@@ -1,0 +1,50 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+.editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.editor-toolbar h1 {
+  font-size: 1.1rem;
+  letter-spacing: normal;
+  margin: 0;
+}
+section {
+  min-width: 0;
+}
+label {
+  display: block;
+  margin-top: 0.65rem;
+}
+input,
+select,
+textarea {
+  box-sizing: border-box;
+  max-width: 100%;
+  width: 100%;
+  font: inherit;
+}
+textarea {
+  font-family: monospace;
+  overflow: auto;
+}
+button {
+  margin: 0.3rem;
+}
+p,
+li {
+  overflow-wrap: anywhere;
+}
+pre {
+  max-height: 20rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+[role="alert"] {
+  color: var(--wb-failure-text);
+}

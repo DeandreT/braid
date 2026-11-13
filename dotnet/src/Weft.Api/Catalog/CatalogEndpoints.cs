@@ -41,6 +41,7 @@ public static partial class CatalogEndpoints
         MapRevisionComparisons(routes, mapping);
         MapInterchange(routes, project, mapping);
         MapPreviews(routes, organization, mapping + "/revisions/{revisionId}");
+        MapMappingDrafts(routes, mapping);
         Administration.AdministrationEndpoints.MapWeftAdministration(endpoints);
         DescribeRevisionUpload(routes.MapPost(project + "/mappings", CreateCatalogMapping), create: true);
         DescribeRevisionUpload(routes.MapPost(mapping + "/revisions", AppendCatalogRevision), create: false);
@@ -85,7 +86,9 @@ public static partial class CatalogEndpoints
                 ingestionOptions.Enabled, creationOptions.Enabled, canCreateProjects,
                 revisionReportOptions.Enabled, revisionReportOptions.DerivationEnabled, admission.IdentityContext,
                 context.RequestServices.GetService<Chat.ChatApiOptions>()?.Enabled == true, PreviewEnabled(context),
-                context.RequestServices.GetService<IAdministrationStore>() is not null));
+                context.RequestServices.GetService<IAdministrationStore>() is not null, MappingEditingEnabled(context),
+                csvPreviewEnabled: context.RequestServices.GetService<CatalogPreviewOptions>() is { Enabled: true, CsvEnabled: true },
+                xmlPreviewEnabled: context.RequestServices.GetService<CatalogPreviewOptions>() is { Enabled: true, XmlEnabled: true }));
         });
 
     private static Task<IResult> GetProjects(string organizationId, HttpContext context,
@@ -146,7 +149,7 @@ public static partial class CatalogEndpoints
             {
                 RequireAccess(mappings.Access, admission.Actor!, scope);
                 return Results.Ok(CatalogPublicMapper.Mappings(mappings, metadataEditOptions.Enabled, ingestionOptions.Enabled,
-                    revisionReportOptions.Enabled, revisionReportOptions.DerivationEnabled, PreviewEnabled(context)));
+                    revisionReportOptions.Enabled, revisionReportOptions.DerivationEnabled, PreviewEnabled(context), MappingEditingEnabled(context)));
             });
         });
 
@@ -164,7 +167,7 @@ public static partial class CatalogEndpoints
                 RequireScope(mapping.Summary.Scope == scope);
                 RequireAccess(mapping.Access, admission.Actor!, Project(scope));
                 return Results.Ok(CatalogPublicMapper.Mapping(mapping, metadataEditOptions.Enabled, ingestionOptions.Enabled,
-                    revisionReportOptions.Enabled, revisionReportOptions.DerivationEnabled, PreviewEnabled(context)));
+                    revisionReportOptions.Enabled, revisionReportOptions.DerivationEnabled, PreviewEnabled(context), MappingEditingEnabled(context)));
             });
         });
 

@@ -17,12 +17,12 @@ use admission::Refusal;
 use crate::protocol::{MAX_NATIVE_BYTES, MAX_TEXT_BYTES, bounded_text};
 use crate::{decode, framing, valid_context_parts};
 use protocol::{
-    DOCUMENT_PREVIEW_PROTOCOL_VERSION, MAX_PREVIEW_ARTIFACTS, MAX_PREVIEW_DISCARD_BYTES,
-    MAX_PREVIEW_INPUT_BYTES, MAX_PREVIEW_INPUTS, MAX_PREVIEW_OUTPUT_BYTES,
-    MAX_PREVIEW_PARAMETER_NAME_BYTES, MAX_PREVIEW_PARAMETER_TEXT_BYTES, MAX_PREVIEW_PARAMETERS,
-    MAX_PREVIEW_RESPONSE_BYTES, MAX_PREVIEW_TARGET_NAME_BYTES, PREVIEW_PROTOCOL_VERSION,
-    PreviewArtifact, PreviewFailure, PreviewInput, PreviewRequestHeader, PreviewResponse,
-    PreviewResult, PreviewTarget, PreviewValue,
+    CSV_PREVIEW_PROTOCOL_VERSION, DOCUMENT_PREVIEW_PROTOCOL_VERSION, MAX_PREVIEW_ARTIFACTS,
+    MAX_PREVIEW_DISCARD_BYTES, MAX_PREVIEW_INPUT_BYTES, MAX_PREVIEW_INPUTS,
+    MAX_PREVIEW_OUTPUT_BYTES, MAX_PREVIEW_PARAMETER_NAME_BYTES, MAX_PREVIEW_PARAMETER_TEXT_BYTES,
+    MAX_PREVIEW_PARAMETERS, MAX_PREVIEW_RESPONSE_BYTES, MAX_PREVIEW_TARGET_NAME_BYTES,
+    PREVIEW_PROTOCOL_VERSION, PreviewArtifact, PreviewFailure, PreviewInput, PreviewRequestHeader,
+    PreviewResponse, PreviewResult, PreviewTarget, PreviewValue, XML_PREVIEW_PROTOCOL_VERSION,
 };
 
 const PROJECT_ROOT: &str = "/weft";
@@ -166,16 +166,34 @@ pub fn process_preview(
             );
         }
     }
-    let decoded = match decode::decode_native(native) {
-        Ok(decoded) => decoded,
-        Err(error) => {
-            let code = if matches!(&error, FileCodecError::UnsupportedVersion { .. }) {
-                "unsupportedNativeVersion"
-            } else {
-                "nativeDecodeFailed"
-            };
-            return failure(code, &error.to_string(), None);
+    // XML uses the strict raw option reader and complete declaration/metadata
+    // ledger before recursive mapping validation or any input processing. Drop
+    // the lowered program immediately: preview still uses Ferrule's interpreter.
+    let (decoded, xml_output_metadata) = if header.is_xml_preview() {
+        match crate::xml_document::admit_native(native) {
+            Ok((decoded, admission)) => (decoded, Some(admission.outputs)),
+            Err(error) => {
+                let code = match error {
+                    crate::xml_document::Error::ResourceLimit(_) => "inputLimitExceeded",
+                    crate::xml_document::Error::InvalidNative => "invalidMapping",
+                    _ => "unsupportedCapability",
+                };
+                return failure(code, &error.to_string(), None);
+            }
         }
+    } else {
+        let decoded = match decode::decode_native(native) {
+            Ok(decoded) => decoded,
+            Err(error) => {
+                let code = if matches!(&error, FileCodecError::UnsupportedVersion { .. }) {
+                    "unsupportedNativeVersion"
+                } else {
+                    "nativeDecodeFailed"
+                };
+                return failure(code, &error.to_string(), None);
+            }
+        };
+        (decoded, None)
     };
     let mut project = decoded.project;
     let issues = ferrule_engine::validate(&project).len();
@@ -192,7 +210,60 @@ pub fn process_preview(
         Ok(admission) => admission,
         Err(refusal) => return refused(header, &refusal),
     };
-    if header.is_document_preview() {
+    if header.is_xml_preview() {
+        for (declared, bytes) in header.inputs.iter().zip(inputs) {
+            let schema = match declared {
+                PreviewInput::Primary { .. } => &project.source,
+                PreviewInput::Named { name, .. } => {
+                    let Some(source) = project
+                        .extra_sources
+                        .iter()
+                        .find(|source| source.name == *name)
+                    else {
+                        return failure(
+                            "invalidMapping",
+                            "The XML input declaration is inconsistent.",
+                            None,
+                        );
+                    };
+                    &source.schema
+                }
+            };
+            if let Err(error) = crate::xml_document::validate_structured(
+                bytes,
+                schema,
+                header.limits.maximum_input_bytes as usize,
+            ) {
+                return failure(
+                    if matches!(error, crate::xml_document::Error::ResourceLimit(_)) {
+                        "inputLimitExceeded"
+                    } else {
+                        "invalidInput"
+                    },
+                    &error.to_string(),
+                    Some(input_subject(declared)),
+                );
+            }
+        }
+    }
+    if header.is_csv_preview()
+        && let Err(error) = ferrule_format_csv::from_bytes_with_options_bounded(
+            &inputs[0],
+            &project.source,
+            &(&project.source_options).into(),
+        )
+    {
+        return failure(
+            if matches!(error, ferrule_format_csv::CsvReadError::Limit { .. }) {
+                "inputLimitExceeded"
+            } else {
+                "invalidInput"
+            },
+            "The CSV input violates its saved dialect, scalar schema or bounded document limits.",
+            Some("primary"),
+        );
+    }
+    if header.is_document_preview() && !header.is_xml_preview() {
         for ((input, bytes), format) in header
             .inputs
             .iter()
@@ -322,6 +393,12 @@ pub fn process_preview(
         .with_extra_sources(&named)
         .with_output_path(&output_path)
         .with_runtime_parameters(&parameters);
+    if header.is_csv_preview() || header.is_xml_preview() {
+        // Keep legacy JSON/EDI on their established compatibility route. In
+        // particular, that route accepts JSON schema provenance the bounded
+        // selector refuses. Only explicitly admitted CSV uses this opt-in.
+        options = options.with_bounded_documents();
+    }
     if let Some(selection) = admission.selection {
         options = options.with_target(selection);
     }
@@ -339,8 +416,7 @@ pub fn process_preview(
     let outcome = match ferrule_cli::run_project_value_payloads(&project, &project_path, &options) {
         Ok(outcome) => outcome,
         Err(error) => {
-            let (code, subject) = classify(&error, header);
-            return failure(code, &format!("{error:#}"), subject.as_deref());
+            return execution_failure(&error, header, &output_path, &admission.targets);
         }
     };
 
@@ -376,7 +452,73 @@ pub fn process_preview(
     let mut artifacts = Vec::with_capacity(outcome.artifacts.len());
     let mut outputs = Vec::with_capacity(outcome.artifacts.len());
     for (artifact, target) in outcome.artifacts.into_iter().zip(admission.targets) {
+        let xml_metadata = if let Some(metadata) = &xml_output_metadata {
+            let index = if target.boundary_id == "primary-output" {
+                Some(0)
+            } else {
+                target
+                    .boundary_id
+                    .strip_prefix("named-output:")
+                    .and_then(|index| index.parse::<usize>().ok())
+                    .and_then(|index| index.checked_add(1))
+            };
+            let Some(index) = index else {
+                return failure(
+                    "executionFailed",
+                    "The XML output identity is inconsistent.",
+                    None,
+                );
+            };
+            let schema = if index == 0 {
+                Some(&project.target)
+            } else {
+                project
+                    .extra_targets
+                    .get(index - 1)
+                    .map(|target| &target.schema)
+            };
+            let (Some(schema), Some(metadata)) = (schema, metadata.get(index)) else {
+                return failure(
+                    "executionFailed",
+                    "The XML output declaration is inconsistent.",
+                    None,
+                );
+            };
+            if let Err(error) = crate::xml_document::validate_structured(
+                &artifact.bytes,
+                schema,
+                header.limits.maximum_output_bytes as usize,
+            ) {
+                return failure(
+                    if matches!(error, crate::xml_document::Error::ResourceLimit(_)) {
+                        "resultLimitExceeded"
+                    } else {
+                        "executionFailed"
+                    },
+                    &error.to_string(),
+                    Some(&target.boundary_id),
+                );
+            }
+            Some(metadata.clone())
+        } else {
+            None
+        };
+        if header.is_csv_preview()
+            && ferrule_format_csv::from_bytes_with_options_bounded(
+                &artifact.bytes,
+                &project.target,
+                &(&project.target_options).into(),
+            )
+            .is_err()
+        {
+            return failure(
+                "resultLimitExceeded",
+                "The CSV output violates its bounded document limits or scalar schema.",
+                Some(&target.boundary_id),
+            );
+        }
         if header.is_document_preview()
+            && !header.is_xml_preview()
             && !crate::document_limits::within_limits(
                 target.format,
                 &artifact.bytes,
@@ -398,6 +540,12 @@ pub fn process_preview(
             records_written: artifact.records_written as u64,
             byte_length: artifact.bytes.len() as u32,
             sha256: hex_digest(&artifact.bytes),
+            csv_dialect: if header.is_csv_preview() {
+                crate::csv_document::CsvDialect::from_options(&project.target_options).ok()
+            } else {
+                None
+            },
+            xml_metadata,
         });
         outputs.push(artifact.bytes);
     }
@@ -467,7 +615,10 @@ fn check_header(header: &PreviewRequestHeader) -> Result<(), Refusal> {
     };
     if !matches!(
         header.protocol_version.as_str(),
-        PREVIEW_PROTOCOL_VERSION | DOCUMENT_PREVIEW_PROTOCOL_VERSION
+        PREVIEW_PROTOCOL_VERSION
+            | DOCUMENT_PREVIEW_PROTOCOL_VERSION
+            | CSV_PREVIEW_PROTOCOL_VERSION
+            | XML_PREVIEW_PROTOCOL_VERSION
     ) {
         return failure(
             "unsupportedProtocolVersion",
@@ -515,7 +666,7 @@ fn check_header(header: &PreviewRequestHeader) -> Result<(), Refusal> {
     let mut names = std::collections::BTreeSet::new();
     let mut total = 0u64;
     for input in &header.inputs {
-        if input.byte_length() == 0
+        if (input.byte_length() == 0 && !header.is_csv_preview())
             || input.sha256().len() != 64
             || !input
                 .sha256()
@@ -649,10 +800,192 @@ fn json_number(text: &str) -> bool {
     index == bytes.len()
 }
 
+fn execution_failure(
+    error: &anyhow::Error,
+    header: &PreviewRequestHeader,
+    output_path: &Path,
+    targets: &[admission::AdmittedTarget],
+) -> PreviewOutcome {
+    let (code, subject) = if header.is_xml_preview() {
+        classify_xml(error, header, output_path, targets)
+    } else {
+        classify(error, header, output_path)
+    };
+    let message = if header.is_xml_preview() {
+        if matches!(code, "inputLimitExceeded" | "resultLimitExceeded") {
+            "The XML operation exceeds a resource limit."
+        } else {
+            "The native XML mapping or bounded serialization failed; no output was published."
+        }
+        .into()
+    } else if header.is_csv_preview() && code == "resultLimitExceeded" {
+        "The CSV output exceeds the bounded serializer's document byte limit.".into()
+    } else {
+        format!("{error:#}")
+    };
+    PreviewOutcome::failure(Some(header), code, &message, subject.as_deref())
+}
+
+fn xml_output_path(
+    target: &admission::AdmittedTarget,
+    header: &PreviewRequestHeader,
+    output_path: &Path,
+) -> Option<PathBuf> {
+    if target.boundary_id == "primary-output"
+        || matches!(header.target, PreviewTarget::Named { .. })
+    {
+        return Some(output_path.to_path_buf());
+    }
+    let index = target
+        .boundary_id
+        .strip_prefix("named-output:")?
+        .parse::<usize>()
+        .ok()?;
+    let path = PathBuf::from(format!("/weft/output/named-{index}.xml"));
+    // Mirror the pinned CLI's stored-path resolution, including rooted Windows paths.
+    Some(if path.is_absolute() {
+        path
+    } else {
+        Path::new(PROJECT_ROOT).join(path)
+    })
+}
+
+fn classify_xml(
+    error: &anyhow::Error,
+    header: &PreviewRequestHeader,
+    output_path: &Path,
+    targets: &[admission::AdmittedTarget],
+) -> (&'static str, Option<String>) {
+    use ferrule_format_xml::XmlFormatError;
+
+    let context = error.to_string();
+    let input = header.inputs.iter().find(|input| match input {
+        PreviewInput::Primary { .. } => context == "reading primary input payload",
+        PreviewInput::Named { name, .. } => context == format!("reading payload source `{name}`"),
+    });
+    let mut engine_failure = None;
+    let mut resource_limit = false;
+    for cause in error.chain() {
+        if let Some(xml) = cause.downcast_ref::<XmlFormatError>() {
+            resource_limit |= matches!(
+                xml,
+                XmlFormatError::StructuredInputLimit { .. }
+                    | XmlFormatError::StructuredParserResourceLimit { .. }
+                    | XmlFormatError::RootViewDocumentLimit { .. }
+                    | XmlFormatError::SchemaMaterializationLimit { .. }
+                    | XmlFormatError::NamespaceArtifactLimit { .. }
+                    | XmlFormatError::NamespaceReferenceLimit { .. }
+                    | XmlFormatError::SubstitutionGroupLimit { .. }
+                    | XmlFormatError::RecursionLimit { .. }
+            );
+        }
+        if let Some(engine) = cause.downcast_ref::<EngineError>() {
+            resource_limit |= matches!(
+                engine,
+                EngineError::ExecutionBudgetExceeded { .. }
+                    | EngineError::UserFunctionDepth { .. }
+                    | EngineError::RuntimeParameterPreviewTooLong { .. }
+                    | EngineError::GeneratedSequenceTooLarge { .. }
+                    | EngineError::FilterMapBudget { .. }
+                    | EngineError::RecursiveSequenceDepth { .. }
+                    | EngineError::RecursiveSequenceTooLarge { .. }
+                    | EngineError::TokenizeRegexPatternTooLarge { .. }
+                    | EngineError::TokenizeRegexTooLarge { .. }
+                    | EngineError::RecursiveFilterDepth { .. }
+                    | EngineError::PathHierarchyDepth { .. }
+                    | EngineError::PathHierarchyTooLarge { .. }
+                    | EngineError::AdjacencyTreeTooLarge { .. }
+                    | EngineError::AdjacencyTreeDepth { .. }
+                    | EngineError::OwnedSourceAccess {
+                        source: ferrule_engine::OwnedSourceError::ResourceLimit { .. },
+                        ..
+                    }
+            );
+            // Never reinterpret a mapping exception or its authored text as a
+            // CLI artifact refusal. Some engine XML errors flatten their cause;
+            // a string there is not proof of a typed resource failure.
+            engine_failure.get_or_insert(match engine {
+                EngineError::MissingRuntimeParameter { .. } => "missingParameter",
+                EngineError::RuntimeParameterType { .. } => "invalidParameter",
+                EngineError::UnsupportedSourceOwnership { .. }
+                | EngineError::UnsupportedOwnedContext { .. }
+                | EngineError::UnsupportedSourceIteration { .. } => "unsupportedCapability",
+                EngineError::UnknownTarget { .. } | EngineError::AmbiguousTarget { .. } => {
+                    "unknownTarget"
+                }
+                _ => "executionFailed",
+            });
+        }
+    }
+    if resource_limit {
+        return if let Some(input) = input {
+            ("inputLimitExceeded", Some(input_subject(input).into()))
+        } else {
+            ("resultLimitExceeded", None)
+        };
+    }
+    if let Some(code) = engine_failure {
+        return (code, None);
+    }
+    // At this revision CLI finalization emits a *bare*, untyped error after
+    // rendering. Require that exact chain shape, caption, and an admitted
+    // synthetic destination, never XML text, arbitrary paths, or substrings.
+    if error.chain().count() == 1 && error.is::<String>() {
+        for target in targets {
+            let Some(path) = xml_output_path(target, header, output_path) else {
+                continue;
+            };
+            if context
+                == format!(
+                    "output artifact `{}` exceeds the {} MiB per-document limit",
+                    path.display(),
+                    ferrule_cli::MAX_PAYLOAD_DOCUMENT_BYTES / (1024 * 1024)
+                )
+            {
+                return ("resultLimitExceeded", Some(target.boundary_id.clone()));
+            }
+        }
+        if input.is_none()
+            && !targets.is_empty()
+            && output_path == Path::new("/weft/output/primary.xml")
+            && targets.iter().all(|target| {
+                target.format == crate::document_format::DocumentFormat::Xml
+                    && xml_output_path(target, header, output_path).is_some()
+            })
+            && context
+                == format!(
+                    "payload outputs exceed the {} MiB total limit",
+                    ferrule_cli::MAX_PAYLOAD_RUN_BYTES / (1024 * 1024)
+                )
+        {
+            return ("resultLimitExceeded", None);
+        }
+    }
+    if let Some(input) = input {
+        return ("invalidInput", Some(input_subject(input).into()));
+    }
+    ("executionFailed", None)
+}
+
 fn classify(
     error: &anyhow::Error,
     header: &PreviewRequestHeader,
+    output_path: &Path,
 ) -> (&'static str, Option<String>) {
+    // The pinned CLI consumes CsvBoundedError::OutputTooLarge and replaces it
+    // with this untyped finalization error. Match only its exact root message
+    // and our admitted synthetic destination, never arbitrary size-error text.
+    // Legacy JSON/EDI retain their established classification.
+    if header.is_csv_preview()
+        && error.root_cause().to_string()
+            == format!(
+                "output artifact `{}` exceeds the {} MiB per-document limit",
+                output_path.display(),
+                ferrule_cli::MAX_PAYLOAD_DOCUMENT_BYTES / (1024 * 1024)
+            )
+    {
+        return ("resultLimitExceeded", None);
+    }
     for cause in error.chain() {
         if let Some(engine) = cause.downcast_ref::<EngineError>() {
             return match engine {
@@ -718,4 +1051,422 @@ fn discard(reader: &mut impl Read) {
         &mut reader.take(MAX_PREVIEW_DISCARD_BYTES as u64),
         &mut io::sink(),
     );
+}
+
+#[cfg(test)]
+mod classification_tests {
+    use super::*;
+
+    fn header(protocol: &str) -> PreviewRequestHeader {
+        serde_json::from_value(serde_json::json!({
+            "protocolVersion": protocol,
+            "requestId": "11111111-1111-4111-8111-111111111111",
+            "revision": {
+                "organizationId": "11111111-1111-4111-8111-111111111111",
+                "projectId": "22222222-2222-4222-8222-222222222222",
+                "mappingId": "33333333-3333-4333-8333-333333333333",
+                "revisionId": "44444444-4444-4444-8444-444444444444"
+            },
+            "nativeDigest": "a".repeat(64),
+            "documentId": "entry.native.json",
+            "target": { "kind": "all" },
+            "currentDateTime": "2026-10-30T12:00:00Z",
+            "parameters": [],
+            "inputs": [],
+            "limits": {
+                "maximumInputBytes": MAX_PREVIEW_INPUT_BYTES,
+                "maximumOutputBytes": MAX_PREVIEW_OUTPUT_BYTES,
+                "maximumArtifacts": MAX_PREVIEW_ARTIFACTS,
+                "maximumTextBytes": MAX_TEXT_BYTES
+            }
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn csv_serializer_ceiling_is_a_sanitized_resource_refusal_without_large_allocation() {
+        for extension in ["csv", "tsv"] {
+            let path = PathBuf::from(format!("/weft/output/primary.{extension}"));
+            let message = format!(
+                "output artifact `{}` exceeds the {} MiB per-document limit",
+                path.display(),
+                ferrule_cli::MAX_PAYLOAD_DOCUMENT_BYTES / (1024 * 1024)
+            );
+            let error =
+                anyhow::Error::msg(message).context("private upstream context must not escape");
+            let result =
+                execution_failure(&error, &header(CSV_PREVIEW_PROTOCOL_VERSION), &path, &[]);
+            let failure = result.response.failure.unwrap();
+            assert_eq!(failure.code, "resultLimitExceeded");
+            assert_eq!(
+                failure.message,
+                "The CSV output exceeds the bounded serializer's document byte limit."
+            );
+            assert!(failure.subject.is_none());
+            assert!(result.outputs.is_empty());
+
+            for protocol in [PREVIEW_PROTOCOL_VERSION, DOCUMENT_PREVIEW_PROTOCOL_VERSION] {
+                assert_eq!(
+                    classify(&error, &header(protocol), &path).0,
+                    "executionFailed"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn csv_size_classification_requires_the_exact_pinned_error_and_destination() {
+        let request = header(CSV_PREVIEW_PROTOCOL_VERSION);
+        let path = Path::new("/weft/output/primary.csv");
+        for message in [
+            "output artifact `/private/other.csv` exceeds the 64 MiB per-document limit",
+            "output artifact `/weft/output/primary.csv` exceeds the 63 MiB per-document limit",
+            "output artifact `/weft/output/primary.csv` exceeds the 64 MiB per-document limit (other error)",
+            "CSV output exceeds the 67108864-byte maximum",
+        ] {
+            assert_eq!(
+                classify(&anyhow::Error::msg(message), &request, path).0,
+                "executionFailed"
+            );
+        }
+    }
+
+    fn xml_targets() -> Vec<admission::AdmittedTarget> {
+        ["primary-output", "named-output:0"]
+            .into_iter()
+            .map(|boundary| admission::AdmittedTarget {
+                boundary_id: boundary.into(),
+                name: "copy".into(),
+                format: crate::document_format::DocumentFormat::Xml,
+                segment: None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn xml_execution_diagnostics_never_publish_private_values_context_or_subjects() {
+        let request = header(XML_PREVIEW_PROTOCOL_VERSION);
+        let path = Path::new("/weft/output/primary.xml");
+        for error in [
+            anyhow::Error::msg("private-sentinel raw error"),
+            anyhow::Error::new(ferrule_format_xml::XmlFormatError::ScalarParse {
+                name: "private-sentinel-field".into(),
+                ty: ferrule_ir::ScalarType::Int,
+                value: "private-sentinel-value".into(),
+            }),
+            anyhow::Error::new(EngineError::MappingFailure {
+                rule: 1,
+                message: Some("private-sentinel-message".into()),
+            }),
+            anyhow::Error::new(EngineError::XmlSerialization {
+                node: 1,
+                message: "private-sentinel-codec-caption".into(),
+            }),
+            anyhow::Error::new(EngineError::MissingRuntimeParameter {
+                node: 1,
+                name: "private-sentinel-parameter".into(),
+            }),
+        ] {
+            let outcome = execution_failure(
+                &error.context("private-sentinel-context"),
+                &request,
+                path,
+                &xml_targets(),
+            );
+            assert!(outcome.outputs.is_empty());
+            assert!(outcome.response.result.is_none());
+            let encoded = serde_json::to_string(&outcome.response).unwrap();
+            assert!(!encoded.contains("private-sentinel"));
+            let failure = outcome.response.failure.unwrap();
+            assert_eq!(
+                failure.message,
+                "The native XML mapping or bounded serialization failed; no output was published."
+            );
+            assert!(failure.subject.is_none());
+        }
+    }
+
+    #[test]
+    fn xml_typed_codec_and_engine_resource_causes_survive_private_contexts() {
+        use ferrule_format_xml::XmlFormatError as Xml;
+        let mut request = header(XML_PREVIEW_PROTOCOL_VERSION);
+        let path = Path::new("/weft/output/primary.xml");
+        let errors = [
+            Xml::StructuredInputLimit {
+                budget: "private-sentinel",
+                limit: 1,
+            },
+            Xml::StructuredParserResourceLimit {
+                resource: "private-sentinel",
+                observed_count: 2,
+                limit: 1,
+            },
+            Xml::RootViewDocumentLimit { limit: 1 },
+            Xml::SchemaMaterializationLimit { limit: 1 },
+            Xml::NamespaceArtifactLimit { limit: 1 },
+            Xml::NamespaceReferenceLimit { limit: 1 },
+            Xml::SubstitutionGroupLimit { limit: 1 },
+            Xml::RecursionLimit { limit: 64 },
+        ];
+        for error in errors {
+            let outcome = execution_failure(
+                &anyhow::Error::new(error).context("private-sentinel-context"),
+                &request,
+                path,
+                &xml_targets(),
+            );
+            let failure = outcome.response.failure.unwrap();
+            assert_eq!(failure.code, "resultLimitExceeded");
+            assert_eq!(
+                failure.message,
+                "The XML operation exceeds a resource limit."
+            );
+            assert!(failure.subject.is_none());
+            assert!(outcome.outputs.is_empty());
+        }
+        for error in [
+            EngineError::GeneratedSequenceTooLarge {
+                requested: 2,
+                max: 1,
+            },
+            EngineError::ExecutionBudgetExceeded {
+                kind: ferrule_engine::ExecutionBudgetKind::Work,
+                limit: 1,
+            },
+            EngineError::OwnedSourceAccess {
+                node: None,
+                scope: None,
+                source: ferrule_engine::OwnedSourceError::ResourceLimit {
+                    resource: "private-sentinel",
+                    limit: 1,
+                },
+            },
+        ] {
+            assert_eq!(
+                classify_xml(
+                    &anyhow::Error::new(error).context("private-sentinel-context"),
+                    &request,
+                    path,
+                    &xml_targets()
+                )
+                .0,
+                "resultLimitExceeded"
+            );
+        }
+        request.inputs.push(PreviewInput::Primary {
+            byte_length: 1,
+            sha256: "a".repeat(64),
+        });
+        let input_error = anyhow::Error::new(Xml::StructuredInputLimit {
+            budget: "private-sentinel",
+            limit: 1,
+        })
+        .context("reading primary input payload");
+        assert_eq!(
+            classify_xml(&input_error, &request, path, &xml_targets()),
+            ("inputLimitExceeded", Some("primary".into()))
+        );
+    }
+
+    #[test]
+    fn xml_cli_size_refusals_require_owned_primary_or_named_destinations_and_exact_shape() {
+        let mut request = header(XML_PREVIEW_PROTOCOL_VERSION);
+        let path = Path::new("/weft/output/primary.xml");
+        let targets = xml_targets();
+        for target in &targets {
+            let owned = xml_output_path(target, &request, path).unwrap();
+            let caption = format!(
+                "output artifact `{}` exceeds the {} MiB per-document limit",
+                owned.display(),
+                ferrule_cli::MAX_PAYLOAD_DOCUMENT_BYTES / (1024 * 1024)
+            );
+            assert_eq!(
+                classify_xml(
+                    &anyhow::Error::msg(caption.clone()),
+                    &request,
+                    path,
+                    &targets
+                ),
+                ("resultLimitExceeded", Some(target.boundary_id.clone()))
+            );
+            for error in [
+                anyhow::Error::msg(caption.clone()).context("private-sentinel fabricated context"),
+                anyhow::Error::new(std::io::Error::other(caption.clone())),
+                anyhow::Error::new(EngineError::MappingFailure {
+                    rule: 1,
+                    message: Some(caption.clone()),
+                }),
+                anyhow::Error::new(EngineError::MappingException {
+                    node: 1,
+                    message: Some(caption.clone()),
+                }),
+                anyhow::Error::new(EngineError::XmlSerialization {
+                    node: 1,
+                    message: caption.clone(),
+                }),
+            ] {
+                assert_eq!(
+                    classify_xml(&error, &request, path, &targets),
+                    ("executionFailed", None)
+                );
+            }
+        }
+        for caption in [
+            "output artifact `/private/private-sentinel.xml` exceeds the 64 MiB per-document limit",
+            "output artifact `/weft/output/named-9.xml` exceeds the 64 MiB per-document limit",
+            "output artifact `/weft/output/primary.xml` exceeds the 63 MiB per-document limit",
+            "output artifact `/weft/output/primary.xml` exceeds the 64 MiB per-document limit (private-sentinel)",
+            "structured XML input exceeds private-sentinel limit 1",
+        ] {
+            assert_eq!(
+                classify_xml(
+                    &anyhow::Error::msg(caption.to_owned()),
+                    &request,
+                    path,
+                    &targets
+                ),
+                ("executionFailed", None)
+            );
+        }
+        // Even an exact-looking borrowed string is not the pinned CLI's formatted String error.
+        assert_eq!(classify_xml(&anyhow::Error::msg("output artifact `/weft/output/primary.xml` exceeds the 64 MiB per-document limit"), &request, path, &targets).0, "executionFailed");
+        request.target = PreviewTarget::Named {
+            name: "copy".into(),
+        };
+        let caption = format!(
+            "output artifact `{}` exceeds the 64 MiB per-document limit",
+            path.display()
+        );
+        assert_eq!(
+            classify_xml(&anyhow::Error::msg(caption), &request, path, &targets[1..]),
+            ("resultLimitExceeded", Some("named-output:0".into()))
+        );
+    }
+
+    #[test]
+    fn xml_cli_aggregate_refusal_requires_exact_bare_string_and_admitted_outputs() {
+        let request = header(XML_PREVIEW_PROTOCOL_VERSION);
+        let path = Path::new("/weft/output/primary.xml");
+        let targets = xml_targets();
+        let caption = format!(
+            "payload outputs exceed the {} MiB total limit",
+            ferrule_cli::MAX_PAYLOAD_RUN_BYTES / (1024 * 1024)
+        );
+        let outcome = execution_failure(
+            &anyhow::Error::msg(caption.clone()),
+            &request,
+            path,
+            &targets,
+        );
+        let failure = outcome.response.failure.unwrap();
+        assert_eq!(failure.code, "resultLimitExceeded");
+        assert_eq!(
+            failure.message,
+            "The XML operation exceeds a resource limit."
+        );
+        assert!(failure.subject.is_none());
+        assert!(outcome.outputs.is_empty());
+        for error in [
+            anyhow::Error::new(EngineError::MappingFailure {
+                rule: 1,
+                message: Some(caption.clone()),
+            }),
+            anyhow::Error::new(EngineError::MappingException {
+                node: 1,
+                message: Some(caption.clone()),
+            }),
+            anyhow::Error::msg(caption.clone()).context("private-sentinel wrapped caption"),
+            anyhow::Error::new(std::io::Error::other(caption.clone())),
+            anyhow::Error::new(ferrule_format_xml::XmlFormatError::ScalarParse {
+                name: "private-sentinel".into(),
+                ty: ferrule_ir::ScalarType::Int,
+                value: caption.clone(),
+            }),
+            anyhow::Error::msg(format!("{caption} private-sentinel")),
+        ] {
+            assert_eq!(
+                classify_xml(&error, &request, path, &targets),
+                ("executionFailed", None)
+            );
+        }
+        assert_eq!(
+            classify_xml(&anyhow::Error::msg(caption.clone()), &request, path, &[]),
+            ("executionFailed", None)
+        );
+        assert_eq!(
+            classify_xml(
+                &anyhow::Error::msg(caption.clone()),
+                &request,
+                Path::new("/private/foreign.xml"),
+                &targets
+            ),
+            ("executionFailed", None)
+        );
+        for (boundary, format) in [
+            (
+                "foreign-output",
+                crate::document_format::DocumentFormat::Xml,
+            ),
+            (
+                "primary-output",
+                crate::document_format::DocumentFormat::Json,
+            ),
+        ] {
+            let unowned = [admission::AdmittedTarget {
+                boundary_id: boundary.into(),
+                name: "copy".into(),
+                format,
+                segment: None,
+            }];
+            assert_eq!(
+                classify_xml(
+                    &anyhow::Error::msg(caption.clone()),
+                    &request,
+                    path,
+                    &unowned
+                ),
+                ("executionFailed", None)
+            );
+        }
+        for protocol in [
+            PREVIEW_PROTOCOL_VERSION,
+            DOCUMENT_PREVIEW_PROTOCOL_VERSION,
+            CSV_PREVIEW_PROTOCOL_VERSION,
+        ] {
+            assert_eq!(
+                classify(
+                    &anyhow::Error::msg(caption.clone()),
+                    &header(protocol),
+                    path
+                ),
+                ("executionFailed", None)
+            );
+        }
+    }
+
+    #[test]
+    fn xml_sanitization_does_not_change_legacy_failure_message_bytes() {
+        let path = Path::new("/weft/output/primary.json");
+        for protocol in [
+            PREVIEW_PROTOCOL_VERSION,
+            DOCUMENT_PREVIEW_PROTOCOL_VERSION,
+            CSV_PREVIEW_PROTOCOL_VERSION,
+        ] {
+            let error =
+                anyhow::Error::msg("legacy private-sentinel cause").context("legacy context");
+            let expected = format!("{error:#}");
+            let outcome = execution_failure(&error, &header(protocol), path, &[]);
+            assert_eq!(outcome.response.failure.unwrap().message, expected);
+        }
+        let outcome = execution_failure(
+            &anyhow::Error::msg("private-sentinel"),
+            &header(XML_PREVIEW_PROTOCOL_VERSION),
+            path,
+            &[],
+        );
+        assert_eq!(
+            outcome.response.failure.unwrap().message,
+            "The native XML mapping or bounded serialization failed; no output was published."
+        );
+    }
 }

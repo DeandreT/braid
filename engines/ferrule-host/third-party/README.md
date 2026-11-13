@@ -3,7 +3,8 @@
 The restricted worker uses Ferrule's `mapping`, `ir`, `engine`, `cli`, `mfd`,
 `codegen`, and `codegen-csharp` libraries at revision
 `dddc4dce6c93f4137fb2aa2a011360d089e0a51b`, with every transitive Ferrule
-package locked to the same revision. The `cli` library supplies only its public
+package locked to the same revision. The shared core also uses Ferrule's
+`edit-ops` and `editor-ui` libraries for deterministic command history. The `cli` library supplies only its public
 in-memory payload API to the preview operation; the worker does not run the
 Ferrule command-line program. `codegen` and `codegen-csharp` supply only
 in-memory C# source generation to the build operation. `mfd` supplies the closed
@@ -15,3 +16,10 @@ license for the Weft repository.
 The worker image also retains the runtime library copyright files supplied by
 its Ubuntu build environment. Compiler, Rust package, and source identities are
 recorded in the locked worker build and its qualification evidence.
+
+The inactive XML safety core's BMP name-character ranges are derived from the
+.NET runtime v10.0.12 `XmlCharType.CharProperties` table. The source identity and
+derivation are recorded beside the ranges in `src/xml_name_chars.rs`.
+`dotnet-xml-name-tables-MIT.txt` retains the upstream attribution and license;
+the worker image includes this directory unchanged. This is not a license
+declaration for the rest of Weft.

@@ -8,6 +8,29 @@ namespace Weft.Api.Chat;
 
 public static partial class ChatEndpoints
 {
+    private static OpenApiSchema ProposalFingerprintSchema() => new()
+    {
+        Type = JsonSchemaType.String,
+        MinLength = 64,
+        MaxLength = 64,
+        Pattern = "^[0-9a-f]{64}$"
+    };
+
+    private static RouteHandlerBuilder DescribeProposalFingerprint(this RouteHandlerBuilder route) =>
+        route.AddOpenApiOperationTransformer((operation, _, _) =>
+        {
+            operation.Parameters ??= [];
+            operation.Parameters.Add(new OpenApiParameter
+            {
+                Name = "expectedFingerprint",
+                In = ParameterLocation.Query,
+                Required = true,
+                Description = "The exact immutable proposal fingerprint being reviewed.",
+                Schema = ProposalFingerprintSchema()
+            });
+            return Task.CompletedTask;
+        });
+
     private static RouteHandlerBuilder DescribeChatResponseHeaders(this RouteHandlerBuilder route, bool stream) =>
         route.AddOpenApiOperationTransformer((operation, context, _) =>
         {
@@ -108,6 +131,44 @@ public static partial class ChatEndpoints
     {
         if (document.Components?.Schemas is not { } schemas)
             return;
+        if (schemas.TryGetValue(nameof(ChatMappingEditApprovalV1), out var approvalSchema) && approvalSchema is OpenApiSchema { Properties: { } approval } approvalObject)
+        {
+            approval["expectedFingerprint"] = ProposalFingerprintSchema();
+            approvalObject.Required = new HashSet<string> { "expectedFingerprint" };
+            approvalObject.AdditionalPropertiesAllowed = false;
+        }
+        foreach (var name in new[] { nameof(ChatMappingEditProposalV1), nameof(ChatMappingEditOperationsV1) })
+            if (schemas.TryGetValue(name, out var proposalSchema) && proposalSchema is OpenApiSchema { Properties: { } proposal })
+            {
+                proposal["fingerprint"] = ProposalFingerprintSchema();
+                proposal["operationsDigest"] = ProposalFingerprintSchema();
+                if (proposal.TryGetValue("canonicalScript", out var script) && script is OpenApiSchema scriptSchema)
+                    scriptSchema.MaxLength = 1024 * 1024;
+                if (proposal.TryGetValue("changes", out var changes) && changes is OpenApiSchema changesSchema)
+                    changesSchema.MaxItems = 64;
+                if (proposal.ContainsKey("status")) proposal["status"] = new OpenApiSchema
+                {
+                    Type = JsonSchemaType.String,
+                    Enum = new[] { "awaitingApproval", "approved", "pending", "saved", "notSaved", "notPermitted", "outOfDate" }
+                        .Select(value => (JsonNode)JsonValue.Create(value)!).ToList()
+                };
+            }
+        if (schemas.TryGetValue(nameof(ChatMappingEditProposalPageV1), out var pageSchema) && pageSchema is OpenApiSchema { Properties: { } page } &&
+            page.TryGetValue("proposals", out var proposalsSchema) && proposalsSchema is OpenApiSchema proposals)
+            proposals.MaxItems = 8;
+        if (schemas.TryGetValue(nameof(ChatMappingWriteReceiptV1), out var receiptSchema) && receiptSchema is OpenApiSchema { Properties: { } receipt })
+        {
+            receipt["status"] = new OpenApiSchema
+            {
+                Type = JsonSchemaType.String,
+                Enum = [JsonValue.Create("pending")!, JsonValue.Create("saved")!, JsonValue.Create("notSaved")!]
+            };
+            receipt["write"] = new OpenApiSchema
+            {
+                OneOf = [new OpenApiSchema { Type = JsonSchemaType.Null },
+                new OpenApiSchemaReference(nameof(ChatTurnEventV1) + nameof(ChatMappingWriteEventV1), document)]
+            };
+        }
         foreach (var name in new[] { nameof(ChatAvailabilityV1), nameof(ChatWorkspaceAvailabilityV1) })
         {
             if (schemas.TryGetValue(name, out var availabilitySchema) &&

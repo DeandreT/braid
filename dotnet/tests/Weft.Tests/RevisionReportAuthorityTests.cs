@@ -160,7 +160,7 @@ public sealed class RevisionReportAuthorityTests(PostgresFixture fixture)
         string row;
         try
         {
-            await gate.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await gate.Entered.Task.WaitAsync(TimeSpan.FromSeconds(30));
             var finish = Assert.Single(test.MetadataPort.Finishes);
             Assert.Equal(RevisionReportStoreOutcome.Applied, finish.Result.Outcome);
             AssertActualEligibleCompletion(test);

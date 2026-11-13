@@ -232,16 +232,20 @@ internal sealed class MappingEndpointRoutes(MappingEndpointCalls calls)
         var media = new List<MachineInputMedia>();
         foreach (var input in inputs.EnumerateArray())
         {
-            Object(input, documentProfile ? ["name", "content", "mediaType"] : ["name", "content"]);
+            Object(input, documentProfile ? ["name", "content", "mediaType", "csvDialect"] : ["name", "content"]);
             string? name = null;
             if (input.TryGetProperty("name", out var named) && named.ValueKind != JsonValueKind.Null)
                 name = named.ValueKind == JsonValueKind.String ? named.GetString() : throw new FormatException();
             if ((documents.Count == 0) != (name is null)) throw new FormatException();
             if (!input.TryGetProperty("content", out var content) || content.ValueKind != JsonValueKind.String) throw new FormatException();
             var bytes = Convert.FromBase64String(content.GetString()!);
-            if (bytes.Length == 0) throw new FormatException();
-            documents.Add(new(name, bytes));
-            if (documentProfile) media.Add(new(name, Text(input, "mediaType")));
+            var dialect = documentProfile ? BuildCsvDialect.ReadOptional(input) : null;
+            var mediaType = documentProfile ? Text(input, "mediaType") : PreviewPolicy.MediaType;
+            if (CsvDocumentPolicy.AdmitsMediaType(mediaType) ? !CsvDocumentPolicy.Admits(dialect, mediaType) : dialect is not null)
+                throw new FormatException();
+            if (bytes.Length == 0 && dialect is null) throw new FormatException();
+            documents.Add(new(name, bytes, dialect));
+            if (documentProfile) media.Add(new(name, mediaType, dialect));
         }
         var parameters = new List<PreviewParameter>();
         if (root.TryGetProperty("parameters", out var values))

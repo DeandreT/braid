@@ -452,7 +452,7 @@ public sealed class PostgresServerSessionUpgradeTests(PostgresFixture fixture)
     private static async Task AssertCurrentHistoryAsync(PostgresCase test)
     {
         var scripts = MigrationRunner.EmbeddedMigrations;
-        Assert.True(scripts.Count == PrefixVersion + 27
+        Assert.True(scripts.Count == PrefixVersion + 38
             && scripts.Take(PrefixVersion).Select(script => script.Checksum)
                 .SequenceEqual(PostgresServerSessionUpgradeConservation.PrefixChecksums, StringComparer.Ordinal)
             && scripts[PrefixVersion].Checksum == ServerSessionSchemaContract.MigrationChecksum
@@ -482,9 +482,20 @@ public sealed class PostgresServerSessionUpgradeTests(PostgresFixture fixture)
             && scripts[PrefixVersion + 24].Version == 34 && scripts[PrefixVersion + 24].Checksum == RegressionSchemaTestContract.DocumentPreviewsChecksum
             && scripts[PrefixVersion + 25].Version == 35 && scripts[PrefixVersion + 25].Checksum == RegressionSchemaTestContract.X12InterchangeBuildsChecksum
             && scripts[PrefixVersion + 26].Version == 36 && scripts[PrefixVersion + 26].Checksum == RegressionSchemaTestContract.ComparisonSettlementChecksum
+            && scripts[PrefixVersion + 27].Version == 37 && scripts[PrefixVersion + 27].Checksum == MappingDraftSchemaTestContract.DraftChecksum
+            && scripts[PrefixVersion + 28].Version == 38 && scripts[PrefixVersion + 28].Checksum == MappingDraftSchemaTestContract.PreviewChecksum
+            && scripts[PrefixVersion + 29].Version == 39 && scripts[PrefixVersion + 29].Checksum == ChatSchemaContract.MappingWriteMigrationChecksum
+            && scripts[PrefixVersion + 30].Version == 40 && scripts[PrefixVersion + 30].Checksum == ChatSchemaContract.WriteJournalMigrationChecksum
+            && scripts[PrefixVersion + 31].Version == 41 && scripts[PrefixVersion + 31].Checksum == RegressionSchemaTestContract.CsvDocumentsChecksum
+            && scripts[PrefixVersion + 32].Version == 42 && scripts[PrefixVersion + 32].Checksum == XmlPreviewSchemaAdmission.MigrationChecksum
+            && scripts[PrefixVersion + 33].Version == 43 && scripts[PrefixVersion + 33].Checksum == ChatSchemaContract.EditProposalMigrationChecksum
+            && scripts[PrefixVersion + 34].Version == 44 && scripts[PrefixVersion + 34].Checksum == SpecSchemaTestContract.Checksum
+            && scripts[PrefixVersion + 35].Version == 45 && scripts[PrefixVersion + 35].Checksum == CreationSchemaAdmission.MigrationChecksum
+            && scripts[PrefixVersion + 36].Version == 46 && scripts[PrefixVersion + 36].Checksum == DocumentEvidenceSchemaAdmission.MigrationChecksum
+            && scripts[PrefixVersion + 37].Version == 47 && scripts[PrefixVersion + 37].Checksum == DocumentJsonSchemaAdmission.MigrationChecksum
             && typeof(MigrationRunner).Assembly.GetManifestResourceNames().Contains(
                 "Weft.Persistence.Postgres.Migrations." + ServerSessionSchemaContract.MigrationName + ".sql", StringComparer.Ordinal),
-            "The embedded source is not the trusted prefix, exact session migration and exact suffix through operations.");
+            "The embedded source is not the trusted prefix, exact session migration and exact suffix through mapping creation.");
         await PostgresServerSessionUpgradeConservation.AdmitChatSuffixAsync(test);
         Assert.True((await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"))
             .SequenceEqual(Enumerable.Range(1, scripts.Count)), "The complete journal versions changed.");

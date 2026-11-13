@@ -347,21 +347,26 @@
                 [(ngModel)]="targetName"
             /></label>
           }
-          @if (capability.documentRuntime) {
+          @if (capability.documentRuntime || capability.csvRuntime) {
             <label
               >Execution profile<select
                 aria-label="Execution profile"
-                [(ngModel)]="documentMode"
-                (ngModelChange)="comparisonPolicy = exactPolicy"
+                [ngModel]="csvMode ? 'csv' : documentMode ? 'document' : 'json'"
+                (ngModelChange)="setRuntimeMode($event)"
               >
-                <option [ngValue]="false">Legacy JSON</option>
-                <option [ngValue]="true">
-                  Declared document formats (JSON / X12 / EDIFACT)
-                </option>
+                <option value="json">Legacy JSON</option>
+                @if (capability.documentRuntime) {
+                  <option value="document">
+                    Declared document formats (JSON / X12 / EDIFACT)
+                  </option>
+                }
+                @if (capability.csvRuntime) {
+                  <option value="csv">CSV / TSV (saved native dialect)</option>
+                }
               </select></label
             >
           }
-          @if (documentMode) {
+          @if (documentMode || csvMode) {
             <label
               >Comparison policy<select
                 aria-label="Comparison policy"
@@ -370,9 +375,16 @@
                 <option [value]="exactPolicy">
                   Exact bytes and media type
                 </option>
-                <option [value]="ediPolicy">
-                  Ordered EDI segments (JSON stays exact bytes)
-                </option>
+                @if (documentMode) {
+                  <option [value]="ediPolicy">
+                    Ordered EDI segments (JSON stays exact bytes)
+                  </option>
+                }
+                @if (csvComparisonAvailable()) {
+                  <option [value]="csvRowsPolicy">
+                    Ordered CSV rows and cells
+                  </option>
+                }
               </select></label
             >
             @if (comparisonPolicy === ediPolicy) {
@@ -394,6 +406,19 @@
                 Segment, repetition and component order remains significant.
               </p>
             }
+          }
+          @if (csvMode) {
+            <p>
+              CSV/TSV needs one primary input and a verified native output
+              dialect. Start with “Save preview as test case” or edit an
+              existing CSV case. Empty input files are allowed only in this
+              profile. Filenames never choose a codec.
+            </p>
+            <p>
+              Row comparison preserves row, column and header order, without
+              trimming or type conversion. Only exact-byte comparison can
+              qualify a build.
+            </p>
           }
           @for (isOutput of [false, true]; track isOutput) {
             <h4>
@@ -433,6 +458,13 @@
                     </select></label
                   >
                 }
+                @if (isOutput && csvMode) {
+                  <p>
+                    Verified expected media:
+                    {{ item.mediaType || "Not supplied" }}. The native dialect
+                    is retained, not inferred from the file.
+                  </p>
+                }
                 @if (isOutput || !first) {
                   <label
                     >Document name<input
@@ -471,6 +503,11 @@
                 <label
                   >Choose exact-byte file<input
                     type="file"
+                    [attr.accept]="
+                      csvMode
+                        ? '.csv,.tsv,text/csv,text/tab-separated-values'
+                        : null
+                    "
                     (change)="chooseFile(isOutput, item.id, $event)"
                 /></label>
                 @if (isOutput || !first) {
@@ -488,6 +525,7 @@
               class="catalog-button"
               type="button"
               (click)="addDocument(isOutput)"
+              [disabled]="csvMode"
             >
               {{ isOutput ? "Add expected output" : "Add named input" }}
             </button>
@@ -777,6 +815,20 @@
               {{ diagnostic.location.element }}
             </p>
           }
+          @if (comparison.csvDiagnostic; as diagnostic) {
+            <p>
+              Invalid {{ diagnostic.side }} CSV/TSV document:
+              {{ diagnostic.name ?? "Primary" }} · row
+              {{ diagnostic.location.row }} · column
+              {{ diagnostic.location.column }}
+            </p>
+          }
+          @if (comparison.policy === csvRowsPolicy) {
+            <p>
+              This is ordered row/cell comparison, not exact-byte build
+              qualification.
+            </p>
+          }
           <p>
             {{ comparison.expectedOutputs }} expected outputs ·
             {{ comparison.actualOutputs }} actual outputs ·
@@ -794,7 +846,7 @@
                   <th>Expected bytes</th>
                   <th>Actual bytes</th>
                   <th>First different byte</th>
-                  <th>EDI location</th>
+                  <th>Document location</th>
                 </tr>
               </thead>
               <tbody>
@@ -812,6 +864,8 @@
                         element {{ location.element }} · repetition
                         {{ location.repetition }} · component
                         {{ location.component }}
+                      } @else if (difference.csvLocation; as location) {
+                        Row {{ location.row }} · column {{ location.column }}
                       } @else {
                         —
                       }
@@ -848,11 +902,7 @@
     @if (!workbench() && shown(); as output) {
       <section class="regression-detail" aria-label="Output text preview">
         <h3>{{ output.name }}</h3>
-        <p>UTF-8 text preview only. Download preserves the exact bytes.</p>
-        @if (output.truncated) {
-          <p>Showing the first 64 KiB.</p>
-        }
-        <pre>{{ output.text }}</pre>
+        <weft-document-view [data]="output.display" />
         <button class="catalog-button" type="button" (click)="shown.set(null)">
           Close output preview
         </button>

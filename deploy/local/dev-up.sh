@@ -32,6 +32,8 @@ dotnet=$dotnet_root/dotnet
 
 mkdir -p "$dev_home" "$dev_config" "$dev_logs" "$dev_home/tmp" "$dev_home/run" "$dev_home/bin"
 chmod 0700 "$dev_home" "$dev_config"
+# The local sandbox keeps its private message history here.
+install -d -m 0700 "$dev_home/sandbox"
 
 # ---- Private settings: generated once, mode 0600, never printed.
 secrets=$dev_config/secrets.env
@@ -265,6 +267,7 @@ WEFT_CHAT_ENABLED=true
 WEFT_CHAT_PROFILES_FILE=$chat_profiles
 WEFT_CHAT_READER_CONNECTION_STRING=$(connection weft_chat_reader CHAT_READER)
 WEFT_CHAT_WRITER_CONNECTION_STRING=$(connection weft_chat_writer CHAT_WRITER)
+WEFT_CHAT_APPROVER_CONNECTION_STRING=$(connection weft_chat_approver CHAT_APPROVER)
 WEFT_PREVIEWS_ENABLED=true
 WEFT_POSTGRES_PREVIEW_READER_CONNECTION_STRING=$(connection weft_preview_reader PREVIEW_READER)
 WEFT_POSTGRES_PREVIEW_WRITER_CONNECTION_STRING=$(connection weft_preview_writer PREVIEW_WRITER)
@@ -286,6 +289,14 @@ WEFT_RELEASE_OPERATIONS_ENABLED=true
 WEFT_RELEASE_READER_CONNECTION_STRING=$(connection weft_release_reader RELEASE_READER)
 WEFT_RELEASE_WRITER_CONNECTION_STRING=$(connection weft_release_writer RELEASE_WRITER)
 WEFT_QUALIFICATION_READER_CONNECTION_STRING=$(connection weft_qualification_reader QUALIFICATION_READER)
+WEFT_LOCAL_SANDBOX_ENABLED=true
+WEFT_LOCAL_SANDBOX_HISTORY_DIRECTORY=$dev_home/sandbox
+WEFT_LOCAL_SANDBOX_RUNTIME_IMAGE=$worker_image
+WEFT_LOCAL_SANDBOX_DOCKER_EXECUTABLE=$(command -v docker)
+WEFT_LOCAL_SANDBOX_QUALIFICATION_WRITER_CONNECTION_STRING=$(connection weft_qualification_writer QUALIFICATION_WRITER)
+WEFT_LOCAL_SANDBOX_BUILD_READER_CONNECTION_STRING=$(connection weft_build_reader BUILD_READER)
+WEFT_LOCAL_SANDBOX_INVOCATION_WRITER_CONNECTION_STRING=$(connection weft_invocation_writer INVOCATION_WRITER)
+WEFT_LOCAL_SANDBOX_INVOCATION_GRANT_WRITER_CONNECTION_STRING=$(connection weft_invocation_grant_writer INVOCATION_GRANT_WRITER)
 $docker_budgets
 EOF
 worker_env=$dev_config/worker.env
@@ -385,6 +396,7 @@ cat <<EOF
 Weft is running at $dev_origin/catalog (Development identity, loopback only).
   Build:    $build_key, Ferrule image $worker_image
   Chat:     ${chat_models[*]} through $dev_ollama_url (default ${chat_models[0]})
+  Sandbox:  local deployment simulation on each mapping's Sandbox page (docs/local-sandbox.md)
   Logs:     $dev_logs
   Settings: $dev_config (private)
   Status:   $dev_home/status.sh

@@ -12,6 +12,14 @@ internal static partial class BuildRoleGuard
     private static readonly Lazy<Dictionary<string, Match>> Definitions = new(Load);
     private static readonly Lazy<Dictionary<string, Match>> DocumentDefinitions = new(() => LoadFunctions("0034_document_previews.sql", 2));
     private static readonly Lazy<Dictionary<string, Match>> InterchangeDefinitions = new(() => LoadFunctions("0035_x12_interchange_builds.sql", 1));
+    private static readonly Lazy<Dictionary<string, Match>> CsvDefinitions = new(LoadCsvFunctions);
+    internal static Match CsvQualificationDefinition => CsvDefinitions.Value["qualification_valid"];
+
+    internal static async Task<bool> HasCsvBuildsAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken token)
+    {
+        await using var command = new NpgsqlCommand("SELECT prosrc FROM pg_catalog.pg_proc WHERE oid='weft.build_intent_canonical(jsonb)'::regprocedure", connection, transaction);
+        return await command.ExecuteScalarAsync(token) is string source && source == CsvDefinitions.Value["build_intent_canonical"].Groups[7].Value;
+    }
 
     internal static Match InterchangeQualificationDefinition => InterchangeDefinitions.Value["qualification_valid"];
     internal static async Task<bool> HasInterchangeBuildsAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken token)
@@ -57,7 +65,18 @@ internal static partial class BuildRoleGuard
     internal static async Task ValidateContractAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken token)
     {
         var definitions = Definitions.Value;
-        if (await HasDocumentBuildsAsync(connection, transaction, token))
+        if (await HasCsvBuildsAsync(connection, transaction, token))
+        {
+            definitions = new(definitions, StringComparer.Ordinal)
+            {
+                ["build_intent_canonical"] = CsvDefinitions.Value["build_intent_canonical"],
+                ["build_evidence_passes"] = CsvDefinitions.Value["build_evidence_passes"],
+                ["write_build_record"] = CsvDefinitions.Value["write_build_record"]
+            };
+            await ValidateFunctionsAsync(connection, transaction,
+                ["csv_dialect_valid", "csv_dialect_char_canonical", "csv_dialect_canonical", "qualification_valid"], CsvDefinitions.Value, token);
+        }
+        else if (await HasDocumentBuildsAsync(connection, transaction, token))
         {
             definitions = new(definitions, StringComparer.Ordinal) { ["build_evidence_passes"] = DocumentDefinitions.Value["build_evidence_passes"] };
         }
@@ -95,7 +114,7 @@ internal static partial class BuildRoleGuard
                 var definition = definitions[name];
                 var args = definition.Groups[2].Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Select(v => v.Split(' ', 2)).ToArray();
                 if (!seen.Add(name) || rows.GetString(1) != definition.Groups[7].Value || rows.GetBoolean(2) != (definition.Groups[6].Value == "DEFINER") ||
-                    rows.GetChar(3) != (definition.Groups[5].Value == "STABLE" ? 's' : 'v') || rows.GetString(4) != definition.Groups[4].Value ||
+                    rows.GetChar(3) != (definition.Groups[5].Value switch { "IMMUTABLE" => 'i', "STABLE" => 's', _ => 'v' }) || rows.GetString(4) != definition.Groups[4].Value ||
                     rows.GetString(5) != string.Join(", ", args.Select(a => a[1])) ||
                     !(rows.IsDBNull(6) ? Array.Empty<string>() : rows.GetFieldValue<string[]>(6)).SequenceEqual(args.Select(a => a[0])) ||
                     !rows.GetBoolean(7) || rows.GetString(8) != definition.Groups[3].Value.Trim()) throw Invalid();
@@ -123,7 +142,24 @@ internal static partial class BuildRoleGuard
         if (result.Count != count) throw Invalid();
         return result;
     }
-    [GeneratedRegex(@"CREATE (?:OR REPLACE )?FUNCTION weft\.([a-z_]+)\((.*?)\)\s+RETURNS\s+(.*?)\s+LANGUAGE (\w+) (STABLE|VOLATILE) SECURITY (DEFINER|INVOKER) SET search_path=pg_catalog,weft,pg_temp\s+AS \$body\$(.*?)\$body\$;", RegexOptions.Singleline | RegexOptions.CultureInvariant)]
+    private static Dictionary<string, Match> LoadCsvFunctions()
+    {
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Weft.Persistence.Postgres.Migrations.0041_csv_documents.sql") ?? throw Invalid();
+        using var reader = new StreamReader(stream);
+        var source = reader.ReadToEnd();
+        var result = new Dictionary<string, Match>(StringComparer.Ordinal);
+        foreach (var name in new[] { "csv_dialect_valid", "csv_dialect_char_canonical", "csv_dialect_canonical", "build_intent_canonical", "build_evidence_passes", "write_build_record", "qualification_valid" })
+        {
+            var start = source.IndexOf("FUNCTION weft." + name + "(", StringComparison.Ordinal);
+            if (start < 0) throw Invalid();
+            start = source.LastIndexOf("CREATE ", start, StringComparison.Ordinal);
+            var match = Function().Match(source, start);
+            if (!match.Success || match.Index != start || match.Groups[1].Value != name) throw Invalid();
+            result.Add(name, match);
+        }
+        return result;
+    }
+    [GeneratedRegex(@"CREATE (?:OR REPLACE )?FUNCTION weft\.([a-z_]+)\((.*?)\)\s+RETURNS\s+(.*?)\s+LANGUAGE (\w+) (IMMUTABLE|STABLE|VOLATILE) SECURITY (DEFINER|INVOKER) SET search_path=pg_catalog,weft,pg_temp\s+AS \$body\$(.*?)\$body\$;", RegexOptions.Singleline | RegexOptions.CultureInvariant)]
     private static partial Regex Function();
     private static InvalidOperationException Invalid() => new("Build database contract unavailable.");
 }

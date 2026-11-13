@@ -21,7 +21,9 @@ import { CatalogContextStore } from "../catalog/catalog-context";
 import { CatalogApi } from "../catalog/catalog-api";
 import {
   catalogOwner,
+  catalogRoutes,
   type CatalogContext,
+  type CatalogMappingScope,
   type CatalogRevisionScope,
   type CatalogMapping,
   type CatalogMappingPage,
@@ -50,16 +52,39 @@ import {
   type AnyConversation,
   type ChatScope,
   type ChatFocus,
+  type MappingWriteEvent,
+  type MappingWriteReceipt,
   type UiAvailability,
   type WorkspaceCitationEvent,
   type WorkspaceCitation,
 } from "./workspace-chat-types";
+import {
+  comparisonPath,
+  comparisonQuery,
+  currentSide,
+} from "../catalog/comparison/revision-comparison-selection";
+import { RegressionStatusComponent } from "../catalog/automation/regression-status.component";
+import { DraftApi } from "../edit/draft-api";
 import { UnsentWork } from "../workbench/unsent-work";
 import { hasChatUnsentWork } from "./chat-unsent-work";
+import { mappingUpdateQuestion } from "./mapping-update-question";
+import {
+  sameProposal,
+  type MappingProposal,
+  type MappingProposalOperations,
+} from "./mapping-proposal-types";
+
+interface ProposalReviewState {
+  busy?: boolean;
+  details?: MappingProposalOperations;
+  reviewed?: boolean;
+  uncertain?: boolean;
+  message?: string;
+}
 
 @Component({
   selector: "weft-revision-chat",
-  imports: [HelpLinkComponent, RouterLink],
+  imports: [HelpLinkComponent, RouterLink, RegressionStatusComponent],
   templateUrl: "./revision-chat.component.html",
   styleUrl: "./revision-chat.component.css",
 })
@@ -262,7 +287,7 @@ export class RevisionChatComponent {
       return {
         label: "Whole workspace",
         detail:
-          "No mapping focus. Read-only tools can use any project you are authorized to read.",
+          "No mapping focus. Tools can use any project you are authorized to read; editing requires current edit permission.",
       };
     const name =
       this.focusMappings().find(
@@ -360,6 +385,56 @@ export class RevisionChatComponent {
     this.restoreFocus("[data-chat-composer]");
   }
 
+  /** Explicitly confirmed feedback is workspace-only and may never replace newer work. */
+  async prepareWorkspaceQuestion(
+    text: string,
+    isCurrent: () => boolean,
+  ): Promise<boolean> {
+    if (
+      !isCurrent() ||
+      this.busy() ||
+      this.hasPending() ||
+      this.pendingConversation
+    )
+      return false;
+    const owner = this.owner(),
+      context = this.context(),
+      draft = this.draft();
+    let conversation = this.current();
+    if (!conversation || !isWorkspace(conversation)) {
+      const requested = this.requestedConversation();
+      let adopted = false;
+      await this.newConversation(
+        draft,
+        () =>
+          (adopted =
+            isCurrent() &&
+            owner === this.owner() &&
+            this.contexts.isCurrent(context) &&
+            this.requestedConversation() === requested &&
+            this.draft() === draft),
+      );
+      if (!adopted) return false;
+      conversation = this.current();
+    }
+    if (
+      !isCurrent() ||
+      owner !== this.owner() ||
+      !this.contexts.isCurrent(context) ||
+      !this.contexts.canSend(this.context()) ||
+      !conversation ||
+      !isWorkspace(conversation) ||
+      this.current() !== conversation ||
+      this.hasPending() ||
+      this.busy() ||
+      this.draft() !== draft
+    )
+      return false;
+    this.draft.set(text);
+    this.restoreFocus("[data-chat-composer]");
+    return true;
+  }
+
   editDraft(event: Event): void {
     const textarea = event.target as HTMLTextAreaElement;
     this.draft.set(textarea.value);
@@ -451,8 +526,500 @@ export class RevisionChatComponent {
         (e): e is WorkspaceCitationEvent => e.type === "workspace.citation",
       ),
       sharedData: (events ?? []).some((e) => e.type === "data.shared"),
+      writes: this.mergeWrites(
+        (events ?? []).filter(
+          (e): e is MappingWriteEvent => e.type === "mapping.write",
+        ),
+        this.saveReceipts()[turn.turnId] ?? [],
+      ).filter(
+        (write) =>
+          !(this.proposals()[turn.turnId] ?? []).some(
+            (p) =>
+              p.status === "saved" &&
+              p.revisionId === write.revisionId &&
+              p.baseRevision.organizationId ===
+                write.baseRevision.organizationId &&
+              p.baseRevision.projectId === write.baseRevision.projectId &&
+              p.baseRevision.mappingId === write.baseRevision.mappingId,
+          ),
+      ),
+      saveReceipts: (this.saveReceipts()[turn.turnId] ?? []).filter(
+        (r) => r.status !== "saved",
+      ),
+      saveProblem: this.saveProblems()[turn.turnId] ?? "",
       problem: this.answerProblems()[turn.turnId] ?? "",
     };
+  }
+
+  private readonly drafts = inject(DraftApi);
+  readonly saveReceipts = signal<Record<string, MappingWriteReceipt[]>>({});
+  readonly saveProblems = signal<Record<string, string>>({});
+  readonly readingSaves = signal<ReadonlySet<string>>(new Set());
+  private readonly saveFlights = new Map<string, Promise<void>>();
+  private saveEpoch = 0;
+  private resetSaveReads(): void {
+    this.proposalEpoch++;
+    this.proposalFlights.clear();
+    this.proposalVersions.clear();
+    this.proposals.set({});
+    this.proposalReviews.set({});
+    this.proposalProblems.set({});
+    this.readingProposals.set(new Set());
+    ++this.saveEpoch;
+    this.saveFlights.clear();
+    this.readingSaves.set(new Set());
+  }
+  private mergeWrites(
+    events: MappingWriteEvent[],
+    receipts: MappingWriteReceipt[],
+  ): MappingWriteEvent[] {
+    const writes = [...events];
+    for (const receipt of receipts)
+      if (
+        receipt.write &&
+        !writes.some((w) => w.revisionId === receipt.write!.revisionId)
+      )
+        writes.push(receipt.write);
+    return writes;
+  }
+  async refreshSaves(turn: ChatTurn): Promise<void> {
+    void this.refreshProposals(turn);
+    const conversation = this.current(),
+      scope = this.activeScope(),
+      generation = this.generation,
+      epoch = this.saveEpoch;
+    if (!conversation || "revisionId" in scope) return;
+    const stale = () =>
+      generation !== this.generation ||
+      epoch !== this.saveEpoch ||
+      this.current()?.conversationId !== conversation.conversationId;
+    const key = `${epoch}:${conversation.conversationId}:${turn.turnId}`;
+    const previous = this.saveFlights.get(key) ?? Promise.resolve();
+    // Serialize a turn's reads without dropping a later refresh. Other turns read independently.
+    const flight = previous.then(async () => {
+      if (stale()) return;
+      const version = this.proposalVersions.get(turn.turnId) ?? 0;
+      try {
+        const receipts = await this.admitted((context, signal) =>
+          this.api.mappingWrites(
+            scope,
+            context,
+            signal,
+            conversation.conversationId,
+            turn.turnId,
+            false,
+          ),
+        );
+        if (
+          stale() ||
+          version !== (this.proposalVersions.get(turn.turnId) ?? 0)
+        )
+          return;
+        this.saveReceipts.update((all) => ({
+          ...all,
+          [turn.turnId]: receipts,
+        }));
+        this.saveProblems.update((all) => ({ ...all, [turn.turnId]: "" }));
+      } catch {
+        if (
+          !stale() &&
+          version === (this.proposalVersions.get(turn.turnId) ?? 0)
+        )
+          this.saveProblems.update((all) => ({
+            ...all,
+            [turn.turnId]:
+              "Couldn't check durable save status. Refresh before repeating an edit.",
+          }));
+      }
+    });
+    this.saveFlights.set(key, flight);
+    this.readingSaves.update((all) => new Set([...all, turn.turnId]));
+    try {
+      await flight;
+    } finally {
+      if (!stale() && this.saveFlights.get(key) === flight) {
+        this.saveFlights.delete(key);
+        this.readingSaves.update((all) => {
+          const next = new Set(all);
+          next.delete(turn.turnId);
+          return next;
+        });
+      }
+    }
+  }
+  readonly proposals = signal<Record<string, MappingProposal[]>>({});
+  readonly proposalReviews = signal<Record<string, ProposalReviewState>>({});
+  readonly proposalProblems = signal<Record<string, string>>({});
+  readonly readingProposals = signal<ReadonlySet<string>>(new Set());
+  private proposalEpoch = 0;
+  private readonly proposalFlights = new Map<string, Promise<void>>();
+  private readonly proposalVersions = new Map<string, number>();
+  proposalKey(turn: ChatTurn, proposal: MappingProposal): string {
+    return `${turn.turnId}:${proposal.proposalId}`;
+  }
+  private proposalGuard(
+    turn: ChatTurn,
+    proposal?: MappingProposal,
+  ): (() => boolean) | null {
+    const current = this.current(),
+      epoch = this.proposalEpoch,
+      generation = this.generation,
+      owner = catalogOwner(this.context());
+    if (
+      !current ||
+      !isWorkspace(current) ||
+      !this.turns().some((t) => t.turnId === turn.turnId)
+    )
+      return null;
+    return () =>
+      epoch !== this.proposalEpoch ||
+      generation !== this.generation ||
+      owner !== catalogOwner(this.context()) ||
+      this.current()?.conversationId !== current.conversationId ||
+      (proposal !== undefined &&
+        !this.proposals()[turn.turnId]?.some((p) => sameProposal(p, proposal)));
+  }
+  private setProposalReview(
+    key: string,
+    change: Partial<ProposalReviewState>,
+  ): void {
+    this.proposalReviews.update((all) => ({
+      ...all,
+      [key]: { ...all[key], ...change },
+    }));
+  }
+  async refreshProposals(turn: ChatTurn): Promise<void> {
+    const stale = this.proposalGuard(turn),
+      current = this.current(),
+      scope = this.activeScope();
+    if (
+      !stale ||
+      !current ||
+      "revisionId" in scope ||
+      this.proposals()[turn.turnId]?.some(
+        (p) => this.proposalReviews()[this.proposalKey(turn, p)]?.busy,
+      )
+    )
+      return;
+    const epoch = this.proposalEpoch,
+      key = `${epoch}:${turn.turnId}`;
+    const previous = this.proposalFlights.get(key) ?? Promise.resolve();
+    const flight = previous.then(async () => {
+      if (stale()) return;
+      const version = this.proposalVersions.get(turn.turnId) ?? 0;
+      try {
+        const result = await this.admitted((c, s) =>
+          this.api.proposals(scope, c, s, current.conversationId, turn.turnId),
+        );
+        if (
+          stale() ||
+          version !== (this.proposalVersions.get(turn.turnId) ?? 0)
+        )
+          return;
+        this.proposalReviews.update((all) => {
+          const next = { ...all };
+          for (const old of this.proposals()[turn.turnId] ?? []) {
+            const id = this.proposalKey(turn, old),
+              replacement = result.find((p) => sameProposal(old, p));
+            if (!replacement) delete next[id];
+            else next[id] = { ...next[id], uncertain: false, message: "" };
+          }
+          return next;
+        });
+        this.proposals.update((all) => ({ ...all, [turn.turnId]: result }));
+        this.proposalProblems.update((all) => ({ ...all, [turn.turnId]: "" }));
+      } catch {
+        if (
+          stale() ||
+          version !== (this.proposalVersions.get(turn.turnId) ?? 0)
+        )
+          return;
+        this.proposalProblems.update((all) => ({
+          ...all,
+          [turn.turnId]:
+            "Couldn't read proposal status. Refresh before approving or retrying.",
+        }));
+        for (const p of this.proposals()[turn.turnId] ?? [])
+          this.setProposalReview(this.proposalKey(turn, p), {
+            details: undefined,
+            reviewed: false,
+            uncertain: true,
+          });
+      }
+    });
+    this.proposalFlights.set(key, flight);
+    this.readingProposals.update((all) => new Set([...all, turn.turnId]));
+    await flight;
+    if (!stale() && this.proposalFlights.get(key) === flight) {
+      this.proposalFlights.delete(key);
+      this.readingProposals.update((all) => {
+        const next = new Set(all);
+        next.delete(turn.turnId);
+        return next;
+      });
+    }
+  }
+  async readProposalOperations(
+    turn: ChatTurn,
+    proposal: MappingProposal,
+  ): Promise<void> {
+    const stale = this.proposalGuard(turn, proposal),
+      current = this.current(),
+      scope = this.activeScope(),
+      key = this.proposalKey(turn, proposal);
+    if (!stale || !current || this.proposalReviews()[key]?.busy) return;
+    this.setProposalReview(key, { busy: true, reviewed: false, message: "" });
+    try {
+      const details = await this.admitted((c, s) =>
+        this.api.proposalDetails(
+          scope,
+          c,
+          s,
+          current.conversationId,
+          turn.turnId,
+          proposal,
+        ),
+      );
+      if (!stale()) this.setProposalReview(key, { details });
+    } catch {
+      if (!stale())
+        this.setProposalReview(key, {
+          details: undefined,
+          message:
+            "Couldn't verify the complete operations. Refresh the proposal and try again.",
+        });
+    } finally {
+      if (!stale()) this.setProposalReview(key, { busy: false });
+    }
+  }
+  markProposalReviewed(
+    turn: ChatTurn,
+    proposal: MappingProposal,
+    event: Event,
+  ): void {
+    const key = this.proposalKey(turn, proposal);
+    if (
+      this.proposalReviews()[key]?.details?.fingerprint === proposal.fingerprint
+    )
+      this.setProposalReview(key, {
+        reviewed: (event.target as HTMLInputElement).checked,
+      });
+  }
+  canApproveProposal(turn: ChatTurn, proposal: MappingProposal): boolean {
+    const review = this.proposalReviews()[this.proposalKey(turn, proposal)];
+    return (
+      ["awaitingApproval", "approved", "pending", "notSaved"].includes(
+        proposal.status,
+      ) &&
+      !this.proposalProblems()[turn.turnId] &&
+      !this.readingProposals().has(turn.turnId) &&
+      !review?.busy &&
+      !review?.uncertain &&
+      review?.reviewed === true &&
+      review.details?.fingerprint === proposal.fingerprint
+    );
+  }
+  async actOnProposal(
+    turn: ChatTurn,
+    proposal: MappingProposal,
+    action: "approve" | "recover",
+  ): Promise<void> {
+    const stale = this.proposalGuard(turn, proposal),
+      current = this.current(),
+      scope = this.activeScope(),
+      key = this.proposalKey(turn, proposal);
+    if (
+      !stale ||
+      !current ||
+      this.proposalReviews()[key]?.busy ||
+      this.proposalReviews()[key]?.uncertain ||
+      this.proposalProblems()[turn.turnId] ||
+      (action === "approve"
+        ? !this.canApproveProposal(turn, proposal)
+        : proposal.status !== "pending")
+    )
+      return;
+    this.proposalVersions.set(
+      turn.turnId,
+      (this.proposalVersions.get(turn.turnId) ?? 0) + 1,
+    );
+    this.setProposalReview(key, { busy: true, message: "" });
+    let confirmed = false;
+    try {
+      const result = await this.admitted((c, s) =>
+        this.api.actOnProposal(
+          scope,
+          c,
+          s,
+          current.conversationId,
+          turn.turnId,
+          proposal,
+          action,
+        ),
+      );
+      if (stale()) return;
+      confirmed = true;
+      this.proposals.update((all) => ({
+        ...all,
+        [turn.turnId]: all[turn.turnId]!.map((p) =>
+          p.proposalId === proposal.proposalId ? result : p,
+        ),
+      }));
+      this.setProposalReview(key, {
+        reviewed: false,
+        uncertain: false,
+        message:
+          result.status === "pending"
+            ? "Still pending. Recovery never supplies missing source. Review and explicitly approve this same proposal again if it needs source."
+            : "",
+      });
+    } catch {
+      if (!stale())
+        this.setProposalReview(key, {
+          uncertain: true,
+          reviewed: false,
+          message:
+            "The request outcome is unknown. No saved version is confirmed. Refresh status before retrying this exact proposal.",
+        });
+    } finally {
+      if (!stale()) {
+        this.proposalVersions.set(
+          turn.turnId,
+          (this.proposalVersions.get(turn.turnId) ?? 0) + 1,
+        );
+        this.setProposalReview(key, { busy: false });
+        if (confirmed) await this.refreshSaves(turn);
+      }
+    }
+  }
+  proposalVersionLink(proposal: MappingProposal): string {
+    return catalogRoutes.revision({
+      ...proposal.baseRevision,
+      revisionId: proposal.revisionId!,
+    });
+  }
+  prepareProposalQuestion(turn: ChatTurn, proposal: MappingProposal): void {
+    if (
+      !this.canUpdate() ||
+      this.hasPending() ||
+      proposal.status !== "outOfDate"
+    )
+      return;
+    const question = `Prepare a new proposal for mapping ${proposal.baseRevision.mappingId} after reading its current head. The previous proposal ${proposal.proposalId} (fingerprint ${proposal.fingerprint}) is out of date. Do not save or approve anything; I will review the new exact proposal separately. Original request: ${JSON.stringify(turn.text)}`;
+    if (
+      new TextEncoder().encode(question).length >
+      (this.availability()?.limits.maxTextBytes ?? 0)
+    ) {
+      this.setProposalReview(this.proposalKey(turn, proposal), {
+        message:
+          "Write a new question naming this mapping and the intended change; the original request exceeds the question limit.",
+      });
+      return;
+    }
+    this.draft.set(question);
+  }
+
+  /** Per receipt: the Undo request key, retained until its outcome is known so a retry never saves twice. */
+  readonly writeStates = signal<
+    Record<string, { key: string; busy: boolean; message: string }>
+  >({});
+  writeKey(turn: ChatTurn, write: MappingWriteEvent): string {
+    return `${turn.turnId}:${write.revisionId ?? write.sequence}`;
+  }
+  writeMapping(write: MappingWriteEvent): CatalogMappingScope {
+    const { organizationId, projectId, mappingId } = write.baseRevision;
+    return { organizationId, projectId, mappingId };
+  }
+  savedLink(write: MappingWriteEvent): string {
+    return catalogRoutes.revision({
+      ...write.baseRevision,
+      revisionId: write.revisionId!,
+    });
+  }
+  comparisonLink(write: MappingWriteEvent): string {
+    return comparisonPath(this.writeMapping(write));
+  }
+  comparisonParams(write: MappingWriteEvent) {
+    return comparisonQuery(
+      currentSide(write.baseRevision.revisionId),
+      currentSide(write.revisionId!),
+    );
+  }
+  async undoWrite(turn: ChatTurn, write: MappingWriteEvent): Promise<void> {
+    const id = this.writeKey(turn, write);
+    const state = this.writeStates()[id];
+    if (state?.busy || write.outcome !== "saved") return;
+    const key = state?.key ?? crypto.randomUUID();
+    const set = (busy: boolean, message: string, keep = true) =>
+      this.writeStates.update((all) => {
+        const next = { ...all };
+        if (keep) next[id] = { key, busy, message };
+        else next[id] = { key: crypto.randomUUID(), busy, message };
+        return next;
+      });
+    set(true, "Saving the previous content as a new version…");
+    try {
+      const result = await this.drafts.restore(
+        this.context(),
+        this.writeMapping(write),
+        write.baseRevision.revisionId,
+        write.revisionId!,
+        key,
+      );
+      const phase = result.receipt?.phase;
+      if (phase === "committed")
+        set(
+          false,
+          `Undone: version ${result.receipt?.committedSequence ?? "?"} has the content of version ${write.baseSequence}.`,
+        );
+      else if (phase === "headConflict")
+        set(
+          false,
+          "Not undone: a newer version was saved after this one. Nothing changed.",
+          false,
+        );
+      else
+        set(
+          false,
+          "The undo outcome isn't known yet. Undo again to check the same request.",
+        );
+    } catch {
+      set(
+        false,
+        "Undo couldn't be confirmed. Undo again to retry the same request.",
+      );
+    }
+  }
+  /** A new question, sent only by this click, asking for the same edit on the newer version. */
+  readonly canUpdate = computed(
+    () =>
+      !!this.current() &&
+      !this.busy() &&
+      !this.turns().some((t) => t.phase === "active") &&
+      !this.draft().trim(),
+  );
+  async updateWrite(turn: ChatTurn, write: MappingWriteEvent): Promise<void> {
+    if (!this.canUpdate() || this.hasPending() || write.headSequence === null)
+      return;
+    const question = mappingUpdateQuestion(
+      turn,
+      write,
+      this.availability()?.limits.maxTextBytes ?? 0,
+    );
+    if (question === null) {
+      this.writeStates.update((states) => ({
+        ...states,
+        [this.writeKey(turn, write)]: {
+          key: "",
+          busy: false,
+          message:
+            "The complete intended edit can't be included in one update question. Send a new question specifying the mapping and intended change; nothing was sent or saved.",
+        },
+      }));
+      return;
+    }
+    this.draft.set(question);
+    await this.send();
   }
   readonly transcript = computed(() =>
     this.turns().map((turn) => ({ turn, ...this.turnView(turn) })),
@@ -804,6 +1371,9 @@ export class RevisionChatComponent {
     this.problemAtComposer.set(false);
     this.followBottom = true;
     this.savedEvents.set({});
+    this.saveReceipts.set({});
+    this.saveProblems.set({});
+    this.resetSaveReads();
     this.answerProblems.set({});
     this.expandedTools.set(new Set());
     this.expandedDetails.set(new Set());
@@ -949,9 +1519,17 @@ export class RevisionChatComponent {
         await this.show(this.requestedConversation()!);
     }
   }
-  async newConversation(): Promise<void> {
+  async newConversation(
+    confirmedDraft?: string,
+    isCurrent: () => boolean = () => true,
+  ): Promise<void> {
     if (this.busy() || this.pending || !this.canCreate()) return;
-    if (!this.pendingConversation && !this.allowConversationSwitch()) return;
+    if (
+      !this.pendingConversation &&
+      !(confirmedDraft !== undefined && this.draft() === confirmedDraft) &&
+      !this.allowConversationSwitch()
+    )
+      return;
     await this.perform(async () => {
       if (!this.pendingConversation) {
         this.pendingConversation = crypto.randomUUID();
@@ -975,6 +1553,7 @@ export class RevisionChatComponent {
       );
       this.pendingConversation = null;
       this.pendingFocus = null;
+      if (!isCurrent()) return;
       this.stopStream();
       this.followBottom = true;
       this.current.set(result);
@@ -990,6 +1569,9 @@ export class RevisionChatComponent {
       this.selectedConversation.emit(result);
       this.turns.set([]);
       this.savedEvents.set({});
+      this.saveReceipts.set({});
+      this.saveProblems.set({});
+      this.resetSaveReads();
       this.answerProblems.set({});
       this.selected.set(null);
       this.events.set([]);
@@ -1039,6 +1621,9 @@ export class RevisionChatComponent {
     this.current.set(null);
     this.turns.set([]);
     this.savedEvents.set({});
+    this.saveReceipts.set({});
+    this.saveProblems.set({});
+    this.resetSaveReads();
     this.answerProblems.set({});
     this.selected.set(null);
     this.events.set([]);
@@ -1146,6 +1731,7 @@ export class RevisionChatComponent {
             ...saved,
             [turn.turnId]: events,
           }));
+          await this.refreshSaves(turn);
         }
       });
     } catch {
@@ -1339,6 +1925,8 @@ export class RevisionChatComponent {
                 throw new ChatError("bodyLimit");
               this.lastSequence = value.sequence;
               this.events.update((events) => [...events, value]);
+              if (value.type === "tool.completed" || terminal(value))
+                void this.refreshProposals(selected);
               if (terminal(value)) {
                 const phase =
                   value.type === "turn.completed"
@@ -1367,6 +1955,8 @@ export class RevisionChatComponent {
         this.streaming.set(false);
         this.disconnected.set(!this.events().some(terminal));
       }
+      if (generation === this.generation && !controller.signal.aborted)
+        await this.refreshSaves(selected);
     }
   }
   async cancel(): Promise<void> {

@@ -1,5 +1,5 @@
 import type { components } from "../../api/generated";
-
+import type { XmlPreflightProblem } from "./xml-problem";
 export type PreviewRun = components["schemas"]["CatalogPreviewRunV1"];
 export type PreviewOutput = components["schemas"]["CatalogPreviewOutputV1"];
 export type PreviewFailure = components["schemas"]["CatalogPreviewFailureV1"];
@@ -60,6 +60,7 @@ export class PreviewError extends Error {
   constructor(
     readonly kind: PreviewErrorKind,
     readonly status: number | null = null,
+    readonly xmlProblem: XmlPreflightProblem | null = null,
   ) {
     super("The preview request could not be completed.");
     this.name = "PreviewError";

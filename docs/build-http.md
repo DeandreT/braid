@@ -1,8 +1,9 @@
 # Build control HTTP API
 
 The default-off build module exposes retained metadata and approved queue
-operations. It does not inspect or compile a mapping, derive reports, discover
-machine work, publish artifacts or deploy an endpoint from an HTTP request.
+operations. It does not compile a mapping, derive reports, discover machine work,
+publish artifacts or deploy an endpoint from an HTTP request. Optional CSV build
+approval performs read-only native boundary inspection as described below.
 
 ## Routes
 
@@ -46,8 +47,10 @@ Approval PUT uses `application/vnd.weft.build-approval.v1+json`:
 The server supplies the native digest, backend/image/runtime identity, artifact
 profile and physical boundary requirements. It uses exact authorized revision
 metadata, the selected environment version, recomputed saved regression evidence
-and a complete verified stored projection. Missing, partial or incompatible
-facts fail the precondition; no hidden worker or report derivation fills a gap.
+and a complete verified stored projection. CSV approval additionally obtains its
+exact saved input/output dialects from the explicit native CSV build inspector;
+projection format recognition does not admit the compiler. Missing, partial or
+incompatible facts fail the precondition; no report derivation fills a gap.
 The build worker still performs its own actual compiler capability/preflight.
 
 Recovery reads a retained own approval before consulting current configuration.
@@ -102,6 +105,36 @@ Session mode reads the corresponding `_FILE` deliveries through the protected
 connection loader. The control role retains its existing database publication
 privileges; HTTP exposes only guarded approval operations, not publication
 services. It receives no machine dispatch credential or claim capability.
+
+### Optional CSV build registration
+
+`WEFT_BUILDS_CSV_ENABLED=true` separately enables the
+`weft.ferrule-csharp-csv.v1` profile and `FerruleCsvBuildBoundaryReader`. It is off
+when absent or `false`; an unsupported value refuses configuration. It does not
+change the existing JSON/EDI profiles or turn on the build module itself.
+
+CSV inspection uses the selected `WEFT_FERRULE_RUNNER`: Docker in development,
+or the Ferrule service or Azure dynamic sessions. The inspection-worker-only
+transport does not serve compiler frames and is refused for CSV. Session hosts
+remain remote-only. Service/Sessions selection requires the exact
+`WEFT_FERRULE_COMPILE_TOOLCHAIN` pin as well as the native worker identity; CSV
+approval, regression provenance and queued builds must share their combined
+compiler identity.
+
+The server registers a lazy compiler-profile reader, not a compiler execution
+queue. Reading capabilities or recovering retained approvals does not open a
+certificate, connect storage or start a child. An authorized new CSV approval
+reads the exact private native revision and runs only the build protocol's
+`inspect` operation. It validates both primary boundaries, including dialects,
+before forming the immutable intent. Named and mixed plans refuse admission.
+New CSV run submission still requires the configured CSV backend/profile and
+fresh approval, evidence and project authority.
+
+If native inspection already owns the selected service/Sessions connector, the
+CSV reader borrows it. Otherwise it owns a connector with the same protected
+certificate delivery or managed-identity settings. Shutdown joins its runner
+before releasing any owned connector or certificate; stopped readers do not
+start new work.
 
 Migration 0020 adds the dedicated read-only metadata role, narrow query function
 and history indexes. Exact function/schema guards admit the new contract without

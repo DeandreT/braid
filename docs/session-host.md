@@ -80,7 +80,7 @@ Session snapshots every feature flag before it opens any PEM, ring or credential
 
 | Session credential file | Login |
 | --- | --- |
-| `WEFT_CHAT_READER_CONNECTION_STRING_FILE` / `WEFT_CHAT_WRITER_CONNECTION_STRING_FILE` | `weft_chat_reader` / `weft_chat_writer` |
+| `WEFT_CHAT_READER_CONNECTION_STRING_FILE` / `WEFT_CHAT_WRITER_CONNECTION_STRING_FILE` / `WEFT_CHAT_APPROVER_CONNECTION_STRING_FILE` | Independently credentialed `weft_chat_reader` / `weft_chat_writer` / `weft_chat_approver`; all three required when chat is enabled. See [exact approval composition](chat-edit-approval-composition.md). |
 | `WEFT_CHAT_PAYLOAD_PERMISSION_CONNECTION_STRING_FILE` (optional) | `weft_payload_permission_reader` |
 | `WEFT_POSTGRES_PREVIEW_READER_CONNECTION_STRING_FILE` / `WEFT_POSTGRES_PREVIEW_WRITER_CONNECTION_STRING_FILE` | `weft_preview_reader` / `weft_preview_writer` |
 

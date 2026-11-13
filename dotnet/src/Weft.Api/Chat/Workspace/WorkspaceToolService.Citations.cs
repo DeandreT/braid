@@ -77,6 +77,14 @@ public sealed partial class WorkspaceToolService
     {
         switch (fact.Kind)
         {
+            case ChatWorkspaceCitationKind.CreationProposal:
+                if (!features.Creation || !await Creation.CreationRuntime.AvailableAsync(services, token)) return false;
+                var retained = await Required<IMappingCreationProposalStore>().ReadAsync(actor, fact.ProjectScope!, fact.SubjectId!.Value, token);
+                return retained is not null && retained.Proposal.Author == actor.PrincipalId && retained.Proposal.Project == fact.ProjectScope &&
+                    retained.Proposal.Id == fact.SubjectId && retained.Proposal.Fingerprint == fact.ProposalFingerprint &&
+                    await Catalog.GetProjectAsync(actor, fact.ProjectScope!, token) is { } creationProject &&
+                    creationProject.Summary.Scope == fact.ProjectScope && creationProject.Access.PrincipalId == actor.PrincipalId &&
+                    creationProject.Access.Can(ProjectAction.ReadMetadata);
             case ChatWorkspaceCitationKind.Project:
                 return await Catalog.GetProjectAsync(actor, fact.ProjectScope!, token) is { } project && project.Summary.Scope == fact.ProjectScope;
             case ChatWorkspaceCitationKind.Mapping:
@@ -85,7 +93,7 @@ public sealed partial class WorkspaceToolService
                 return await CatalogEndpoints.ReadableRevisionAsync(services, actor, fact.RevisionScope!, token) is not null;
             case ChatWorkspaceCitationKind.PreviewRun:
                 return features.Previews && Optional<PreviewRunService>() is { } previews &&
-                    await previews.ReadAsync(actor, fact.OrganizationId, fact.SubjectId!.Value, token) is { } preview && preview.Revision == fact.RevisionScope;
+                    await previews.ReadAsync(actor, fact.OrganizationId, fact.SubjectId!.Value, token) is { Subject: RevisionPreviewSubject preview } && preview.Revision == fact.RevisionScope;
             case ChatWorkspaceCitationKind.RegressionCase:
                 return features.Regressions && Optional<IRegressionCaseMetadataReader>() is { } cases &&
                     await CatalogEndpoints.ReadableMappingAsync(services, actor, fact.MappingScope!, token) is not null &&

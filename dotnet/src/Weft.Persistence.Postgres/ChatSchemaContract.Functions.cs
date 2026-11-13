@@ -13,7 +13,7 @@ internal static partial class ChatSchemaContract
     private static readonly string[] Owners = ["weft_chat_reader", "weft_chat_writer"];
     private static readonly string[] Writer = ["weft_chat_writer"];
     private static readonly string[] Lifecycle = ["weft_chat_lifecycle"];
-    private static readonly string[] Profiles = ["weft_chat_reader", "weft_chat_writer", "weft_chat_lifecycle"];
+    private static readonly string[] Profiles = ["weft_chat_reader", "weft_chat_writer", "weft_chat_lifecycle", "weft_chat_approver"];
     private const string EraseTypes = "uuid,uuid,uuid,uuid,uuid,uuid,text,integer,timestamp with time zone";
     private static readonly string[] TargetNames = ["p_org", "p_creator", "p_conversation", "p_project", "p_mapping", "p_revision"];
     private static readonly string[] EraseNames = [.. TargetNames, "p_policy", "p_policy_version", "p_retirement_not_before"];
@@ -36,15 +36,31 @@ internal static partial class ChatSchemaContract
         new("chat_erase_expired", EraseTypes, EraseNames, "text", Roles: Writer),
         new("chat_lifecycle_erase", EraseTypes, EraseNames, "text", Definer: true, Scoped: true, Roles: Lifecycle),
         new("guard_chat_payload_audit", "", []),
-        new("audit_chat_payload", "", [], Definer: true)
+        new("audit_chat_payload", "", [], Definer: true),
+        new("guard_chat_mapping_write_audit", "", []),
+        new("audit_chat_mapping_write", "", [], Definer: true),
+        new("guard_chat_mapping_write_content", "", []),
+        new("audit_chat_mapping_write_commit", "", [], Definer: true),
+        new("chat_mapping_write_prepare", "uuid,uuid,uuid,uuid,uuid,text,uuid,text,bytea",
+            ["p_org", "p_creator", "p_conversation", "p_turn", "p_round", "p_call", "p_key", "p_proposal", "p_native"], "boolean", Definer: true),
+        new("chat_mapping_write_read", "uuid,uuid,uuid,uuid", ["p_org", "p_creator", "p_conversation", "p_turn"], "text", Definer: true, Roles: Owners),
+        new("chat_edit_create", "uuid,uuid,uuid,uuid,text,uuid,text,bytea,bytea,text",
+            ["p_org", "p_creator", "p_conversation", "p_turn", "p_facts", "p_generation", "p_provenance", "p_encoding", "p_native", "p_journal"], "text", Definer: true, Roles: Writer),
+        new("chat_edit_read", "uuid,uuid,uuid,uuid,uuid", ["p_org", "p_creator", "p_conversation", "p_turn", "p_proposal"], "text", Definer: true,
+            Roles: ["weft_chat_reader", "weft_chat_writer", "weft_chat_approver"]),
+        new("chat_edit_list", "uuid,uuid,uuid,uuid", ["p_org", "p_creator", "p_conversation", "p_turn"], "text", Definer: true,
+            Roles: ["weft_chat_reader", "weft_chat_writer", "weft_chat_approver"]),
+        new("chat_edit_approve", "uuid,uuid,uuid,uuid,uuid,text", ["p_org", "p_creator", "p_conversation", "p_turn", "p_proposal", "p_fingerprint"], "text", Definer: true,
+            Roles: ["weft_chat_approver"])
     ];
     internal static string[] FunctionGrants(ChatDatabaseProfile profile) => Functions
         .Where(f => f.Roles?.Contains(ChatRoleGuard.RoleName(profile), StringComparer.Ordinal) == true).Select(f => f.Signature).ToArray();
     internal static string[] FunctionNames => Functions.Select(f => f.Name).ToArray();
 
-    private static async Task ValidateFunctionsAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct)
+    private static async Task ValidateFunctionsAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct,
+        IEnumerable<Function>? selected = null)
     {
-        foreach (var f in Functions)
+        foreach (var f in selected ?? Functions)
         {
             await using var command = new NpgsqlCommand("""
                 SELECT count(*)=1 AND COALESCE(bool_and(o.rolname='weft_migrator' AND l.lanname=$2 AND f.prokind='f'

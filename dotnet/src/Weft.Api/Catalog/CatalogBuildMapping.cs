@@ -19,7 +19,9 @@ internal static class CatalogBuildMapping
     {
         var intent = value.Intent;
         return new(intent.ApprovalId.ToString("D"), intent.BuildId.ToString("D"), Scope(intent.Revision), intent.NativeDigest.Value,
-            Backend(intent.Backend), Profile(intent.Profile), intent.Boundaries.Select(boundary => new BuildBoundaryV1(Name(boundary.Kind), boundary.Name, boundary.Format)).ToArray(),
+            Backend(intent.Backend), Profile(intent.Profile), intent.Boundaries.Select(boundary => new BuildBoundaryV1(Name(boundary.Kind), boundary.Name, boundary.Format,
+                boundary.CsvDialect is { } dialect ? new(dialect.Schema, dialect.Delimiter, dialect.Quote, dialect.QuoteDisabled,
+                    dialect.HasHeaderRow, dialect.Utf8Bom, dialect.PreserveEmptyStrings) : null)).ToArray(),
             Reference(intent.Environment), intent.RegressionEvidenceId.ToString("D"), value.Revoked, value.EnvironmentActive,
             value.CreatedAt.ToString("O", CultureInfo.InvariantCulture));
     }

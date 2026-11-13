@@ -13,9 +13,10 @@ namespace Weft.Tests;
 public sealed class ChatHostConfigurationTests : IDisposable
 {
     private const string Connection = "Host=127.0.0.1;Database=weft;Username=weft_chat_reader;Password=synthetic-never-connected";
-    private const string WriterConnection = "Host=127.0.0.1;Database=weft;Username=weft_chat_writer;Password=synthetic-never-connected";
+    private const string WriterConnection = "Host=127.0.0.1;Database=weft;Username=weft_chat_writer;Password=synthetic-writer-never-connected";
+    private const string ApproverConnection = "Host=127.0.0.1;Database=weft;Username=weft_chat_approver;Password=synthetic-approver-never-connected";
     private static readonly string[] ChatDependencies =
-        ["WEFT_CHAT_PROFILES_FILE", "WEFT_CHAT_READER_CONNECTION_STRING", "WEFT_CHAT_WRITER_CONNECTION_STRING"];
+        ["WEFT_CHAT_PROFILES_FILE", "WEFT_CHAT_READER_CONNECTION_STRING", "WEFT_CHAT_WRITER_CONNECTION_STRING", "WEFT_CHAT_APPROVER_CONNECTION_STRING"];
     private readonly string root = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "weft-chat-host-" + Guid.NewGuid().ToString("N"),
         "private")).FullName;
 
@@ -186,6 +187,7 @@ public sealed class ChatHostConfigurationTests : IDisposable
         configuration["WEFT_CHAT_PROFILES_FILE"] = Private("profiles.json", Profiles(Secret("token")));
         configuration["WEFT_CHAT_READER_CONNECTION_STRING"] = Connection;
         configuration["WEFT_CHAT_WRITER_CONNECTION_STRING"] = WriterConnection;
+        configuration["WEFT_CHAT_APPROVER_CONNECTION_STRING"] = ApproverConnection;
     }
 
     private static string Profiles(string secretPath) =>

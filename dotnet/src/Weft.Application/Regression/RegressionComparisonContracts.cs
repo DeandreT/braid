@@ -18,7 +18,7 @@ public sealed class RegressionComparisonException : Exception
 
 public enum RegressionComparisonOutcome { Passed, Failed, NotEvaluated }
 public enum RegressionNotEvaluatedReason { None, UnsupportedPolicy, ExecutionUnsuccessful, MissingBaseline, InvalidDocument }
-public enum RegressionDifferenceKind { MissingOutput, UnexpectedOutput, BytesDiffer, MediaTypeDiffer, SeparatorsDiffer, SegmentsDiffer }
+public enum RegressionDifferenceKind { MissingOutput, UnexpectedOutput, BytesDiffer, MediaTypeDiffer, SeparatorsDiffer, SegmentsDiffer, CsvDialectDiffer, CsvRowsDiffer, XmlMetadataDiffer }
 
 /// <summary>Explicit EDI comparison choices. Segment, repetition and component order is always significant.</summary>
 public sealed record EdiComparisonOptions(bool CompareSeparators, bool IgnoreControlNumbers, bool IgnoreDates);
@@ -26,6 +26,8 @@ public sealed record EdiComparisonOptions(bool CompareSeparators, bool IgnoreCon
 /// <summary>One-based lexical location, with zero for a whole segment or its service separators. No payload values.</summary>
 public sealed record RegressionDocumentLocation(int Interchange, int Segment, string SegmentId, int Element, int Repetition, int Component);
 public sealed record RegressionDocumentDiagnostic(RegressionOutputKey Key, string Side, RegressionDocumentLocation Location);
+public sealed record RegressionCsvLocation(int Row, int Column);
+public sealed record RegressionCsvDiagnostic(RegressionOutputKey Key, string Side, RegressionCsvLocation Location);
 
 /// <summary>Execution facts supplied by a trusted run reader; this type does not authenticate them.</summary>
 public sealed class RegressionExecutionObservation
@@ -49,6 +51,7 @@ public sealed record RegressionOutputDifference(RegressionOutputKey Key, Regress
     int? FirstDifferentByte)
 {
     public RegressionDocumentLocation? Location { get; init; }
+    public RegressionCsvLocation? CsvLocation { get; init; }
     public override string ToString() => nameof(RegressionOutputDifference);
 }
 
@@ -91,6 +94,7 @@ public sealed class RegressionComparisonResult
 
     public string Policy { get; }
     public RegressionDocumentDiagnostic? DocumentDiagnostic { get; internal init; }
+    public RegressionCsvDiagnostic? CsvDiagnostic { get; internal init; }
     public RegressionComparisonOutcome Outcome { get; }
     public RegressionNotEvaluatedReason NotEvaluatedReason { get; }
     public OperationStatusV1 ExecutionStatus { get; }

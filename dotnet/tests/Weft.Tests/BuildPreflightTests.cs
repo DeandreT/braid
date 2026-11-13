@@ -19,6 +19,14 @@ public sealed class BuildPreflightTests
     private readonly BuildPreflightService service = new();
 
     [Fact]
+    public void Xml_builds_refuse_even_a_claimed_supported_capability_without_an_exact_byte_substitute()
+    {
+        var intent = Intent(boundaries: [new(BuildBoundaryKind.PrimaryInput, null, "xml"), new(BuildBoundaryKind.PrimaryOutput, null, "xml")]);
+        Assert.Equal(new BuildPreflightResult(BuildPreflightOutcome.Unsupported, BuildPreflightReason.UnsupportedXmlBuild), service.Evaluate(intent, Capability(intent)));
+        AssertFailure(BuildContractFailure.CapabilityUnavailable, () => BuildArtifactReference.Create(intent, Capability(intent), Digest(), 1));
+    }
+
+    [Fact]
     public void Exact_supported_capability_matches_without_executing_anything()
     {
         var intent = Intent();

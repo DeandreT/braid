@@ -26,7 +26,7 @@ _Compare revisions: semantic differences between two saved explanations._
 
 ![Workspace chat panel answering a question with citations](docs/images/chat.png)
 
-_Workspace chat: read-only questions answered with links to their sources._
+_Workspace chat: questions answered with links to their sources, with permission-controlled mapping edits when requested._
 
 Screenshots use demo data; see [docs/images](docs/images/README.md) for how they are produced.
 
@@ -35,7 +35,7 @@ Screenshots use demo data; see [docs/images](docs/images/README.md) for how they
 - A mapping catalog with immutable revisions, native-file uploads and project ownership.
 - A compact source-to-rule-to-target workbench with a contextual inspector and investigation dock.
 - Revision-pinned AI chat with permission-controlled mapping tools and verified citations.
-- An organization-wide, read-only workspace assistant whose every tool call is freshly authorized as the user.
+- An organization-wide workspace assistant whose every tool call is freshly authorized as the user, with exact-head mapping saves when requested and permitted.
 - Bounded sample previews, revision comparison and saved regression cases.
 - Immutable build preparation, qualification, and local release activation, audit and rollback.
 - A machine-facing mapping endpoint that serves the active qualified release to callers
@@ -45,6 +45,7 @@ Screenshots use demo data; see [docs/images](docs/images/README.md) for how they
   and private objects can be kept in Azure Blob storage.
 - Microsoft Entra sign-in, server sessions and project-scoped application permissions.
 - A `weft` command line that works with the API as the signed-in user.
+- Opt-in [mapping editing](docs/mapping-editing.md) with private drafts, typed operations and authoritative conditional saves.
 
 Other mapping engines, identity providers, and AI model providers will integrate
 through separate adapters. Web hosting and publishing a mapping as a runnable
@@ -149,6 +150,8 @@ See [Local development](docs/development.md) to run and verify the application.
 - [Workbench presentation](docs/workbench-presentation.md): semantic colors, exact-value details, safe layout preferences and action confirmations.
 - [Chat UI](docs/chat-ui.md): shared workspace conversations, legacy revision pins and evidence-backed navigation.
 - [Preview runs](docs/preview-runs.md): bounded execution of explicit sample inputs.
+- [CSV and TSV documents](docs/csv-documents.md): explicit native dialects, bounded table display, regression comparison and compiled execution.
+- [Native XML documents](docs/xml-previews.md): explicit saved metadata, bounded physical checks, private run envelopes, exact-byte regressions and explicit generated-build refusal.
 - [Regression cases](docs/regression-cases.md): saved inputs, expected output and immutable case versions.
 - [Automation and notifications](docs/automation-notifications.md): exact-revision checks, project build gates and metadata-only activity delivery.
 - [Build workflow](docs/build-workflow.md) and [compiled runtime](docs/compiled-runtime.md): capability admission, immutable artifacts and restricted execution.

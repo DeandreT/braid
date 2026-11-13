@@ -27,6 +27,11 @@ public static class FerruleServiceProtocol
     public const string PreviewProfile = "preview";
     public const string InterchangeProfile = "interchange";
 
+    /// <summary>Exact-base typed edit replay (<c>weft.ferrule-edit.v1</c>).</summary>
+    public const string EditProfile = "edit";
+    public const string AuthoringProfile = "authoring";
+    public const string AuthoredPreviewProfile = "authored-preview";
+
     /// <summary>
     /// Compilation of deployable mapping libraries (<c>weft.ferrule-build.v1</c>). A service serves it only when
     /// compilation is enabled; otherwise it remains reserved and is refused with <c>501</c>.
@@ -39,6 +44,9 @@ public static class FerruleServiceProtocol
     {
         InspectionProfile => DockerWorkerProfile.Inspection,
         PreviewProfile => DockerWorkerProfile.Preview,
+        EditProfile => DockerWorkerProfile.Edit,
+        AuthoringProfile => DockerWorkerProfile.Authoring,
+        AuthoredPreviewProfile => DockerWorkerProfile.AuthoredPreview,
         InterchangeProfile => DockerWorkerProfile.Interchange,
         CompileProfile => DockerWorkerProfile.Build,
         CompiledProfile => DockerWorkerProfile.Compiled,

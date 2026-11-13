@@ -75,7 +75,7 @@ public sealed record ChatCitationFact(RevisionScope Revision, ChatReportPin Repo
 
 public enum ChatWorkspaceCitationKind
 {
-    Project = 1, Mapping, Revision, Report, PreviewRun, RegressionCase, RegressionRun, BuildRun, BuildApproval, BuildEnvironment, GuideSection
+    Project = 1, Mapping, Revision, Report, PreviewRun, RegressionCase, RegressionRun, BuildRun, BuildApproval, BuildEnvironment, GuideSection, CreationProposal
 }
 
 /// <summary>
@@ -86,13 +86,14 @@ public sealed record ChatWorkspaceCitationFact
 {
     private ChatWorkspaceCitationFact(ChatWorkspaceCitationKind kind, Guid organizationId, Guid? projectId = null, Guid? mappingId = null,
         Guid? revisionId = null, ChatReportPin? report = null, ChatCitationTarget? target = null, Guid? subjectId = null,
-        long? version = null, string? sectionId = null)
+        long? version = null, string? sectionId = null, Sha256Digest? proposalFingerprint = null)
     {
         ChatBounds.Id(organizationId);
         foreach (var id in new[] { projectId, mappingId, revisionId, subjectId }) if (id is { } value) ChatBounds.Id(value);
         if (version is < 1 || sectionId is not null && !SectionPattern(sectionId)) throw ChatBounds.Invalid();
         Kind = kind; OrganizationId = organizationId; ProjectId = projectId; MappingId = mappingId; RevisionId = revisionId;
         Report = report; Target = target; SubjectId = subjectId; Version = version; SectionId = sectionId;
+        ProposalFingerprint = proposalFingerprint;
     }
     public static ChatWorkspaceCitationFact Project(ProjectScope project) =>
         new(ChatWorkspaceCitationKind.Project, project.OrganizationId, project.ProjectId);
@@ -121,6 +122,9 @@ public sealed record ChatWorkspaceCitationFact
     /// <summary>A section of the user guide shipped with this server; it carries the organization it was cited in.</summary>
     public static ChatWorkspaceCitationFact GuideSection(Guid organizationId, string sectionId) =>
         new(ChatWorkspaceCitationKind.GuideSection, organizationId, sectionId: sectionId ?? throw ChatBounds.Invalid());
+    public static ChatWorkspaceCitationFact CreationProposal(ProjectScope project, Guid proposalId, Sha256Digest fingerprint) =>
+        new(ChatWorkspaceCitationKind.CreationProposal, project.OrganizationId, project.ProjectId, subjectId: Required(proposalId),
+            proposalFingerprint: fingerprint ?? throw ChatBounds.Invalid());
 
     public ChatWorkspaceCitationKind Kind { get; }
     public Guid OrganizationId { get; }
@@ -132,6 +136,7 @@ public sealed record ChatWorkspaceCitationFact
     public Guid? SubjectId { get; }
     public long? Version { get; }
     public string? SectionId { get; }
+    public Sha256Digest? ProposalFingerprint { get; }
     public ProjectScope? ProjectScope => ProjectId is { } project ? new(OrganizationId, project) : null;
     public MappingScope? MappingScope => ProjectId is { } project && MappingId is { } mapping ? new(OrganizationId, project, mapping) : null;
     public RevisionScope? RevisionScope => ProjectId is { } project && MappingId is { } mapping && RevisionId is { } revision
@@ -144,7 +149,7 @@ public sealed record ChatWorkspaceCitationFact
     public override string ToString() => nameof(ChatWorkspaceCitationFact);
 }
 
-public enum ChatPayloadSource { PreviewInput = 1, PreviewOutput, RegressionCase, RegressionRunOutput }
+public enum ChatPayloadSource { PreviewInput = 1, PreviewOutput, RegressionCase, RegressionRunOutput, Specification }
 
 /// <summary>Payload bytes one tool call returned to the model: identities and the byte count, never content.</summary>
 public sealed record ChatPayloadDisclosureFact
@@ -159,12 +164,89 @@ public sealed record ChatPayloadDisclosureFact
     }
     public Guid ProjectId { get; }
     public ChatPayloadSource Source { get; }
-    /// <summary>The preview run, regression case or regression run.</summary>
+    /// <summary>The preview run, regression case, regression run, or immutable specification extraction object.</summary>
     public Guid SubjectId { get; }
     /// <summary>The regression case version; null for runs.</summary>
     public long? Version { get; }
     public int ByteCount { get; }
     public override string ToString() => nameof(ChatPayloadDisclosureFact);
+}
+
+public enum ChatMappingWriteOutcome { Saved = 1, Proposed }
+public enum ChatMappingWriteReason { NotPermitted = 1, OutOfDate }
+
+/// <summary>One field's plain-language rule before and after an edit, from verified projections, never model text.</summary>
+public sealed record ChatMappingChange
+{
+    public const int MaximumText = 256;
+    public ChatMappingChange(string field, string before, string after)
+    {
+        Field = Bound(field); Before = Bound(before); After = Bound(after);
+    }
+    public string Field { get; }
+    public string Before { get; }
+    public string After { get; }
+    private static string Bound(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length > MaximumText || value.Any(char.IsControl)) throw ChatBounds.Invalid();
+        return ChatBounds.Text(value, 1024, false);
+    }
+    public override string ToString() => nameof(ChatMappingChange);
+}
+
+/// <summary>
+/// A mapping edit a workspace tool saved as the next version of its exact base, or showed read-only because the
+/// user may not edit or the base is no longer current. Identities, versions, the edit's size and digest, and at
+/// most <see cref="MaximumChanges"/> changes; never the edit itself or any sample data.
+/// </summary>
+public sealed record ChatMappingWriteFact
+{
+    public const int MaximumChanges = 8;
+    public ChatMappingWriteFact(ChatMappingWriteOutcome outcome, ChatMappingWriteReason? reason, RevisionScope baseRevision, long baseSequence,
+        Guid? revisionId, long? sequence, Guid? headRevisionId, long? headSequence, int operationCount, Sha256Digest editDigest,
+        IReadOnlyList<ChatMappingChange> changes, bool changesTruncated)
+    {
+        ArgumentNullException.ThrowIfNull(baseRevision); ArgumentNullException.ThrowIfNull(editDigest); ArgumentNullException.ThrowIfNull(changes);
+        ChatBounds.Id(baseRevision.OrganizationId); ChatBounds.Id(baseRevision.ProjectId); ChatBounds.Id(baseRevision.MappingId); ChatBounds.Id(baseRevision.RevisionId);
+        if (!Enum.IsDefined(outcome) || reason is { } r && !Enum.IsDefined(r) || baseSequence < 1 || operationCount is < 1 or > 2000 ||
+            changes.Count > MaximumChanges || changes.Any(change => change is null) ||
+            revisionId is null != sequence is null || headRevisionId is null != headSequence is null ||
+            revisionId == Guid.Empty || headRevisionId == Guid.Empty || sequence < 1 || headSequence < 1) throw ChatBounds.Invalid();
+        if (outcome == ChatMappingWriteOutcome.Saved
+                ? reason is not null || revisionId is null || headRevisionId is not null || sequence <= baseSequence
+                : reason is null || revisionId is not null || (reason == ChatMappingWriteReason.OutOfDate) != (headRevisionId is not null))
+            throw ChatBounds.Invalid();
+        Outcome = outcome; Reason = reason; Base = baseRevision; BaseSequence = baseSequence; RevisionId = revisionId; Sequence = sequence;
+        HeadRevisionId = headRevisionId; HeadSequence = headSequence; OperationCount = operationCount; EditDigest = editDigest;
+        Changes = changes.ToArray(); ChangesTruncated = changesTruncated;
+    }
+    public ChatMappingWriteOutcome Outcome { get; }
+    public ChatMappingWriteReason? Reason { get; }
+    public RevisionScope Base { get; }
+    public long BaseSequence { get; }
+    /// <summary>The saved version; null for a proposal.</summary>
+    public Guid? RevisionId { get; }
+    public long? Sequence { get; }
+    /// <summary>The newer version observed for an out-of-date proposal.</summary>
+    public Guid? HeadRevisionId { get; }
+    public long? HeadSequence { get; }
+    public int OperationCount { get; }
+    public Sha256Digest EditDigest { get; }
+    public IReadOnlyList<ChatMappingChange> Changes { get; }
+    public bool ChangesTruncated { get; }
+
+    /// <summary>The same write with the longest prefix of its changes whose record fits the bounded event.</summary>
+    public ChatMappingWriteFact Fitted()
+    {
+        for (var count = Changes.Count; ; count--)
+        {
+            var fact = new ChatMappingWriteFact(Outcome, Reason, Base, BaseSequence, RevisionId, Sequence, HeadRevisionId, HeadSequence,
+                OperationCount, EditDigest, Changes.Take(count).ToArray(), ChangesTruncated || count < Changes.Count);
+            try { _ = ChatMetadataCodec.MappingWrite(fact); return fact; }
+            catch (ArgumentException) when (count > 0) { }
+        }
+    }
+    public override string ToString() => nameof(ChatMappingWriteFact);
 }
 
 public sealed record ChatTerminalMetadata
@@ -238,6 +320,7 @@ public static class ChatMetadataCodec
         WriteNumber(w, "targetKind", value.Target is { } target ? (int)target.Kind : null);
         w.WriteString("resource", value.Target?.ResourceId); WriteNumber(w, "ordinal", value.Target?.DiagnosticOrdinal);
         WriteId(w, "subject", value.SubjectId); WriteNumber(w, "version", value.Version); w.WriteString("section", value.SectionId);
+        if (value.Kind == ChatWorkspaceCitationKind.CreationProposal) w.WriteString("proposalFingerprint", value.ProposalFingerprint!.Value);
         w.WriteEndObject();
     });
     public static string Disclosure(ChatPayloadDisclosureFact value) => Json(w =>
@@ -246,6 +329,30 @@ public static class ChatMetadataCodec
         w.WriteString("subject", value.SubjectId); WriteNumber(w, "version", value.Version); w.WriteNumber("bytes", value.ByteCount);
         w.WriteEndObject();
     });
+    public static string MappingWrite(ChatMappingWriteFact value) => Json(w =>
+    {
+        w.WriteStartObject(); w.WriteNumber("v", 1); w.WriteNumber("outcome", (int)value.Outcome); WriteNumber(w, "reason", (int?)value.Reason);
+        w.WriteString("organization", value.Base.OrganizationId); w.WriteString("project", value.Base.ProjectId);
+        w.WriteString("mapping", value.Base.MappingId); w.WriteString("base", value.Base.RevisionId); w.WriteNumber("baseSequence", value.BaseSequence);
+        WriteId(w, "revision", value.RevisionId); WriteNumber(w, "sequence", value.Sequence);
+        WriteId(w, "head", value.HeadRevisionId); WriteNumber(w, "headSequence", value.HeadSequence);
+        w.WriteNumber("operations", value.OperationCount); w.WriteString("digest", value.EditDigest.Value);
+        w.WriteStartArray("changes");
+        foreach (var change in value.Changes)
+        {
+            w.WriteStartObject(); w.WriteString("field", change.Field); w.WriteString("before", change.Before); w.WriteString("after", change.After); w.WriteEndObject();
+        }
+        w.WriteEndArray(); w.WriteBoolean("truncated", value.ChangesTruncated);
+        w.WriteEndObject();
+    });
+    public static ChatMappingWriteFact ReadMappingWrite(string json) => Parse<ChatMappingWriteFact>(json, e => new(
+        (ChatMappingWriteOutcome)e.GetProperty("outcome").GetInt32(), Number(e, "reason") is { } reason ? (ChatMappingWriteReason)checked((int)reason) : null,
+        new(e.GetProperty("organization").GetGuid(), e.GetProperty("project").GetGuid(), e.GetProperty("mapping").GetGuid(), e.GetProperty("base").GetGuid()),
+        e.GetProperty("baseSequence").GetInt64(), OptionalId(e, "revision"), Number(e, "sequence"), OptionalId(e, "head"), Number(e, "headSequence"),
+        e.GetProperty("operations").GetInt32(), Sha256Digest.Parse(e.GetProperty("digest").GetString()!),
+        e.GetProperty("changes").EnumerateArray().Select(change => new ChatMappingChange(change.GetProperty("field").GetString()!,
+            change.GetProperty("before").GetString()!, change.GetProperty("after").GetString()!)).ToArray(),
+        e.GetProperty("truncated").GetBoolean()), MappingWrite);
     public static ChatWorkspaceCitationFact ReadWorkspaceCitation(string json) => Parse(json, e =>
     {
         var organization = e.GetProperty("organization").GetGuid();
@@ -267,6 +374,8 @@ public static class ChatMetadataCodec
             ChatWorkspaceCitationKind.BuildApproval => ChatWorkspaceCitationFact.BuildApproval(new(organization, Id("project"), Id("mapping")), Id("subject")),
             ChatWorkspaceCitationKind.BuildEnvironment => ChatWorkspaceCitationFact.BuildEnvironment(new(organization, Id("project")), Id("subject"), e.GetProperty("version").GetInt64()),
             ChatWorkspaceCitationKind.GuideSection => ChatWorkspaceCitationFact.GuideSection(organization, e.GetProperty("section").GetString()!),
+            ChatWorkspaceCitationKind.CreationProposal => ChatWorkspaceCitationFact.CreationProposal(new(organization, Id("project")), Id("subject"),
+                Sha256Digest.Parse(e.GetProperty("proposalFingerprint").GetString()!)),
             _ => throw ChatBounds.Invalid()
         };
     }, WorkspaceCitation);
@@ -309,6 +418,7 @@ public static class ChatMetadataCodec
     private static void WriteNumber(Utf8JsonWriter w, string name, long? n) { if (n is { } value) w.WriteNumber(name, value); else w.WriteNull(name); }
     private static void WriteId(Utf8JsonWriter w, string name, Guid? id) { if (id is { } value) w.WriteString(name, value); else w.WriteNull(name); }
     private static long? Number(JsonElement e, string name) => e.GetProperty(name).ValueKind == JsonValueKind.Null ? null : e.GetProperty(name).GetInt64();
+    private static Guid? OptionalId(JsonElement e, string name) => e.GetProperty(name).ValueKind == JsonValueKind.Null ? null : e.GetProperty(name).GetGuid();
     private static ChatUsageFact ReadUsage(JsonElement e) => new(e.GetProperty("round").GetGuid(), (ChatUsageOrigin)e.GetProperty("origin").GetInt32(), Number(e, "input"), Number(e, "output"), Number(e, "total"));
     private static ChatProviderFailureFact ReadFailure(JsonElement e) => new(e.GetProperty("round").GetGuid(), (ChatProviderFailureCode)e.GetProperty("code").GetInt32(), (ChatDispatchObservation)e.GetProperty("dispatch").GetInt32());
     private static T Parse<T>(string json, Func<JsonElement, T> read, Func<T, string> write)

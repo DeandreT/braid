@@ -118,9 +118,11 @@ internal static class CatalogBusinessServices
                 provider.GetRequiredService<IPrivateObjectStore>(), provider.GetRequiredService<IInterchangeBackendRegistry>(),
                 provider.GetRequiredService<IExportReviewStore>(), TimeProvider.System));
         }
-        CatalogRegressionHostConfiguration.Configure(services, readEnvironment, catalogEnabled: true);
         CatalogBuildHostConfiguration.Configure(services, environment, readEnvironment,
             buildRuntime ?? CatalogBuildHostConfiguration.ReadRuntime(readEnvironment, catalogEnabled: true));
+        // CSV regression admission inspects the final source registrations. Build-only
+        // source aliases must exist first; neither admission resolves their factories.
+        CatalogRegressionHostConfiguration.Configure(services, readEnvironment, catalogEnabled: true);
         ReleaseOperationsHostConfiguration.Configure(services, readEnvironment);
     }
 

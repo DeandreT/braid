@@ -15,6 +15,9 @@ public sealed class OutboxPreviewRunStore(PostgresPreviewRunStore inner, IWolver
     private readonly PostgresPreviewRunStore _inner = inner ?? throw new ArgumentNullException(nameof(inner));
     private readonly IWolverineRuntime _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
 
+    public Task RequireSubmissionAdmissionAsync(CancellationToken cancellationToken = default) =>
+        _inner.RequireSubmissionAdmissionAsync(cancellationToken);
+
     public async Task<PreviewSubmitResult> SubmitAsync(ActorContext actor, PreviewRunRecord record, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(record);
@@ -26,7 +29,7 @@ public sealed class OutboxPreviewRunStore(PostgresPreviewRunStore inner, IWolver
             if (submitted.Outcome != PreviewSubmitOutcome.Created)
                 return;
             await context.EnlistInOutboxAsync(new DatabaseEnvelopeTransaction(database, transaction)).ConfigureAwait(false);
-            await context.PublishAsync(new RunPreview(record.Submission.Revision.OrganizationId, submitted.RunId!.Value)).ConfigureAwait(false);
+            await context.PublishAsync(new RunPreview(record.Submission.Subject.ExecutionScope.OrganizationId, submitted.RunId!.Value)).ConfigureAwait(false);
         }, cancellationToken).ConfigureAwait(false);
         await context.FlushOutgoingMessagesAsync().ConfigureAwait(false);
         return result;

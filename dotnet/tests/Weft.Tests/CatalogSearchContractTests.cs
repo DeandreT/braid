@@ -10,7 +10,9 @@ public sealed class CatalogSearchContractTests
     public void EmbeddedHistoryKeepsDisplayAndSearchAsSeparateAdditiveMigrations()
     {
         var migrations = MigrationRunner.EmbeddedMigrations;
-        Assert.Equal(Enumerable.Range(1, 36), migrations.Select(migration => migration.Version));
+        Assert.Equal(Enumerable.Range(1, 47), migrations.Select(migration => migration.Version));
+        Assert.Equal(PostgresMigrationTests.CurrentChecksums, migrations.Select(migration => migration.Checksum));
+        Assert.Equal(XmlPreviewSchemaAdmission.MigrationChecksum, migrations[41].Checksum);
         Assert.Equal(AccountDisplayMetadataTestContract.MigrationChecksum, migrations[25].Checksum);
         Assert.Equal(RegressionSchemaTestContract.AdministrationChecksum, migrations[26].Checksum);
         Assert.Equal(InterchangeSchemaTestContract.MigrationChecksum, migrations[27].Checksum);
@@ -22,6 +24,11 @@ public sealed class CatalogSearchContractTests
         Assert.Equal(RegressionSchemaTestContract.DocumentPreviewsChecksum, migrations[33].Checksum);
         Assert.Equal(RegressionSchemaTestContract.X12InterchangeBuildsChecksum, migrations[34].Checksum);
         Assert.Equal(RegressionSchemaTestContract.ComparisonSettlementChecksum, migrations[35].Checksum);
+        Assert.Equal(MappingDraftSchemaTestContract.DraftChecksum, migrations[36].Checksum);
+        Assert.Equal(MappingDraftSchemaTestContract.PreviewChecksum, migrations[37].Checksum);
+        Assert.Equal(ChatSchemaContract.MappingWriteMigrationChecksum, migrations[38].Checksum);
+        Assert.Equal(ChatSchemaContract.WriteJournalMigrationChecksum, migrations[39].Checksum);
+        Assert.Equal(RegressionSchemaTestContract.CsvDocumentsChecksum, migrations[40].Checksum);
     }
 
     [Fact]

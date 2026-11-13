@@ -19,6 +19,9 @@ import {
   type PreviewSubmission,
   type PreviewTargetKind,
 } from "./preview-types";
+import { csvPreviewProfile } from "./csv-contract";
+import { xmlPreviewProfile } from "./xml-contract";
+import { xmlPreflightText } from "./xml-problem";
 
 export interface PreviewInputDraft {
   readonly id: number;
@@ -44,6 +47,8 @@ export interface PreviewBinding {
   readonly admit: () => Observable<string>;
   /** No access check is pending, so a request can be sent at once. */
   readonly ready: () => boolean;
+  readonly csvAvailable?: () => boolean;
+  readonly xmlAvailable?: () => boolean;
 }
 
 /** A submission whose key outlives a reload until its run is known and finished with. */
@@ -83,6 +88,12 @@ export class PreviewState {
   readonly parameters = signal<PreviewParameterDraft[]>([]);
   readonly targetKind = signal<PreviewTargetKind>("all");
   readonly documentProfile = signal(false);
+  readonly csvProfile = signal(false);
+  readonly xmlProfile = signal(false);
+  readonly submitted = signal<{
+    runId: string;
+    body: PreviewSubmission;
+  } | null>(null);
   readonly targetName = signal("");
   readonly run = this.currentRun.asReadonly();
   readonly busy = this.currentBusy.asReadonly();
@@ -127,6 +138,7 @@ export class PreviewState {
     this.currentFormError.set(null);
     this.currentNotice.set(null);
     this.currentRecord.set(null);
+    this.submitted.set(null);
   }
 
   destroy(): void {
@@ -209,6 +221,7 @@ export class PreviewState {
           this.request = null;
           this.currentBusy.set(null);
           this.save({ key, runId: submitted.run.runId });
+          this.submitted.set({ runId: submitted.run.runId, body });
           this.currentNotice.set(
             submitted.outcome === "replayed" ? "replayed" : null,
           );
@@ -225,7 +238,10 @@ export class PreviewState {
             kind === "unsupportedMediaType"
           )
             this.save(record && record.runId === null ? record : null);
-          this.currentError.set(kind);
+          if (error instanceof PreviewError && error.xmlProblem) {
+            this.currentFormError.set(xmlPreflightText(error.xmlProblem));
+            this.currentNotice.set(null);
+          } else this.currentError.set(kind);
         },
       });
   }
@@ -361,12 +377,31 @@ export class PreviewState {
   }
 
   private body(): PreviewSubmission {
+    if (this.xmlProfile() && !this.binding?.xmlAvailable?.())
+      throw new Error("The server has not offered XML previews.");
+    if (
+      [this.xmlProfile(), this.csvProfile(), this.documentProfile()].filter(
+        Boolean,
+      ).length > 1
+    )
+      throw new Error("Choose one preview admission profile.");
+    if (this.csvProfile() && !this.binding?.csvAvailable?.())
+      throw new Error(
+        "The server has not offered the CSV/TSV preview runtime.",
+      );
+    if (
+      this.csvProfile() &&
+      (this.inputs().length !== 1 || this.targetKind() === "named")
+    )
+      throw new Error(
+        "CSV/TSV preview requires one primary input and a primary or all-output target.",
+      );
     const inputs = this.inputs();
     const names = new Set<string>();
     let total = 0;
     const encoded = inputs.map((input, index) => {
       const bytes = input.file ? input.file.bytes : encoder.encode(input.text);
-      if (bytes.length === 0)
+      if (bytes.length === 0 && !this.csvProfile())
         throw new Error(
           index === 0
             ? this.documentProfile()
@@ -409,9 +444,13 @@ export class PreviewState {
         kind === "named" ? { kind, name: targetName } : { kind, name: null },
       parameters,
       inputs: encoded,
-      ...(this.documentProfile()
-        ? { profile: "weft.ferrule-document-preview.v1" as const }
-        : {}),
+      ...(this.xmlProfile()
+        ? { profile: xmlPreviewProfile }
+        : this.csvProfile()
+          ? { profile: csvPreviewProfile }
+          : this.documentProfile()
+            ? { profile: "weft.ferrule-document-preview.v1" as const }
+            : {}),
     };
   }
 

@@ -8,15 +8,18 @@
 set -euo pipefail
 
 roles=(MIGRATOR RUNTIME INGEST CATALOG METADATA CREATOR REPORT DERIVATION MAINTENANCE IDENTITY
-  PAYLOAD_PERMISSION SESSION_READER SESSION_WRITER CHAT_READER CHAT_WRITER CHAT_LIFECYCLE
-  PREVIEW_READER PREVIEW_WRITER CASE_READER CASE_WRITER RUN_READER RUN_WRITER COMPARISON BUILD_READER BUILD_WRITER BUILD_RUN_READER BUILD_RUN_WRITER BUILD_DISPATCHER BUILD_METADATA QUALIFICATION_READER QUALIFICATION_WRITER RELEASE_READER RELEASE_WRITER INVOCATION_GRANT_WRITER INVOCATION_WRITER API_AUDIT_WRITER)
+  PAYLOAD_PERMISSION SESSION_READER SESSION_WRITER CHAT_READER CHAT_WRITER CHAT_LIFECYCLE CHAT_APPROVER
+  PREVIEW_READER PREVIEW_WRITER CASE_READER CASE_WRITER RUN_READER RUN_WRITER COMPARISON BUILD_READER BUILD_WRITER BUILD_RUN_READER BUILD_RUN_WRITER BUILD_DISPATCHER BUILD_METADATA QUALIFICATION_READER QUALIFICATION_WRITER RELEASE_READER RELEASE_WRITER INVOCATION_GRANT_WRITER INVOCATION_WRITER API_AUDIT_WRITER DRAFT_READER DRAFT_WRITER)
 for role in "${roles[@]}"; do
   variable=WEFT_${role}_PASSWORD
   [[ -n ${!variable:-} ]] || { echo "Set $variable." >&2; exit 2; }
 done
 [[ $WEFT_CHAT_READER_PASSWORD != "$WEFT_CHAT_WRITER_PASSWORD" &&
   $WEFT_CHAT_LIFECYCLE_PASSWORD != "$WEFT_CHAT_READER_PASSWORD" &&
-  $WEFT_CHAT_LIFECYCLE_PASSWORD != "$WEFT_CHAT_WRITER_PASSWORD" ]] || {
+  $WEFT_CHAT_LIFECYCLE_PASSWORD != "$WEFT_CHAT_WRITER_PASSWORD" &&
+  $WEFT_CHAT_APPROVER_PASSWORD != "$WEFT_CHAT_READER_PASSWORD" &&
+  $WEFT_CHAT_APPROVER_PASSWORD != "$WEFT_CHAT_WRITER_PASSWORD" &&
+  $WEFT_CHAT_APPROVER_PASSWORD != "$WEFT_CHAT_LIFECYCLE_PASSWORD" ]] || {
   echo 'All chat profile passwords must be independent.' >&2
   exit 2
 }
@@ -25,7 +28,7 @@ done
   exit 2
 }
 regression_passwords=()
-for role in CASE_READER CASE_WRITER RUN_READER RUN_WRITER COMPARISON BUILD_READER BUILD_WRITER BUILD_RUN_READER BUILD_RUN_WRITER BUILD_DISPATCHER BUILD_METADATA QUALIFICATION_READER QUALIFICATION_WRITER RELEASE_READER RELEASE_WRITER INVOCATION_GRANT_WRITER INVOCATION_WRITER API_AUDIT_WRITER; do
+for role in CASE_READER CASE_WRITER RUN_READER RUN_WRITER COMPARISON BUILD_READER BUILD_WRITER BUILD_RUN_READER BUILD_RUN_WRITER BUILD_DISPATCHER BUILD_METADATA QUALIFICATION_READER QUALIFICATION_WRITER RELEASE_READER RELEASE_WRITER INVOCATION_GRANT_WRITER INVOCATION_WRITER API_AUDIT_WRITER DRAFT_READER DRAFT_WRITER; do
   variable=WEFT_${role}_PASSWORD
   for previous in "${regression_passwords[@]}"; do
     [[ ${!variable} != "$previous" ]] || { echo 'Regression profile passwords must be independent.' >&2; exit 2; }
@@ -34,6 +37,22 @@ for role in CASE_READER CASE_WRITER RUN_READER RUN_WRITER COMPARISON BUILD_READE
 done
 unset regression_passwords previous
 export WEFT_ADMINISTRATION_PASSWORD=${WEFT_ADMINISTRATION_PASSWORD:-}
+export WEFT_SPEC_READER_PASSWORD=${WEFT_SPEC_READER_PASSWORD:-}
+export WEFT_SPEC_WRITER_PASSWORD=${WEFT_SPEC_WRITER_PASSWORD:-}
+export WEFT_SPEC_MAINTENANCE_PASSWORD=${WEFT_SPEC_MAINTENANCE_PASSWORD:-}
+export WEFT_CREATION_READER_PASSWORD=${WEFT_CREATION_READER_PASSWORD:-}
+export WEFT_CREATION_WRITER_PASSWORD=${WEFT_CREATION_WRITER_PASSWORD:-}
+export WEFT_CREATION_APPROVER_PASSWORD=${WEFT_CREATION_APPROVER_PASSWORD:-}
+creation_passwords=()
+for role in READER WRITER APPROVER; do
+  variable=WEFT_CREATION_${role}_PASSWORD
+  [[ -n ${!variable} ]] || continue
+  for previous in "${creation_passwords[@]}"; do
+    [[ ${!variable} != "$previous" ]] || { echo 'Creation profile passwords must be independent.' >&2; exit 2; }
+  done
+  creation_passwords+=("${!variable}")
+done
+unset creation_passwords previous
 # The role is required by the schema even without administration enabled. An
 # absent opt-in credential leaves its password login unusable.
 
@@ -60,6 +79,7 @@ psql --no-psqlrc --set=ON_ERROR_STOP=1 --dbname=weft --quiet <<'SQL'
 \getenv chat_reader_password WEFT_CHAT_READER_PASSWORD
 \getenv chat_writer_password WEFT_CHAT_WRITER_PASSWORD
 \getenv chat_lifecycle_password WEFT_CHAT_LIFECYCLE_PASSWORD
+\getenv chat_approver_password WEFT_CHAT_APPROVER_PASSWORD
 \getenv preview_reader_password WEFT_PREVIEW_READER_PASSWORD
 \getenv preview_writer_password WEFT_PREVIEW_WRITER_PASSWORD
 \getenv case_reader_password WEFT_CASE_READER_PASSWORD
@@ -81,6 +101,14 @@ psql --no-psqlrc --set=ON_ERROR_STOP=1 --dbname=weft --quiet <<'SQL'
 \getenv invocation_writer_password WEFT_INVOCATION_WRITER_PASSWORD
 \getenv api_audit_writer_password WEFT_API_AUDIT_WRITER_PASSWORD
 \getenv administration_password WEFT_ADMINISTRATION_PASSWORD
+\getenv draft_reader_password WEFT_DRAFT_READER_PASSWORD
+\getenv draft_writer_password WEFT_DRAFT_WRITER_PASSWORD
+\getenv spec_reader_password WEFT_SPEC_READER_PASSWORD
+\getenv spec_writer_password WEFT_SPEC_WRITER_PASSWORD
+\getenv spec_maintenance_password WEFT_SPEC_MAINTENANCE_PASSWORD
+\getenv creation_reader_password WEFT_CREATION_READER_PASSWORD
+\getenv creation_writer_password WEFT_CREATION_WRITER_PASSWORD
+\getenv creation_approver_password WEFT_CREATION_APPROVER_PASSWORD
 BEGIN;
 -- PostgreSQL 16 records a non-superuser creator as an ADMIN member of every role it creates,
 -- and the migrations refuse any membership on the restricted profiles. A temporary creator
@@ -123,6 +151,8 @@ CREATE ROLE weft_chat_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
   PASSWORD :'chat_writer_password';
 CREATE ROLE weft_chat_lifecycle LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
   PASSWORD :'chat_lifecycle_password';
+CREATE ROLE weft_chat_approver LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'chat_approver_password';
 CREATE ROLE weft_preview_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
   PASSWORD :'preview_reader_password';
 CREATE ROLE weft_preview_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
@@ -165,12 +195,23 @@ CREATE ROLE weft_api_audit_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOIN
   PASSWORD :'api_audit_writer_password';
 CREATE ROLE weft_administration LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
   PASSWORD :'administration_password';
+CREATE ROLE weft_draft_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD :'draft_reader_password';
+CREATE ROLE weft_draft_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD :'draft_writer_password';
+CREATE ROLE weft_spec_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD :'spec_reader_password';
+CREATE ROLE weft_spec_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD :'spec_writer_password';
+CREATE ROLE weft_spec_maintenance LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD :'spec_maintenance_password';
+CREATE ROLE weft_creation_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD :'creation_reader_password';
+CREATE ROLE weft_creation_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD :'creation_writer_password';
+CREATE ROLE weft_creation_approver LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD :'creation_approver_password';
+GRANT CONNECT ON DATABASE weft TO weft_creation_reader,weft_creation_writer,weft_creation_approver;
+GRANT CONNECT ON DATABASE weft TO weft_chat_approver,weft_spec_reader,weft_spec_writer,weft_spec_maintenance;
 GRANT CONNECT ON DATABASE weft TO weft_runtime, weft_ingest, weft_catalog_reader, weft_catalog_editor, weft_project_creator, weft_report_reader, weft_deriver, weft_maintenance, weft_identity_reader, weft_payload_permission_reader, weft_session_reader, weft_session_writer, weft_chat_reader, weft_chat_writer, weft_chat_lifecycle, weft_preview_reader, weft_preview_writer, weft_case_reader, weft_case_writer, weft_run_reader, weft_run_writer, weft_build_reader, weft_build_writer, weft_build_run_reader, weft_build_run_writer, weft_build_dispatcher, weft_build_metadata_reader;
 GRANT CONNECT ON DATABASE weft TO weft_qualification_reader,weft_qualification_writer,weft_comparison_settler;
 GRANT CONNECT ON DATABASE weft TO weft_release_reader,weft_release_writer;
 GRANT CONNECT ON DATABASE weft TO weft_invocation_grant_writer,weft_invocation_writer;
 GRANT CONNECT ON DATABASE weft TO weft_api_audit_writer;
 GRANT CONNECT ON DATABASE weft TO weft_administration;
+GRANT CONNECT ON DATABASE weft TO weft_draft_reader,weft_draft_writer;
 GRANT weft_migrator TO weft_provisioner WITH INHERIT FALSE, SET TRUE;
 CREATE SCHEMA weft_search_extensions AUTHORIZATION weft_migrator;
 -- Install through the database owner, then let the DBA remove the trusted

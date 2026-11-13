@@ -63,6 +63,12 @@ identity. Display-name and diagnostic text truncation is explicit.
 
 ## Protocol and limits
 
+Editing uses the separate `weft.ferrule-edit.v1` protocol: header, exact native
+base and typed operation-log frames. Its result carries authoritative validation,
+projection and a separate exact native frame. It preserves inspection's sandbox
+profile and deadline; only the bounded output framing is enlarged. The shared
+core also builds the dedicated browser wasm module. See [Mapping editing](mapping-editing.md).
+
 `weft.ferrule-host.v1` admits one request per worker process:
 
 1. A four-byte unsigned big-endian header length, followed by UTF-8 JSON.
@@ -94,6 +100,36 @@ writer. C# preflights JSON depth, duplicate properties, and collection counts
 before allocating its typed result. Unsupported input, structural/result limits,
 protocol failure, worker failure, cancellation, timeout, unavailable isolation,
 and cleanup failure remain distinct outcomes.
+
+## Deterministic edit checkpoints
+
+`IMappingEditBackend` replays the closed `ferrule.edit.v1` operation vocabulary
+against exact server-owned base bytes. `weft-ferrule-core`, under the worker's
+`core/` directory, shares Ferrule's codec, `edit-ops` command history, validation
+and Weft's projection walker with the browser wasm module. The host retains its
+existing library exports and binary entry point; preview, build and sandbox code
+are not dependencies of the shared core.
+
+`weft.ferrule-edit.v1` admits three length-prefixed frames: the context header,
+the immutable native base (4 MiB), and the typed operation log (1 MiB and 2,000
+operations). The header names `edit` and binds both input SHA-256 digests. It
+accepts no paths, commands or arbitrary model patches. Trailing frames are refused.
+The worker decodes, replays all operations, calls Ferrule's `encode_pretty`, and
+validates and projects the encoded checkpoint. A failing operation returns its
+zero-based index as decimal text and no partial output.
+
+The response contains a bounded JSON header (16 MiB) with validation and
+projection, then one exact native frame whose length and digest are verified by
+the adapter. A zero-operation replay is permitted for base admission, but is not
+itself an edit to save. The fixed `edit` runner profile keeps inspection's 10-second
+deadline, memory and isolation policy; only request/response frame limits differ.
+
+`engines/ferrule-edit-wasm` exports session open/apply/undo/redo and a typed view.
+The page does not receive an encoder API. Its separate qualification build exposes
+a checkpoint digest and reports, allowing `tools/edit-core/cross-target.mjs` to
+compare actual Node wasm execution with the native worker. The import check
+verifies both import names and their generated implementations, allowing only
+wasm-bindgen's error throw and error-string conversion intrinsics.
 
 ## JSON sample preview
 

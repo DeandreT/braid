@@ -58,6 +58,49 @@ test("the browser fixture admits exactly the current ordered migration inventory
   );
 });
 
+test("CSV is an additive migration after the retained draft and chat write contracts", () => {
+  assert.deepEqual(browserFixtureMigrations.slice(36, 41), [
+    "0037_mapping_drafts.sql",
+    "0038_mapping_draft_previews.sql",
+    "0039_chat_mapping_writes.sql",
+    "0040_chat_mapping_write_journal.sql",
+    "0041_csv_documents.sql",
+  ]);
+  const sql = readFileSync(
+    new URL("0041_csv_documents.sql", migrations),
+    "utf8",
+  );
+  assert.match(sql, /weft\.csv-preview-request\.v1/);
+  assert.match(sql, /weft\.csv-regression-case\.v1/);
+  assert.match(sql, /weft\.csv-regression-run-result\.v1/);
+  assert.match(
+    sql,
+    /comparisonPolicy' IS DISTINCT FROM 'weft\.regression\.exact-bytes\.v1'/,
+  );
+  assert.doesNotMatch(
+    sql,
+    /DROP TABLE|TRUNCATE|DELETE FROM|DISABLE ROW LEVEL SECURITY/,
+  );
+});
+
+test("XML documents retain the base authorization and settlement fences", () => {
+  assert.equal(browserFixtureMigrations[41], "0042_xml_documents.sql");
+  const sql = readFileSync(
+    new URL("0042_xml_documents.sql", migrations),
+    "utf8",
+  );
+  assert.match(sql, /CREATE TABLE weft\.xml_preview_documents/);
+  assert.match(sql, /weft\.preview_authorized\(/);
+  assert.match(sql, /weft\.preview_subject_authorized\(/);
+  assert.match(sql, /FOR UPDATE/);
+  assert.match(sql, /r\.lease_token IS DISTINCT FROM p_token/);
+  assert.doesNotMatch(sql, /weft\.lifecycle_|flextext_profile/);
+  assert.doesNotMatch(
+    sql,
+    /DROP TABLE|TRUNCATE (TABLE )?weft|DELETE FROM|DISABLE ROW LEVEL SECURITY|CREATE OR REPLACE FUNCTION/,
+  );
+});
+
 test("qualification and release state stays inside fixture conservation snapshots", () => {
   const sql = browserFixtureMigrations
     .map((name) => readFileSync(new URL(name, migrations), "utf8"))

@@ -2,7 +2,10 @@
 use std::ffi::{CStr, CString};
 
 use super::hostfxr_abi::{Close, GetProperty, Handle, Initialize, InitializeParameters, Run};
-use super::{Launch, ManagedProfile, RUNTIME_VERSION, SDK_VERSION, SandboxError};
+use super::{
+    Launch, ManagedProfile, RUNTIME_VERSION, RuntimeOperation, SDK_VERSION, SandboxError,
+    XML_COMPARISON_ARGUMENT,
+};
 
 pub(super) fn run(launch: &Launch) -> Result<i32, SandboxError> {
     let failure = || SandboxError::Execute;
@@ -25,7 +28,11 @@ pub(super) fn run(launch: &Launch) -> Result<i32, SandboxError> {
                 .map_err(|_| failure())?,
             ]
         }
-        ManagedProfile::Runtime(assembly) => vec![assembly.clone()],
+        ManagedProfile::Runtime(assembly, RuntimeOperation::Mapping) => vec![assembly.clone()],
+        ManagedProfile::Runtime(assembly, RuntimeOperation::XmlCanonicalComparison) => vec![
+            assembly.clone(),
+            CString::new(XML_COMPARISON_ARGUMENT).unwrap(),
+        ],
     };
     let argv = arguments
         .iter()
@@ -33,7 +40,7 @@ pub(super) fn run(launch: &Launch) -> Result<i32, SandboxError> {
         .collect::<Vec<_>>();
     let app = match &launch.profile {
         ManagedProfile::Compile => format!("{root}/sdk/{SDK_VERSION}/Roslyn/bincore/csc.dll"),
-        ManagedProfile::Runtime(path) => path.to_str().map_err(|_| failure())?.to_owned(),
+        ManagedProfile::Runtime(path, _) => path.to_str().map_err(|_| failure())?.to_owned(),
     };
     let app_root = app.rsplit_once('/').ok_or_else(failure)?.0;
     if app_root.is_empty() {

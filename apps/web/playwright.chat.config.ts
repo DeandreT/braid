@@ -9,6 +9,8 @@ export default defineConfig({
     "workspace-chat.spec.ts",
     "workspace-chat-resources.spec.ts",
     "chat-presentation.spec.ts",
+    "chat-mapping-writes.spec.ts",
+    "chat-proposal-review.spec.ts",
   ],
   fullyParallel: false,
   workers: 1,

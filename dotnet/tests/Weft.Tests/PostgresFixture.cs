@@ -24,6 +24,15 @@ public sealed class PostgresFactAttribute : FactAttribute
     }
 }
 
+public sealed class PostgresTheoryAttribute : TheoryAttribute
+{
+    public PostgresTheoryAttribute()
+    {
+        if (!PostgresFixture.IsConfigured)
+            Skip = "Set WEFT_POSTGRES_IMAGE or WEFT_POSTGRES_BIN to execute actual database gates.";
+    }
+}
+
 /// <summary>A uniquely owned cluster; the optional isolated client is only attached and detached.</summary>
 public sealed class PostgresFixture : IAsyncLifetime
 {
@@ -50,6 +59,7 @@ public sealed class PostgresFixture : IAsyncLifetime
     private readonly string chatReaderPassword = Guid.NewGuid().ToString("N");
     private readonly string chatWriterPassword = Guid.NewGuid().ToString("N");
     private readonly string chatLifecyclePassword = Guid.NewGuid().ToString("N");
+    private readonly string chatApproverPassword = Guid.NewGuid().ToString("N");
     private readonly string previewReaderPassword = Guid.NewGuid().ToString("N");
     private readonly string previewWriterPassword = Guid.NewGuid().ToString("N");
     private readonly string caseReaderPassword = Guid.NewGuid().ToString("N");
@@ -71,6 +81,14 @@ public sealed class PostgresFixture : IAsyncLifetime
     private readonly string invocationWriterPassword = Guid.NewGuid().ToString("N");
     private readonly string apiAuditWriterPassword = Guid.NewGuid().ToString("N");
     private readonly string administrationPassword = Guid.NewGuid().ToString("N");
+    private readonly string draftReaderPassword = Guid.NewGuid().ToString("N");
+    private readonly string draftWriterPassword = Guid.NewGuid().ToString("N");
+    private readonly string specReaderPassword = Guid.NewGuid().ToString("N");
+    private readonly string specWriterPassword = Guid.NewGuid().ToString("N");
+    private readonly string specMaintenancePassword = Guid.NewGuid().ToString("N");
+    private readonly string creationReaderPassword = Guid.NewGuid().ToString("N");
+    private readonly string creationWriterPassword = Guid.NewGuid().ToString("N");
+    private readonly string creationApproverPassword = Guid.NewGuid().ToString("N");
     private readonly bool provisionMetadataEditor;
     private readonly bool provisionProjectCreator;
     private readonly bool provisionReportReader;
@@ -84,6 +102,7 @@ public sealed class PostgresFixture : IAsyncLifetime
     private readonly bool provisionChatReader;
     private readonly bool provisionChatWriter;
     private readonly bool provisionChatLifecycle;
+    private readonly bool provisionChatApprover;
     private readonly bool provisionPreviewProfiles;
     private readonly bool provisionRegressionProfiles;
     private readonly bool provisionBuildProfiles;
@@ -118,7 +137,8 @@ public sealed class PostgresFixture : IAsyncLifetime
         bool provisionChatReader = true, bool provisionChatWriter = true, bool provisionChatLifecycle = true,
         bool provisionPreviewProfiles = true, bool provisionRegressionProfiles = true, bool provisionBuildProfiles = true,
         bool provisionBuildRunProfiles = true, bool provisionBuildMetadata = true, bool provisionQualifications = true, bool provisionLocalReleases = true,
-        bool provisionMachineInvocations = true, bool provisionApiAudit = true, bool provisionAccountDisplay = true)
+        bool provisionMachineInvocations = true, bool provisionApiAudit = true, bool provisionAccountDisplay = true,
+        bool provisionChatApprover = true)
     {
         this.provisionMetadataEditor = provisionMetadataEditor;
         this.provisionProjectCreator = provisionProjectCreator;
@@ -133,6 +153,7 @@ public sealed class PostgresFixture : IAsyncLifetime
         this.provisionChatReader = provisionChatReader;
         this.provisionChatWriter = provisionChatWriter;
         this.provisionChatLifecycle = provisionChatLifecycle;
+        this.provisionChatApprover = provisionChatApprover;
         this.provisionPreviewProfiles = provisionPreviewProfiles;
         this.provisionRegressionProfiles = provisionRegressionProfiles;
         this.provisionBuildProfiles = provisionBuildProfiles;
@@ -334,6 +355,14 @@ public sealed class PostgresFixture : IAsyncLifetime
                     """, bootstrap);
                 await role.ExecuteNonQueryAsync();
             }
+            if (provisionChatApprover)
+            {
+                await using var role = new NpgsqlCommand($"""
+                    CREATE ROLE weft_chat_approver LOGIN PASSWORD '{chatApproverPassword}'
+                      NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+                    """, bootstrap);
+                await role.ExecuteNonQueryAsync();
+            }
             if (provisionRegressionProfiles)
             {
                 foreach (var (name, password) in RegressionRoles())
@@ -376,6 +405,7 @@ public sealed class PostgresFixture : IAsyncLifetime
             if (provisionChatReader) connectRoles.Add("weft_chat_reader");
             if (provisionChatWriter) connectRoles.Add("weft_chat_writer");
             if (provisionChatLifecycle) connectRoles.Add("weft_chat_lifecycle");
+            if (provisionChatApprover) connectRoles.Add("weft_chat_approver");
             if (provisionPreviewProfiles) connectRoles.AddRange(["weft_preview_reader", "weft_preview_writer"]);
             if (provisionRegressionProfiles) connectRoles.AddRange(RegressionRoles().Select(item => item.Name));
             await using (var grants = new NpgsqlCommand($"REVOKE ALL ON DATABASE {database} FROM PUBLIC; GRANT CONNECT ON DATABASE {database} TO {string.Join(", ", connectRoles)}", bootstrap))
@@ -427,6 +457,12 @@ public sealed class PostgresFixture : IAsyncLifetime
         }
     }
 
+    internal string ChatApproverConnectionString(PostgresCase test)
+    {
+        if (!caseDatabases.ContainsKey(test.Name)) throw new ArgumentException("A current fixture-owned database is required.");
+        return ConnectionString(test.Name, "weft_chat_approver", chatApproverPassword);
+    }
+
     private (string Name, string Password)[] RegressionRoles() =>
         [("weft_administration", administrationPassword), ("weft_case_reader", caseReaderPassword), ("weft_case_writer", caseWriterPassword),
          ("weft_run_reader", runReaderPassword), ("weft_run_writer", runWriterPassword), ("weft_comparison_settler", comparisonPassword),
@@ -440,7 +476,10 @@ public sealed class PostgresFixture : IAsyncLifetime
              ("weft_release_writer", releaseWriterPassword) } : []),
          .. (provisionMachineInvocations ? new (string Name, string Password)[] { ("weft_invocation_grant_writer", invocationGrantWriterPassword),
              ("weft_invocation_writer", invocationWriterPassword) } : []),
-         .. (provisionApiAudit ? new (string Name, string Password)[] { ("weft_api_audit_writer", apiAuditWriterPassword) } : [])];
+          .. (provisionApiAudit ? new (string Name, string Password)[] { ("weft_api_audit_writer", apiAuditWriterPassword) } : []),
+          ("weft_draft_reader", draftReaderPassword), ("weft_draft_writer", draftWriterPassword),
+           ("weft_spec_reader", specReaderPassword), ("weft_spec_writer", specWriterPassword), ("weft_spec_maintenance", specMaintenancePassword),
+           ("weft_creation_reader", creationReaderPassword), ("weft_creation_writer", creationWriterPassword), ("weft_creation_approver", creationApproverPassword)];
 
     internal string RegressionConnectionString(PostgresCase test, string role)
     {

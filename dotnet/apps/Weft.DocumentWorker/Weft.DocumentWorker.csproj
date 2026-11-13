@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- The compile-sandbox runtime profile sets DOTNET_ROLL_FORWARD=Disable; bind the installed runtime exactly. -->
+    <RuntimeFrameworkVersion>10.0.12</RuntimeFrameworkVersion>
+    <RollForward>Disable</RollForward>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Weft.Application/Weft.Application.csproj" />
+  </ItemGroup>
+</Project>

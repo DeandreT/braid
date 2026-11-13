@@ -8,7 +8,9 @@ public sealed record RegressionLimitsV1(int MaximumInputBytes, int MaximumOutput
 public sealed record RegressionTargetV1(string Kind, string? Name);
 public sealed record RegressionInputDocumentV1(string? Name, string BytesBase64Url);
 public sealed record RegressionDocumentV1(string? Name, string BytesBase64Url,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? MediaType = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? MediaType = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CsvDocumentDialectV1? CsvDialect = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] XmlDocumentMetadataV1? XmlMetadata = null);
 public sealed record RegressionEdiComparisonOptionsV1(bool CompareSeparators, bool IgnoreControlNumbers, bool IgnoreDates);
 public sealed record RegressionParameterV1(string Name, string Kind, string Value);
 
@@ -22,7 +24,9 @@ public sealed record RegressionCasePutV1(string Name, string RevisionId, Regress
 public sealed record RegressionCaseCapabilitiesV1(RegressionRuntimeV1 Runtime, RegressionLimitsV1 Limits,
     string ComparisonPolicy, bool ReadSamples, bool PublishCases,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RegressionRuntimeV1? DocumentRuntime = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? ComparisonPolicies = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? ComparisonPolicies = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RegressionRuntimeV1? CsvRuntime = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RegressionRuntimeV1? XmlRuntime = null);
 
 public sealed record RegressionCaseMetadataV1(string CaseId, string Version, CatalogRevisionScopeV1 Revision,
     string Name, string CreatedAtUtc);

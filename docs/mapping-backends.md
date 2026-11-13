@@ -24,6 +24,7 @@ mappings are an optional runtime with a separate capability gate.
 | `inspect` | Backend identity, boundaries, revision-specific capabilities, dependencies | Readable artifact under inspection limits |
 | `project` | Deterministic simplified viewer document and coverage diagnostics | Supported projection schema version |
 | `validate` | Structured issues with native and projected locators | Backend validation supported |
+| `edit` | Exact encoded checkpoint, validation and projection | Bounded typed operations replayed on a verified immutable base |
 | `preview` | Ordered output artifacts, counts, bounded trace/diagnostics | Exact formats, inputs, target, limits, and host policy accepted |
 | `build`, later | Immutable runtime artifact and provenance manifest | Exact generator/runtime capability accepted |
 
@@ -154,6 +155,10 @@ Start preview with self-authored JSON-to-JSON fixtures. Add XML/CSV and other
 formats only through explicit capability and qualification increments. Stateful
 SQLite and update-existing XLSX remain outside the initial preview contract.
 Inherited design-time HTTP paths do not authorize worker network access.
+
+The [flat CSV document core](csv-documents.md) has a separate direct-preview and
+source-emission contract. Its bounded route, dialect metadata and empty-document
+semantics do not expand the existing persisted preview or deployment profiles.
 
 Bound every native document before decoding, including legacy unmarked project
 files. Ferrule's logical path acceptance is broader than Weft's storage policy;

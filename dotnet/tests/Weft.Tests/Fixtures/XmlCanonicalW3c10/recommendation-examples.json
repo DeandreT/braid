@@ -1,0 +1,137 @@
+{
+  "schema": "weft.xml-c14n10-w3c-examples.v1",
+  "source": {
+    "url": "https://www.w3.org/TR/2001/REC-xml-c14n-20010315",
+    "title": "Canonical XML Version 1.0",
+    "status": "W3C Recommendation 15 March 2001",
+    "author": "John Boyer, PureEdge Solutions Inc.",
+    "sourceSha256": "09c02ef3bc0f8364b00b16fb06092637c08e8f38cf223d47a5862eacc2956bc0",
+    "sourceEncoding": "iso-8859-1",
+    "copyright": "Copyright \u00a9 2001 W3C\u00ae (MIT, INRIA, Keio), All Rights Reserved.",
+    "licenseUrl": "https://www.w3.org/Consortium/Legal/copyright-documents-19990405",
+    "noticeFile": "W3C-NOTICE.txt",
+    "extraction": "Original table code inner HTML. Remove HTML-source CR/LF layout, translate each <br/> to LF and each &nbsp; to ASCII space, then HTML-decode once. No XML parsing, trimming, indentation changes, DTD removal or encoding-declaration changes. All seven displayed inputs contain only ASCII characters, including the input declaring ISO-8859-1. Base64 stores the resulting complete XML input octets. Section 3.2 also retains the adjacent literal HTML comments as independent whitespace evidence."
+  },
+  "scope": "One admitted complete-document with-comments golden (3.2), six original-input refusal vectors. Core-only source coverage, not general W3C conformance or worker qualification.",
+  "cases": [
+    {
+      "section": "3.1",
+      "url": "https://www.w3.org/TR/2001/REC-xml-c14n-20010315#Example-OutsideDoc",
+      "title": "PIs, Comments, and Outside of Document Element",
+      "disposition": "refuse",
+      "constraints": [
+        "dtd"
+      ],
+      "input": {
+        "sourceCodeHtml": "\n&lt;?xml version=\"1.0\"?><br/>\n<br/>\n&lt;?xml-stylesheet&nbsp;&nbsp;&nbsp;href=\"doc.xsl\"<br/>\n&nbsp;&nbsp;&nbsp;type=\"text/xsl\"&nbsp;&nbsp;&nbsp;?><br/>\n<br/>\n&lt;!DOCTYPE doc SYSTEM \"doc.dtd\"><br/>\n<br/>\n&lt;doc>Hello, world!&lt;!-- Comment 1 -->&lt;/doc><br/>\n<br/>\n&lt;?pi-without-data&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;?><br/>\n<br/>\n&lt;!-- Comment 2 --><br/>\n<br/>\n&lt;!-- Comment 3 --><br/>\n",
+        "sourceCodeSha256": "70d4055bb069fdde8f38ae3b3a9fdac31228c55838cccbad000d999a5b2043fe",
+        "base64": "PD94bWwgdmVyc2lvbj0iMS4wIj8+Cgo8P3htbC1zdHlsZXNoZWV0ICAgaHJlZj0iZG9jLnhzbCIKICAgdHlwZT0idGV4dC94c2wiICAgPz4KCjwhRE9DVFlQRSBkb2MgU1lTVEVNICJkb2MuZHRkIj4KCjxkb2M+SGVsbG8sIHdvcmxkITwhLS0gQ29tbWVudCAxIC0tPjwvZG9jPgoKPD9waS13aXRob3V0LWRhdGEgICAgID8+Cgo8IS0tIENvbW1lbnQgMiAtLT4KCjwhLS0gQ29tbWVudCAzIC0tPgo=",
+        "sha256": "2538692d087426a61cf2ff3b553706a54ccd29fdee942425e01e51a321d3869a"
+      }
+    },
+    {
+      "section": "3.2",
+      "url": "https://www.w3.org/TR/2001/REC-xml-c14n-20010315#Example-WhitespaceInContent",
+      "title": "Whitespace in Document Content",
+      "disposition": "admit",
+      "constraints": [],
+      "input": {
+        "sourceCodeHtml": "\n&lt;doc><br/>\n&nbsp;&nbsp;&nbsp;&lt;clean>&nbsp;&nbsp;&nbsp;&lt;/clean><br/>\n&nbsp;&nbsp;&nbsp;&lt;dirty>&nbsp;&nbsp;&nbsp;A&nbsp;&nbsp;&nbsp;B&nbsp;&nbsp;&nbsp;&lt;/dirty><br/>\n&nbsp;&nbsp;&nbsp;&lt;mixed><br/>\n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A<br/>\n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;clean>&nbsp;&nbsp;&nbsp;&lt;/clean><br/>\n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;B<br/>\n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;dirty>&nbsp;&nbsp;&nbsp;A&nbsp;&nbsp;&nbsp;B&nbsp;&nbsp;&nbsp;&lt;/dirty><br/>\n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;C<br/>\n&nbsp;&nbsp;&nbsp;&lt;/mixed><br/>\n&lt;/doc>\n",
+        "sourceCodeSha256": "f4d6fb8c2b846c6f8a83b5e81fa5ff2667a849365fa8637ccbe3c54610ca9edb",
+        "base64": "PGRvYz4KICAgPGNsZWFuPiAgIDwvY2xlYW4+CiAgIDxkaXJ0eT4gICBBICAgQiAgIDwvZGlydHk+CiAgIDxtaXhlZD4KICAgICAgQQogICAgICA8Y2xlYW4+ICAgPC9jbGVhbj4KICAgICAgQgogICAgICA8ZGlydHk+ICAgQSAgIEIgICA8L2RpcnR5PgogICAgICBDCiAgIDwvbWl4ZWQ+CjwvZG9jPg==",
+        "sha256": "d844efc8c46782fec445a5726c7bc6130fe5cdb3e4804f680aef702a158afbba",
+        "sourceLiteralComment": "\n<doc>\n   <clean>   </clean>\n   <dirty>   A   B   </dirty>\n   <mixed>\n      A\n      <clean>   </clean>\n      B\n      <dirty>   A   B   </dirty>\n      C\n   </mixed>\n</doc>\n"
+      },
+      "canonical": {
+        "sourceCodeHtml": "\n&lt;doc><br/>\n&nbsp;&nbsp;&nbsp;&lt;clean>&nbsp;&nbsp;&nbsp;&lt;/clean><br/>\n&nbsp;&nbsp;&nbsp;&lt;dirty>&nbsp;&nbsp;&nbsp;A&nbsp;&nbsp;&nbsp;B&nbsp;&nbsp;&nbsp;&lt;/dirty><br/>\n&nbsp;&nbsp;&nbsp;&lt;mixed><br/>\n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;A<br/>\n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;clean>&nbsp;&nbsp;&nbsp;&lt;/clean><br/>\n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;B<br/>\n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;dirty>&nbsp;&nbsp;&nbsp;A&nbsp;&nbsp;&nbsp;B&nbsp;&nbsp;&nbsp;&lt;/dirty><br/>\n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;C<br/>\n&nbsp;&nbsp;&nbsp;&lt;/mixed><br/>\n&lt;/doc>\n",
+        "sourceCodeSha256": "f4d6fb8c2b846c6f8a83b5e81fa5ff2667a849365fa8637ccbe3c54610ca9edb",
+        "base64": "PGRvYz4KICAgPGNsZWFuPiAgIDwvY2xlYW4+CiAgIDxkaXJ0eT4gICBBICAgQiAgIDwvZGlydHk+CiAgIDxtaXhlZD4KICAgICAgQQogICAgICA8Y2xlYW4+ICAgPC9jbGVhbj4KICAgICAgQgogICAgICA8ZGlydHk+ICAgQSAgIEIgICA8L2RpcnR5PgogICAgICBDCiAgIDwvbWl4ZWQ+CjwvZG9jPg==",
+        "sha256": "d844efc8c46782fec445a5726c7bc6130fe5cdb3e4804f680aef702a158afbba",
+        "sourceLiteralComment": "\n<doc>\n   <clean>   </clean>\n   <dirty>   A   B   </dirty>\n   <mixed>\n      A\n      <clean>   </clean>\n      B\n      <dirty>   A   B   </dirty>\n      C\n   </mixed>\n</doc>\n"
+      }
+    },
+    {
+      "section": "3.3",
+      "url": "https://www.w3.org/TR/2001/REC-xml-c14n-20010315#Example-SETags",
+      "title": "Start and End Tags",
+      "disposition": "refuse",
+      "constraints": [
+        "dtd"
+      ],
+      "input": {
+        "sourceCodeHtml": "\n&lt;!DOCTYPE doc [&lt;!ATTLIST e9 attr CDATA \"default\">]><br/>\n&lt;doc><br/>\n&nbsp;&nbsp;&nbsp;&lt;e1&nbsp;&nbsp;&nbsp;/><br/>\n&nbsp;&nbsp;&nbsp;&lt;e2&nbsp;&nbsp;&nbsp;>&lt;/e2><br/>\n&nbsp;&nbsp;&nbsp;&lt;e3&nbsp;&nbsp;&nbsp;name = \"elem3\"&nbsp;&nbsp;&nbsp;id=\"elem3\"&nbsp;&nbsp;&nbsp;/><br/>\n&nbsp;&nbsp;&nbsp;&lt;e4&nbsp;&nbsp;&nbsp;name=\"elem4\"&nbsp;&nbsp;&nbsp;id=\"elem4\"&nbsp;&nbsp;&nbsp;>&lt;/e4><br/>\n&nbsp;&nbsp;&nbsp;&lt;e5 a:attr=\"out\" b:attr=\"sorted\" attr2=\"all\" attr=\"I'm\"<br/>\n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; xmlns:b=\"http://www.ietf.org\"<br/>\n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; xmlns:a=\"http://www.w3.org\"<br/>\n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; xmlns=\"http://example.org\"/><br/>\n&nbsp;&nbsp;&nbsp;&lt;e6 xmlns=\"\" xmlns:a=\"http://www.w3.org\"><br/>\n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;e7 xmlns=\"http://www.ietf.org\"><br/>\n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;e8 xmlns=\"\" xmlns:a=\"http://www.w3.org\"><br/>\n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;e9 xmlns=\"\" xmlns:a=\"http://www.ietf.org\"/><br/>\n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;/e8><br/>\n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;/e7><br/>\n&nbsp;&nbsp;&nbsp;&lt;/e6><br/>\n&lt;/doc>\n",
+        "sourceCodeSha256": "a13457092bf6a43ca7233da3f1d8174056ae934578b5a1abc6ee02b5d0e9e04e",
+        "base64": "PCFET0NUWVBFIGRvYyBbPCFBVFRMSVNUIGU5IGF0dHIgQ0RBVEEgImRlZmF1bHQiPl0+Cjxkb2M+CiAgIDxlMSAgIC8+CiAgIDxlMiAgID48L2UyPgogICA8ZTMgICBuYW1lID0gImVsZW0zIiAgIGlkPSJlbGVtMyIgICAvPgogICA8ZTQgICBuYW1lPSJlbGVtNCIgICBpZD0iZWxlbTQiICAgPjwvZTQ+CiAgIDxlNSBhOmF0dHI9Im91dCIgYjphdHRyPSJzb3J0ZWQiIGF0dHIyPSJhbGwiIGF0dHI9IkknbSIKICAgICAgeG1sbnM6Yj0iaHR0cDovL3d3dy5pZXRmLm9yZyIKICAgICAgeG1sbnM6YT0iaHR0cDovL3d3dy53My5vcmciCiAgICAgIHhtbG5zPSJodHRwOi8vZXhhbXBsZS5vcmciLz4KICAgPGU2IHhtbG5zPSIiIHhtbG5zOmE9Imh0dHA6Ly93d3cudzMub3JnIj4KICAgICAgPGU3IHhtbG5zPSJodHRwOi8vd3d3LmlldGYub3JnIj4KICAgICAgICAgPGU4IHhtbG5zPSIiIHhtbG5zOmE9Imh0dHA6Ly93d3cudzMub3JnIj4KICAgICAgICAgICAgPGU5IHhtbG5zPSIiIHhtbG5zOmE9Imh0dHA6Ly93d3cuaWV0Zi5vcmciLz4KICAgICAgICAgPC9lOD4KICAgICAgPC9lNz4KICAgPC9lNj4KPC9kb2M+",
+        "sha256": "e4847e039414780317081e0ce359fff339cbb7e344d15d0f10aa78e94f926812"
+      }
+    },
+    {
+      "section": "3.4",
+      "url": "https://www.w3.org/TR/2001/REC-xml-c14n-20010315#Example-Chars",
+      "title": "Character Modifications and Character References",
+      "disposition": "refuse",
+      "constraints": [
+        "dtd"
+      ],
+      "input": {
+        "sourceCodeHtml": "\n&lt;!DOCTYPE doc [<br/>\n&lt;!ATTLIST normId id ID #IMPLIED><br/>\n&lt;!ATTLIST normNames attr NMTOKENS #IMPLIED><br/>\n]><br/>\n&lt;doc><br/>\n&nbsp;&nbsp;&nbsp;&lt;text>First line&amp;#x0d;&amp;#10;Second line&lt;/text><br/>\n&nbsp;&nbsp;&nbsp;&lt;value>&amp;#x32;&lt;/value><br/>\n&nbsp;&nbsp;&nbsp;&lt;compute>&lt;![CDATA[value>\"0\" &amp;&amp; value&lt;\"10\" ?\"valid\":\"error\"]]&gt;&lt;/compute><br/>\n&nbsp;&nbsp;&nbsp;&lt;compute expr='value>\"0\" &amp;amp;&amp;amp; value&amp;lt;\"10\" ?\"valid\":\"error\"'>valid&lt;/compute><br/>\n&nbsp;&nbsp;&nbsp;&lt;norm attr=' &amp;apos;&nbsp;&nbsp;&nbsp;&amp;#x20;&amp;#13;&amp;#xa;&amp;#9;&nbsp;&nbsp;&nbsp;&amp;apos; '/><br/>\n&nbsp;&nbsp;&nbsp;&lt;normNames attr='&nbsp;&nbsp;&nbsp;A&nbsp;&nbsp;&nbsp;&amp;#x20;&amp;#13;&amp;#xa;&amp;#9;&nbsp;&nbsp;&nbsp;B&nbsp;&nbsp;&nbsp;'/><br/>\n&nbsp;&nbsp;&nbsp;&lt;normId id=' &amp;apos;&nbsp;&nbsp;&nbsp;&amp;#x20;&amp;#13;&amp;#xa;&amp;#9;&nbsp;&nbsp;&nbsp;&amp;apos; '/><br/>\n&lt;/doc><br/>\n",
+        "sourceCodeSha256": "f0fb74654b87530496925e1609df1924b788f73b4333c85d528b6bb5d0989176",
+        "base64": "PCFET0NUWVBFIGRvYyBbCjwhQVRUTElTVCBub3JtSWQgaWQgSUQgI0lNUExJRUQ+CjwhQVRUTElTVCBub3JtTmFtZXMgYXR0ciBOTVRPS0VOUyAjSU1QTElFRD4KXT4KPGRvYz4KICAgPHRleHQ+Rmlyc3QgbGluZSYjeDBkOyYjMTA7U2Vjb25kIGxpbmU8L3RleHQ+CiAgIDx2YWx1ZT4mI3gzMjs8L3ZhbHVlPgogICA8Y29tcHV0ZT48IVtDREFUQVt2YWx1ZT4iMCIgJiYgdmFsdWU8IjEwIiA/InZhbGlkIjoiZXJyb3IiXV0+PC9jb21wdXRlPgogICA8Y29tcHV0ZSBleHByPSd2YWx1ZT4iMCIgJmFtcDsmYW1wOyB2YWx1ZSZsdDsiMTAiID8idmFsaWQiOiJlcnJvciInPnZhbGlkPC9jb21wdXRlPgogICA8bm9ybSBhdHRyPScgJmFwb3M7ICAgJiN4MjA7JiMxMzsmI3hhOyYjOTsgICAmYXBvczsgJy8+CiAgIDxub3JtTmFtZXMgYXR0cj0nICAgQSAgICYjeDIwOyYjMTM7JiN4YTsmIzk7ICAgQiAgICcvPgogICA8bm9ybUlkIGlkPScgJmFwb3M7ICAgJiN4MjA7JiMxMzsmI3hhOyYjOTsgICAmYXBvczsgJy8+CjwvZG9jPgo=",
+        "sha256": "74386ae086569be3c144127c4e3c513c18c3154ba78c822f18b4495d9c9493e0"
+      }
+    },
+    {
+      "section": "3.5",
+      "url": "https://www.w3.org/TR/2001/REC-xml-c14n-20010315#Example-Entities",
+      "title": "Entity References",
+      "disposition": "refuse",
+      "constraints": [
+        "dtd",
+        "external-entity"
+      ],
+      "input": {
+        "sourceCodeHtml": "\n&lt;!DOCTYPE doc [<br/>\n&lt;!ATTLIST doc attrExtEnt ENTITY #IMPLIED><br/>\n&lt;!ENTITY ent1 \"Hello\"><br/>\n&lt;!ENTITY ent2 SYSTEM \"world.txt\"><br/>\n&lt;!ENTITY entExt SYSTEM \"earth.gif\" NDATA gif><br/>\n&lt;!NOTATION gif SYSTEM \"viewgif.exe\"><br/>\n]><br/>\n&lt;doc attrExtEnt=\"entExt\"><br/>\n&nbsp;&nbsp;&nbsp;&amp;ent1;, &amp;ent2;!<br/>\n&lt;/doc><br/>\n<br/>\n&lt;!-- Let world.txt contain \"world\" (excluding the quotes) -->\n",
+        "sourceCodeSha256": "0ccb502d81587f189549f21bab663776ceb727bb73f921d9dd450dc361a0e913",
+        "base64": "PCFET0NUWVBFIGRvYyBbCjwhQVRUTElTVCBkb2MgYXR0ckV4dEVudCBFTlRJVFkgI0lNUExJRUQ+CjwhRU5USVRZIGVudDEgIkhlbGxvIj4KPCFFTlRJVFkgZW50MiBTWVNURU0gIndvcmxkLnR4dCI+CjwhRU5USVRZIGVudEV4dCBTWVNURU0gImVhcnRoLmdpZiIgTkRBVEEgZ2lmPgo8IU5PVEFUSU9OIGdpZiBTWVNURU0gInZpZXdnaWYuZXhlIj4KXT4KPGRvYyBhdHRyRXh0RW50PSJlbnRFeHQiPgogICAmZW50MTssICZlbnQyOyEKPC9kb2M+Cgo8IS0tIExldCB3b3JsZC50eHQgY29udGFpbiAid29ybGQiIChleGNsdWRpbmcgdGhlIHF1b3RlcykgLS0+",
+        "sha256": "4c9ff345a2a3355005e047b874c26abede4402fe782335288e982900bf368372"
+      }
+    },
+    {
+      "section": "3.6",
+      "url": "https://www.w3.org/TR/2001/REC-xml-c14n-20010315#Example-UTF8",
+      "title": "UTF-8 Encoding",
+      "disposition": "refuse",
+      "constraints": [
+        "non-utf8-declaration"
+      ],
+      "input": {
+        "sourceCodeHtml": "\n&lt;?xml version=\"1.0\" encoding=\"ISO-8859-1\"?><br/>\n&lt;doc>&amp;#169;&lt;/doc>\n",
+        "sourceCodeSha256": "c9afaa4771d1e4139e598092829ec90bc41fbd8b8f4c3ebbd854a3c1fd27fe36",
+        "base64": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iSVNPLTg4NTktMSI/Pgo8ZG9jPiYjMTY5OzwvZG9jPg==",
+        "sha256": "4b2af8e50d1430763f74dc925ab7725c8ffbfade7fecfd83b1fc9d47b496e47d"
+      }
+    },
+    {
+      "section": "3.7",
+      "url": "https://www.w3.org/TR/2001/REC-xml-c14n-20010315#Example-DocSubsets",
+      "title": "Document Subsets",
+      "disposition": "refuse",
+      "constraints": [
+        "dtd",
+        "document-subset"
+      ],
+      "input": {
+        "sourceCodeHtml": "\n&lt;!DOCTYPE doc [ <br/>\n&lt;!ATTLIST e2 xml:space (default|preserve) 'preserve'> <br/>\n&lt;!ATTLIST e3 id ID #IMPLIED> <br/>\n]> <br/>\n&lt;doc xmlns=\"http://www.ietf.org\" xmlns:w3c=\"http://www.w3.org\"> <br/>\n&nbsp;&nbsp;&nbsp;&lt;e1> <br/>\n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;e2 xmlns=\"\"> <br/>\n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;e3 id=\"E3\"/> <br/>\n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;/e2> <br/>\n&nbsp;&nbsp;&nbsp;&lt;/e1> <br/>\n&lt;/doc>\n",
+        "sourceCodeSha256": "1369abb3d76298610583a65b86251d6f8220305291f55707188a2bca5d73967a",
+        "base64": "PCFET0NUWVBFIGRvYyBbIAo8IUFUVExJU1QgZTIgeG1sOnNwYWNlIChkZWZhdWx0fHByZXNlcnZlKSAncHJlc2VydmUnPiAKPCFBVFRMSVNUIGUzIGlkIElEICNJTVBMSUVEPiAKXT4gCjxkb2MgeG1sbnM9Imh0dHA6Ly93d3cuaWV0Zi5vcmciIHhtbG5zOnczYz0iaHR0cDovL3d3dy53My5vcmciPiAKICAgPGUxPiAKICAgICAgPGUyIHhtbG5zPSIiPiAKICAgICAgICAgPGUzIGlkPSJFMyIvPiAKICAgICAgPC9lMj4gCiAgIDwvZTE+IAo8L2RvYz4=",
+        "sha256": "67664e9ec3832cf1bf50fbfb589717e4fc949e2628563bb4dfdac7ba95b03463"
+      },
+      "subsetExpression": {
+        "sourceCodeHtml": "\n&lt;!-- Evaluate with declaration xmlns:ietf=\"http://www.ietf.org\" --&gt; <br/>\n<br/>\n(//. | //@* | //namespace::*) <br/>\n[ <br/>\n&nbsp;&nbsp;&nbsp;self::ietf:e1 or (parent::ietf:e1 and not(self::text() or self::e2)) <br/>\n&nbsp;&nbsp;&nbsp;or <br/>\n&nbsp;&nbsp;&nbsp;count(id(\"E3\")|ancestor-or-self::node()) = count(ancestor-or-self::node()) <br/>\n]",
+        "sourceCodeSha256": "17ae3f899d1c9e8163bcbe1a9318100476c76581ceddd277a4a45ed2da3ce94f",
+        "base64": "PCEtLSBFdmFsdWF0ZSB3aXRoIGRlY2xhcmF0aW9uIHhtbG5zOmlldGY9Imh0dHA6Ly93d3cuaWV0Zi5vcmciIC0tPiAKCigvLy4gfCAvL0AqIHwgLy9uYW1lc3BhY2U6OiopIApbIAogICBzZWxmOjppZXRmOmUxIG9yIChwYXJlbnQ6OmlldGY6ZTEgYW5kIG5vdChzZWxmOjp0ZXh0KCkgb3Igc2VsZjo6ZTIpKSAKICAgb3IgCiAgIGNvdW50KGlkKCJFMyIpfGFuY2VzdG9yLW9yLXNlbGY6Om5vZGUoKSkgPSBjb3VudChhbmNlc3Rvci1vci1zZWxmOjpub2RlKCkpIApd",
+        "sha256": "860680620809038d2c28edc5a6c6e31efc9c66e3c9b12a8e88f243f82d87606d"
+      }
+    }
+  ]
+}

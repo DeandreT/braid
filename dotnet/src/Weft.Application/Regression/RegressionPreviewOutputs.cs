@@ -35,7 +35,14 @@ internal static class RegressionPreviewOutputs
         {
             token.ThrowIfCancellationRequested();
             if (output is null || !boundaries.Add(output.BoundaryId) ||
-                (value.Runtime.Profile == PreviewPolicy.Profile ? output.MediaType != PreviewPolicy.MediaType : !DocumentPreviewPolicy.AdmitsMediaType(output.MediaType)) ||
+                (value.Runtime.Profile switch
+                {
+                    XmlPreviewAdmission.Profile => output.CsvDialect is not null ||
+                        !XmlDocumentPolicy.Admits(output.XmlMetadata, XmlDocumentRole.Output, output.MediaType),
+                    CsvDocumentPolicy.Profile => !CsvDocumentPolicy.Admits(output.CsvDialect, output.MediaType),
+                    PreviewPolicy.Profile => output.CsvDialect is not null || output.MediaType != PreviewPolicy.MediaType,
+                    _ => output.CsvDialect is not null || !DocumentPreviewPolicy.AdmitsMediaType(output.MediaType)
+                }) ||
                 output.ByteCount > value.Replay.Limits.MaximumOutputBytes - total) throw Invalid();
             total += output.ByteCount;
             RegressionOutputKey key;
@@ -55,7 +62,9 @@ internal static class RegressionPreviewOutputs
                 if (value.Replay.Target.Kind == PreviewTargetKind.Named && output.TargetName != value.Replay.Target.Name) throw Invalid();
                 key = RegressionOutputKey.Named(output.TargetName);
             }
-            outputs.Add(RegressionOutput.Capture(key, output.Bytes, token, output.MediaType));
+            if (value.Runtime.Profile == CsvDocumentPolicy.Profile &&
+                (key != RegressionOutputKey.Primary || value.Expected.Outputs.Single().CsvDialect != output.CsvDialect)) throw Invalid();
+            outputs.Add(RegressionOutput.Capture(key, output.Bytes, token, output.MediaType, output.CsvDialect, output.XmlMetadata));
         }
         if (value.Replay.Target.Kind == PreviewTargetKind.Named ? outputs.Count != 1 : primary != 1) throw Invalid();
         return RegressionOutputSet.Capture(outputs, token);

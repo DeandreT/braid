@@ -23,7 +23,10 @@ public static class CatalogHostConfiguration
         var creationOptions = new CatalogProjectCreationOptions(Flag("WEFT_PROJECT_CREATION_ENABLED"));
         var reportOptions = new CatalogRevisionReportOptions(Flag("WEFT_REVISION_REPORTS_ENABLED"),
             Flag("WEFT_REVISION_REPORT_DERIVATION_ENABLED"));
-        var previewOptions = new CatalogPreviewOptions(Flag("WEFT_PREVIEWS_ENABLED"));
+        var previewOptions = new CatalogPreviewOptions(Flag("WEFT_PREVIEWS_ENABLED"), csvEnabled: Flag(CatalogPreviewOptions.CsvEnabledSetting),
+            xmlEnabled: Flag(Weft.Application.XmlPreviewAdmission.EnabledSetting));
+        CatalogMappingEditingHostConfiguration.Configure(builder.Services, readEnvironment, options.Enabled, ingestionOptions.Enabled,
+            reportOptions.Enabled, reportOptions.DerivationEnabled);
         builder.Services.AddWeftCatalog(options, builder.Environment, metadataOptions, ingestionOptions, creationOptions, reportOptions);
         var chat = Flag("WEFT_CHAT_ENABLED");
         if (previewOptions.Enabled && !options.Enabled)
@@ -33,6 +36,7 @@ public static class CatalogHostConfiguration
             CatalogRegressionHostConfiguration.Configure(builder.Services, readEnvironment, catalogEnabled: false);
             _ = CatalogBuildHostConfiguration.ReadRuntime(readEnvironment, catalogEnabled: false);
             _ = ReleaseOperationsHostConfiguration.ReadEnabled(readEnvironment, catalogEnabled: false);
+            LocalSandboxHostConfiguration.Configure(builder.Services, builder.Environment, readEnvironment, catalogEnabled: false);
             ChatHostConfiguration.Configure(builder.Services, readEnvironment, chat, false, reportOptions);
             return;
         }
@@ -42,6 +46,7 @@ public static class CatalogHostConfiguration
             throw new InvalidOperationException("The catalog browser origin must match the concrete configured loopback listener.");
         CatalogBusinessServices.Configure(builder.Services, builder.Environment, metadataOptions, ingestionOptions,
             creationOptions, reportOptions, readEnvironment);
+        LocalSandboxHostConfiguration.Configure(builder.Services, builder.Environment, readEnvironment, catalogEnabled: true);
         ChatHostConfiguration.Configure(builder.Services, readEnvironment, chat, true, reportOptions);
         CatalogPreviewHostConfiguration.Configure(builder.Services, previewOptions, readEnvironment);
 

@@ -71,6 +71,7 @@ internal sealed class ServerHostOptions
         }
         if (Flag(read, "WEFT_DEV_IDENTITY_ENABLED") || new[]
             { "WEFT_DEV_PRINCIPAL_ID", "WEFT_DEV_ORGANIZATION_ID", "WEFT_DEV_BROWSER_ORIGIN", "WEFT_DEV_LISTEN_ADDR" }
+            .Concat(LocalSandboxHostConfiguration.Settings)
             .Any(name => read(name) is not null)) throw Failure();
         var publicOrigin = Required(read, "WEFT_PUBLIC_ORIGIN");
         _ = new ServerSessionBrowserOptions(publicOrigin);
@@ -114,7 +115,8 @@ internal sealed class ServerHostOptions
         var chat = Flag(read, "WEFT_CHAT_ENABLED");
         // Conversations pin verified reports; refuse the inconsistent profile before any delivery is opened.
         if (chat && !reports.Enabled) throw Failure();
-        var previews = new CatalogPreviewOptions(Flag(read, "WEFT_PREVIEWS_ENABLED"));
+        var previews = new CatalogPreviewOptions(Flag(read, "WEFT_PREVIEWS_ENABLED"), csvEnabled: Flag(read, CatalogPreviewOptions.CsvEnabledSetting),
+            xmlEnabled: Flag(read, Weft.Application.XmlPreviewAdmission.EnabledSetting));
         var builds = CatalogBuildHostConfiguration.ReadRuntime(read, catalogEnabled: true);
         _ = ReleaseOperationsHostConfiguration.ReadEnabled(read, catalogEnabled: true);
         // Native admission and derivation run only through a separately hosted, pinned runner; this host never runs

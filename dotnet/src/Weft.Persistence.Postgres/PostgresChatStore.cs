@@ -163,7 +163,7 @@ public sealed partial class PostgresChatStore : IChatConversationStore, IChatTur
                 var next = reader.GetInt32(0);
                 if (next != sequence + 1 || !Enum.IsDefined((ChatEventKind)reader.GetInt32(2))) throw Invalid();
                 var item = new ChatStoredEvent(next, reader.GetGuid(1), (ChatEventKind)reader.GetInt32(2), reader.GetString(3), reader.IsDBNull(4) ? null : reader.GetGuid(4), reader.IsDBNull(5) ? null : reader.GetString(5));
-                _ = item.Usage; _ = item.ProviderFailure; _ = item.Citation; _ = item.WorkspaceCitation; _ = item.DataShared; _ = item.TerminalMetadata;
+                _ = item.Usage; _ = item.ProviderFailure; _ = item.Citation; _ = item.WorkspaceCitation; _ = item.DataShared; _ = item.MappingWrite; _ = item.TerminalMetadata;
                 result.Add(item);
                 sequence = next;
             }

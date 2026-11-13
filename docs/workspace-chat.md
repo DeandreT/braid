@@ -1,10 +1,11 @@
 # Workspace chat
 
-A workspace conversation is an organization-wide, read-only assistant. It answers
+A workspace conversation is an organization-wide assistant. It answers
 questions about the projects, mappings, revisions, retained reports, sample
 previews, regression cases and runs, builds and the user guide that its creator
-can read in one organization. It can only read: it never starts a preview, run,
-build or report derivation and never changes anything.
+can read in one organization. When asked to edit a mapping, it can save an exact-base
+typed edit as the next version through the creator's current edit permission.
+It never changes the version in use or starts a preview, run, build or report derivation.
 
 Workspace conversations sit beside the revision-pinned conversations described in
 [AI chat architecture](ai-chat.md) and [Mapping explanation tools](mapping-ai-tools.md).
@@ -89,17 +90,17 @@ described only as `unavailable`.
 
 ## Grounding policy
 
-Every workspace turn pins the `weft.workspace-assistant` policy, version 2,
+Every workspace turn pins the `weft.workspace-assistant` policy, version 8,
 together with the exact manifest the host offers:
 
 | Bound | Value |
 | --- | --- |
-| Tool iterations per turn | 3 |
+| Tool iterations per turn | 3; creation-enabled payload manifest: 4 |
 | Tool calls per turn | 8 (provider budget) |
 | Retrieved nodes per turn | 512 |
 | Tool-result bytes per turn | 32,768 |
 | Result bytes per call | 12,288 |
-| Argument bytes per call | 4,096, two container levels |
+| Argument bytes per call | Metadata: 4,096, two container levels; edit/creation: 16,384 (provider JSON depth 16) |
 | Items per list call | 20 |
 | Concurrent calls per host | 4 (further calls are `busy`) |
 | Duration per call | 20 seconds (then `timedOut`) |
@@ -153,6 +154,8 @@ organization, actor, report selection and every scope come from trusted context.
 | `get_run` | One of the user's own previews, regression runs or builds: status, attempts, result summary and bounded failure |
 | `get_capabilities` | What the user can do with a mapping on this server |
 | `search_user_guide`, `get_user_guide_section` | The user guide shipped with the server |
+| `propose_mapping_edit` | Retains an exact-base proposal for separate authenticated review and approval; requires proposal persistence |
+| `save_mapping_edit` | Legacy direct save, offered only with explicit `WEFT_CHAT_LEGACY_DIRECT_SAVE_ENABLED=true` |
 
 Run kinds of a disabled family (previews, regression tests, builds) are not
 offered; `list_runs` and `get_run` are absent when all three are disabled, and the
@@ -220,10 +223,65 @@ literal values are never cropped. A result that cannot fit even empty is
    `CatalogEndpoints.ReadCores.cs`.
 6. Observes the organization admission again before releasing the result.
 
-Nothing is cached between calls, so revoked membership, a lost organization
-admission or a disabled principal takes effect on the next call. The service
-resolves only read ports; it has no write, derivation, run, build or provider
-port. Caller cancellation propagates instead of becoming a result.
+Revoked membership, a lost organization admission or a disabled principal takes
+effect on the next call. By default the edit tool only retains proposals; approval is a separate authenticated action.
+The legacy direct-save port requires an explicit server capability;
+there is no activation, derivation, run, build or provider port. Caller cancellation
+propagates instead of becoming a result.
+
+## Mapping approval, legacy saves and recovery
+
+The default runtime requires exact proposal approval. See
+[the runtime cutover contract](chat-proposal-runtime.md) for proposal listing,
+complete-operation review, approval/recovery routes and the outstanding production
+persistence/UI integration. The direct-save flow below is compatibility behavior
+behind a default-false server capability, not approval of a proposal or a turn.
+
+`save_mapping_edit` accepts a `ferrule.edit.v1` script, never arbitrary native
+bytes. The server replays it against the named immutable base and derives bounded
+before/after summaries from verified projections. Current edit authority is checked
+again by storage and ingestion. Appending requires that exact base to remain the head.
+
+Before ingestion can reserve or commit, `IChatMappingWriteJournal.PrepareAsync`
+must acknowledge an immutable intent. Its key is derived from the turn and tool-call
+identity. The journal retains the actor, conversation, round, base, operation count,
+edit digest, exact native digest/count and pinned profile as a no-content audit in
+`chat_mapping_write_intents`. Exact replay bytes and change summaries live separately
+in `chat_mapping_write_content` and are erased with conversation content.
+
+The ingestion commit trigger matches actor, project, mapping, key, exact head
+condition and native identity, then inserts an immutable no-content commit fact in
+`chat_mapping_write_commits` in that same transaction. This fact retains the operation,
+saved revision, sequence and commit time without a foreign key to purgeable request
+rows. Capture failure rolls back the mapping commit. Request-key retirement
+tombstones are never treated as success evidence. The intent and commit fact are
+the durable audit, even when the original ingestion receipt is later purged.
+There is no fallible application-side post-commit journal update. A `mapping.write` stream
+event is an immediate presentation record, not the sole receipt or audit. Losing its
+append acknowledgement, cancelling or expiring the turn, or restarting the server
+does not lose an already committed version's receipt.
+
+The creator can read save status through `GET .../turns/{turnId}/mapping-writes`
+independently of the turn's live event fence. Only `saved` includes a confirmed
+version. `pending` makes no saved claim; `notSaved` means no matching save completed.
+Fresh creator and project read authority applies even after the turn ends.
+
+Explicit `POST .../mapping-writes/recover` resumes only an already reserved
+ingestion by operation ID and current edit permission, through `ResumeAsync`.
+It never calls append or resupplies source bytes. A `NeedsSource` result stays pending;
+the exact-proposal flow requires explicit repeat approval before supplying source.
+It neither invokes a model nor starts an unreserved save after cancellation or
+expiry. A committed receipt is recognized before checking a later head, so retries
+do not append another revision. Each pending save gets at most one attempt per
+request, with two joined recovery lanes and a short per-save slice that reserves
+time for the final receipt read, within a shared deadline and ingestion's existing attempt limit. One lost
+acknowledgement does not prevent other independent saves from being recovered.
+
+The browser reads these receipts when opening or finishing an answer and merges
+confirmed versions with immediate stream cards without changing stream sequence
+numbers. Pending saves offer **Refresh save status** and explicit **Continue pending
+save**. Saved cards provide Undo (another exact-head conditional append), Diff and
+Open version. Saving never activates a version or starts tests automatically.
 
 ## Citations
 

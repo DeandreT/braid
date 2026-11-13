@@ -1,3 +1,5 @@
+using Weft.Application;
+
 namespace Weft.MappingBackends.Ferrule;
 
 internal sealed record PreviewHostResponse(
@@ -20,6 +22,8 @@ internal sealed record PreviewHostArtifact(
     string MediaType,
     ulong RecordsWritten,
     uint ByteLength,
-    string Sha256);
+    string Sha256,
+    CsvDocumentDialect? CsvDialect = null,
+    System.Text.Json.JsonElement? XmlMetadata = null);
 
 internal sealed record PreviewHostFailure(string Code, string Message, bool MessageTruncated, string? Subject, bool SubjectTruncated);

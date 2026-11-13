@@ -7,6 +7,9 @@ pub const MAX_EDI_SEGMENT_BYTES: usize = 16 * 1024;
 pub const MAX_JSON_NESTING: usize = 64;
 
 pub fn admitted_schema(format: DocumentFormat, schema: &ferrule_ir::SchemaNode) -> bool {
+    if format == DocumentFormat::Xml {
+        return crate::xml_document::bounded_closed_schema(schema).is_ok();
+    }
     fn visit(
         schema: &ferrule_ir::SchemaNode,
         depth: usize,
@@ -44,6 +47,16 @@ pub fn within_limits(
     bytes: &[u8],
     configured_segment: Option<char>,
 ) -> bool {
+    if format == DocumentFormat::Xml {
+        return crate::xml_document::Safety::new(crate::xml_document::MAX_DOCUMENT_BYTES)
+            .and_then(|safety| safety.validate_bytes(bytes))
+            .is_ok();
+    }
+    if matches!(format, DocumentFormat::Csv | DocumentFormat::Tsv) {
+        // Native CSV parsing supplies cell/record/column/node limits. The outer
+        // per-run limit is still enforced by preview before publication.
+        return bytes.len() <= crate::preview::protocol::MAX_PREVIEW_OUTPUT_BYTES;
+    }
     if format == DocumentFormat::Json {
         let mut quoted = false;
         let mut escaped = false;

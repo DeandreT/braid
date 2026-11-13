@@ -52,6 +52,10 @@ public sealed class BuildQualification
             .Select(value => value.Name).ToHashSet(StringComparer.Ordinal);
         if (!outputs.SetEquals(execution.Outputs.Outputs.Select(value => value.Key.Name)) || execution.Outputs.ByteCount > sourceCase.Replay.Limits.MaximumOutputBytes ||
             execution.Outputs.Outputs.Count > sourceCase.Replay.Limits.MaximumArtifacts) throw Invalid(BuildQualificationFailure.IncompleteEvidence);
+        if (artifact.Intent.Profile.Id == BuildWorkerProtocol.CsvProfile && execution.Outputs.Outputs.Any(output =>
+            !artifact.Intent.Boundaries.Any(boundary => boundary.Kind == BuildBoundaryKind.PrimaryOutput && output.Key.IsPrimary &&
+                boundary.CsvDialect == output.CsvDialect && BuildWorkerProtocol.MediaType(boundary.Format) == output.MediaType)))
+            throw Invalid(BuildQualificationFailure.OutputMismatch);
         var comparison = new RegressionComparisonService().Compare(sourceCase.Expected, new(OperationStatusV1.Succeeded, execution.Outputs), cancellationToken: token);
         if (comparison.Outcome != RegressionComparisonOutcome.Passed) throw Invalid(BuildQualificationFailure.OutputMismatch);
         var bytes = new RegressionRunResultCodec().EncodeObservation(id, sourceCase, MappingPreviewStatus.Succeeded, execution.Outputs, token);
@@ -87,7 +91,7 @@ public sealed class BuildQualification
             evidence.RunId != intent.RegressionEvidenceId || sourceCase.Revision != intent.Revision || sourceCase.NativeDigest != intent.NativeDigest ||
             sourceCase.Runtime.BackendId != intent.Backend.BackendId || sourceCase.Runtime.EngineRevision != intent.Backend.EngineRevision ||
             sourceCase.Runtime.BackendBuild != intent.Backend.EngineBuild || sourceCase.Runtime.AdapterBuild != intent.Backend.AdapterVersion ||
-            sourceCase.Runtime.Profile != (BuildWorkerProtocol.IsDocumentProfile(intent.Profile.Id) ? DocumentPreviewPolicy.Profile : PreviewPolicy.Profile))
+            sourceCase.Runtime.Profile != BuildWorkerProtocol.PreviewProfileFor(intent.Profile.Id))
             throw Invalid(BuildQualificationFailure.IdentityMismatch);
         var reference = new RegressionCaseEnvelopeCodec().Encode(sourceCase, token).Reference;
         if (reference != evidence.Case) throw Invalid(BuildQualificationFailure.IdentityMismatch);
@@ -103,7 +107,11 @@ public sealed class BuildQualification
         if (outputs.Count == 0 || !outputs.SetEquals(sourceCase.Expected.Outputs.Select(value => value.Key.Name))) throw Invalid(BuildQualificationFailure.IncompleteEvidence);
         if (BuildWorkerProtocol.IsDocumentProfile(intent.Profile.Id) && sourceCase.Expected.Outputs.Any(output => !intent.Boundaries.Any(boundary =>
             boundary.Kind == (output.Key.IsPrimary ? BuildBoundaryKind.PrimaryOutput : BuildBoundaryKind.NamedOutput) && boundary.Name == output.Key.Name &&
-            BuildWorkerProtocol.AdmitsFormat(intent.Profile.Id, boundary.Format) && BuildWorkerProtocol.MediaType(boundary.Format) == output.MediaType)))
+            BuildWorkerProtocol.AdmitsBoundary(intent.Profile.Id, boundary.Format, boundary.CsvDialect) &&
+            BuildWorkerProtocol.MediaType(boundary.Format) == output.MediaType && boundary.CsvDialect == output.CsvDialect)))
+            throw Invalid(BuildQualificationFailure.IncompleteEvidence);
+        if (intent.Profile.Id == BuildWorkerProtocol.CsvProfile && (!BuildWorkerProtocol.AdmitsCsvPlan(intent.Boundaries) ||
+            sourceCase.Replay.Primary.CsvDialect != intent.Boundaries.Single(boundary => boundary.Kind == BuildBoundaryKind.PrimaryInput).CsvDialect))
             throw Invalid(BuildQualificationFailure.IncompleteEvidence);
         var inputs = intent.Boundaries.Where(value => value.Kind == BuildBoundaryKind.NamedInput).Select(value => value.Name).ToHashSet(StringComparer.Ordinal);
         if (!inputs.SetEquals(sourceCase.Replay.NamedInputs.Select(value => value.Name))) throw Invalid(BuildQualificationFailure.IncompleteEvidence);

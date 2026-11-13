@@ -9,6 +9,17 @@ public sealed class PostgresPreviewRunReader(PostgresPreviewDatabase database) :
 {
     private readonly PostgresPreviewDatabase _database = database ?? throw new ArgumentNullException(nameof(database));
 
+    public Task<DraftPreviewSubject?> ReadDraftSubjectAsync(ActorContext actor, MappingScope mapping, Guid requestKey,
+        CancellationToken cancellationToken = default) => _database.RunAsync<DraftPreviewSubject?>(false, async (connection, transaction) =>
+        {
+            await using var command = new NpgsqlCommand("SELECT draft_id,draft_version,base_revision_id,native_digest,native_byte_count FROM weft.preview_draft_subject_by_key($1,$2,$3,$4,$5)", connection, transaction);
+            command.Parameters.AddWithValue(mapping.OrganizationId); command.Parameters.AddWithValue(mapping.ProjectId); command.Parameters.AddWithValue(mapping.MappingId);
+            command.Parameters.AddWithValue(actor.PrincipalId.Value); command.Parameters.AddWithValue(requestKey);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            return await reader.ReadAsync(cancellationToken) ? new(new(mapping.OrganizationId, mapping.ProjectId, mapping.MappingId, reader.GetGuid(2)),
+                reader.GetGuid(0), reader.GetInt64(1), Sha256Digest.Parse(reader.GetString(3)), reader.GetInt32(4)) : null;
+        }, cancellationToken);
+
     public Task<PreviewRunSnapshot?> ReadAsync(ActorContext actor, Guid organizationId, Guid runId, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(actor);
@@ -40,12 +51,32 @@ public sealed class PostgresPreviewRunReader(PostgresPreviewDatabase database) :
                     reader.GetBoolean(13), reader.IsDBNull(14) ? null : reader.GetString(14), !reader.IsDBNull(15) && reader.GetBoolean(15));
                 var provenance = reader.IsDBNull(16) ? null : new PreviewRunProvenance(reader.GetBoolean(16), reader.GetString(17),
                     reader.GetString(18), reader.GetString(19), reader.GetString(20));
-                snapshot = new PreviewRunSnapshot(runId, new RevisionScope(organizationId, reader.GetGuid(0), reader.GetGuid(1), reader.GetGuid(2)),
-                    reader.GetGuid(3), reader.GetString(4), reader.GetString(5), state, reader.GetInt32(7), reader.GetInt32(8),
-                    reader.GetBoolean(9), reader.IsDBNull(10) ? null : PostgresPreviewRunStore.Outcome(reader.GetString(10)), failure,
-                    provenance, reader.IsDBNull(21) ? null : reader.GetInt64(21), [], reader.GetFieldValue<DateTimeOffset>(22),
-                    reader.IsDBNull(23) ? null : reader.GetFieldValue<DateTimeOffset>(23),
-                    reader.IsDBNull(24) ? null : reader.GetFieldValue<DateTimeOffset>(24), reader.GetFieldValue<DateTimeOffset>(25));
+                var project = reader.GetGuid(0); var mapping = reader.GetGuid(1);
+                // The subject query is needed only for a draft, so revision-only deployments
+                // retain their existing read path while the staged migration is integrated.
+                var revision = reader.IsDBNull(2) ? null : new RevisionScope(organizationId, project, mapping, reader.GetGuid(2));
+                var key = reader.GetGuid(3); var fingerprint = reader.GetString(4); var clock = reader.GetString(5);
+                var attempt = reader.GetInt32(7); var maximum = reader.GetInt32(8); var cancel = reader.GetBoolean(9);
+                var outcome = reader.IsDBNull(10) ? (PreviewRunOutcome?)null : PostgresPreviewRunStore.Outcome(reader.GetString(10));
+                var records = reader.IsDBNull(21) ? (long?)null : reader.GetInt64(21);
+                var created = reader.GetFieldValue<DateTimeOffset>(22);
+                var started = reader.IsDBNull(23) ? (DateTimeOffset?)null : reader.GetFieldValue<DateTimeOffset>(23);
+                var finished = reader.IsDBNull(24) ? (DateTimeOffset?)null : reader.GetFieldValue<DateTimeOffset>(24);
+                var expires = reader.GetFieldValue<DateTimeOffset>(25);
+                PreviewSubject subject;
+                if (revision is not null) subject = new RevisionPreviewSubject(revision);
+                else
+                {
+                    await reader.DisposeAsync();
+                    await using var subjectCommand = new NpgsqlCommand("SELECT draft_id,draft_version,base_revision_id,native_digest,native_byte_count FROM weft.preview_draft_subject($1,$2,$3)", connection, transaction);
+                    subjectCommand.Parameters.AddWithValue(organizationId); subjectCommand.Parameters.AddWithValue(runId); subjectCommand.Parameters.AddWithValue(actor.PrincipalId.Value);
+                    await using var draft = await subjectCommand.ExecuteReaderAsync(cancellationToken);
+                    if (!await draft.ReadAsync(cancellationToken)) throw PostgresPreviewRunStore.Inconsistent();
+                    subject = new DraftPreviewSubject(new(organizationId, project, mapping, draft.GetGuid(2)), draft.GetGuid(0), draft.GetInt64(1),
+                        Sha256Digest.Parse(draft.GetString(3)), draft.GetInt32(4));
+                }
+                snapshot = new PreviewRunSnapshot(runId, subject,
+                    key, fingerprint, clock, state, attempt, maximum, cancel, outcome, failure, provenance, records, [], created, started, finished, expires);
             }
             var outputs = new List<PreviewOutputDescriptor>();
             await using (var command = new NpgsqlCommand("""
@@ -60,6 +91,21 @@ public sealed class PostgresPreviewRunReader(PostgresPreviewDatabase database) :
                 while (await reader.ReadAsync(cancellationToken))
                     outputs.Add(new(reader.GetInt32(0), reader.GetString(1), reader.GetString(2), reader.GetBoolean(3), reader.GetString(4),
                         reader.GetInt64(5), Sha256Digest.Parse(reader.GetString(6)), reader.GetInt32(7)));
+            }
+            for (var index = 0; index < outputs.Count; index++)
+                if (CsvDocumentPolicy.AdmitsMediaType(outputs[index].MediaType))
+                    outputs[index] = outputs[index] with
+                    {
+                        CsvDialect = await ReadCsvDialectAsync(connection, transaction,
+                        actor, organizationId, runId, outputs[index].Ordinal, outputs[index].MediaType, cancellationToken)
+                    };
+            if (snapshot.Provenance?.Profile == XmlPreviewAdmission.Profile)
+            {
+                if (outputs.Count != 0) throw PostgresPreviewRunStore.Inconsistent();
+                var documents = await ReadXmlDocumentsAsync(connection, transaction, actor, organizationId, runId, 2, cancellationToken);
+                outputs.AddRange(documents.Select(item => new PreviewOutputDescriptor(item.Ordinal, item.Name!, item.TargetName!, item.TargetNameTruncated!.Value,
+                    XmlDocumentPolicy.MediaType, item.RecordsWritten!.Value, item.Digest, item.Content.ByteCount)
+                { XmlMetadata = item.Content.XmlMetadata }));
             }
             if (outputs.Select((output, index) => output.Ordinal != index).Any(mismatch => mismatch)
                 || (snapshot.Outcome == PreviewRunOutcome.Succeeded) != (outputs.Count > 0))
@@ -121,6 +167,12 @@ public sealed class PostgresPreviewRunReader(PostgresPreviewDatabase database) :
             while (await reader.ReadAsync(cancellationToken))
                 inputs.Add(new(reader.GetInt32(0), reader.IsDBNull(1) ? null : reader.GetString(1), Sha256Digest.Parse(reader.GetString(2)),
                     reader.GetInt32(3)));
+            await reader.DisposeAsync();
+            if (inputs.Count == 0 && await XmlPreviewSchemaAdmission.InstalledAsync(connection, transaction, cancellationToken))
+            {
+                var xml = await ReadXmlDocumentsAsync(connection, transaction, actor, organizationId, runId, 1, cancellationToken);
+                inputs.AddRange(xml.Select(item => new PreviewInputDescriptor(item.Ordinal, item.Name, item.Digest, item.Content.ByteCount)));
+            }
             if (inputs.Count == 0) return null;
             if (inputs.Select((input, index) => input.Ordinal != index || (index == 0) != (input.Name is null)).Any(mismatch => mismatch))
                 throw PostgresPreviewRunStore.Inconsistent();
@@ -143,9 +195,19 @@ public sealed class PostgresPreviewRunReader(PostgresPreviewDatabase database) :
         ArgumentNullException.ThrowIfNull(actor);
         return _database.RunAsync(false, async (connection, transaction) =>
         {
+            if (await XmlPreviewSchemaAdmission.InstalledAsync(connection, transaction, cancellationToken))
+            {
+                var xml = await ReadXmlDocumentsAsync(connection, transaction, actor, organizationId, runId, function == "preview_output" ? 2 : 1, cancellationToken);
+                if (xml.Count != 0)
+                {
+                    var selected = xml.SingleOrDefault(item => item.Ordinal == ordinal);
+                    if (selected is null) return null;
+                    return new PreviewOutputContent(selected.Digest, selected.Bytes!) { MediaType = XmlDocumentPolicy.MediaType, XmlMetadata = selected.Content.XmlMetadata };
+                }
+            }
             var sql = function == "preview_output"
                 ? "SELECT b.digest,b.content,m.media_type FROM weft.preview_output($1,$2,$3,$4) b JOIN weft.preview_outputs($1,$2,$3) m ON m.ordinal=$4"
-                : $"SELECT digest,content FROM weft.{function}($1,$2,$3,$4)";
+                : "SELECT digest,content,'application/json'::text FROM weft.preview_input($1,$2,$3,$4)";
             await using var command = new NpgsqlCommand(sql, connection, transaction);
             command.Parameters.AddWithValue(organizationId);
             command.Parameters.AddWithValue(runId);
@@ -156,9 +218,95 @@ public sealed class PostgresPreviewRunReader(PostgresPreviewDatabase database) :
             var digest = Sha256Digest.Parse(reader.GetString(0));
             var content = reader.GetFieldValue<byte[]>(1);
             if (Sha256Digest.FromBytes(content) != digest) throw PostgresPreviewRunStore.Inconsistent();
-            var mediaType = function == "preview_output" ? reader.GetString(2) : PreviewPolicy.MediaType;
-            if (!DocumentPreviewPolicy.AdmitsMediaType(mediaType)) throw PostgresPreviewRunStore.Inconsistent();
-            return (PreviewOutputContent?)new PreviewOutputContent(digest, content) { MediaType = mediaType };
+            var mediaType = reader.GetString(2);
+            await reader.DisposeAsync();
+            CsvDocumentDialect? dialect = null;
+            if (function == "preview_output" && CsvDocumentPolicy.AdmitsMediaType(mediaType))
+                dialect = await ReadCsvDialectAsync(connection, transaction, actor, organizationId, runId, ordinal, mediaType, cancellationToken);
+            else if (function == "preview_input")
+            {
+                // Prefix-33 input reads predate CSV metadata. Admit only this exact additive
+                // reader when installed; a missing or faulty CSV output reader never falls back.
+                await using var installed = new NpgsqlCommand("""
+                    SELECT (SELECT count(*) FROM pg_catalog.pg_attribute
+                            WHERE attrelid=to_regclass('weft.preview_documents') AND attnum>0 AND NOT attisdropped
+                            AND ((attname='csv_input' AND atttypid='boolean'::regtype AND attnotnull)
+                                OR (attname='csv_dialect' AND atttypid='jsonb'::regtype AND NOT attnotnull))),
+                        to_regprocedure('weft.preview_csv_input(uuid,uuid,uuid,integer)') IS NOT NULL
+                    """, connection, transaction);
+                bool csvInstalled;
+                await using (var admission = await installed.ExecuteReaderAsync(cancellationToken))
+                {
+                    if (!await admission.ReadAsync(cancellationToken)) throw PostgresPreviewRunStore.Inconsistent();
+                    var columns = admission.GetInt64(0);
+                    csvInstalled = admission.GetBoolean(1);
+                    if (columns != (csvInstalled ? 2 : 0))
+                        throw PostgresPreviewRunStore.Inconsistent();
+                }
+                if (csvInstalled)
+                {
+                    await using var metadata = new NpgsqlCommand("SELECT media_type,csv_dialect::text FROM weft.preview_csv_input($1,$2,$3,$4)", connection, transaction);
+                    metadata.Parameters.AddWithValue(organizationId); metadata.Parameters.AddWithValue(runId);
+                    metadata.Parameters.AddWithValue(actor.PrincipalId.Value); metadata.Parameters.AddWithValue(ordinal);
+                    await using var values = await metadata.ExecuteReaderAsync(cancellationToken);
+                    if (!await values.ReadAsync(cancellationToken)) throw PostgresPreviewRunStore.Inconsistent();
+                    mediaType = values.GetString(0);
+                    dialect = values.IsDBNull(1) ? null : CsvDialectJson.Decode(values.GetString(1));
+                    if (await values.ReadAsync(cancellationToken)) throw PostgresPreviewRunStore.Inconsistent();
+                }
+            }
+            if (CsvDocumentPolicy.AdmitsMediaType(mediaType) ? !CsvDocumentPolicy.Admits(dialect, mediaType)
+                : !DocumentPreviewPolicy.AdmitsMediaType(mediaType) || dialect is not null) throw PostgresPreviewRunStore.Inconsistent();
+            return (PreviewOutputContent?)new PreviewOutputContent(digest, content) { MediaType = mediaType, CsvDialect = dialect };
         }, cancellationToken);
     }
+
+    private static async Task<CsvDocumentDialect> ReadCsvDialectAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
+        ActorContext actor, Guid organizationId, Guid runId, int ordinal, string mediaType, CancellationToken token)
+    {
+        await using var command = new NpgsqlCommand("SELECT csv_dialect::text FROM weft.preview_csv_outputs($1,$2,$3) WHERE ordinal=$4", connection, transaction);
+        command.Parameters.AddWithValue(organizationId); command.Parameters.AddWithValue(runId);
+        command.Parameters.AddWithValue(actor.PrincipalId.Value); command.Parameters.AddWithValue(ordinal);
+        await using var reader = await command.ExecuteReaderAsync(token);
+        if (!await reader.ReadAsync(token) || reader.IsDBNull(0)) throw PostgresPreviewRunStore.Inconsistent();
+        var dialect = CsvDialectJson.Decode(reader.GetString(0));
+        if (!CsvDocumentPolicy.Admits(dialect, mediaType) || await reader.ReadAsync(token)) throw PostgresPreviewRunStore.Inconsistent();
+        return dialect;
+    }
+
+    private sealed record XmlStoredDocument(int Ordinal, string? Name, string? TargetName, bool? TargetNameTruncated, long? RecordsWritten,
+        Sha256Digest Digest, PreviewOutputDescriptor Content, byte[]? Bytes);
+
+    private static async Task<IReadOnlyList<XmlStoredDocument>> ReadXmlDocumentsAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
+        ActorContext actor, Guid organizationId, Guid runId, int direction, CancellationToken token)
+    {
+        await using var command = new NpgsqlCommand("SELECT ordinal,name,target_name,target_name_truncated,records_written,metadata,digest,byte_count,content FROM weft.preview_xml_documents($1,$2,$3,$4)", connection, transaction);
+        command.Parameters.AddWithValue(organizationId); command.Parameters.AddWithValue(runId); command.Parameters.AddWithValue(actor.PrincipalId.Value); command.Parameters.AddWithValue(direction);
+        var result = new List<XmlStoredDocument>();
+        long total = 0;
+        var metadataBytes = 0;
+        await using var reader = await command.ExecuteReaderAsync(token);
+        while (await reader.ReadAsync(token))
+        {
+            if (result.Count >= (direction == 1 ? XmlDocumentPolicy.MaximumInputs : XmlDocumentPolicy.MaximumOutputs) || reader.GetInt32(0) != result.Count) throw PostgresPreviewRunStore.Inconsistent();
+            if (reader.IsDBNull(5)) throw PostgresPreviewRunStore.Inconsistent();
+            var role = direction == 1 ? XmlDocumentRole.Input : XmlDocumentRole.Output;
+            var metadata = XmlDocumentMetadataJson.Decode(reader.GetString(5), role);
+            if (reader.GetString(5) != XmlDocumentMetadataJson.Encode(metadata, role)) throw PostgresPreviewRunStore.Inconsistent();
+            metadataBytes += XmlDocumentMetadataJson.MeasureProperty(metadata, direction == 1 ? XmlDocumentRole.Input : XmlDocumentRole.Output);
+            var digest = Sha256Digest.Parse(reader.GetString(6));
+            var bytes = reader.GetFieldValue<byte[]>(8);
+            total += bytes.Length;
+            if (total > PreviewPolicy.MaximumOutputBytes || metadataBytes > XmlDocumentPolicy.MaximumMetadataBytes || bytes.Length != reader.GetInt32(7) || digest != Sha256Digest.FromBytes(bytes)) throw PostgresPreviewRunStore.Inconsistent();
+            XmlDocumentSafety.Validate(bytes, token);
+            var name = reader.IsDBNull(1) ? null : reader.GetString(1);
+            var targetName = reader.IsDBNull(2) ? null : reader.GetString(2);
+            bool? truncated = reader.IsDBNull(3) ? null : reader.GetBoolean(3);
+            long? records = reader.IsDBNull(4) ? null : reader.GetInt64(4);
+            var descriptor = new PreviewOutputDescriptor(result.Count, name ?? "primary-input", targetName ?? "", truncated ?? false, XmlDocumentPolicy.MediaType, records ?? 0, digest, bytes.Length) { XmlMetadata = metadata };
+            result.Add(new(result.Count, name, targetName, truncated, records, digest, descriptor, bytes));
+        }
+        return result;
+    }
+
 }

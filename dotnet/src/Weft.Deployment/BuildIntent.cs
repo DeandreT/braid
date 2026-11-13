@@ -28,6 +28,8 @@ public sealed class BuildIntent
         Backend = backend;
         Profile = profile;
         Boundaries = BuildValues.Boundaries(boundaries);
+        if (profile.Id == BuildWorkerProtocol.CsvProfile ? !BuildWorkerProtocol.AdmitsCsvPlan(Boundaries) : Boundaries.Any(boundary => boundary.CsvDialect is not null))
+            throw new BuildContractException(BuildContractFailure.InvalidInput);
         Environment = environment;
         ApprovalId = BuildValues.Id(approvalId);
         RegressionEvidenceId = BuildValues.Id(regressionEvidenceId);
@@ -86,6 +88,11 @@ public sealed class BuildIntent
                 });
                 json.WriteString("name", boundary.Name);
                 json.WriteString("format", boundary.Format);
+                if (boundary.CsvDialect is { } dialect)
+                {
+                    json.WritePropertyName("csvDialect");
+                    BuildCsvDialect.Write(json, dialect);
+                }
                 json.WriteEndObject();
             }
             json.WriteEndArray();

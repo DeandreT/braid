@@ -22,21 +22,32 @@ internal static class RegressionSchemaTestContract
     internal const string DocumentPreviewsChecksum = "849f17688af5f6dc46dfc8792ffe6578ac491a8083b581f0d1221d5a30808254";
     internal const string X12InterchangeBuildsChecksum = "c17397b4829cb9bcbcfbd49a4bae1612c839e61d39c84104115b1eede1ea0cb2";
     internal const string ComparisonSettlementChecksum = "52f31240810b895e9b858fd58dc5bec08457b998189224c066b49b346645f4d3";
+    internal const string CsvDocumentsChecksum = "1d338dc7831f9079269c2ecfc2014492ab6e9402e1d28daf5eba301226d5f9f9";
     internal const string AccountDisplayChecksum = "922e9c46ea1ee9374a95ca0e087cf20e4306826dd72aaad7f89292c31ad8760e";
     internal const string ReleaseOperationsChecksum = "926d5bc816765c6b4263c78e129337eb3f1fe4ec7794e1ed276fb6923dfe640d";
     internal const string AutomationChecksum = "e4dd2a5c41fed83eb3246aafd144a059c47dc5c476f6bd1247e1153cfc93e1f2";
     internal const string AdministrationChecksum = "18b3e19431c2b48c3e506d4e6286c07ea1bf5dbd5a0e9fc2f51226925545743e";
-    internal static readonly string[] Tables = ["regression_cases", "regression_case_versions", "regression_runs", .. BuildRoleGuard.Tables, .. BuildRunRoleGuard.Tables, .. QualificationRoleGuard.Tables, .. LocalReleaseRoleGuard.Tables, .. MachineInvocationRoleGuard.Tables, .. ApiRequestAuditRoleGuard.Tables, .. AdministrationRoleGuard.Objects, .. ReleaseOperationsRoleGuard.Tables, .. AutomationSchemaAdmission.Tables];
+    internal static readonly string[] Tables = ["regression_cases", "regression_case_versions", "regression_runs", .. BuildRoleGuard.Tables, .. BuildRunRoleGuard.Tables, .. QualificationRoleGuard.Tables, .. LocalReleaseRoleGuard.Tables, .. MachineInvocationRoleGuard.Tables, .. ApiRequestAuditRoleGuard.Tables, .. AdministrationRoleGuard.Objects, .. ReleaseOperationsRoleGuard.Tables, .. AutomationSchemaAdmission.Tables, .. MappingDraftSchemaTestContract.Tables, .. SpecSchemaTestContract.Tables, .. CreationSchemaAdmission.Tables];
     internal static readonly string[] Functions = ["case_authorized", "guard_regression_case", "guard_regression_version", "read_regression_case_metadata",
         "save_regression_case", "read_regression_case", "list_regression_cases", "regression_run_authorized", "guard_regression_run",
-        "submit_regression_run", "claim_regression_run", "observe_regression_run", "finish_regression_run", "release_regression_run",
-        "cancel_regression_run", "read_regression_run", "read_regression_run_metadata", "list_ready_regression_runs", "list_regression_run_history", .. BuildRoleGuard.Names, .. BuildRunRoleGuard.Names, .. BuildMetadataRoleGuard.Names, .. QualificationRoleGuard.Names, .. LocalReleaseRoleGuard.Names, .. MachineInvocationRoleGuard.Names, .. ApiRequestAuditRoleGuard.Names, .. AdministrationRoleGuard.Names.Where(name => name != "guard_machine_invocation"), .. ReleaseOperationsRoleGuard.Names, .. AutomationSchemaAdmission.Functions];
+        "submit_regression_run", "claim_regression_run", "observe_regression_run", "finish_regression_run", "release_regression_run", "csv_dialect_valid", "csv_dialect_char_canonical", "csv_dialect_canonical",
+        "cancel_regression_run", "read_regression_run", "read_regression_run_metadata", "list_ready_regression_runs", "list_regression_run_history", .. BuildRoleGuard.Names, .. BuildRunRoleGuard.Names, .. BuildMetadataRoleGuard.Names, .. QualificationRoleGuard.Names, .. LocalReleaseRoleGuard.Names, .. MachineInvocationRoleGuard.Names, .. ApiRequestAuditRoleGuard.Names, .. AdministrationRoleGuard.Names.Where(name => name != "guard_machine_invocation"), .. ReleaseOperationsRoleGuard.Names, .. AutomationSchemaAdmission.Functions, .. MappingDraftSchemaTestContract.Functions, .. SpecSchemaTestContract.Functions, .. CreationSchemaAdmission.Functions];
     internal static readonly string[] Roles = ["weft_case_reader", "weft_case_writer", "weft_run_reader", "weft_run_writer", "weft_build_reader", "weft_build_writer",
         "weft_build_run_reader", "weft_build_run_writer", "weft_build_dispatcher", "weft_build_metadata_reader", "weft_qualification_reader", "weft_qualification_writer", "weft_release_reader", "weft_release_writer",
-        "weft_invocation_grant_writer", "weft_invocation_writer", "weft_api_audit_writer", "weft_administration", "weft_comparison_settler"];
+        "weft_invocation_grant_writer", "weft_invocation_writer", "weft_api_audit_writer", "weft_administration", "weft_comparison_settler", .. MappingDraftSchemaTestContract.Roles, .. SpecSchemaTestContract.Roles, .. CreationSchemaAdmission.Roles];
 
     internal static async Task AdmitAsync(PostgresCase test, CancellationToken token = default)
     {
+        await MappingDraftSchemaTestContract.AdmitPreviewParentAsync(test);
+        await SpecSchemaTestContract.AdmitAsync(test, token);
+        foreach (var profile in Enum.GetValues<CreationDatabaseProfile>())
+        {
+            await using var creation = new Npgsql.NpgsqlConnection(new Npgsql.NpgsqlConnectionStringBuilder(test.RegressionConnectionString(CreationSchemaAdmission.Roles[(int)profile])) { Pooling = false }.ConnectionString);
+            await creation.OpenAsync(token);
+            await using var creationTransaction = await creation.BeginTransactionAsync(token);
+            await using (var setup = new Npgsql.NpgsqlCommand("SET LOCAL search_path=pg_catalog", creation, creationTransaction)) await setup.ExecuteNonQueryAsync(token);
+            await CreationSchemaAdmission.ValidateAsync(creation, creationTransaction, profile, token);
+        }
         Assert.Equal(AccountDisplayChecksum, MigrationRunner.EmbeddedMigrations[25].Checksum);
         Assert.Equal(AdministrationChecksum, MigrationRunner.EmbeddedMigrations[26].Checksum);
         Assert.Equal(AutomationChecksum, MigrationRunner.EmbeddedMigrations[29].Checksum);
@@ -46,6 +57,14 @@ internal static class RegressionSchemaTestContract
         Assert.Equal(DocumentPreviewsChecksum, MigrationRunner.EmbeddedMigrations[33].Checksum);
         Assert.Equal(X12InterchangeBuildsChecksum, MigrationRunner.EmbeddedMigrations[34].Checksum);
         Assert.Equal(ComparisonSettlementChecksum, MigrationRunner.EmbeddedMigrations[35].Checksum);
+        Assert.Equal(MappingDraftSchemaTestContract.DraftChecksum, MigrationRunner.EmbeddedMigrations[36].Checksum);
+        Assert.Equal(MappingDraftSchemaTestContract.PreviewChecksum, MigrationRunner.EmbeddedMigrations[37].Checksum);
+        Assert.Equal(ChatSchemaContract.MappingWriteMigrationChecksum, MigrationRunner.EmbeddedMigrations[38].Checksum);
+        Assert.Equal(ChatSchemaContract.WriteJournalMigrationChecksum, MigrationRunner.EmbeddedMigrations[39].Checksum);
+        Assert.Equal(CsvDocumentsChecksum, MigrationRunner.EmbeddedMigrations[40].Checksum);
+        Assert.Equal(XmlPreviewSchemaAdmission.MigrationChecksum, MigrationRunner.EmbeddedMigrations[41].Checksum);
+        await using (var preview = new PostgresPreviewDatabase(test.PreviewReaderConnectionString, PreviewDatabaseProfile.Reader))
+            Assert.Null(await new PostgresPreviewRunReader(preview).ReadAsync(new(new(Guid.NewGuid())), Guid.NewGuid(), Guid.NewGuid(), token));
         await using (var administration = new PostgresAdministrationStore(test.RegressionConnectionString("weft_administration")))
             Assert.Null(await administration.ReadOrganizationAsync(new(new(Guid.NewGuid())), Guid.NewGuid(), token));
         var actor = new ActorContext(new(Guid.NewGuid()));

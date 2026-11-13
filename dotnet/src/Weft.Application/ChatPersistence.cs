@@ -34,7 +34,7 @@ public sealed record ChatRoundFacts
     public ChatRoundFacts(ChatRoundIntent intent, int ordinal, ChatRoundOutcome outcome, ChatTerminalMetadata? metadata = null)
     {
         ArgumentNullException.ThrowIfNull(intent);
-        if (ordinal is < 1 or > 4 || !Enum.IsDefined(outcome)) throw ChatBounds.Invalid();
+        if (ordinal is < 1 or > 5 || !Enum.IsDefined(outcome)) throw ChatBounds.Invalid();
         if (metadata is not null && outcome == ChatRoundOutcome.Uncertain) throw ChatBounds.Invalid();
         if (metadata is not null) _ = new ChatRoundCompletion(outcome, metadata);
         if (metadata?.Usage is { } usage && usage.RoundId != intent.RoundId || metadata?.Failure is { } failure && failure.RoundId != intent.RoundId) throw ChatBounds.Invalid();
@@ -54,6 +54,7 @@ public sealed record ChatStoredEvent(long Sequence, Guid EventId, ChatEventKind 
     public ChatCitationFact? Citation => Kind == ChatEventKind.Citation ? ChatMetadataCodec.ReadCitation(MetadataJson!) : null;
     public ChatWorkspaceCitationFact? WorkspaceCitation => Kind == ChatEventKind.WorkspaceCitation ? ChatMetadataCodec.ReadWorkspaceCitation(MetadataJson!) : null;
     public ChatPayloadDisclosureFact? DataShared => Kind == ChatEventKind.DataShared ? ChatMetadataCodec.ReadDisclosure(MetadataJson!) : null;
+    public ChatMappingWriteFact? MappingWrite => Kind == ChatEventKind.MappingWrite ? ChatMetadataCodec.ReadMappingWrite(MetadataJson!) : null;
     public ChatTerminalMetadata? TerminalMetadata => (Kind is ChatEventKind.Completed or ChatEventKind.Failed or ChatEventKind.Cancelled or ChatEventKind.Interrupted or ChatEventKind.RoundCompleted) && MetadataJson is not null
         ? ChatMetadataCodec.ReadTerminal(MetadataJson!) : null;
     public override string ToString() => nameof(ChatStoredEvent);

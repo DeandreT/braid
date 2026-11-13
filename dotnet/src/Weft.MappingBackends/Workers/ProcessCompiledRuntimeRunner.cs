@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
+using Weft.Application;
 using Weft.Deployment;
 
 namespace Weft.MappingBackends.Workers;
@@ -26,6 +27,7 @@ public sealed class ProcessCompiledRuntimeRunner : IInspectionWorkerRunner, IAsy
     public ProcessCompiledRuntimeRunner(ProcessCompiledRuntimeOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+        if (!Enum.IsDefined(options.Operation)) throw new ArgumentOutOfRangeException(nameof(options));
         if (!OperatingSystem.IsLinux()) throw new PlatformNotSupportedException("Compiled service execution requires Linux.");
         if (!File.Exists(options.RuntimeAssembly) || !File.Exists(options.LauncherExecutable) ||
             !File.Exists(BuildCompilation.Host(options.DotnetRoot)) || !File.Exists(BuildCompilation.HostFxr(options.DotnetRoot)) || !Directory.Exists(options.TemporaryRoot))
@@ -40,7 +42,12 @@ public sealed class ProcessCompiledRuntimeRunner : IInspectionWorkerRunner, IAsy
     }
 
     /// <summary>The runtime host's fixed line for a frame it cannot decode.</summary>
-    private static ReadOnlySpan<byte> ProbeRefusal => "WeftCompiledRuntimeFailed:decode\n"u8;
+    private ReadOnlySpan<byte> ProbeRefusal => options.Operation switch
+    {
+        CompiledRuntimeOperation.XmlCanonicalComparison => "WeftXmlComparisonFailed:decode\n"u8,
+        CompiledRuntimeOperation.OfficeExtraction => "WeftDocumentWorkerFailed:decode\n"u8,
+        _ => "WeftCompiledRuntimeFailed:decode\n"u8
+    };
 
     /// <summary>The native identity shared by the service's transport profiles.</summary>
     public string BuildIdentity => options.NativeIdentity;
@@ -56,7 +63,13 @@ public sealed class ProcessCompiledRuntimeRunner : IInspectionWorkerRunner, IAsy
 
     public Task<WorkerProcessResult> RunAsync(ReadOnlyMemory<byte> requestFrame, CancellationToken token)
     {
-        if (requestFrame.Length is < 1 || requestFrame.Length > ProcessCompiledRuntimeOptions.Profile.MaximumRequestBytes)
+        var maximum = options.Operation switch
+        {
+            CompiledRuntimeOperation.XmlCanonicalComparison => XmlComparisonProtocol.MaximumRequestBytes,
+            CompiledRuntimeOperation.OfficeExtraction => SpecOfficeProcessProtocol.MaximumRequestBytes,
+            _ => ProcessCompiledRuntimeOptions.Profile.MaximumRequestBytes
+        };
+        if (requestFrame.Length is < 1 || requestFrame.Length > maximum)
             throw new ArgumentException("The compiled request exceeds its fixed transport bound.", nameof(requestFrame));
         return ExecuteAsync(requestFrame, probe: false, token);
     }
@@ -135,8 +148,14 @@ public sealed class ProcessCompiledRuntimeRunner : IInspectionWorkerRunner, IAsy
             var admission = Verify(child.Id);
             if (admission != ChildAdmissionFailure.None) return ChildAdmissionDiagnostics.Refused(admission);
             token.ThrowIfCancellationRequested();
+            var maximumOutput = options.Operation switch
+            {
+                CompiledRuntimeOperation.XmlCanonicalComparison => XmlComparisonProtocol.MaximumResponseBytes,
+                CompiledRuntimeOperation.OfficeExtraction => SpecOfficeProcessProtocol.MaximumResponseBytes,
+                _ => ProcessCompiledRuntimeOptions.Profile.MaximumOutputBytes
+            };
             var output = operation.CreateOriginal<byte[]>(CompiledRuntimeIoKind.StandardOutput,
-                () => DrainAsync(child.StandardOutput.BaseStream, ProcessCompiledRuntimeOptions.Profile.MaximumOutputBytes, io.Token));
+                () => DrainAsync(child.StandardOutput.BaseStream, maximumOutput, io.Token));
             _ = operation.Track(CompiledRuntimeIoKind.StandardOutput, output);
             // The writer's synchronous close is owned too; it cannot hold this method before its task is tracked.
             var write = operation.CreateOriginal(CompiledRuntimeIoKind.Writer, async () =>
@@ -428,6 +447,14 @@ public sealed class ProcessCompiledRuntimeRunner : IInspectionWorkerRunner, IAsy
     {
         var manifest = new StringBuilder("weft.compiled-runtime-identity.v1\nentry=")
             .Append(Path.GetFileName(options.RuntimeAssembly)).Append('\n');
+        // Mapping identity bytes are deliberately unchanged. XML gets an explicitly distinct operation identity.
+        if (options.Operation == CompiledRuntimeOperation.XmlCanonicalComparison)
+            manifest.Append("operation=").Append(XmlComparisonProtocol.ModeArgument).Append('\n')
+                .Append("protocol=").Append(XmlComparisonProtocol.Version).Append('\n')
+                .Append("comparer=").Append(XmlComparisonProtocol.Comparer).Append('\n');
+        if (options.Operation == CompiledRuntimeOperation.OfficeExtraction)
+            manifest.Append("operation=office-extraction\nprotocol=").Append(SpecOfficeProcessProtocol.Version).Append('\n')
+                .Append("extractor=").Append(SpecOfficeExtractionResult.ExtractorVersion).Append('\n');
         void Add(string name, string path)
         {
             using var stream = File.OpenRead(path);

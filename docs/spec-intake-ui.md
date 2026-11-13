@@ -1,0 +1,31 @@
+# Project specification intake UI
+
+The project metadata page links to **Open specification intake**. The new Angular routes are `/catalog/organizations/:organizationId/projects/:projectId/specs` and `/specs/:bundleId`. The first creates a client-generated bundle identity in the URL; the second lets the user create that exact bundle through the real API. No manually supplied UUID prerequisite. A bookmark/reload retains the bundle identity and reloads authoritative inventory.
+
+The client uses generated `Spec*V1` contracts regenerated from this branch's `contracts/weft-v1.json`. It performs fresh catalog/session admission before operations, binds results to the owner and route generation, checks organization scope, sends the current antiforgery token, and hides results whose context is no longer current. Metadata visibility is not treated as content permission. Actual content grants and backend admission remain server decisions; unavailable/denied responses are shown explicitly.
+
+## Intake and recovery
+
+- Upload `.txt` or `.json` (up to 10 MiB), explicitly selecting text/JSON/OpenAPI JSON; or paste text within the 1 MiB JSON request limit.
+- The original and extraction have separate stable publication IDs/keys and CAS versions. Pending requests freeze the in-tab input. Retry reads inventory first, avoids a second upload when both publications are already confirmed, and only refreshes the extraction expected version while no extraction reservation exists. A stale original CAS is not silently rebased; the user may inspect inventory and explicitly discard a local attempt before starting another.
+- Creation uses the bundle UUID as its stable creation key. Deletion retains its exact idempotency key and original expected version across uncertain outcomes. A missing bundle does not prove deletion or failed creation. A successful deletion receipt acknowledges logical deletion, not physical retirement.
+- Original publication state and extraction outcome are separate. `LimitExceeded`, `Malformed`, `Unsupported` and pending states are explicit; no incomplete extraction is presented as successful generation. Evidence is rendered only by Angular text interpolation, including JSON pointers and URLs. Citations identify source/version, extraction ID/digest, ordinal, lines and byte locator.
+- Work, selected files and pending request content remain only in component memory. Unsent-work integration, route guards and before-unload warn before losing it. After a confirmed reload, inventory remains recoverable but private bytes and exact in-tab retry keys are gone; the UI does not fabricate a retry for a pre-existing pending reservation. Re-selecting a file is a new operation only after explicit abandonment. Cross-owner admission clears private draft/recovery state; refused authentication hides it.
+
+## Contract and workflow gaps
+
+The API currently accepts only `text`, `json`, and `openapi-json`. PDF/Office upload retention cannot be offered honestly through this contract: the UI refuses those files before sending and says they were not retained. Inventory can still show an existing `Unsupported` extraction. Supporting opaque original retention requires a separately reviewed backend contract change.
+
+There is no project bundle-list API or admitted spec capability flag in catalog context. This UI therefore uses bookmarkable bundle routes, exposes creation from the project page, and reports actual admission failures rather than advertising readiness from configuration. A server project bundle index and preflight readiness/capability read remain integration gaps. No backend or SQL changes are included here.
+
+No mapping generation, source selection for generation, model invocation, AI-sharing approval or editor handoff is implemented. Those workflows require their own authority and integration work. The existing catalog/editor remain separate.
+
+## Verification
+
+`apps/web/playwright.spec-intake.config.ts` runs Chromium against the Angular dev server with controlled real-contract HTTP responses. It exercises the real page entry/link, uploads, pasted text, citation rendering, reload, deletion, CAS replay, lost-response inventory reconciliation, identity changes, auth failures, navigation decisions, mobile overflow and axe checks. Parser/recovery assertions run in the same suite. This is browser/client qualification, not PostgreSQL/Blob/session-server qualification; the production API still requires admitted registry/schema/backend and refuses development identity.
+
+Run `npm run test:spec-intake-browser` with the pinned Node/npm toolchain and `WEFT_CHROMIUM_EXECUTABLE` when using a separately installed Chromium. Root and contracts-generator dependencies use their existing lockfiles via `npm ci`.
+
+The original UI branch's full `npm run check` stopped at the pending migration inventory. Integration now includes the real 0042/0043 predecessors, activates 0044 and reconciles the fixture inventory through 44. See [integration validation](v1-integration.md) for combined checks and remaining runtime gaps.
+
+Final review verification: all 13 parser/Chromium tests passed. Coverage includes normalized project metadata refusal clearing displayed evidence, access refresh superseding a delayed evidence read, and lost deletion acknowledgements reconciling the exact source/version while another version remains published. Upload fixtures now derive evidence text, UTF-8 byte counts and digests from the actual request. The multibyte citation test checks displayed lines and byte locators against its controlled source; HTML/URL escaping has a separate inert-text test. These verify client rendering of controlled evidence, not backend extraction correctness. Preservation of unrelated unsent input and navigation protection also remain covered. Formatting, browser TypeScript checks and the production build passed after the review fixes. The production build reports an initial-bundle budget warning (655.88 kB against 500 kB). Contracts, development build, chat-type checks, docs-image checks and the browser-session probe build also passed earlier during this implementation.

@@ -265,6 +265,45 @@ p {
 .chat-footnote {
   margin-top: 8px;
 }
+.chat-write {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--wb-border, #d7e2d1);
+  border-left: 3px solid var(--wb-passed-text, #2f6b3a);
+  border-radius: 6px;
+}
+.chat-write-proposal {
+  border-left-color: var(--wb-running-text, #8a6d1d);
+}
+.chat-write h3 {
+  margin: 0 0 4px;
+  font-size: 0.8125rem;
+}
+.chat-write p {
+  margin: 4px 0;
+  font-size: 0.75rem;
+}
+.chat-write-changes {
+  margin: 6px 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.75rem;
+}
+.chat-write-changes li {
+  display: grid;
+  gap: 2px;
+  padding: 4px 0;
+  border-top: 1px solid var(--wb-border, #d7e2d1);
+  overflow-wrap: anywhere;
+}
+.chat-write-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+  font-size: 0.75rem;
+}
 .chat-status {
   color: var(--wb-running-text);
   font-size: 0.75rem;
@@ -640,4 +679,31 @@ p {
   .chat-answer-actions {
     opacity: 1;
   }
+}
+.chat-proposal-identity,
+.chat-write-proposal code {
+  overflow-wrap: anywhere;
+}
+.chat-proposal-identity {
+  font-size: 0.8rem;
+}
+.chat-proposal-operations {
+  max-height: 20rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 0.75rem;
+  background: var(--chat-paper);
+  border-radius: 0.4rem;
+  font-size: 0.8rem;
+}
+.chat-proposal-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-block: 0.75rem;
+}
+.chat-proposal-operations:focus-visible {
+  outline: 2px solid var(--wb-focus);
+  outline-offset: 2px;
 }

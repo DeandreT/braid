@@ -116,6 +116,8 @@ internal sealed class CliHarness : IDisposable
     public TimeSpan InvocationTimeout { get; set; } = TimeSpan.FromMinutes(2);
     public string ConfigurationDirectory => directory;
     public Func<Uri, Task>? OpenBrowser { get; set; }
+    public Func<Stream>? OpenStandardInput { get; set; }
+    public Func<string, Stream>? OpenInputFile { get; set; }
 
     /// <summary>Saves the default profile for this issuer and server.</summary>
     public async Task<CliResult> ConfigureAsync(string name = "test")
@@ -144,7 +146,8 @@ internal sealed class CliHarness : IDisposable
         {
             Out = output,
             Error = error,
-            OpenStandardInput = () => new MemoryStream(input ?? []),
+            OpenStandardInput = () => OpenStandardInput?.Invoke() ?? new MemoryStream(input ?? []),
+            OpenInputFile = path => OpenInputFile?.Invoke(path) ?? new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.Asynchronous),
             OpenStandardOutput = () => new NonClosing(binary),
             ConfigurationDirectory = directory,
             TokenCaches = Caches,

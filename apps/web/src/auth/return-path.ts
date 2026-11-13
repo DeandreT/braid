@@ -73,6 +73,24 @@ export function isReturnPath(value: unknown): value is string {
 function allowedQuery(path: string[], values: Map<string, string>): boolean {
   if (path.length === 1 && path[0] === "chat") {
     if (
+      values.has("creationProjectId") ||
+      values.has("creationProposalId") ||
+      values.has("creationFingerprint")
+    )
+      return (
+        (values.size === 3 ||
+          (values.size === 4 && id(values.get("conversationId") ?? ""))) &&
+        keys(values, [
+          "creationProjectId",
+          "creationProposalId",
+          "creationFingerprint",
+          "conversationId",
+        ]) &&
+        id(values.get("creationProjectId") ?? "") &&
+        id(values.get("creationProposalId") ?? "") &&
+        /^[0-9a-f]{64}$/.test(values.get("creationFingerprint") ?? "")
+      );
+    if (
       !keys(values, [
         "conversationId",
         "projectId",
@@ -144,6 +162,21 @@ function allowedQuery(path: string[], values: Map<string, string>): boolean {
         cursor(after, 4096, false))
     );
   }
+  if (
+    path.length === 7 &&
+    path[0] === "catalog" &&
+    path[1] === "organizations" &&
+    id(path[2]) &&
+    path[3] === "projects" &&
+    id(path[4]) &&
+    path[5] === "creation" &&
+    id(path[6])
+  )
+    return (
+      values.size === 1 &&
+      keys(values, ["fingerprint"]) &&
+      /^[0-9a-f]{64}$/.test(values.get("fingerprint") ?? "")
+    );
   if (revision(path))
     return (
       keys(values, ["projectionDerivationId", "validationDerivationId"]) &&

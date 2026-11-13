@@ -79,6 +79,7 @@ import { StatusChipComponent } from "../workbench/status-chip.component";
 import { MetadataValueComponent } from "../workbench/metadata-value.component";
 import { RegressionStatusComponent } from "./automation/regression-status.component";
 import { DocumentViewComponent } from "../workbench/document-view.component";
+import { MappingEditorComponent } from "../edit/mapping-editor.component";
 import {
   buildStatus,
   comparisonStatus,
@@ -109,6 +110,7 @@ interface RevisionScreen {
     MetadataValueComponent,
     RegressionStatusComponent,
     DocumentViewComponent,
+    MappingEditorComponent,
   ],
   providers: [BuildViewRecovery, RegressionViewRecovery, WorkbenchState],
   templateUrl: "./revision-page.component.html",
@@ -119,6 +121,15 @@ export class RevisionPageComponent extends CatalogRoutePage<
   CatalogRevisionScope
 > {
   readonly workbench = inject(WorkbenchState);
+  readonly editMode = signal(false);
+  editedRevision(id: string): void {
+    const mapping = this.data()?.mapping.scope;
+    this.editMode.set(false);
+    if (mapping)
+      void this.workbenchRouter.navigateByUrl(
+        this.routes.revision({ ...mapping, revisionId: id }),
+      );
+  }
   readonly comparisonStatus = comparisonStatus;
   readonly buildStatus = buildStatus;
   readonly operationStatus = operationStatus;

@@ -1,5 +1,8 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import type { CreationProposal } from "../src/catalog/creation/creation-model";
+import type { ChatTurn } from "../src/chat/chat-types";
 import { expectSignedInAccount } from "./hosted-account.fixture";
 import {
   chooseSavedConversation,
@@ -129,6 +132,170 @@ async function ask(
     .getByRole("button", { name: "Send question", exact: true })
     .click();
 }
+
+test("creation citation streams, opens an authenticated exact review, and replays without approval", async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const hash = (text: string) =>
+    createHash("sha256").update(text).digest("hex");
+  const proposalId = "50000000-0000-4000-8000-000000000001";
+  const extractionId = "50000000-0000-4000-8000-000000000002";
+  const fingerprint = hash("workspace creation proposal");
+  const f = await workspaceFixture(page, {
+    payloadsAllowed: true,
+    grant: true,
+    creationProposal: {
+      projectId: otherProject,
+      proposalId,
+      fingerprint,
+      extractionId,
+    },
+  });
+  const identityContext = `v1.${"A".repeat(43)}`;
+  const requestToken = "ZXBvY2gtYQ";
+  await context.addCookies([
+    {
+      name: "weft-creation-fixture",
+      value: "synthetic-session",
+      url: baseURL!,
+      httpOnly: true,
+      sameSite: "Lax",
+    },
+  ]);
+  await context.route("**/api/auth/session", (route) =>
+    route.fulfill({
+      json: {
+        version: 1,
+        mode: "session",
+        state: "authenticated",
+        authActionRequestToken: "YXV0aC1h",
+        requestToken,
+        identityContext,
+        displayName: "Fixture account",
+      },
+    }),
+  );
+  await context.route("**/api/v1/catalog/context", (route) =>
+    route.fulfill({
+      json: {
+        ...f.data.context,
+        mode: "session",
+        identityContext,
+        requestToken,
+      },
+    }),
+  );
+  const planJson = JSON.stringify({
+    schema: "weft.creation-plan.v1",
+    format: "json-record",
+    source: [{ Name: "code", Type: 1, Required: true }],
+    target: [{ Name: "item", Type: 1, Required: true }],
+    bindings: [{ Source: "code", Target: "item" }],
+  });
+  const proposal: CreationProposal = {
+    projectId: otherProject,
+    proposalId,
+    fingerprint,
+    snapshotDigest: hash("snapshot"),
+    planDigest: hash(planJson),
+    nativeDigest: hash("native"),
+    name: "Workspace-created mapping",
+    description: "Retained specification proposal",
+    planJson,
+    approved: false,
+    evidence: [
+      {
+        bundleId: extractionId,
+        sourceId: proposalId,
+        sourceVersion: 1,
+        chunkOrdinal: 0,
+      },
+    ],
+    assumptions: [
+      { id: "A1", text: "Use the supplied item code.", critical: true },
+    ],
+    questions: [],
+    receipt: null,
+  };
+  const org = f.data.revision.scope.organizationId;
+  const reviewPath = `/catalog/organizations/${org}/projects/${otherProject}/creation/${proposalId}?fingerprint=${fingerprint}`;
+  const apiPath = `/api/v1/organizations/${org}/projects/${otherProject}/creation-proposals/${proposalId}?expectedFingerprint=${fingerprint}`;
+  const proposalRequests: { method: string; path: string; cookie: string }[] =
+    [];
+  await context.route("**/creation-proposals/**", async (route) => {
+    const request = route.request(),
+      url = new URL(request.url());
+    const cookie = (await request.allHeaders())["cookie"] ?? "";
+    proposalRequests.push({
+      method: request.method(),
+      path: url.pathname + url.search,
+      cookie,
+    });
+    if (
+      request.method() !== "GET" ||
+      url.pathname + url.search !== apiPath ||
+      !cookie.includes("weft-creation-fixture=synthetic-session")
+    )
+      return route.fulfill({ status: 403, json: { code: "NotFound" } });
+    return route.fulfill({ json: proposal });
+  });
+  await page.goto("/chat");
+  await expectSignedInAccount(page);
+  await create(page);
+  await ask(page, "Create a mapping from the selected specification.");
+  await expectComplete(page);
+  await expect(panel(page)).toContainText("Data shared with fixture-model");
+  expect(f.offered.at(-1)).toEqual([
+    "read_specification",
+    "propose_mapping_creation",
+  ]);
+  const link = panel(page).getByRole("link", {
+    name: "Open new mapping proposal",
+    exact: true,
+  });
+  await expect(link).toHaveAttribute("href", reviewPath);
+  const opened = page.waitForEvent("popup");
+  await link.click();
+  const review = await opened;
+  await expect(review).toHaveURL(new URL(reviewPath, page.url()).href);
+  await expectSignedInAccount(review);
+  await expect(
+    review.getByRole("heading", { name: proposal.name, exact: true }),
+  ).toBeVisible();
+  await expect(
+    review.getByRole("button", {
+      name: "Approve and save this mapping",
+      exact: true,
+    }),
+  ).toBeDisabled();
+  expect(proposalRequests).toEqual([
+    {
+      method: "GET",
+      path: apiPath,
+      cookie: expect.stringContaining(
+        "weft-creation-fixture=synthetic-session",
+      ),
+    },
+  ]);
+  const postCount = f.posts.length;
+  const readCount = f.reads.length;
+  await page.reload();
+  await expectComplete(page);
+  await expect(link).toHaveAttribute("href", reviewPath);
+  await expect(panel(page)).toContainText("Data shared with fixture-model");
+  expect(
+    f.reads.slice(readCount).some((path) => path.includes("/events?after=0")),
+  ).toBe(true);
+  expect(f.posts).toHaveLength(postCount);
+  expect(proposalRequests.every((request) => request.method === "GET")).toBe(
+    true,
+  );
+  expect(f.posts.some((post) => /\/(approve|recover)$/.test(post.path))).toBe(
+    false,
+  );
+});
 
 test("standalone chat lists both kinds, searches mappings, pins focus and links cross-project/help sources", async ({
   page,
@@ -449,14 +616,62 @@ test("each send observes fresh authority and rotated tokens; grant loss cannot r
     payloadsAllowed: true,
     grant: true,
   });
+  const completedReads = new Map<string, number>();
+  page.on("response", async (response) => {
+    const path = new URL(response.url()).pathname;
+    if (
+      response.ok() &&
+      /\/turns\/[^/]+\/(mapping-writes|mapping-edit-proposals)$/.test(path)
+    ) {
+      await response.finished();
+      completedReads.set(path, (completedReads.get(path) ?? 0) + 1);
+    }
+  });
+  async function askAndSettle(text: string) {
+    const accepted = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        response.url().endsWith("/turns") &&
+        response.request().postDataJSON().text === text,
+    );
+    await ask(page, text);
+    const response = await accepted;
+    expect(response.status()).toBe(201);
+    const turn = (await response.json()) as ChatTurn;
+    const path = `${new URL(response.url()).pathname}/${turn.turnId}`;
+    await expect(panel(page).getByText(text, { exact: true })).toBeVisible();
+    await expectComplete(page);
+    expect(
+      f.turns.get(turn.conversationId)?.find((t) => t.turnId === turn.turnId)
+        ?.phase,
+    ).toBe("completed");
+    // Terminal text can precede these reads. Drain this exact turn's tool,
+    // terminal-event and post-stream proposal refreshes before replacing owner.
+    const proposalReads =
+      f.events
+        .get(turn.turnId)!
+        .filter(
+          (event) =>
+            event.type === "tool.completed" || event.type === "turn.completed",
+        ).length + 1;
+    await expect
+      .poll(() => completedReads.get(`${path}/mapping-writes`) ?? 0)
+      .toBe(1);
+    await expect
+      .poll(() => completedReads.get(`${path}/mapping-edit-proposals`) ?? 0)
+      .toBe(proposalReads);
+    return turn;
+  }
   await page.goto("/chat");
   await create(page);
-  await ask(page);
+  const first = await askAndSettle(
+    "Explain the partner mapping and how to inspect it.",
+  );
   await expect(panel(page)).toContainText("Data shared with fixture-model");
   f.state.grant = false;
   f.data.context.requestToken = "fresh-catalog-request-token";
-  await ask(page, "Read again after my grant changed.");
-  await expectComplete(page);
+  const second = await askAndSettle("Read again after my grant changed.");
+  expect(second.turnId).not.toBe(first.turnId);
   await expect(
     panel(page)
       .getByRole("region", { name: "Selected answer" })
@@ -465,8 +680,13 @@ test("each send observes fresh authority and rotated tokens; grant loss cannot r
   expect(f.offered.at(-1)).not.toContain("get_preview_output");
   expect(f.posts.at(-1)!.token).toBe("fresh-catalog-request-token");
   const count = f.posts.length;
+  await panel(page)
+    .getByLabel("Question", { exact: true })
+    .fill("This must not be sent as a different owner.");
   f.data.context.actorPrincipalId = "b0000000-0000-4000-8000-000000000099";
-  await ask(page, "This must not be sent as a different owner.");
+  await panel(page)
+    .getByRole("button", { name: "Send question", exact: true })
+    .click();
   await expect(panel(page)).not.toContainText(
     "Partner orders maps the order fields.",
   );

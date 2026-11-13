@@ -130,10 +130,12 @@ public static partial class CatalogEndpoints
                 comparison.ExpectedOutputCount, comparison.ActualOutputCount, comparison.TotalDifferenceCount, comparison.Truncated,
                 comparison.Differences.Select(difference => new RegressionDifferenceV1(difference.Key.Name, Name(difference.Kind),
                     difference.ExpectedByteCount, difference.ActualByteCount, difference.ExpectedDigest?.Value,
-                    difference.ActualDigest?.Value, difference.FirstDifferentByte, DocumentLocation(difference.Location))).ToArray(),
-                comparison.DocumentDiagnostic is { } diagnostic ? new(diagnostic.Key.Name, diagnostic.Side, DocumentLocation(diagnostic.Location)!) : null),
+                    difference.ActualDigest?.Value, difference.FirstDifferentByte, DocumentLocation(difference.Location), CsvLocation(difference.CsvLocation))).ToArray(),
+                comparison.DocumentDiagnostic is { } diagnostic ? new(diagnostic.Key.Name, diagnostic.Side, DocumentLocation(diagnostic.Location)!) : null,
+                comparison.CsvDiagnostic is { } csv ? new(csv.Key.Name, csv.Side, CsvLocation(csv.Location)!) : null),
             result?.Outputs?.Outputs.Select(output => new RegressionDocumentV1(output.Key.Name, WebEncoders.Base64UrlEncode(output.CopyBytes()),
-                view.Runtime?.Profile == DocumentPreviewPolicy.Profile ? output.MediaType : null)).ToArray());
+                view.Runtime?.Profile is DocumentPreviewPolicy.Profile or CsvDocumentPolicy.Profile or XmlPreviewAdmission.Profile ? output.MediaType : null,
+                CsvDialect(output.CsvDialect), XmlMetadata(output.XmlMetadata))).ToArray());
         var bytes = PrepareCase(response, context.RequestAborted);
         return CaseResponse(bytes);
     }
@@ -143,4 +145,5 @@ public static partial class CatalogEndpoints
     private static string Name<T>(T value) where T : Enum => JsonNamingPolicy.CamelCase.ConvertName(value.ToString());
     private static RegressionDocumentLocationV1? DocumentLocation(RegressionDocumentLocation? location) => location is null ? null :
         new(location.Interchange, location.Segment, location.SegmentId, location.Element, location.Repetition, location.Component);
+    private static RegressionCsvLocationV1? CsvLocation(RegressionCsvLocation? location) => location is null ? null : new(location.Row, location.Column);
 }

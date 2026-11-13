@@ -1,0 +1,402 @@
+{
+  "schema": "weft.xml-safety-cases.v1",
+  "description": "Small, independently authored physical-safety vectors, not a public conformance corpus or execution qualification. UTF-8 text is encoded without adding a BOM; byte arrays are passed unchanged. Expected values are public refusal categories, not parser messages. Resource boundaries remain covered by the dedicated safety tests.",
+  "limits": {
+    "maximumBytes": 8388608,
+    "maximumDepth": 64,
+    "maximumNodes": 1000000,
+    "maximumAttributes": 256
+  },
+  "cases": [
+    {
+      "id": "xml-minimal-root",
+      "payload": { "encoding": "utf8", "text": "<root/>" },
+      "expectedCSharp": "Accept",
+      "expectedNative": "Accept"
+    },
+    {
+      "id": "xml-10-declaration",
+      "payload": { "encoding": "utf8", "text": "<?xml version='1.0' encoding='UTF-8'?><root><value>authored</value></root>" },
+      "expectedCSharp": "Accept",
+      "expectedNative": "Accept"
+    },
+    {
+      "id": "xml-utf8-bom",
+      "payload": { "encoding": "utf8", "text": "\ufeff<?xml version='1.0' encoding='uTf-8' standalone='yes'?><root/>" },
+      "expectedCSharp": "Accept",
+      "expectedNative": "Accept"
+    },
+    {
+      "id": "xml-doctype-lookalikes",
+      "payload": { "encoding": "utf8", "text": "<!-- <!DOCTYPE root SYSTEM 'https://example.invalid/never-fetch.dtd'> --><root><![CDATA[<!DOCTYPE root [<!ENTITY x 'authored'>]> &unknown;]]></root>" },
+      "expectedCSharp": "Accept",
+      "expectedNative": "Accept"
+    },
+    {
+      "id": "xml-predefined-numeric-entities",
+      "payload": { "encoding": "utf8", "text": "<root value='&lt;&gt;&amp;&apos;&quot;&#9;&#xA;'>&lt;&gt;&amp;&apos;&quot;&#65;&#13;&#x1F680;</root>" },
+      "expectedCSharp": "Accept",
+      "expectedNative": "Accept"
+    },
+    {
+      "id": "xml-multiline-values",
+      "payload": { "encoding": "utf8", "text": "<root value='first\r\nsecond\tthird'>line one\nline two\r\nline three</root>" },
+      "expectedCSharp": "Accept",
+      "expectedNative": "Accept"
+    },
+    {
+      "id": "xml-nonascii-and-astral-values",
+      "payload": { "encoding": "utf8", "text": "<root value='caf\u00e9 \ud83d\ude80'>\u65e5\u672c\u8a9e \ud83d\ude00</root>" },
+      "expectedCSharp": "Accept",
+      "expectedNative": "Accept"
+    },
+    {
+      "id": "xml-dtd-bare",
+      "payload": { "encoding": "utf8", "text": "<!DOCTYPE root><root/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "DtdProhibited"
+    },
+    {
+      "id": "xml-dtd-internal-entity",
+      "payload": { "encoding": "utf8", "text": "<!DOCTYPE root [<!ENTITY x 'authored'>]><root>&x;</root>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "DtdProhibited"
+    },
+    {
+      "id": "xml-dtd-external-system",
+      "payload": { "encoding": "utf8", "text": "<!DOCTYPE root SYSTEM 'https://example.invalid/never-fetch.dtd'><root/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "DtdProhibited"
+    },
+    {
+      "id": "xml-dtd-external-parameter-entity",
+      "payload": { "encoding": "utf8", "text": "<!DOCTYPE root [<!ENTITY % x SYSTEM 'https://example.invalid/never-fetch.dtd'>%x;]><root/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "DtdProhibited"
+    },
+    {
+      "id": "xml-unknown-text-entity",
+      "payload": { "encoding": "utf8", "text": "<root>&unknown;</root>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "InvalidInput"
+    },
+    {
+      "id": "xml-unknown-attribute-entity",
+      "payload": { "encoding": "utf8", "text": "<root value='&unknown;'/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "InvalidInput"
+    },
+    {
+      "id": "xml-invalid-utf8-byte",
+      "payload": { "encoding": "bytes", "bytes": [60, 114, 62, 255, 60, 47, 114, 62] },
+      "expectedCSharp": "InvalidUtf8",
+      "expectedNative": "InvalidEncoding"
+    },
+    {
+      "id": "xml-truncated-utf8-sequence",
+      "payload": { "encoding": "bytes", "bytes": [60, 114, 62, 226, 130] },
+      "expectedCSharp": "InvalidUtf8",
+      "expectedNative": "InvalidEncoding"
+    },
+    {
+      "id": "xml-non-utf8-declaration",
+      "payload": { "encoding": "utf8", "text": "<?xml version='1.0' encoding='UTF-16'?><root/>" },
+      "expectedCSharp": "InvalidDeclaration",
+      "expectedNative": "InvalidDeclaration"
+    },
+    {
+      "id": "xml-11-declaration",
+      "payload": { "encoding": "utf8", "text": "<?xml version='1.1'?><root/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "InvalidDeclaration"
+    },
+    {
+      "id": "xml-zero-bytes",
+      "payload": { "encoding": "bytes", "bytes": [] },
+      "expectedCSharp": "DocumentRequired",
+      "expectedNative": "InvalidInput"
+    },
+    {
+      "id": "xml-bom-only",
+      "payload": { "encoding": "bytes", "bytes": [239, 187, 191] },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "InvalidInput"
+    },
+    {
+      "id": "xml-multiple-roots",
+      "payload": { "encoding": "utf8", "text": "<first/><second/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "InvalidInput"
+    },
+    {
+      "id": "xml-elementless-comment",
+      "payload": { "encoding": "utf8", "text": " \n<!-- authored comment, no root -->\t" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "InvalidInput"
+    },
+    {
+      "id": "xml-mismatched-closing-name",
+      "payload": { "encoding": "utf8", "text": "<root><child></other></root>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "InvalidInput"
+    },
+    {
+      "id": "xml-duplicate-attributes",
+      "payload": { "encoding": "utf8", "text": "<root value='first' value='second'/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "InvalidInput"
+    },
+    {
+      "id": "xml-astral-element-name",
+      "payload": { "encoding": "utf8", "text": "<\ud800\udc00/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    },
+    {
+      "id": "xml-nul-character",
+      "payload": { "encoding": "bytes", "bytes": [60, 114, 62, 0, 60, 47, 114, 62] },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "InvalidInput"
+    },
+    {
+      "id": "xml-name-037f-element-start",
+      "payload": { "encoding": "utf8", "text": "<\u037f/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    },
+    {
+      "id": "xml-name-037f-element-continuation",
+      "payload": { "encoding": "utf8", "text": "<a\u037f/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    },
+    {
+      "id": "xml-name-037f-prefixed-element-start",
+      "payload": { "encoding": "utf8", "text": "<p:\u037f xmlns:p='urn:test'/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    },
+    {
+      "id": "xml-name-037f-prefixed-element-continuation",
+      "payload": { "encoding": "utf8", "text": "<p:a\u037f xmlns:p='urn:test'/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    },
+    {
+      "id": "xml-name-037f-element-prefix-start",
+      "payload": { "encoding": "utf8", "text": "<\u037f:r xmlns:\u037f='urn:test'/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    },
+    {
+      "id": "xml-name-037f-element-prefix-continuation",
+      "payload": { "encoding": "utf8", "text": "<a\u037f:r xmlns:a\u037f='urn:test'/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    },
+    {
+      "id": "xml-name-037f-attribute-start",
+      "payload": { "encoding": "utf8", "text": "<r \u037f='value'/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    },
+    {
+      "id": "xml-name-037f-attribute-continuation",
+      "payload": { "encoding": "utf8", "text": "<r a\u037f='value'/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    },
+    {
+      "id": "xml-name-037f-prefixed-attribute-start",
+      "payload": { "encoding": "utf8", "text": "<r xmlns:p='urn:test' p:\u037f='value'/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    },
+    {
+      "id": "xml-name-037f-prefixed-attribute-continuation",
+      "payload": { "encoding": "utf8", "text": "<r xmlns:p='urn:test' p:a\u037f='value'/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    },
+    {
+      "id": "xml-name-037f-attribute-prefix-start",
+      "payload": { "encoding": "utf8", "text": "<r xmlns:\u037f='urn:test' \u037f:a='value'/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    },
+    {
+      "id": "xml-name-037f-attribute-prefix-continuation",
+      "payload": { "encoding": "utf8", "text": "<r xmlns:a\u037f='urn:test' a\u037f:a='value'/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    },
+    {
+      "id": "xml-name-037f-unused-xmlns-prefix-start",
+      "payload": { "encoding": "utf8", "text": "<r xmlns:\u037f='urn:test'/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    },
+    {
+      "id": "xml-name-037f-unused-xmlns-prefix-continuation",
+      "payload": { "encoding": "utf8", "text": "<r xmlns:a\u037f='urn:test'/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    },
+    {
+      "id": "xml-name-037f-pi-start",
+      "payload": { "encoding": "utf8", "text": "<?\u037f?><r/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    },
+    {
+      "id": "xml-name-037f-pi-continuation",
+      "payload": { "encoding": "utf8", "text": "<?a\u037f?><r/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    },
+    {
+      "id": "xml-name-pi-colon-middle",
+      "payload": { "encoding": "utf8", "text": "<?a:b?><r/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    },
+    {
+      "id": "xml-name-pi-colon-start",
+      "payload": { "encoding": "utf8", "text": "<?:a?><r/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    },
+    {
+      "id": "xml-name-pi-colon-end",
+      "payload": { "encoding": "utf8", "text": "<?a:?><r/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    },
+    {
+      "id": "xml-name-037f-ordinary-text",
+      "payload": { "encoding": "utf8", "text": "<r>\u037f</r>" },
+      "expectedCSharp": "Accept",
+      "expectedNative": "Accept"
+    },
+    {
+      "id": "xml-name-037f-attribute-value",
+      "payload": { "encoding": "utf8", "text": "<r a='\u037f'/>" },
+      "expectedCSharp": "Accept",
+      "expectedNative": "Accept"
+    },
+    {
+      "id": "xml-name-037f-namespace-uri",
+      "payload": { "encoding": "utf8", "text": "<p:r xmlns:p='urn:\u037f'/>" },
+      "expectedCSharp": "Accept",
+      "expectedNative": "Accept"
+    },
+    {
+      "id": "xml-name-037f-default-namespace-uri",
+      "payload": { "encoding": "utf8", "text": "<r xmlns='urn:\u037f'/>" },
+      "expectedCSharp": "Accept",
+      "expectedNative": "Accept"
+    },
+    {
+      "id": "xml-name-037f-other-character-data",
+      "payload": { "encoding": "utf8", "text": "<r><!--\u037f--><![CDATA[\u037f]]><?pi \u037f?></r>" },
+      "expectedCSharp": "Accept",
+      "expectedNative": "Accept"
+    },
+    {
+      "id": "xml-name-accented-components",
+      "payload": { "encoding": "utf8", "text": "<\u00e9:\u00e9l\u00e9ment xmlns:\u00e9='urn:\u00e9' \u00e9:attribut='value'/>" },
+      "expectedCSharp": "Accept",
+      "expectedNative": "Accept"
+    },
+    {
+      "id": "xml-name-0386-start",
+      "payload": { "encoding": "utf8", "text": "<\u0386/>" },
+      "expectedCSharp": "Accept",
+      "expectedNative": "Accept"
+    },
+    {
+      "id": "xml-name-0387-start",
+      "payload": { "encoding": "utf8", "text": "<\u0387/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    },
+    {
+      "id": "xml-name-0387-continuation",
+      "payload": { "encoding": "utf8", "text": "<a\u0387/>" },
+      "expectedCSharp": "Accept",
+      "expectedNative": "Accept"
+    },
+    {
+      "id": "xml-name-02d0-start",
+      "payload": { "encoding": "utf8", "text": "<\u02d0/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    },
+    {
+      "id": "xml-name-02d0-continuation",
+      "payload": { "encoding": "utf8", "text": "<a\u02d0/>" },
+      "expectedCSharp": "Accept",
+      "expectedNative": "Accept"
+    },
+    {
+      "id": "xml-name-0345-continuation",
+      "payload": { "encoding": "utf8", "text": "<a\u0345/>" },
+      "expectedCSharp": "Accept",
+      "expectedNative": "Accept"
+    },
+    {
+      "id": "xml-name-0346-continuation",
+      "payload": { "encoding": "utf8", "text": "<a\u0346/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    },
+    {
+      "id": "xml-name-200c-start",
+      "payload": { "encoding": "utf8", "text": "<\u200c/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    },
+    {
+      "id": "xml-name-203f-continuation",
+      "payload": { "encoding": "utf8", "text": "<a\u203f/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    },
+    {
+      "id": "xml-name-3001-start",
+      "payload": { "encoding": "utf8", "text": "<\u3001/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    },
+    {
+      "id": "xml-name-f900-start",
+      "payload": { "encoding": "utf8", "text": "<\uf900/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    },
+    {
+      "id": "xml-name-0370-continuation",
+      "payload": { "encoding": "utf8", "text": "<a\u0370/>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    },
+    {
+      "id": "xml-name-accented-pi",
+      "payload": { "encoding": "utf8", "text": "<?\u00e9?><r/>" },
+      "expectedCSharp": "Accept",
+      "expectedNative": "Accept"
+    },
+    {
+      "id": "xml-name-037f-unknown-child-start",
+      "payload": { "encoding": "utf8", "text": "<r><unused><\u037f/></unused></r>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    },
+    {
+      "id": "xml-name-037f-unknown-child-continuation",
+      "payload": { "encoding": "utf8", "text": "<r><unused><a\u037f/></unused></r>" },
+      "expectedCSharp": "InvalidXml",
+      "expectedNative": "UnsupportedName"
+    }
+  ]
+}

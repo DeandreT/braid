@@ -16,6 +16,15 @@ import {
 import type { components } from "../../api/generated";
 import { BrowserSessionState } from "../../auth/browser-session-state";
 import {
+  csvPreviewProfile,
+  csvRowsPolicy,
+  csvMetadata,
+  csvMedia,
+  csvMaximumRecords,
+  csvMaximumColumns,
+} from "../previews/csv-contract";
+import { xmlMetadata, xmlPreviewProfile } from "../previews/xml-contract";
+import {
   isCatalogId,
   type CatalogContext,
   type CatalogMappingScope,
@@ -29,6 +38,8 @@ export type CasePage = components["schemas"]["RegressionCasePageV1"];
 export type CaseSaved = components["schemas"]["RegressionCaseSavedV1"];
 export type RunPage = components["schemas"]["RegressionRunPageV1"];
 export type RunSummary = components["schemas"]["RegressionRunSummaryV1"];
+export type RegressionComparison =
+  components["schemas"]["RegressionComparisonV1"];
 export type RegressionRun = components["schemas"]["RegressionRunV1"];
 export type RunReceipt = components["schemas"]["RegressionRunReceiptV1"];
 export type RegressionDocument = components["schemas"]["RegressionDocumentV1"];
@@ -90,9 +101,20 @@ export class RegressionApi {
               "readSamples",
               "publishCases",
             ],
-            ["documentRuntime", "comparisonPolicies"],
+            [
+              "documentRuntime",
+              "comparisonPolicies",
+              "csvRuntime",
+              "xmlRuntime",
+            ],
           ) ||
           !runtime(v.runtime) ||
+          (v.xmlRuntime !== undefined &&
+            (!runtime(v.xmlRuntime) ||
+              (v.xmlRuntime as Obj).profile !== xmlPreviewProfile ||
+              !["backendId", "engineRevision", "backendBuild"].every(
+                (key) => (v.xmlRuntime as Obj)[key] === (v.runtime as Obj)[key],
+              ))) ||
           !limits(v.limits) ||
           v.comparisonPolicy !== exactPolicy ||
           typeof v.readSamples !== "boolean" ||
@@ -100,13 +122,13 @@ export class RegressionApi {
           (v.documentRuntime !== undefined &&
             (!runtime(v.documentRuntime) ||
               (v.documentRuntime as Obj).profile !== documentProfile)) ||
-          (v.comparisonPolicies !== undefined &&
-            (!Array.isArray(v.comparisonPolicies) ||
-              v.comparisonPolicies.length !== 2 ||
-              v.comparisonPolicies[0] !== exactPolicy ||
-              v.comparisonPolicies[1] !== ediPolicy)) ||
-          (v.documentRuntime === undefined) !==
-            (v.comparisonPolicies === undefined)
+          (v.csvRuntime !== undefined &&
+            (!runtime(v.csvRuntime) ||
+              (v.csvRuntime as Obj).profile !== csvPreviewProfile ||
+              !["backendId", "engineRevision", "backendBuild"].every(
+                (key) => (v.csvRuntime as Obj)[key] === (v.runtime as Obj)[key],
+              ))) ||
+          !capabilityPolicies(v)
         )
           invalid();
         return v as unknown as CaseCapabilities;
@@ -508,6 +530,19 @@ function runtime(v: unknown): boolean {
     ]) && Object.values(v).every((x) => text(x, 256) && x.length > 0)
   );
 }
+function capabilityPolicies(v: Obj): boolean {
+  const expected = [
+    exactPolicy,
+    ...(v.documentRuntime === undefined ? [] : [ediPolicy]),
+    ...(v.csvRuntime === undefined ? [] : [csvRowsPolicy]),
+  ];
+  if (expected.length === 1) return v.comparisonPolicies === undefined;
+  return (
+    Array.isArray(v.comparisonPolicies) &&
+    v.comparisonPolicies.length === expected.length &&
+    v.comparisonPolicies.every((value, index) => value === expected[index])
+  );
+}
 function limits(v: unknown): boolean {
   return (
     shape(v, [
@@ -536,18 +571,31 @@ function documents(
   for (const item of v) {
     if (
       !(media === "required"
-        ? shape(item, ["name", "bytesBase64Url", "mediaType"])
+        ? optionalShape(
+            item,
+            ["name", "bytesBase64Url", "mediaType"],
+            ["csvDialect", "xmlMetadata"],
+          )
         : optionalShape(
             item,
             ["name", "bytesBase64Url"],
-            media === "optional" ? ["mediaType"] : [],
+            media === "optional"
+              ? ["mediaType", "csvDialect", "xmlMetadata"]
+              : [],
           )) ||
       (item.mediaType !== undefined &&
         !oneOf(item.mediaType, [
           "application/json",
           "application/edi-x12",
           "application/edifact",
+          "text/csv",
+          "text/tab-separated-values",
+          "application/xml",
         ])) ||
+      (item.mediaType === "application/xml"
+        ? item.csvDialect !== undefined || !xmlMetadata(item.xmlMetadata)
+        : item.xmlMetadata !== undefined ||
+          !csvMetadata(item.mediaType, item.csvDialect)) ||
       !(item.name === null || (text(item.name, 256) && item.name.length > 0)) ||
       typeof item.bytesBase64Url !== "string" ||
       names.has(item.name)
@@ -585,9 +633,12 @@ function definition(v: unknown): v is CaseDefinition {
     limits(v.limits) &&
     (v.comparisonPolicy === exactPolicy
       ? v.comparisonOptions === undefined
-      : v.comparisonPolicy === ediPolicy &&
-        ediOptions(v.comparisonOptions) &&
-        (v.runtime as Obj).profile === documentProfile) &&
+      : (v.comparisonPolicy === ediPolicy &&
+          ediOptions(v.comparisonOptions) &&
+          (v.runtime as Obj).profile === documentProfile) ||
+        (v.comparisonPolicy === csvRowsPolicy &&
+          v.comparisonOptions === undefined &&
+          (v.runtime as Obj).profile === csvPreviewProfile)) &&
     shape(v.target, ["kind", "name"]) &&
     ((oneOf(v.target.kind, ["all", "primary"]) && v.target.name === null) ||
       (v.target.kind === "named" && text(v.target.name, 256))) &&
@@ -598,8 +649,24 @@ function definition(v: unknown): v is CaseDefinition {
     documents(
       v.expected,
       64,
-      (v.runtime as Obj).profile === documentProfile ? "required" : "none",
+      [documentProfile, csvPreviewProfile, xmlPreviewProfile].includes(
+        (v.runtime as Obj).profile as string,
+      )
+        ? "required"
+        : "none",
     ) &&
+    ((v.runtime as Obj).profile === xmlPreviewProfile
+      ? v.comparisonPolicy === exactPolicy &&
+        v.expected.length > 0 &&
+        v.expected.every((item) => item.mediaType === "application/xml")
+      : v.expected.every((item) => item.xmlMetadata === undefined)) &&
+    ((v.runtime as Obj).profile === csvPreviewProfile
+      ? v.target.kind !== "named" &&
+        v.namedInputs.length === 0 &&
+        v.expected.length === 1 &&
+        v.expected[0].name === null &&
+        csvMedia(v.expected[0].mediaType)
+      : v.expected.every((item) => item.csvDialect === undefined)) &&
     Array.isArray(v.parameters) &&
     v.parameters.length <= 32 &&
     v.parameters.every(
@@ -631,9 +698,7 @@ function summary(v: unknown, scope: CatalogMappingScope): v is RunSummary {
     date(v.createdAtUtc)
   );
 }
-function comparison(
-  v: unknown,
-): v is components["schemas"]["RegressionComparisonV1"] {
+function comparison(v: unknown): v is RegressionComparison {
   return (
     optionalShape(
       v,
@@ -647,11 +712,12 @@ function comparison(
         "truncated",
         "differences",
       ],
-      ["documentDiagnostic"],
+      ["documentDiagnostic", "csvDiagnostic"],
     ) &&
-    oneOf(v.policy, [exactPolicy, ediPolicy]) &&
+    oneOf(v.policy, [exactPolicy, ediPolicy, csvRowsPolicy]) &&
     (v.notEvaluatedReason !== "invalidDocument" ||
-      v.documentDiagnostic !== undefined) &&
+      v.documentDiagnostic !== undefined ||
+      v.csvDiagnostic !== undefined) &&
     (v.documentDiagnostic === undefined ||
       (v.policy === ediPolicy &&
         v.outcome === "notEvaluated" &&
@@ -661,6 +727,14 @@ function comparison(
           text(v.documentDiagnostic.name, 256)) &&
         oneOf(v.documentDiagnostic.side, ["expected", "actual"]) &&
         documentLocation(v.documentDiagnostic.location))) &&
+    (v.csvDiagnostic === undefined ||
+      (v.policy === csvRowsPolicy &&
+        v.outcome === "notEvaluated" &&
+        v.notEvaluatedReason === "invalidDocument" &&
+        shape(v.csvDiagnostic, ["name", "side", "location"]) &&
+        (v.csvDiagnostic.name === null || text(v.csvDiagnostic.name, 256)) &&
+        oneOf(v.csvDiagnostic.side, ["expected", "actual"]) &&
+        csvLocation(v.csvDiagnostic.location))) &&
     oneOf(v.outcome, ["passed", "failed", "notEvaluated"]) &&
     oneOf(v.notEvaluatedReason, [
       "none",
@@ -690,11 +764,14 @@ function comparison(
             "actualDigest",
             "firstDifferentByte",
           ],
-          ["location"],
+          ["location", "csvLocation"],
         ) &&
         (["segmentsDiffer", "separatorsDiffer"].includes(String(x.kind))
           ? v.policy === ediPolicy && documentLocation(x.location)
           : x.location === undefined) &&
+        (x.kind === "csvRowsDiffer"
+          ? v.policy === csvRowsPolicy && csvLocation(x.csvLocation)
+          : x.csvLocation === undefined) &&
         (x.name === null || text(x.name, 256)) &&
         oneOf(x.kind, [
           "missingOutput",
@@ -703,6 +780,9 @@ function comparison(
           "mediaTypeDiffer",
           "separatorsDiffer",
           "segmentsDiffer",
+          "csvRowsDiffer",
+          "csvDialectDiffer",
+          "xmlMetadataDiffer",
         ]) &&
         [x.expectedBytes, x.actualBytes, x.firstDifferentByte].every(
           (n) => n === null || integer(n, maxBytes),
@@ -712,6 +792,15 @@ function comparison(
             d === null || (typeof d === "string" && /^[a-f0-9]{64}$/.test(d)),
         ),
     )
+  );
+}
+function csvLocation(v: unknown): boolean {
+  return (
+    shape(v, ["row", "column"]) &&
+    integer(v.row, csvMaximumRecords + 1) &&
+    Number(v.row) > 0 &&
+    integer(v.column, csvMaximumColumns + 1) &&
+    Number(v.column) > 0
   );
 }
 function ediOptions(v: unknown): boolean {

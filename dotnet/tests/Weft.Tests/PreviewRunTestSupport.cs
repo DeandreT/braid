@@ -41,15 +41,23 @@ internal sealed class PreviewRunTestSupport : IAsyncDisposable
     internal PostgresPreviewRunReader Reader { get; }
     internal PostgresPreviewDatabase ReaderDatabase => reader;
     internal PostgresPreviewDatabase WriterDatabase => writer;
+    internal IPrivateObjectStore Objects => objects;
     internal static byte[] NativeBytes => File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "FerruleFixtures", "preview-orders.json"));
 
-    internal static async Task<PreviewRunTestSupport> CreateAsync(PostgresFixture fixture, byte[]? nativeBytes = null)
+    internal static async Task<PreviewRunTestSupport> CreateAsync(PostgresFixture fixture, byte[]? nativeBytes = null, int? migrationCount = null)
     {
-        var catalog = await PostgresCatalogTestSupport.CreateAsync(fixture);
+        // Populate through the exact original ingestion fixture before evolving a
+        // historical prefix; current production admission requires the current schema.
+        var catalog = await PostgresCatalogTestSupport.CreateAsync(fixture, installCatalog: migrationCount is null);
         try
         {
             var native = nativeBytes ?? NativeBytes;
             var receipt = await catalog.CommitCreateAsync("Preview mapping", "JSON preview source", body: native);
+            if (migrationCount is { } count)
+            {
+                await using var prefix = new MigrationRunner(catalog.Case.MigrationConnectionString, MigrationRunner.EmbeddedMigrations.Take(count).ToArray());
+                await prefix.MigrateAsync();
+            }
             var support = new PreviewRunTestSupport(catalog, receipt);
             using var input = new MemoryStream(native);
             Assert.Equal(PrivateObjectPublishResult.Created,

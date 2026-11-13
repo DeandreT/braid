@@ -66,9 +66,24 @@ appropriate project role.
 
 For a mapping with explicit X12 or EDIFACT formats, use `weft previews create
 --document` with the usual project, mapping, revision and input options. The
-mapping selects the formats, not the input filename. Without `--document`, the
-command keeps the JSON preview behavior. `weft regression capabilities` and the
-build capability commands show the separate document profiles when available.
+mapping selects the formats, not the input filename.
+
+For flat CSV/TSV, use `--csv` instead:
+
+```sh
+weft previews create --project PROJECT_ID --mapping MAPPING_ID --revision REVISION_ID --input sample.csv --csv --target all --wait
+```
+
+CSV previews must be enabled by your workspace. The saved native dialect selects
+CSV or TSV; a filename never does. `--input` is required even for a zero-byte
+file, and `--input -` reads standard input. CSV accepts one primary input, no
+`--named-input`, and only `--target all` (the default) or `--target primary`.
+`--csv` and `--document` cannot be combined. With neither flag, the command keeps
+the legacy JSON preview behavior, including its nonempty-input requirement.
+
+`weft regression capabilities` and the build capability commands show the
+separate document and CSV profiles when available. A CSV row-comparison pass
+does not supply the exact-byte evidence required for a build.
 
 ## Output and waiting
 

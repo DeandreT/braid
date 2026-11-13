@@ -14,6 +14,8 @@ using Wolverine;
 // Database credentials may arrive as protected private files; every other setting is read unchanged.
 var read = WorkerCredentialSettings.Resolve(Environment.GetEnvironmentVariable);
 var settings = PreviewWorkerSettings.Read(read);
+var xmlPreview = XmlPreviewAdmission.Enabled(read, XmlPreviewAdmission.EnabledSetting, settings.PreviewEnabled);
+var xmlRegression = XmlPreviewAdmission.Enabled(read, XmlPreviewAdmission.RegressionEnabledSetting, read("WEFT_REGRESSION_WORKER_ENABLED") == "true");
 var inspection = InspectionWorkerSettings.Read(read, settings.WorkerImage, settings.DockerExecutable);
 var previewRunner = PreviewRunnerSettings.Read(read, settings);
 const string previewRunnerKey = "preview-runner";
@@ -24,7 +26,7 @@ var contentRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(builder.Env
 if (settings.PreviewEnabled)
 {
     builder.Services.AddSingleton(new PreviewWorkerInstance(Guid.NewGuid()));
-    builder.Services.AddSingleton(new PreviewRunOptions { Lease = settings.Lease });
+    builder.Services.AddSingleton(new PreviewRunOptions { Lease = settings.Lease, XmlEnabled = xmlPreview });
     builder.Services.AddSingleton(TimeProvider.System);
     builder.Services.AddSingleton(_ => new PostgresPreviewDatabase(settings.WriterConnectionString!, PreviewDatabaseProfile.Writer));
     builder.Services.AddSingleton(provider => new PostgresPreviewRunStore(provider.GetRequiredService<PostgresPreviewDatabase>()));
@@ -32,8 +34,8 @@ if (settings.PreviewEnabled)
     var storage = settings.Storage!.Bind(contentRoot);
     builder.Services.AddSingleton<IPrivateObjectStore>(_ => new LazyPrivateObjectStore(storage));
     builder.Services.AddKeyedSingleton(previewRunnerKey, (_, _) => previewRunner.CreateRunner(settings));
-    builder.Services.AddSingleton<IMappingPreviewBackend>(provider =>
-        new FerrulePreviewBackend(provider.GetRequiredKeyedService<IInspectionWorkerRunner>(previewRunnerKey)));
+    builder.Services.AddWeftPreviewBackends(provider => provider.GetRequiredKeyedService<IInspectionWorkerRunner>(previewRunnerKey),
+        xmlPreview, xmlRegression);
     builder.Services.AddSingleton(provider => new PreviewRunExecutor(provider.GetRequiredService<PostgresPreviewRunStore>(),
         provider.GetRequiredService<IPrivateObjectStore>(), provider.GetRequiredService<IMappingPreviewBackend>(),
         provider.GetRequiredService<TimeProvider>(), provider.GetRequiredService<PreviewRunOptions>()));

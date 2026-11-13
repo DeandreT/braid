@@ -6,7 +6,7 @@ using Weft.Domain;
 
 namespace Weft.Deployment;
 
-public sealed record MachineInputMedia(string? Name, string MediaType);
+public sealed record MachineInputMedia(string? Name, string MediaType, CsvDocumentDialect? CsvDialect = null);
 
 /// <summary>
 /// One machine request for the whole qualified artifact: the primary input, every declared named input and
@@ -28,13 +28,23 @@ public sealed class MachineInvocationRequest
             throw new ArgumentException("Input and parameter names must be unique.");
         if (inputMedia is not null)
         {
-            if (inputMedia.Any(value => value is null || !DocumentPreviewPolicy.AdmitsMediaType(value.MediaType)) ||
+            if (inputMedia.Any(value => value is null || (CsvDocumentPolicy.AdmitsMediaType(value.MediaType)
+                    ? !CsvDocumentPolicy.Admits(value.CsvDialect, value.MediaType)
+                    : value.CsvDialect is not null || !DocumentPreviewPolicy.AdmitsMediaType(value.MediaType))) ||
                 inputMedia.Select(value => value.Name).Distinct(StringComparer.Ordinal).Count() != inputMedia.Count ||
                 inputMedia.Count != NamedInputs.Count + 1 ||
                 !inputMedia.Select(value => value.Name).ToHashSet(StringComparer.Ordinal).SetEquals(NamedInputs.Prepend(primary).Select(value => value.Name)))
                 throw new ArgumentException("Every document input requires its explicit supported media type.");
             InputMedia = Array.AsReadOnly(inputMedia.OrderBy(value => value.Name, StringComparer.Ordinal).ToArray());
         }
+        foreach (var input in NamedInputs.Prepend(primary))
+        {
+            var declared = InputMedia?.Single(value => value.Name == input.Name);
+            if (input.CsvDialect != declared?.CsvDialect || input.ByteCount == 0 && declared?.CsvDialect is null)
+                throw new ArgumentException("Empty CSV input requires its explicit admitted dialect.");
+        }
+        if (InputMedia?.Any(value => value.CsvDialect is not null) == true &&
+            (InputMedia.Count != 1 || InputMedia[0].Name is not null)) throw new ArgumentException("CSV requires primary-only input.");
         using var stream = new MemoryStream();
         using (var json = new Utf8JsonWriter(stream))
         {
@@ -47,7 +57,16 @@ public sealed class MachineInvocationRequest
                 json.WriteString("name", input.Name);
                 json.WriteNumber("bytes", input.ByteCount);
                 json.WriteString("sha256", input.Digest.Value);
-                if (InputMedia is not null) json.WriteString("mediaType", InputMedia.Single(value => value.Name == input.Name).MediaType);
+                if (InputMedia is not null)
+                {
+                    var declared = InputMedia.Single(value => value.Name == input.Name);
+                    json.WriteString("mediaType", declared.MediaType);
+                    if (declared.CsvDialect is { } dialect)
+                    {
+                        json.WritePropertyName("csvDialect");
+                        BuildCsvDialect.Write(json, dialect);
+                    }
+                }
                 json.WriteEndObject();
             }
             json.WriteEndArray();
@@ -172,7 +191,8 @@ public sealed class MachineInvocationService
             {
                 var boundaries = intent.Boundaries.Where(value => value.Kind is BuildBoundaryKind.PrimaryInput or BuildBoundaryKind.NamedInput).ToArray();
                 if (boundaries.Length != media.Count || media.Any(value => !boundaries.Any(boundary => boundary.Name == value.Name &&
-                    BuildWorkerProtocol.AdmitsFormat(intent.Profile.Id, boundary.Format) && BuildWorkerProtocol.MediaType(boundary.Format) == value.MediaType)))
+                    BuildWorkerProtocol.AdmitsBoundary(intent.Profile.Id, boundary.Format, boundary.CsvDialect) &&
+                    BuildWorkerProtocol.MediaType(boundary.Format) == value.MediaType && boundary.CsvDialect == value.CsvDialect)))
                     return new(MachineInvocationOutcome.InvalidInput, provenance);
             }
             RegressionReplay replay;
@@ -200,7 +220,7 @@ public sealed class MachineInvocationService
                 result.Outputs.Outputs.Any(output => !intent.Boundaries.Any(boundary =>
                     boundary.Kind == (output.Key.IsPrimary ? BuildBoundaryKind.PrimaryOutput : BuildBoundaryKind.NamedOutput) &&
                     boundary.Name == output.Key.Name && BuildWorkerProtocol.AdmitsFormat(intent.Profile.Id, boundary.Format) &&
-                    BuildWorkerProtocol.MediaType(boundary.Format) == output.MediaType))))
+                    BuildWorkerProtocol.MediaType(boundary.Format) == output.MediaType && boundary.CsvDialect == output.CsvDialect))))
                 outcome = MachineInvocationOutcome.IntegrityFailure;
             var response = outcome == MachineInvocationOutcome.Completed ? Encode(requestId, provenance, clock, result.Outputs!, documents) : null;
             if (response?.Length > MachineInvocationPolicy.MaximumRetainedBytes) (outcome, response) = (MachineInvocationOutcome.ResourceLimit, null);
@@ -258,6 +278,12 @@ public sealed class MachineInvocationService
                 json.WriteString("name", output.Key.IsPrimary ? null : output.Key.Name);
                 json.WriteString("sha256", output.Digest.Value);
                 if (documents) json.WriteString("mediaType", output.MediaType);
+                if (output.CsvDialect is { } dialect)
+                {
+                    if (!documents) throw new ArgumentException("CSV output requires document mode.");
+                    json.WritePropertyName("csvDialect");
+                    BuildCsvDialect.Write(json, dialect);
+                }
                 json.WriteBase64String("content", bytes);
                 json.WriteEndObject();
             }

@@ -63,6 +63,9 @@ public sealed class CliDocumentCommandTests : IAsyncLifetime
     [InlineData("application/json")]
     [InlineData("application/edi-x12")]
     [InlineData("application/edifact")]
+    [InlineData("text/csv")]
+    [InlineData("text/tab-separated-values")]
+    [InlineData("application/xml")]
     public async Task Document_downloads_advertise_exact_media_and_verify_bytes_before_stdout(string media)
     {
         var content = Encoding.UTF8.GetBytes("owned exact output\r\n");
@@ -73,8 +76,176 @@ public sealed class CliDocumentCommandTests : IAsyncLifetime
         var result = await cli.RunAsync("previews", "download", run, "--output", "-");
         Assert.True(result.Exit == 0, result.ToString());
         Assert.Equal(content, result.Binary);
-        Assert.Equal(new[] { "application/json", "application/edi-x12", "application/edifact" },
+        Assert.Equal(new[] { "application/json", "application/edi-x12", "application/edifact", "text/csv", "text/tab-separated-values", "application/xml" },
             Assert.Single(stub.Calls("GetCatalogPreviewOutput")).Headers["Accept"].Split(',').Select(value => value.Trim()));
+    }
+
+    [Fact]
+    public async Task Xml_preview_requires_the_explicit_option_and_never_adds_caller_metadata()
+    {
+        stub.Reply("GetCatalogContext", _ => CliStubReply.Of(200, XmlContext(true)));
+        var path = Path.Combine(cli.ConfigurationDirectory, "xml-looking.json");
+        var bytes = "<Order/>\r\n"u8.ToArray();
+        await File.WriteAllBytesAsync(path, bytes);
+        stub.Reply("SubmitCatalogPreview", _ => CliStubReply.Of(201, new CatalogPreviewSubmitResultV1("created", data.PreviewRun(CliStubData.Id(), "queued"))));
+        var result = await cli.RunAsync("previews", "create", "--xml", "--input", path, "--project", data.Project, "--mapping", data.Mapping, "--revision", data.Revision);
+        Assert.Equal(CliExitCode.Success, result.Code);
+        var sent = Assert.Single(stub.Calls("SubmitCatalogPreview")).Json!;
+        Assert.Equal(PreviewCommands.XmlProfile, sent["profile"]!.GetValue<string>());
+        Assert.Equal(bytes, Convert.FromBase64String(sent["inputs"]![0]!["content"]!.GetValue<string>()));
+        Assert.False(sent["inputs"]![0]!.AsObject().ContainsKey("xmlMetadata"));
+        var mixed = await cli.RunAsync("previews", "create", "--xml", "--csv", "--input", path, "--project", data.Project, "--mapping", data.Mapping, "--revision", data.Revision);
+        Assert.NotEqual(CliExitCode.Success, mixed.Code);
+        Assert.Single(stub.Calls("SubmitCatalogPreview"));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Xml_unadvertised_context_refuses_before_any_stdin_or_file_io_and_never_uploads(bool explicitOrganization, bool file)
+    {
+        var opens = 0;
+        cli.OpenStandardInput = () => { opens++; throw new InvalidOperationException("private-sentinel stdin was opened"); };
+        cli.OpenInputFile = _ => { opens++; throw new InvalidOperationException("private-sentinel file was opened"); };
+        foreach (var state in new[] { "disabled", "missing", "unsupported" })
+        {
+            var body = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(XmlContext(false), WeftApiClient.Json))!;
+            if (state == "missing") body["features"]!.AsObject().Remove("xmlPreview");
+            stub.Reply("GetCatalogContext", _ => state == "unsupported" ? CliStubReply.Error(404, CatalogErrorCodeV1.Unavailable) : CliStubReply.Of(200, body));
+            var args = new List<string> { "previews", "create", "--xml", "--input", file ? "private-sentinel.xml" : "-", "--project", data.Project, "--mapping", data.Mapping, "--revision", data.Revision };
+            if (explicitOrganization) args.AddRange(["--organization", stub.OrganizationId]);
+            var result = await cli.RunAsync(args.ToArray());
+            Assert.Equal(CliExitCode.Unavailable, result.Code);
+            Assert.Equal(0, opens);
+            Assert.Empty(stub.Calls("SubmitCatalogPreview"));
+            Assert.All(stub.Requests, request => Assert.Equal("GetCatalogContext", request.OperationId));
+        }
+        Assert.Equal(3, stub.Calls("GetCatalogContext").Count);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Xml_enabled_context_is_fresh_and_submission_keeps_its_captured_scope_and_request_identity(bool explicitOrganization)
+    {
+        stub.Reply("GetCatalogContext", _ => CliStubReply.Of(200, XmlContext(true)));
+        cli.OpenStandardInput = () =>
+        {
+            Assert.Single(stub.Calls("GetCatalogContext"));
+            stub.Reply("GetCatalogContext", _ => CliStubReply.Of(200, XmlContext(false)));
+            return new MemoryStream("<Order/>"u8.ToArray());
+        };
+        stub.Reply("SubmitCatalogPreview", _ => CliStubReply.Of(201, new CatalogPreviewSubmitResultV1("created", data.PreviewRun(CliStubData.Id(), "queued"))));
+        var key = CliStubData.Id();
+        var args = new List<string> { "previews", "create", "--xml", "--input", "-", "--request-id", key, "--project", data.Project, "--mapping", data.Mapping, "--revision", data.Revision };
+        if (explicitOrganization) args.AddRange(["--organization", stub.OrganizationId]);
+        Assert.Equal(CliExitCode.Success, (await cli.RunAsync(args.ToArray())).Code);
+        var sent = Assert.Single(stub.Calls("SubmitCatalogPreview"));
+        Assert.Single(stub.Calls("GetCatalogContext"));
+        Assert.Equal(stub.OrganizationId, sent.Path["organizationId"]);
+        Assert.Equal(data.Project, sent.Path["projectId"]);
+        Assert.Equal(data.Mapping, sent.Path["mappingId"]);
+        Assert.Equal(data.Revision, sent.Path["revisionId"]);
+        Assert.Equal(key, sent.Headers["Idempotency-Key"]);
+        Assert.Equal(Convert.ToBase64String("<Order/>"u8), sent.Json!["inputs"]![0]!["content"]!.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData("invalidXml", "invalidInput", null, null)]
+    [InlineData("depthLimit", "resourceLimit", "65", "64")]
+    [InlineData("nodeLimit", "resourceLimit", "1000001", "1000000")]
+    [InlineData("metadataTooLarge", "resourceLimit", "32769", "32768")]
+    [InlineData("metadataTooLarge", "resourceLimit", "9223372036854775807", "32768")]
+    public async Task Xml_preflight_refusals_show_safe_facts_without_a_run_or_retry(string reason, string kind, string? observed, string? limit)
+    {
+        stub.Reply("GetCatalogContext", _ => CliStubReply.Of(200, XmlContext(true)));
+        stub.Reply("SubmitCatalogPreview", _ => CliStubReply.Of(422,
+            new CatalogXmlPreviewProblemV1("xmlPreflight", kind, reason, new(2, 3), new(12, 3, 2, 0), observed, limit)));
+        var result = await cli.RunWithInputAsync("<private-sentinel/>"u8.ToArray(), "previews", "create", "--xml", "--input", "-", "--project", data.Project, "--mapping", data.Mapping, "--revision", data.Revision);
+        Assert.Equal(CliExitCode.InvalidRequest, result.Code);
+        Assert.Contains("Line 2, column 3", result.Error);
+        Assert.Contains("No preview run was created", result.Error);
+        Assert.DoesNotContain("private-sentinel", result.Error + result.Out);
+        if (limit is not null) Assert.Contains("Limit " + limit, result.Error);
+        Assert.Single(stub.Calls("SubmitCatalogPreview"));
+        Assert.Empty(stub.Calls("GetCatalogPreview"));
+        Assert.Empty(result.Binary);
+    }
+
+    [Fact]
+    public async Task Xml_explicit_organization_must_match_fresh_admission_before_input_io()
+    {
+        stub.Reply("GetCatalogContext", _ => CliStubReply.Of(200, XmlContext(true)));
+        cli.OpenStandardInput = () => throw new InvalidOperationException("Input must not be opened.");
+        var result = await cli.RunAsync("previews", "create", "--xml", "--organization", CliStubData.Id(), "--input", "-", "--project", data.Project, "--mapping", data.Mapping, "--revision", data.Revision);
+        Assert.Equal(CliExitCode.Usage, result.Code);
+        Assert.Single(stub.Calls("GetCatalogContext"));
+        Assert.Empty(stub.Calls("SubmitCatalogPreview"));
+    }
+
+    [Theory]
+    [InlineData("reason", "private-sentinel")]
+    [InlineData("observed", "-1")]
+    [InlineData("limit", "9223372036854775808")]
+    [InlineData("message", "private-sentinel parser text")]
+    public async Task Xml_cli_never_echoes_untrusted_problem_fields(string field, string text)
+    {
+        var body = JsonSerializer.SerializeToNode(new CatalogXmlPreviewProblemV1("xmlPreflight", "resourceLimit", "depthLimit", null, null, "65", "64"), WeftApiClient.Json)!;
+        body[field] = text;
+        using var message = new HttpResponseMessage(System.Net.HttpStatusCode.UnprocessableEntity)
+        {
+            Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json")
+        };
+        using var response = new ApiResponse(message, ApiOperations.SubmitCatalogPreview);
+        var error = await response.FailureAsync(default);
+        Assert.Equal(CliExitCode.InvalidRequest, error.Code);
+        Assert.DoesNotContain("private-sentinel", error.Message);
+        Assert.DoesNotContain("No preview run was created", error.Message);
+    }
+
+    private CatalogContextV1 XmlContext(bool enabled) => new("bearer", CliStubData.Id(), stub.OrganizationId, "Stub organization",
+        new CatalogFeaturesV1(true, true, true, true, true, true, true, true, false, true, xmlPreview: enabled),
+        new CatalogOrganizationActionsV1(true), requestToken: null, identityContext: null);
+
+    [Theory]
+    [InlineData("--csv")]
+    [InlineData("--document")]
+    public async Task Xml_profile_conflicts_never_submit(string other)
+    {
+        var result = await cli.RunWithInputAsync([], "previews", "create", "--xml", other, "--input", "-", "--project", data.Project, "--mapping", data.Mapping, "--revision", data.Revision);
+        Assert.Equal(CliExitCode.Usage, result.Code);
+        Assert.Empty(stub.Calls("SubmitCatalogPreview"));
+    }
+
+    [Fact]
+    public async Task Xml_regression_create_and_get_keep_metadata_and_exact_baseline()
+    {
+        var body = data.CaseDefinition with
+        {
+            Name = "XML CLI",
+            Runtime = data.Runtime with { EngineRevision = "dddc4dce6c93f4137fb2aa2a011360d089e0a51b", BackendBuild = "sha256:" + new string('a', 64), Profile = PreviewCommands.XmlProfile, AdapterBuild = "weft.ferrule-xml-preview-adapter.v1" },
+            PrimaryBase64Url = Convert.ToBase64String("<Order/>\n"u8).TrimEnd('=').Replace('+', '-').Replace('/', '_'),
+            Parameters = [],
+            ComparisonPolicy = "weft.regression.exact-bytes.v1",
+            Expected = [new(null, Convert.ToBase64String("<Order/>\n"u8).TrimEnd('=').Replace('+', '-').Replace('/', '_'), "application/xml", XmlMetadata: new("weft.xml-boundary.v1", "weft.xml-safe.v1", null))],
+        };
+        var id = CliStubData.Id();
+        stub.Reply("PutRegressionCaseVersion", _ => CliStubReply.Of(201, new RegressionCaseSavedV1(id, "1", data.RevisionScope(), "created")));
+        var created = await cli.RunWithInputAsync(JsonSerializer.SerializeToUtf8Bytes(body, WeftApiClient.Json), "regression", "cases", "create", "--case-id", id, "--definition", "-", "--project", data.Project, "--mapping", data.Mapping);
+        Assert.Equal(CliExitCode.Success, created.Code);
+        var sent = Assert.Single(stub.Calls("PutRegressionCaseVersion")).Json!;
+        Assert.Equal("application/xml", sent["expected"]![0]!["mediaType"]!.GetValue<string>());
+        Assert.Equal("weft.xml-safe.v1", sent["expected"]![0]!["xmlMetadata"]!["safetyProfile"]!.GetValue<string>());
+        stub.Reply("GetRegressionCaseVersion", _ => CliStubReply.Of(200, new RegressionCaseDetailV1(id, "1", data.RevisionScope(), body)));
+        var read = await cli.RunAsync("regression", "cases", "get", id, "1", "--project", data.Project, "--mapping", data.Mapping, "--json");
+        Assert.Equal(CliExitCode.Success, read.Code);
+        using var document = JsonDocument.Parse(read.Out);
+        var actual = document.RootElement.GetProperty("definition").GetProperty("expected")[0];
+        Assert.Equal("application/xml", actual.GetProperty("mediaType").GetString());
+        Assert.Equal("weft.xml-safe.v1", actual.GetProperty("xmlMetadata").GetProperty("safetyProfile").GetString());
+        Assert.Equal(body.Expected[0].BytesBase64Url, actual.GetProperty("bytesBase64Url").GetString());
     }
 
     [Theory]
@@ -192,7 +363,10 @@ public sealed class CliDocumentCommandTests : IAsyncLifetime
     }
 
     private static CatalogPreviewOutputV1 Output(string media, byte[] content) => new(0, "primary", "Result", false,
-        media, "1", Convert.ToHexStringLower(SHA256.HashData(content)), content.Length);
+        media, "1", Convert.ToHexStringLower(SHA256.HashData(content)), content.Length,
+        media is "text/csv" or "text/tab-separated-values"
+            ? new("weft.csv-dialect.v1", media == "text/csv" ? "," : "\t", "\"", false, false, false, true)
+            : null, media == "application/xml" ? new("weft.xml-boundary.v1", "weft.xml-safe.v1", null) : null);
 
     private static CliStubReply Reply(byte[] content, string media) => new()
     {

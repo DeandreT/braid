@@ -155,8 +155,51 @@ public static partial class CatalogEndpoints
         RegressionCaseReference expected;
         try
         {
+            var replay = incoming.Replay;
+            if (selectedRuntime.Profile is CsvDocumentPolicy.Profile or XmlPreviewAdmission.Profile)
+            {
+                var source = await context.RequestServices.GetRequiredService<IRevisionReportMetadataReader>()
+                    .GetSourceAsync(admission.Actor!, revisionScope, context.RequestAborted);
+                if (source is null) return NotFound();
+                if (source.Actor != admission.Actor!.PrincipalId || source.Source.Scope != revisionScope || source.Source.NativeObject.Digest != revision.Summary.NativeDigest ||
+                    source.Source.SourceBackendId != revision.Summary.BackendId || source.Source.LogicalDocument != IngestionIntent.EntryDocument ||
+                    source.Source.DependencyIdentity != IngestionIntent.EmptyDependencyIdentity)
+                    throw new InvalidOperationException("CSV source identity mismatch.");
+                if (!await CsvNativeAuthorityAsync(context, admission.Actor!, revision, ProjectAction.UploadRevision)) return NotFound();
+                var native = await context.RequestServices.GetRequiredService<IPrivateObjectStore>()
+                    .ReadVerifiedAsync(revisionScope, source.Source.NativeObject, context.RequestAborted);
+                if (!await CsvNativeAuthorityAsync(context, admission.Actor!, revision, ProjectAction.UploadRevision)) return NotFound();
+                try
+                {
+                    var artifact = NativeArtifact.Admit(revisionScope, native, PreviewPolicy.MaximumNativeBytes);
+                    if (artifact.Digest != source.Source.NativeObject.Digest || artifact.ByteCount != source.Source.NativeObject.ByteCount)
+                        throw new InvalidOperationException("CSV source integrity mismatch.");
+                    if (selectedRuntime.Profile == XmlPreviewAdmission.Profile)
+                    {
+                        if (!XmlPreviewAdmission.MatchesCase(artifact, replay, incoming.Expected))
+                            return Error(CatalogErrorCodeV1.InvalidRequest, StatusCodes.Status400BadRequest);
+                    }
+                    else
+                    {
+                        if (incoming.Expected.Outputs.Count != 1)
+                            return Error(CatalogErrorCodeV1.InvalidRequest, StatusCodes.Status400BadRequest);
+                        var primary = new PreviewInputDocument(null, replay.Primary.CopyBytes(), CsvNativeDialect.Read(artifact).Input);
+                        if (CsvNativeDialect.Read(artifact).Output != incoming.Expected.Outputs[0].CsvDialect)
+                            return Error(CatalogErrorCodeV1.InvalidRequest, StatusCodes.Status400BadRequest);
+                        replay = new(replay.Target, replay.CurrentDateTime, replay.Limits,
+                            primary, replay.NamedInputs, replay.Parameters, context.RequestAborted,
+                            PreviewExecutionProfile.CsvDocument);
+                    }
+                }
+                catch (PreviewRunException) { return Error(CatalogErrorCodeV1.InvalidRequest, StatusCodes.Status400BadRequest); }
+                catch (XmlDocumentException error)
+                {
+                    return error.IsResourceLimit ? Error(CatalogErrorCodeV1.BodyLimit, StatusCodes.Status413PayloadTooLarge)
+                        : Error(CatalogErrorCodeV1.InvalidRequest, StatusCodes.Status400BadRequest);
+                }
+            }
             value = new(id, number, owner, incoming.Name, revisionScope, revision.Summary.NativeDigest, selectedRuntime,
-                incoming.Replay, incoming.Policy, incoming.Expected, incoming.EdiOptions);
+                replay, incoming.Policy, incoming.Expected, incoming.EdiOptions);
             expected = new RegressionCaseEnvelopeCodec().Encode(value, context.RequestAborted).Reference;
         }
         catch (RegressionCaseException error)
@@ -246,6 +289,7 @@ public static partial class CatalogEndpoints
             _ => "boolean"
         }, parameter.Value)).ToArray(), value.ComparisonPolicy,
         value.Expected.Outputs.Select(output => new RegressionDocumentV1(output.Key.Name, WebEncoders.Base64UrlEncode(output.CopyBytes()),
-            value.Runtime.Profile == DocumentPreviewPolicy.Profile ? output.MediaType : null)).ToArray(),
+            value.Runtime.Profile is DocumentPreviewPolicy.Profile or CsvDocumentPolicy.Profile or XmlPreviewAdmission.Profile ? output.MediaType : null,
+            CsvDialect(output.CsvDialect), XmlMetadata(output.XmlMetadata))).ToArray(),
         value.EdiOptions is { } options ? new(options.CompareSeparators, options.IgnoreControlNumbers, options.IgnoreDates) : null);
 }

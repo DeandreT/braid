@@ -48,6 +48,7 @@ export const actions = {
   createProjects: true,
   createMappings: true,
   editMetadata: true,
+  edit: false,
   uploadRevisions: true,
   readReports: true,
   deriveReports: false,
@@ -62,7 +63,7 @@ export function context(): Context {
     actorPrincipalId: ids.actor,
     allowedOrganizationId: ids.organization,
     organizationName: "Owned synthetic session workspace",
-    features: { ...featureActions, readCatalog: true },
+    features: { ...featureActions, readCatalog: true, xmlPreview: false },
     organizationActions: { createProjects: true },
     requestToken: "fixture-before-admission",
   };

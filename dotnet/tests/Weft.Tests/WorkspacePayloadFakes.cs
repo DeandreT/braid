@@ -71,7 +71,8 @@ internal sealed class WorkspacePayloadFakes(WorkspaceToolFixture catalog) : IPro
         };
     }
     private bool Own(ActorContext actor, Guid organizationId, Guid runId) => Run(runId) is { } run &&
-        organizationId == run.Revision.OrganizationId && Readable(actor, new(run.Revision.OrganizationId, run.Revision.ProjectId));
+        organizationId == run.Subject.ExecutionScope.OrganizationId &&
+        Readable(actor, new(run.Subject.ExecutionScope.OrganizationId, run.Subject.ExecutionScope.ProjectId));
 
     public Task<PreviewRunSnapshot?> ReadAsync(ActorContext actor, Guid organizationId, Guid runId, CancellationToken cancellationToken = default) =>
         Task.FromResult(Own(actor, organizationId, runId) ? Run(runId) : null);
@@ -99,6 +100,7 @@ internal sealed class WorkspacePayloadFakes(WorkspaceToolFixture catalog) : IPro
         Task.FromResult(Own(actor, organizationId, runId) && ordinal is 0 or 1
             ? new PreviewOutputContent(Sha256Digest.FromBytes(ordinal == 0 ? Primary : Rates), ordinal == 0 ? Primary : Rates) : null);
 
+    public Task RequireSubmissionAdmissionAsync(CancellationToken cancellationToken = default) => Refuse<bool>();
     public Task<PreviewSubmitResult> SubmitAsync(ActorContext actor, PreviewRunRecord record, CancellationToken cancellationToken = default) => Refuse<PreviewSubmitResult>();
     public Task<PreviewClaimResult> ClaimAsync(Guid organizationId, Guid runId, Guid owner, TimeSpan lease, CancellationToken cancellationToken = default) => Refuse<PreviewClaimResult>();
     public Task<IReadOnlyList<PreviewStoredInput>> ReadInputsAsync(PreviewRunClaim claim, CancellationToken cancellationToken = default) => Refuse<IReadOnlyList<PreviewStoredInput>>();

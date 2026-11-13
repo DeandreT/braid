@@ -49,7 +49,9 @@ internal static class QualificationRoleGuard
     {
         await BuildRoleGuard.ValidateContractAsync(connection, transaction, token);
         var definitions = Definitions.Value;
-        if (await BuildRoleGuard.HasDocumentBuildsAsync(connection, transaction, token))
+        if (await BuildRoleGuard.HasCsvBuildsAsync(connection, transaction, token))
+            definitions = new(definitions, StringComparer.Ordinal) { ["qualification_valid"] = BuildRoleGuard.CsvQualificationDefinition };
+        else if (await BuildRoleGuard.HasDocumentBuildsAsync(connection, transaction, token))
             definitions = new(definitions, StringComparer.Ordinal)
             {
                 ["qualification_valid"] =

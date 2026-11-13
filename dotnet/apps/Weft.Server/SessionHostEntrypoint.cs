@@ -2,6 +2,7 @@ using Weft.Api;
 using Weft.Api.Auth;
 using Weft.Api.Catalog;
 using Weft.Api.Chat;
+using Weft.Api.Specs;
 
 namespace Weft.Server;
 
@@ -56,6 +57,7 @@ internal static class SessionHostEntrypoint
                                 context.Response.Headers.StrictTransportSecurity = "max-age=31536000";
                             }
                         });
+                        BrowserContentPolicy.Use(app, options.Origin);
                         app.UseDefaultFiles();
                         app.UseStaticFiles();
                         app.UseRouting();
@@ -64,6 +66,8 @@ internal static class SessionHostEntrypoint
                             endpoints.MapWeftHealth();
                             endpoints.MapWeftAuthentication();
                             endpoints.MapWeftCatalog();
+                            endpoints.MapWeftSpecs();
+                            Weft.Api.Creation.CreationEndpoints.MapWeftCreation(endpoints);
                             endpoints.MapWeftRegressionCases();
                             endpoints.MapWeftRegressionRuns();
                             endpoints.MapWeftAutomation();

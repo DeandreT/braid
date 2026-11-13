@@ -278,7 +278,7 @@ internal static class CatalogRoleGuard
             throw Refusal("The catalog constraints are incomplete.");
     }
 
-    private static async Task ValidateTransitionAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
+    internal static async Task ValidateTransitionAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
         CatalogSchemaContract.Table table, CancellationToken cancellationToken)
     {
         if (table.FunctionBody is null)

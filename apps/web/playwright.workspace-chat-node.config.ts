@@ -4,6 +4,7 @@ export default defineConfig({
   testDir: "./tests",
   testMatch: [
     "workspace-chat-types.spec.ts",
+    "mapping-proposal-types.spec.ts",
     "workspace-chat-unsent.spec.ts",
     "return-path.spec.ts",
   ],

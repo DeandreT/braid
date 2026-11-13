@@ -27,6 +27,8 @@ public sealed class ProcessCompiledRuntimeOptions
     public string TemporaryRoot { get; }
     public string DotnetRoot { get; }
     public TimeSpan WallTimeout { get; }
+    // Trusted composition only. No request field can select a process operation.
+    internal CompiledRuntimeOperation Operation { get; init; }
     internal bool WithholdEndOfInput { get; init; }
     // Parent-side qualification seams only. None is populated from service/request configuration.
     internal Action<ProcessCompiledRuntimeRunner.OwnedOperation>? ObserveOperation { get; init; }
@@ -71,9 +73,13 @@ public sealed class ProcessCompiledRuntimeOptions
         };
         result.AddRange(["--dotnet-root=" + DotnetRoot, "--profile=runtime", "--runtime-assembly=" + RuntimeAssembly]);
         result.AddRange(grants.Read.Append(Path.GetDirectoryName(RuntimeAssembly)!).Distinct(StringComparer.Ordinal).Select(path => "--read=" + path));
+        if (Operation == CompiledRuntimeOperation.XmlCanonicalComparison) result.Add(XmlComparisonProtocol.ModeArgument);
+        else if (Operation is not (CompiledRuntimeOperation.Mapping or CompiledRuntimeOperation.OfficeExtraction)) throw new InvalidOperationException("Unknown fixed runtime operation.");
         return result;
     }
 }
+
+internal enum CompiledRuntimeOperation { Mapping, XmlCanonicalComparison, OfficeExtraction }
 
 internal enum CompiledRuntimeCleanupStage { Process, Callbacks, Pipes, Handles, Directory }
 

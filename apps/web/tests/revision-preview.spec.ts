@@ -24,6 +24,8 @@ function run(state: Run["state"], change: Partial<Run> = {}): Run {
   return {
     runId: RUN,
     revision: scope,
+    subjectKind: "revision",
+    draft: null,
     requestFingerprint: "b".repeat(64),
     currentDateTime: "2026-10-20T08:30:00Z",
     state,
@@ -80,9 +82,15 @@ class Previews {
 
   constructor(private readonly page: Page) {}
 
-  async install(role = "publisher", allowed = true, enabled = true) {
+  async install(
+    role = "publisher",
+    allowed = true,
+    enabled = true,
+    xml = false,
+  ) {
     const context = structuredClone(synthetic.context);
     context.features.preview = enabled;
+    context.features.xmlPreview = enabled && xml;
     const mapping = structuredClone(synthetic.mapping);
     mapping.access = {
       role: role as typeof mapping.access.role,
@@ -152,6 +160,161 @@ const panel = (page: Page) =>
   page.getByRole("region", { name: "Sample preview", exact: true });
 const documentView = (page: Page) =>
   page.getByRole("region", { name: "Document bytes", exact: true });
+
+test("XML preview is explicit, escaped and read only without DOM resource fetching", async ({
+  page,
+}) => {
+  const previews = new Previews(page);
+  const bytes =
+    '<?xml-stylesheet href="https://never-fetch.invalid/style"?><Order><![CDATA[<script>alert(1)</script>]]><code>A</code></Order>\r\n';
+  let fetched = false;
+  await page.route("https://never-fetch.invalid/**", async (route) => {
+    fetched = true;
+    await route.abort();
+  });
+  previews.outputBytes = bytes;
+  previews.outputMedia = "application/xml";
+  previews.states = [
+    run("completed", {
+      outcome: "succeeded",
+      recordsWritten: "1",
+      provenance: {
+        ...succeeded.provenance!,
+        profile: "weft.ferrule-xml-preview.v1",
+        adapterBuild: "weft.ferrule-xml-preview-adapter.v1",
+      },
+      outputs: [
+        {
+          ...succeeded.outputs[0]!,
+          boundaryId: "primary-output",
+          targetName: "Order",
+          mediaType: "application/xml",
+          byteCount: Buffer.byteLength(bytes),
+          sha256: createHash("sha256").update(bytes).digest("hex"),
+          xmlMetadata: {
+            schema: "weft.xml-boundary.v1",
+            safetyProfile: "weft.xml-safe.v1",
+            schemaHints: {
+              noNamespaceLocation: "https://never-fetch.invalid/schema",
+              locations: [],
+            },
+          },
+        },
+      ],
+    }),
+  ];
+  await previews.install("publisher", true, true, true);
+  await open(page);
+  const region = panel(page);
+  await region.getByLabel("Preview admission").selectOption("xml");
+  await region.getByLabel("Primary input (XML)").fill("<Order/>");
+  await region
+    .getByRole("button", { name: "Run preview", exact: true })
+    .click();
+  await region.getByRole("button", { name: "Show Order", exact: true }).click();
+  expect(previews.submissions[0]!.body.profile).toBe(
+    "weft.ferrule-xml-preview.v1",
+  );
+  await expect(
+    documentView(page).getByRole("list", {
+      name: "Read-only XML lexical outline",
+    }),
+  ).toBeVisible();
+  await expect(
+    documentView(page).locator("script,iframe,img,object,embed"),
+  ).toHaveCount(0);
+  await expect(region.getByRole("button", { name: /Save.*case/i })).toHaveCount(
+    0,
+  );
+  await documentView(page)
+    .getByText("Saved XML metadata (read only)", { exact: true })
+    .click();
+  await expect(documentView(page)).toContainText(
+    "https://never-fetch.invalid/schema",
+  );
+  await documentView(page)
+    .getByRole("button", { name: "Raw text", exact: true })
+    .click();
+  await expect(documentView(page).locator("pre").last()).toHaveText(
+    bytes.trimEnd(),
+  );
+  const downloadEvent = page.waitForEvent("download");
+  await region
+    .getByRole("button", { name: "Download Order", exact: true })
+    .click();
+  const download = await downloadEvent;
+  expect(download.suggestedFilename()).toBe("preview-0-Order.xml");
+  const chunks: Buffer[] = [];
+  for await (const chunk of await download.createReadStream())
+    chunks.push(Buffer.from(chunk));
+  expect(Buffer.concat(chunks).toString()).toBe(bytes);
+  expect(fetched).toBe(false);
+});
+
+test("XML preview has no option before its server capability is offered", async ({
+  page,
+}) => {
+  const previews = new Previews(page);
+  await previews.install();
+  await open(page);
+  await expect(
+    panel(page).getByLabel("Preview admission").locator('option[value="xml"]'),
+  ).toHaveCount(0);
+});
+
+for (const [reason, kind, observed, limit, phrase] of [
+  ["invalidXml", "invalidInput", null, null, "safe syntax policy"],
+  ["depthLimit", "resourceLimit", "65", "64", "depth limit"],
+  ["nodeLimit", "resourceLimit", "1000001", "1000000", "node limit"],
+  ["metadataTooLarge", "resourceLimit", "32769", "32768", "metadata exceeds"],
+] as const) {
+  test(`XML preview ${reason} preflight refusal shows safe facts without inventing a run`, async ({
+    page,
+  }) => {
+    const previews = new Previews(page);
+    previews.submitReply = {
+      status: 422,
+      json: {
+        code: "xmlPreflight",
+        kind,
+        reason,
+        location: { line: 2, column: 3 },
+        statistics: {
+          originalBytes: 100,
+          physicalNodes: 4,
+          maximumDepth: 2,
+          maximumAttributes: 0,
+        },
+        observed,
+        limit,
+      },
+    };
+    await previews.install("publisher", true, true, true);
+    await open(page);
+    const region = panel(page);
+    await region.getByLabel("Preview admission").selectOption("xml");
+    await region.getByLabel("Primary input (XML)").fill("<private-sentinel/>");
+    await region
+      .getByRole("button", { name: "Run preview", exact: true })
+      .click();
+    const alert = region.getByRole("alert");
+    await expect(alert).toContainText(phrase);
+    await expect(alert).toContainText("Line 2, column 3");
+    await expect(alert).toContainText("No preview run was created");
+    await expect(alert).not.toContainText("private-sentinel");
+    if (limit) await expect(alert).toContainText("Limit " + limit);
+    expect(previews.submissions).toHaveLength(1);
+    expect(previews.reads).toBe(0);
+    await expect(region.getByRole("button", { name: /^Show / })).toHaveCount(0);
+    expect(
+      await page.evaluate(() =>
+        Object.keys(sessionStorage).filter((key) =>
+          key.startsWith("weft.preview.v1/"),
+        ),
+      ),
+    ).toHaveLength(0);
+  });
+}
 
 for (const family of ["x12", "edifact"] as const) {
   test(`explicit document admission renders and downloads ${family} segments`, async ({

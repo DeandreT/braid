@@ -117,9 +117,14 @@ public sealed class FerruleServiceOpenApiTests
             if (enabled)
             {
                 Assert.Equal(new[] { Weft.Deployment.BuildWorkerProtocol.Profile, Weft.Deployment.BuildWorkerProtocol.DocumentProfile,
-                    Weft.Deployment.BuildWorkerProtocol.X12InterchangesProfile }, capabilities.Profiles.Single(profile => profile.Toolchain is not null).Toolchain!.SupportedProfiles);
-                Assert.Equal(new[] { Weft.Deployment.CompiledRuntimeProtocol.Protocol, Weft.Deployment.CompiledRuntimeProtocol.DocumentProtocol },
+                    Weft.Deployment.BuildWorkerProtocol.X12InterchangesProfile, Weft.Deployment.BuildWorkerProtocol.CsvProfile }, capabilities.Profiles.Single(profile => profile.Toolchain is not null).Toolchain!.SupportedProfiles);
+                Assert.Equal(new[] { Weft.Deployment.CompiledRuntimeProtocol.Protocol, Weft.Deployment.CompiledRuntimeProtocol.DocumentProtocol, Weft.Deployment.CompiledRuntimeProtocol.CsvProtocol },
                     capabilities.Profiles.Single(profile => profile.Runtime is not null).Runtime!.SupportedProtocols);
+            }
+            else
+            {
+                Assert.DoesNotContain(Weft.Deployment.BuildWorkerProtocol.CsvProfile, System.Text.Encoding.UTF8.GetString(body));
+                Assert.DoesNotContain(Weft.Deployment.CompiledRuntimeProtocol.CsvProtocol, System.Text.Encoding.UTF8.GetString(body));
             }
             Assert.Equal(body, JsonSerializer.SerializeToUtf8Bytes(capabilities, web));
         }

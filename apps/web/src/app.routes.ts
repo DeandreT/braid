@@ -16,10 +16,13 @@ import type { EditMappingPageComponent } from "./catalog/metadata/edit-mapping-p
 import type { UploadMappingPageComponent } from "./catalog/uploads/upload-mapping-page.component";
 import type { AppendRevisionPageComponent } from "./catalog/uploads/append-revision-page.component";
 import type { OperationsPageComponent } from "./catalog/operations/operations-page.component";
+import type { SandboxPageComponent } from "./catalog/sandbox/sandbox-page.component";
 import type { AutomationPageComponent } from "./catalog/automation/automation-page.component";
 import { NotFoundComponent } from "./not-found.component";
 import type { ChatPageComponent } from "./chat/chat-page.component";
 import type { RevisionPageComponent } from "./catalog/revision-page.component";
+import type { SpecPageComponent } from "./catalog/specs/spec-page.component";
+import type { CreationPageComponent } from "./catalog/creation/creation-page.component";
 
 const leaveChat: CanDeactivateFn<ChatPageComponent> = (component) =>
   component.requestLeave();
@@ -45,6 +48,8 @@ const leaveRevisionAppend: CanDeactivateFn<AppendRevisionPageComponent> = (
   component,
 ) => requestWorkspaceLeave(component);
 const leaveOperations: CanDeactivateFn<OperationsPageComponent> = (component) =>
+  requestWorkspaceLeave(component);
+const leaveSandbox: CanDeactivateFn<SandboxPageComponent> = (component) =>
   requestWorkspaceLeave(component);
 
 const leaveAutomation: CanDeactivateFn<AutomationPageComponent> = (component) =>
@@ -127,6 +132,44 @@ export const routes: Routes = [
     canActivate: [requireSignIn],
     children: [
       {
+        path: "organizations/:organizationId/projects/:projectId/creation",
+        loadComponent: () =>
+          import("./catalog/creation/creation-library.component").then(
+            (m) => m.CreationLibraryComponent,
+          ),
+        title: "Your new mapping proposals · Weft",
+      },
+      {
+        path: "organizations/:organizationId/projects/:projectId/creation/:proposalId",
+        loadComponent: () =>
+          import("./catalog/creation/creation-page.component").then(
+            (m) => m.CreationPageComponent,
+          ),
+        canDeactivate: [
+          (component: CreationPageComponent) =>
+            requestWorkspaceLeave(component),
+        ],
+        canActivate: [leaveWorkspaceEntry],
+        runGuardsAndResolvers: "paramsOrQueryParamsChange",
+        title: "Review new mapping · Weft",
+      },
+      ...[
+        "organizations/:organizationId/projects/:projectId/specs",
+        "organizations/:organizationId/projects/:projectId/specs/:bundleId",
+      ].map((path) => ({
+        path,
+        loadComponent: () =>
+          import("./catalog/specs/spec-page.component").then(
+            (m) => m.SpecPageComponent,
+          ),
+        canDeactivate: [
+          (component: SpecPageComponent) => requestWorkspaceLeave(component),
+        ],
+        canActivate: [leaveWorkspaceEntry],
+        runGuardsAndResolvers: "paramsOrQueryParamsChange" as const,
+        title: "Specification intake · Weft",
+      })),
+      {
         path: "organizations/:organizationId/projects/:projectId/mappings/:mappingId/operations",
         loadComponent: () =>
           import("./catalog/operations/operations-page.component").then(
@@ -134,6 +177,15 @@ export const routes: Routes = [
           ),
         canDeactivate: [leaveOperations],
         title: "Operations · Weft",
+      },
+      {
+        path: "organizations/:organizationId/projects/:projectId/mappings/:mappingId/sandbox",
+        loadComponent: () =>
+          import("./catalog/sandbox/sandbox-page.component").then(
+            (module) => module.SandboxPageComponent,
+          ),
+        canDeactivate: [leaveSandbox],
+        title: "Local sandbox · Weft",
       },
       {
         path: "organizations/:organizationId/projects/:projectId/automation",

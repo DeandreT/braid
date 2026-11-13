@@ -177,7 +177,7 @@ public sealed record ChatTurnBudget
 {
     public ChatTurnBudget(int maxEvents, int maxEventBytes, int maxRounds)
     {
-        if (maxEvents is < 2 or > 4096 || maxEventBytes is < 1 or > 4194304 || maxRounds is < 1 or > 4)
+        if (maxEvents is < 2 or > 4096 || maxEventBytes is < 1 or > 4194304 || maxRounds is < 1 or > 5)
             throw ChatBounds.Invalid();
         MaxEvents = maxEvents;
         MaxEventBytes = maxEventBytes;
@@ -224,7 +224,9 @@ public enum ChatEventKind
     /// <summary>A verified citation in a workspace conversation, of any resource kind.</summary>
     WorkspaceCitation,
     /// <summary>Payload bytes a tool returned to the model in a workspace conversation: identities and byte counts only.</summary>
-    DataShared
+    DataShared,
+    /// <summary>A mapping edit a workspace tool saved as a new version, or showed read-only; audited by the ledger.</summary>
+    MappingWrite
 }
 
 /// <summary>One irreversible dispatch reservation. Uncertain includes reserved-but-unsent.</summary>
@@ -266,6 +268,8 @@ public sealed record ChatEventData
     public static ChatEventData ForFailure(Guid eventId, ChatProviderFailureFact failure) => new(eventId, ChatEventKind.ProviderFailure, "", ChatMetadataCodec.Failure(failure));
     public static ChatEventData ForDataShared(Guid eventId, ChatPayloadDisclosureFact disclosure) =>
         new(eventId, ChatEventKind.DataShared, "", ChatMetadataCodec.Disclosure(disclosure));
+    public static ChatEventData ForMappingWrite(Guid eventId, ChatMappingWriteFact write) =>
+        new(eventId, ChatEventKind.MappingWrite, "", ChatMetadataCodec.MappingWrite(write));
     public Guid EventId { get; }
     public ChatEventKind Kind { get; }
     public string Text { get; }

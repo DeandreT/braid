@@ -29,7 +29,7 @@ public sealed class PreviewRequestDocumentTests
             + "\"limits\":{\"maximumInputBytes\":8388608,\"maximumOutputBytes\":8388608,\"maximumArtifacts\":64,\"maximumTextBytes\":2048}}",
             document);
         var decoded = PreviewRequestDocument.Decode(document);
-        Assert.Equal(Revision, decoded.Revision);
+        Assert.Equal(Revision, Assert.IsType<RevisionPreviewSubject>(decoded.Subject).Revision);
         Assert.Equal(PreviewTargetSelection.Named("summary"), decoded.Target);
         Assert.Equal(Submission().Parameters, decoded.Parameters);
         Assert.Equal([null, "rates"], decoded.Inputs.Select(input => input.Name));
@@ -61,7 +61,7 @@ public sealed class PreviewRequestDocumentTests
             Submission() with { NamedInputs = [new PreviewInputDocument("other", "{\"currency\":\"EUR\"}"u8)] },
             Submission() with { Parameters = [new("limit", PreviewParameterKind.String, "9007199254740993"), new("express", PreviewParameterKind.Boolean, "true")] },
             Submission() with { Parameters = [new("express", PreviewParameterKind.Boolean, "true"), new("limit", PreviewParameterKind.Integer, "9007199254740993")] },
-            Submission() with { Revision = new(Revision.OrganizationId, Revision.ProjectId, Revision.MappingId, Guid.NewGuid()) }
+            Submission() with { Subject = new RevisionPreviewSubject(new(Revision.OrganizationId, Revision.ProjectId, Revision.MappingId, Guid.NewGuid())) }
         };
         foreach (var variant in variants)
             Assert.NotEqual(original, PreviewRequestDocument.Fingerprint(PreviewRequestDocument.Encode(variant, PreviewLimits.Default)));
@@ -75,6 +75,29 @@ public sealed class PreviewRequestDocumentTests
     [InlineData("{\"schema\":\"weft.preview-request.v2\"}")]
     public void MalformedStoredDocumentsAreRefused(string document) =>
         Assert.Throws<PreviewRunException>(() => PreviewRequestDocument.Decode(document));
+
+    [Fact]
+    public void DraftSubjectsPreserveExactVersionsAndCheckpointIdentityWithoutClaimingARevision()
+    {
+        var subject = new DraftPreviewSubject(Revision, Guid.NewGuid(), 9007199254740993, Sha256Digest.FromBytes([1]), 1);
+        var submission = Submission() with { Subject = subject };
+        var document = PreviewRequestDocument.Encode(submission, PreviewLimits.Default);
+        Assert.Contains("\"draftVersion\":\"9007199254740993\"", document);
+        Assert.DoesNotContain("\"revisionId\"", document);
+        Assert.Equal(subject, Assert.IsType<DraftPreviewSubject>(PreviewRequestDocument.Decode(document).Subject));
+        var original = PreviewRequestDocument.Fingerprint(document);
+        foreach (var variant in new[]
+        {
+            new DraftPreviewSubject(Revision, subject.DraftId, subject.Version + 1, subject.NativeDigest, 1),
+            new DraftPreviewSubject(Revision, Guid.NewGuid(), subject.Version, subject.NativeDigest, 1),
+            new DraftPreviewSubject(Revision, subject.DraftId, subject.Version, Sha256Digest.FromBytes([2]), 1),
+            new DraftPreviewSubject(Revision, subject.DraftId, subject.Version, subject.NativeDigest, 2),
+            new DraftPreviewSubject(new(Revision.OrganizationId, Revision.ProjectId, Revision.MappingId, Guid.NewGuid()), subject.DraftId, subject.Version, subject.NativeDigest, 1)
+        }) Assert.NotEqual(original, PreviewRequestDocument.Fingerprint(PreviewRequestDocument.Encode(submission with { Subject = variant }, PreviewLimits.Default)));
+        Assert.Throws<ArgumentException>(() => new DraftPreviewSubject(Revision, Guid.Empty, 0, subject.NativeDigest, 1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new DraftPreviewSubject(Revision, subject.DraftId, -1, subject.NativeDigest, 1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new DraftPreviewSubject(Revision, subject.DraftId, 0, subject.NativeDigest, 0));
+    }
 
     [Fact]
     public void ClockUsesUtcWithSevenFractionalDigits() =>

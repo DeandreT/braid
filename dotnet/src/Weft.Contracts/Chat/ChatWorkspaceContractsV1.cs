@@ -146,7 +146,7 @@ public sealed record ChatTurnFocusV1
 [JsonConverter(typeof(ChatWorkspaceCitationKindConverterV1))]
 public enum ChatWorkspaceCitationKindV1
 {
-    Project = 1, Mapping, Revision, Report, PreviewRun, RegressionCase, RegressionRun, BuildRun, BuildApproval, BuildEnvironment, GuideSection
+    Project = 1, Mapping, Revision, Report, PreviewRun, RegressionCase, RegressionRun, BuildRun, BuildApproval, BuildEnvironment, GuideSection, CreationProposal
 }
 
 /// <summary>
@@ -156,7 +156,7 @@ public enum ChatWorkspaceCitationKindV1
 public sealed record ChatWorkspaceCitationV1
 {
     public ChatWorkspaceCitationV1(ChatWorkspaceCitationKindV1 kind, string organizationId, string? projectId, string? mappingId,
-        string? revisionId, ChatSelectorV1? target, string? reportDerivationId, string? subjectId, string? version, string? sectionId)
+        string? revisionId, ChatSelectorV1? target, string? reportDerivationId, string? subjectId, string? version, string? sectionId, string? proposalFingerprint = null)
     {
         if (!Enum.IsDefined(kind) || (kind == ChatWorkspaceCitationKindV1.Report) != (target is not null) ||
             (target is null) != (reportDerivationId is null) || (kind == ChatWorkspaceCitationKindV1.GuideSection) != (sectionId is not null))
@@ -171,6 +171,11 @@ public sealed record ChatWorkspaceCitationV1
         SubjectId = subjectId is null ? null : CatalogValueV1.RequireId(subjectId, nameof(subjectId));
         Version = version is null ? null : CatalogValueV1.RequireText(version, 20, nameof(version));
         SectionId = sectionId is null ? null : CatalogValueV1.RequireText(sectionId, 64, nameof(sectionId));
+        if ((kind == ChatWorkspaceCitationKindV1.CreationProposal) != (proposalFingerprint is not null) ||
+            proposalFingerprint is not null && (projectId is null || subjectId is null || mappingId is not null || revisionId is not null || version is not null ||
+                proposalFingerprint.Length != 64 || proposalFingerprint.Any(c => !char.IsAsciiDigit(c) && c is not (>= 'a' and <= 'f'))))
+            throw new ArgumentException("Invalid creation proposal citation.");
+        ProposalFingerprint = proposalFingerprint;
     }
 
     public ChatWorkspaceCitationKindV1 Kind { get; }
@@ -188,6 +193,8 @@ public sealed record ChatWorkspaceCitationV1
     public string? Version { get; }
     /// <summary>The user guide section, for a guide citation.</summary>
     public string? SectionId { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ProposalFingerprint { get; }
 }
 
 public sealed record ChatWorkspaceCitationEventV1 : ChatTurnEventV1
@@ -203,7 +210,7 @@ public sealed record ChatWorkspaceCitationEventV1 : ChatTurnEventV1
 }
 
 [JsonConverter(typeof(ChatPayloadSourceConverterV1))]
-public enum ChatPayloadSourceV1 { PreviewInput = 1, PreviewOutput, RegressionCase, RegressionRunOutput }
+public enum ChatPayloadSourceV1 { PreviewInput = 1, PreviewOutput, RegressionCase, RegressionRunOutput, Specification }
 
 /// <summary>Sample payload bytes a tool result shared with the turn's model: identities and the byte count, never content.</summary>
 public sealed record ChatDataSharedEventV1 : ChatTurnEventV1
@@ -226,6 +233,65 @@ public sealed record ChatDataSharedEventV1 : ChatTurnEventV1
     public string SubjectId { get; }
     public string? Version { get; }
     public int Bytes { get; }
+}
+
+[JsonConverter(typeof(ChatMappingWriteOutcomeConverterV1))]
+public enum ChatMappingWriteOutcomeV1 { Saved = 1, Proposed }
+
+[JsonConverter(typeof(ChatMappingWriteReasonConverterV1))]
+public enum ChatMappingWriteReasonV1 { NotPermitted = 1, OutOfDate }
+
+/// <summary>One field's plain-language rule before and after the edit, derived from verified projections.</summary>
+public sealed record ChatMappingChangeV1(string Field, string Before, string After);
+
+/// <summary>
+/// A mapping edit this turn saved as the next version of its exact base, or showed read-only because the user may
+/// not edit or the base is no longer the latest. Saving never puts a version in use or starts a build or run.
+/// </summary>
+public sealed record ChatMappingWriteEventV1 : ChatTurnEventV1
+{
+    public ChatMappingWriteEventV1(int sequence, string roundId, ChatMappingWriteOutcomeV1 outcome, ChatMappingWriteReasonV1? reason,
+        CatalogRevisionScopeV1 baseRevision, string baseSequence, string? revisionId, string? revisionSequence, string? headRevisionId,
+        string? headSequence, int operationCount, IReadOnlyList<ChatMappingChangeV1> changes, bool changesTruncated) : base(sequence)
+    {
+        if (!Enum.IsDefined(outcome) || reason is { } r && !Enum.IsDefined(r) || operationCount < 1) throw new ArgumentOutOfRangeException(nameof(outcome));
+        RoundId = CatalogValueV1.RequireId(roundId, nameof(roundId));
+        Outcome = outcome; Reason = reason;
+        BaseRevision = baseRevision ?? throw new ArgumentNullException(nameof(baseRevision));
+        BaseSequence = CatalogValueV1.RequireText(baseSequence, 20, nameof(baseSequence));
+        RevisionId = revisionId is null ? null : CatalogValueV1.RequireId(revisionId, nameof(revisionId));
+        RevisionSequence = revisionSequence is null ? null : CatalogValueV1.RequireText(revisionSequence, 20, nameof(revisionSequence));
+        HeadRevisionId = headRevisionId is null ? null : CatalogValueV1.RequireId(headRevisionId, nameof(headRevisionId));
+        HeadSequence = headSequence is null ? null : CatalogValueV1.RequireText(headSequence, 20, nameof(headSequence));
+        OperationCount = operationCount;
+        Changes = changes ?? throw new ArgumentNullException(nameof(changes));
+        ChangesTruncated = changesTruncated;
+    }
+
+    public string RoundId { get; }
+    public ChatMappingWriteOutcomeV1 Outcome { get; }
+    public ChatMappingWriteReasonV1? Reason { get; }
+    public CatalogRevisionScopeV1 BaseRevision { get; }
+    public string BaseSequence { get; }
+    /// <summary>The saved version; null for a proposal.</summary>
+    public string? RevisionId { get; }
+    public string? RevisionSequence { get; }
+    /// <summary>The newer version an out-of-date proposal observed.</summary>
+    public string? HeadRevisionId { get; }
+    public string? HeadSequence { get; }
+    public int OperationCount { get; }
+    public IReadOnlyList<ChatMappingChangeV1> Changes { get; }
+    public bool ChangesTruncated { get; }
+}
+
+internal sealed class ChatMappingWriteOutcomeConverterV1 : JsonStringEnumConverter<ChatMappingWriteOutcomeV1>
+{
+    public ChatMappingWriteOutcomeConverterV1() : base(JsonNamingPolicy.CamelCase, allowIntegerValues: false) { }
+}
+
+internal sealed class ChatMappingWriteReasonConverterV1 : JsonStringEnumConverter<ChatMappingWriteReasonV1>
+{
+    public ChatMappingWriteReasonConverterV1() : base(JsonNamingPolicy.CamelCase, allowIntegerValues: false) { }
 }
 
 internal sealed class ChatConversationKindConverterV1 : JsonStringEnumConverter<ChatConversationKindV1>

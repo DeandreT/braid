@@ -43,7 +43,8 @@ public sealed class DocumentBuildSchemaSourceTests
     public void Combined_prefix_preserves_every_migration_before_the_document_suffix()
     {
         var scripts = MigrationRunner.EmbeddedMigrations;
-        Assert.Equal(Enumerable.Range(1, 36), scripts.Select(script => script.Version));
+        Assert.Equal(Enumerable.Range(1, 47), scripts.Select(script => script.Version));
+        Assert.Equal(XmlPreviewSchemaAdmission.MigrationChecksum, scripts[41].Checksum);
         Assert.Equal(PostgresMigrationTests.CurrentChecksums, scripts.Select(script => script.Checksum));
         Assert.Equal(RegressionSchemaTestContract.AccountDisplayChecksum, scripts[25].Checksum);
         Assert.Equal(RegressionSchemaTestContract.AdministrationChecksum, scripts[26].Checksum);

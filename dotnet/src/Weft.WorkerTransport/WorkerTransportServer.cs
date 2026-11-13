@@ -305,6 +305,7 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
                     writer.WriteStringValue(BuildWorkerProtocol.Profile);
                     writer.WriteStringValue(BuildWorkerProtocol.DocumentProfile);
                     writer.WriteStringValue(BuildWorkerProtocol.X12InterchangesProfile);
+                    writer.WriteStringValue(BuildWorkerProtocol.CsvProfile);
                     writer.WriteEndArray();
                     writer.WriteString("sdkVersion", BuildWorkerProtocol.SdkVersion);
                     writer.WriteString("runtimeVersion", BuildWorkerProtocol.RuntimeVersion);
@@ -319,6 +320,7 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
                     writer.WriteStartArray("supportedProtocols");
                     writer.WriteStringValue(CompiledRuntimeProtocol.Protocol);
                     writer.WriteStringValue(CompiledRuntimeProtocol.DocumentProtocol);
+                    writer.WriteStringValue(CompiledRuntimeProtocol.CsvProtocol);
                     writer.WriteEndArray();
                     writer.WriteString("version", BuildWorkerProtocol.RuntimeVersion);
                     writer.WriteString("identity", options.CompiledRuntimeIdentity);
@@ -432,6 +434,12 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
         {
             // An incomplete frame never becomes an operation.
             context.Abort();
+            return;
+        }
+
+        if (!AuthoringFrameAdmission.Allows(profile, frame) || !AuthoredPreviewFrameAdmission.Allows(profile, frame))
+        {
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
             return;
         }
 

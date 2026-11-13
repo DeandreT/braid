@@ -20,6 +20,17 @@ public sealed class DockerWorkerProfile
     public static DockerWorkerProfile Inspection { get; } = new("inspection", 268_435_456, 10,
         TimeSpan.FromSeconds(10), DockerInspectionWorkerOptions.MaximumFrameBytes, DockerInspectionWorkerOptions.MaximumFrameBytes);
 
+    /// <summary>Exact-base edit replay; isolation is identical to inspection, with bounded checkpoint frames.</summary>
+    public static DockerWorkerProfile Edit { get; } = new("edit", 268_435_456, 10,
+        TimeSpan.FromSeconds(10), MappingEditPolicy.MaximumRequestBytes, MappingEditPolicy.MaximumResponseBytes);
+
+    /// <summary>Fresh native construction from a bounded authored plan; no revision or preview.</summary>
+    public static DockerWorkerProfile Authoring { get; } = new("authoring", 268_435_456, 10,
+        TimeSpan.FromSeconds(10), MappingAuthoringPolicy.MaximumRequestBytes, MappingAuthoringPolicy.MaximumResponseBytes);
+
+    public static DockerWorkerProfile AuthoredPreview { get; } = new("authored-preview", 536_870_912, 30,
+        TimeSpan.FromSeconds(30), MappingAuthoredPreviewPolicy.MaximumRequestBytes, MappingAuthoredPreviewPolicy.MaximumResponseBytes);
+
     /// <summary>Bounded sample preview with explicit input and output documents.</summary>
     public static DockerWorkerProfile Preview { get; } = new("preview", 536_870_912, 30,
         TimeSpan.FromSeconds(30), PreviewPolicy.MaximumRequestBytes, PreviewPolicy.MaximumResponseBytes);
@@ -34,6 +45,8 @@ public sealed class DockerWorkerProfile
     /// <summary>One in-memory invocation of a verified compiled mapping, without a writable filesystem or network.</summary>
     public static DockerWorkerProfile Compiled { get; } = new("compiled", 536_870_912, 30,
         TimeSpan.FromSeconds(30), CompiledRuntimeProtocol.MaximumRequestBytes, CompiledRuntimeProtocol.MaximumResponseBytes);
+    internal static DockerWorkerProfile Pdf { get; } = new("pdf", SpecPdfExtractionProfile.MemoryBytes, SpecPdfExtractionProfile.CpuSeconds,
+        TimeSpan.FromSeconds(SpecPdfExtractionProfile.WallSeconds), SpecPdfWorkerResponse.MaximumSourceBytes, SpecPdfWorkerResponse.MaximumResponseBytes);
     public string Entrypoint => this == Build ? "/weft-build-worker" : this == Compiled ? "/weft-compiled-runtime" : "/ferrule-host";
     public int ProcessLimit => this == Build ? 128 : this == Compiled ? 64 : 16;
     public int FileLimit => this == Build ? 256 : this == Compiled ? 128 : 64;

@@ -9,7 +9,8 @@ public sealed class RegressionReplay
 {
     public RegressionReplay(PreviewTargetSelection target, string currentDateTime, PreviewLimits limits,
         PreviewInputDocument primary, IReadOnlyList<PreviewInputDocument> namedInputs,
-        IReadOnlyList<PreviewParameter> parameters, CancellationToken cancellationToken = default)
+        IReadOnlyList<PreviewParameter> parameters, CancellationToken cancellationToken = default,
+        PreviewExecutionProfile? profile = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(target);
@@ -17,8 +18,17 @@ public sealed class RegressionReplay
         ArgumentNullException.ThrowIfNull(primary);
         ArgumentNullException.ThrowIfNull(namedInputs);
         ArgumentNullException.ThrowIfNull(parameters);
-        if (primary.Name is not null || primary.ByteCount == 0 ||
+        var selectedProfile = profile ?? (primary.XmlMetadata is not null ? PreviewExecutionProfile.XmlDocument :
+            primary.CsvDialect is null ? PreviewExecutionProfile.LegacyJson : PreviewExecutionProfile.CsvDocument);
+        // XML inputs are all explicit and role-valid; no other profile may carry XML metadata.
+        if (namedInputs.Prepend(primary).Any(input => input is not null && (input.XmlMetadata is null) == (selectedProfile == PreviewExecutionProfile.XmlDocument)))
+            throw new RegressionCaseException(RegressionCaseFailure.InvalidInput);
+        if (!Enum.IsDefined(selectedProfile) || primary.Name is not null || selectedProfile != PreviewExecutionProfile.CsvDocument && primary.ByteCount == 0 ||
             !Enum.IsDefined(target.Kind)) throw new RegressionCaseException(RegressionCaseFailure.InvalidInput);
+        if (selectedProfile == PreviewExecutionProfile.CsvDocument && (namedInputs.Count != 0 || target.Kind == PreviewTargetKind.Named))
+            throw new RegressionCaseException(RegressionCaseFailure.InvalidInput);
+        if (selectedProfile != PreviewExecutionProfile.CsvDocument && (primary.CsvDialect is not null || namedInputs.Any(input => input?.CsvDialect is not null)))
+            throw new RegressionCaseException(RegressionCaseFailure.InvalidInput);
         if (target.Kind == PreviewTargetKind.Named) RegressionCaseValues.Name(target.Name!);
         if (limits.MaximumInputBytes is < 1 or > PreviewPolicy.MaximumInputBytes ||
             limits.MaximumOutputBytes is < 1 or > PreviewPolicy.MaximumOutputBytes ||
@@ -71,6 +81,7 @@ public sealed class RegressionReplay
         NamedInputs = Array.AsReadOnly(ownedInputs);
         Parameters = Array.AsReadOnly(ownedParameters);
         InputByteCount = inputBytes;
+        Profile = selectedProfile;
         cancellationToken.ThrowIfCancellationRequested();
     }
 
@@ -81,6 +92,7 @@ public sealed class RegressionReplay
     public IReadOnlyList<PreviewInputDocument> NamedInputs { get; }
     public IReadOnlyList<PreviewParameter> Parameters { get; }
     public int InputByteCount { get; }
+    public PreviewExecutionProfile Profile { get; }
     public override string ToString() => nameof(RegressionReplay);
 }
 

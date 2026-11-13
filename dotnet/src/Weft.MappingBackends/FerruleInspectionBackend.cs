@@ -10,7 +10,7 @@ using Weft.MappingBackends.Workers;
 
 namespace Weft.MappingBackends;
 
-public sealed partial class FerruleInspectionBackend(IInspectionWorkerRunner runner) : IMappingInspectionBackend, IMappingProjectionBackend
+public sealed partial class FerruleInspectionBackend(IInspectionWorkerRunner runner) : IMappingInspectionBackend, IMappingProjectionBackend, Weft.Application.IMappingEditBackend
 {
     public const string ProtocolVersion = "weft.ferrule-host.v1";
     public const string EngineRevision = "dddc4dce6c93f4137fb2aa2a011360d089e0a51b";

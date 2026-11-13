@@ -563,6 +563,29 @@ test("saved fixture keeps lexical values and executes its exact version", async 
   ).toHaveText("{}");
 });
 
+test("an empty legacy primary is rejected before publication and leaves the draft editable", async ({
+  page,
+}) => {
+  const fixture = new RegressionFixture();
+  await fixture.install(page);
+  await panel(page)
+    .getByRole("button", { name: "New test case", exact: true })
+    .click();
+  await panel(page)
+    .getByLabel("Test name", { exact: true })
+    .fill("Missing primary");
+  await panel(page)
+    .getByRole("button", { name: "Save test version", exact: true })
+    .click();
+  await expect(panel(page).getByRole("alert")).toContainText(
+    "Empty input files are allowed only with the explicit CSV/TSV runtime.",
+  );
+  expect(fixture.publications).toHaveLength(0);
+  await expect(
+    panel(page).getByLabel("Test name", { exact: true }),
+  ).toBeEnabled();
+});
+
 test("a saved fixture refreshes the case table without a manual reload", async ({
   page,
 }) => {
@@ -574,6 +597,7 @@ test("a saved fixture refreshes the case table without a manual reload", async (
   await panel(page)
     .getByLabel("Test name", { exact: true })
     .fill("Freshly saved case");
+  await fillPrimaryJson(page);
   await panel(page)
     .getByRole("button", { name: "Save test version", exact: true })
     .click();
@@ -611,6 +635,7 @@ test("recovering a new fixture clears a previously selected run from another cas
   await panel(page)
     .getByLabel("Test name", { exact: true })
     .fill("Recovered new case");
+  await fillPrimaryJson(page);
   await panel(page)
     .getByRole("button", { name: "Save test version", exact: true })
     .click();
@@ -711,6 +736,7 @@ test("lost publication response retries the same immutable request", async ({
   await panel(page)
     .getByLabel("Test name", { exact: true })
     .fill("Original fixture");
+  await fillPrimaryJson(page);
   await panel(page)
     .getByRole("button", { name: "Save test version", exact: true })
     .click();
@@ -868,6 +894,7 @@ test("publication remains busy until its chained case read finishes", async ({
     await panel(page)
       .getByLabel("Test name", { exact: true })
       .fill("Chained fixture");
+    await fillPrimaryJson(page);
     await panel(page)
       .getByRole("button", { name: "Save test version", exact: true })
       .click();
@@ -993,6 +1020,18 @@ test("publication recovery accepts canonical server collection ordering", async 
   await panel(page)
     .getByRole("button", { name: "Add named input", exact: true })
     .click();
+  await expect(
+    panel(page).getByLabel("Input UTF-8 text", { exact: true }),
+  ).toHaveCount(3);
+  await fillPrimaryJson(page);
+  await panel(page)
+    .getByLabel("Input UTF-8 text", { exact: true })
+    .nth(1)
+    .fill('{"source":"zeta"}');
+  await panel(page)
+    .getByLabel("Input UTF-8 text", { exact: true })
+    .nth(2)
+    .fill('{"source":"alpha"}');
   await panel(page)
     .getByLabel("Document name", { exact: true })
     .nth(0)
@@ -1100,6 +1139,13 @@ async function enterDraft(page: Page) {
   const parameter = panel(page).locator(".regression-parameter");
   await parameter.getByLabel("Parameter name").fill("region");
   await parameter.getByLabel("Exact parameter value").fill("west");
+}
+
+async function fillPrimaryJson(page: Page) {
+  await panel(page)
+    .getByLabel("Input UTF-8 text", { exact: true })
+    .first()
+    .fill("{}");
 }
 
 async function expectDraft(page: Page) {

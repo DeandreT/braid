@@ -5,30 +5,38 @@ use std::io::{self, Read, Write};
 use ferrule_mapping::FileCodecError;
 use sha2::{Digest, Sha256};
 
+mod authored_preview;
 pub mod build;
-pub mod decode;
+pub mod csv_document;
 pub mod document_format;
 pub mod document_limits;
 pub mod edi_envelope;
+pub mod edit;
 pub mod framing;
-pub mod inspect;
 pub mod interchange;
 pub mod preview;
-pub mod projection;
-pub mod protocol;
 pub mod sandbox;
-pub mod validation;
 mod x12_syntax;
+pub mod xml_document;
+pub use weft_ferrule_core::{
+    canonical_nonzero_guid, decode, inspect, projection, protocol, valid_context_parts, validation,
+};
 
-use preview::protocol::{DOCUMENT_PREVIEW_PROTOCOL_VERSION, PREVIEW_PROTOCOL_VERSION};
+use preview::protocol::{
+    CSV_PREVIEW_PROTOCOL_VERSION, DOCUMENT_PREVIEW_PROTOCOL_VERSION, PREVIEW_PROTOCOL_VERSION,
+    XML_PREVIEW_PROTOCOL_VERSION,
+};
 use protocol::{
     Failure, MAX_DIAGNOSTICS, MAX_HEADER_BYTES, MAX_ITEMS, MAX_NATIVE_BYTES, MAX_TEXT_BYTES,
-    NativeLocator, PROTOCOL_VERSION, RequestHeader, Response, Revision, WorkerResult, bounded_text,
+    NativeLocator, PROTOCOL_VERSION, RequestHeader, Response, WorkerResult, bounded_text,
 };
 use serde::Deserialize;
 
 pub fn handle_stream(reader: &mut impl Read, writer: &mut impl Write) -> io::Result<()> {
-    let header_bytes = match framing::read_frame(reader, MAX_HEADER_BYTES) {
+    let header_bytes = match framing::read_frame(
+        reader,
+        MAX_HEADER_BYTES.max(authored_preview::MAX_HEADER_BYTES),
+    ) {
         Ok(bytes) => bytes,
         Err(message) => {
             return framing::write_response(
@@ -37,11 +45,36 @@ pub fn handle_stream(reader: &mut impl Read, writer: &mut impl Write) -> io::Res
             );
         }
     };
+    if let Some(result) = authored_preview::try_handle(&header_bytes, reader, writer) {
+        return result;
+    }
+    // Keep legacy header admission unchanged if the independent route's cap
+    // ever grows. Its native/sample frames are read only by its own handler.
+    if header_bytes.len() > MAX_HEADER_BYTES {
+        return framing::write_response(
+            writer,
+            &Response::failure(
+                None,
+                "invalidFrame",
+                "A frame length exceeds its admitted range.",
+            ),
+        );
+    }
     // Select independent bounded request shapes before native inspection.
     #[derive(Deserialize)]
     struct ProtocolProbe {
         #[serde(rename = "protocolVersion")]
         protocol_version: Option<String>,
+    }
+    if serde_json::from_slice::<ProtocolProbe>(&header_bytes).is_ok_and(|probe| {
+        probe.protocol_version.as_deref() == Some(weft_ferrule_core::authoring::transport::PROTOCOL)
+    }) {
+        return weft_ferrule_core::authoring::transport::handle(&header_bytes, reader, writer);
+    }
+    if serde_json::from_slice::<ProtocolProbe>(&header_bytes)
+        .is_ok_and(|probe| probe.protocol_version.as_deref() == Some(edit::PROTOCOL))
+    {
+        return edit::handle(&header_bytes, reader, writer);
     }
     if serde_json::from_slice::<ProtocolProbe>(&header_bytes)
         .is_ok_and(|probe| probe.protocol_version.as_deref() == Some(interchange::PROTOCOL))
@@ -56,7 +89,12 @@ pub fn handle_stream(reader: &mut impl Read, writer: &mut impl Write) -> io::Res
     if serde_json::from_slice::<ProtocolProbe>(&header_bytes).is_ok_and(|probe| {
         matches!(
             probe.protocol_version.as_deref(),
-            Some(PREVIEW_PROTOCOL_VERSION | DOCUMENT_PREVIEW_PROTOCOL_VERSION)
+            Some(
+                PREVIEW_PROTOCOL_VERSION
+                    | DOCUMENT_PREVIEW_PROTOCOL_VERSION
+                    | CSV_PREVIEW_PROTOCOL_VERSION
+                    | XML_PREVIEW_PROTOCOL_VERSION
+            )
         )
     }) {
         return preview::handle_preview(&header_bytes, reader, writer);
@@ -204,48 +242,4 @@ fn valid_context(header: &RequestHeader) -> bool {
         &header.native_digest,
         &header.document_id,
     )
-}
-
-pub(crate) fn valid_context_parts(
-    request_id: &str,
-    revision: &Revision,
-    native_digest: &str,
-    document_id: &str,
-) -> bool {
-    [
-        request_id,
-        &revision.organization_id,
-        &revision.project_id,
-        &revision.mapping_id,
-        &revision.revision_id,
-    ]
-    .into_iter()
-    .all(canonical_nonzero_guid)
-        && native_digest.len() == 64
-        && native_digest
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-        && valid_document_id(document_id)
-}
-
-fn canonical_nonzero_guid(value: &str) -> bool {
-    value.len() == 36
-        && value != "00000000-0000-0000-0000-000000000000"
-        && value.bytes().enumerate().all(|(index, byte)| {
-            if matches!(index, 8 | 13 | 18 | 23) {
-                byte == b'-'
-            } else {
-                byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)
-            }
-        })
-}
-
-fn valid_document_id(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 128
-        && !value.contains("..")
-        && value.as_bytes()[0].is_ascii_alphanumeric()
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
 }

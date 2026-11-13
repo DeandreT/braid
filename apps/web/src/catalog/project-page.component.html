@@ -97,6 +97,26 @@
           <dd>{{ view.project.access.role }}</dd>
         </div>
       </dl>
+      <weft-creation-entry [scope]="view.project.scope" [context]="context()" />
+      <section aria-label="Specification intake">
+        <h2>Specification documents</h2>
+        <p>
+          Capture text and JSON reference documents, inspect extraction
+          citations, and manage retained sources. Availability and content
+          permissions are checked separately from project metadata access.
+        </p>
+        <a
+          class="catalog-button"
+          [routerLink]="[
+            '/catalog/organizations',
+            view.project.scope.organizationId,
+            'projects',
+            view.project.scope.projectId,
+            'specs',
+          ]"
+          >Open specification intake</a
+        >
+      </section>
       <details class="catalog-details">
         <summary>Project details</summary>
         <dl class="catalog-facts">

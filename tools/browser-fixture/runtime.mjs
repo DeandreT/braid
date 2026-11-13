@@ -480,6 +480,7 @@ export async function runBrowserFixture(definition) {
       ["weft_session_writer", "SESSION_WRITER"],
       ["weft_chat_reader", "CHAT_READER"],
       ["weft_chat_writer", "CHAT_WRITER"],
+      ["weft_chat_approver", "CHAT_APPROVER"],
       ["weft_chat_lifecycle", "CHAT_LIFECYCLE"],
       ["weft_preview_reader", "PREVIEW_READER"],
       ["weft_preview_writer", "PREVIEW_WRITER"],
@@ -502,6 +503,8 @@ export async function runBrowserFixture(definition) {
       ["weft_invocation_writer", "INVOCATION_WRITER"],
       ["weft_api_audit_writer", "API_AUDIT_WRITER"],
       ["weft_administration", "ADMINISTRATION"],
+      ["weft_draft_reader", "DRAFT_READER"],
+      ["weft_draft_writer", "DRAFT_WRITER"],
     ];
     const roleEnvironment = { ...process.env };
     for (const key of Object.keys(roleEnvironment))

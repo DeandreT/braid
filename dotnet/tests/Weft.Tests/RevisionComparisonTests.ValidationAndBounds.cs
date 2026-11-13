@@ -617,6 +617,7 @@ public sealed partial class RevisionComparisonTests
         var side = left.Side();
         var result = new RevisionComparisonService().Compare(side, right.Side());
         var item = Item(result, ComparisonEntityV1.Rule, "L.rule");
+        Assert.NotNull(result.Left.Projection);
         foreach (var text in new[] { side.ToString(), result.ToString(), result.Left.ToString(), result.Left.Projection.ToString(),
             item.ToString(), Assert.Single(item.Left).ToString() })
         {

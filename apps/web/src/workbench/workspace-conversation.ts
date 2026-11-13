@@ -66,4 +66,16 @@ export class WorkspaceConversation {
     this.requestVersion.update((value) => value + 1);
     if (!this.opened()) this.open();
   }
+  async prepareQuestion(
+    text: string,
+    isCurrent: () => boolean,
+  ): Promise<boolean> {
+    this.open();
+    const panel = this.panel();
+    if (!panel || this.streaming()) return false;
+    return panel.prepareWorkspaceQuestion(
+      text,
+      () => this.panel() === panel && isCurrent(),
+    );
+  }
 }

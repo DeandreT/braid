@@ -7,7 +7,7 @@ internal static partial class ChatSchemaContract
     internal static async Task ValidateAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
         ChatDatabaseProfile profile, CancellationToken ct)
     {
-        _ = Source.Value; _ = WorkspaceSource.Value;
+        _ = Source.Value; _ = WorkspaceSource.Value; _ = MappingWriteSource.Value; _ = WriteJournalSource.Value; _ = EditProposalSource.Value;
         // Reader also needs the tombstone relation protected without a tombstone
         // SELECT/listing grant. All profiles receive only this bounded lock capability.
         {
@@ -31,7 +31,7 @@ internal static partial class ChatSchemaContract
             locks.Add(("revision_derivations", "cache_entry_id"));
             locks.Add(("revision_derivation_attempts", "derivation_id"));
         }
-        foreach (var (table, column) in profile == ChatDatabaseProfile.Lifecycle ? new List<(string Table, string Column)>() : locks)
+        foreach (var (table, column) in profile is ChatDatabaseProfile.Lifecycle or ChatDatabaseProfile.Approver ? new List<(string Table, string Column)>() : locks)
         {
             await using var protect = new NpgsqlCommand($"SELECT {column} FROM ONLY weft.{table} WHERE false", connection, transaction);
             await protect.ExecuteNonQueryAsync(ct);
@@ -60,6 +60,8 @@ internal static partial class ChatSchemaContract
                 await ValidateIndexesAsync(connection, transaction, table, ct);
             }
         }
+        foreach (var name in new[] { "mappings", "mapping_revisions", "revision_ingestions" })
+            await CatalogRoleGuard.ValidateTransitionAsync(connection, transaction, CatalogSchemaContract.Tables[name], ct);
         await ValidateFunctionsAsync(connection, transaction, ct);
         await ValidateTriggersAsync(connection, transaction, ct);
         await ValidateGrantsAsync(connection, transaction, ct);
@@ -69,7 +71,14 @@ internal static partial class ChatSchemaContract
     {
         var expected = MigrationRunner.EmbeddedMigrations;
         var workspace = WorkspaceMigrationVersion;
-        if (expected.Count < workspace || expected[10].Checksum != MigrationChecksum || expected[workspace - 1].Checksum != WorkspaceMigrationChecksum ||
+        var writes = MappingWriteMigrationVersion;
+        var writeJournal = WriteJournalMigrationVersion;
+        if (expected.Count < writes || expected[10].Checksum != MigrationChecksum || expected[workspace - 1].Checksum != WorkspaceMigrationChecksum ||
+            expected[writes - 1].Checksum != MappingWriteMigrationChecksum || expected.Count < writeJournal || expected[writeJournal - 1].Checksum != WriteJournalMigrationChecksum ||
+            expected.SingleOrDefault(script => script.Version == 43)?.Checksum != EditProposalMigrationChecksum ||
+            expected.SingleOrDefault(script => script.Version == 44)?.Checksum != DocumentEvidenceSchemaAdmission.SpecChecksum ||
+            expected.SingleOrDefault(script => script.Version == 45)?.Checksum != DocumentEvidenceSchemaAdmission.CreationChecksum ||
+            expected.SingleOrDefault(script => script.Version == 46)?.Checksum != DocumentEvidenceSchemaAdmission.MigrationChecksum ||
             !expected.Take(10).Select(script => script.Checksum).SequenceEqual(PrefixChecksums, StringComparer.Ordinal)) throw Refusal();
         await using var command = new NpgsqlCommand("SELECT version,checksum FROM ONLY weft.schema_migrations ORDER BY version", connection, transaction);
         await using var reader = await command.ExecuteReaderAsync(ct);
@@ -189,23 +198,35 @@ internal static partial class ChatSchemaContract
     }
 
     private sealed record Trigger(string Function, short Type, bool Deferred = false);
-    private static async Task ValidateTriggersAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct)
+    private static async Task ValidateTriggersAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct,
+        IEnumerable<string>? selected = null)
     {
-        foreach (var table in ChatTables)
+        foreach (var table in selected ?? ChatTables)
         {
             var conversation = table == "chat_conversations";
             var identity = table == "chat_identities";
-            var audit = table == "chat_payload_audit";
-            var function = audit ? "guard_chat_payload_audit" : identity ? "guard_chat_identity" : conversation ? "guard_chat_conversation" : "guard_chat_child";
+            var audit = table is "chat_payload_audit" or "chat_mapping_write_audit";
+            var function = audit ? "guard_" + table : identity ? "guard_chat_identity" : conversation ? "guard_chat_conversation" : "guard_chat_child";
             var expected = new Dictionary<string, Trigger>(StringComparer.Ordinal)
             {
-                // The append-only audit refuses UPDATE/DELETE (27); the ledger guards also see INSERT (31).
-                [audit ? "chat_payload_audit_guard" : identity ? "chat_identity_guard" : conversation ? "chat_conversation_guard" : "chat_child_guard"] = new(function, (short)(audit ? 27 : 31)),
-                [audit ? "chat_payload_audit_truncate" : identity ? "chat_identity_truncate" : conversation ? "chat_conversation_truncate" : "chat_child_truncate"] = new(function, 34)
+                // The append-only audits refuse UPDATE/DELETE (27); the ledger guards also see INSERT (31).
+                [audit ? table + "_guard" : identity ? "chat_identity_guard" : conversation ? "chat_conversation_guard" : "chat_child_guard"] = new(function, (short)(audit ? 27 : 31)),
+                [audit ? table + "_truncate" : identity ? "chat_identity_truncate" : conversation ? "chat_conversation_truncate" : "chat_child_truncate"] = new(function, 34)
             };
+            if (table is "chat_mapping_write_intents" or "chat_mapping_write_content" or "chat_mapping_write_commits" or "chat_edit_proposals" or "chat_edit_content" or "chat_edit_approvals")
+            {
+                expected.Clear();
+                expected.Add(table + "_guard", new(table is "chat_mapping_write_content" or "chat_edit_content" ? "guard_chat_mapping_write_content" : "guard_chat_mapping_write_audit", 27));
+                expected.Add(table + "_truncate", new(table is "chat_mapping_write_content" or "chat_edit_content" ? "guard_chat_mapping_write_content" : "guard_chat_mapping_write_audit", 34));
+                audit = true;
+            }
             if (identity) expected.Add("chat_identity_erasure", new("check_chat_identity_erasure", 17, true));
             else if (!conversation && !audit) expected.Add("chat_counters", new("check_chat_counters", 21, true));
-            if (table == "chat_events") expected.Add("chat_payload_audit", new("audit_chat_payload", 5));
+            if (table == "chat_events")
+            {
+                expected.Add("chat_payload_audit", new("audit_chat_payload", 5));
+                expected.Add("chat_mapping_write_audit", new("audit_chat_mapping_write", 5));
+            }
             await using var command = new NpgsqlCommand("""
                 SELECT t.tgname,t.tgtype,t.tgenabled::text,t.tgnargs,t.tgattr::text,t.tgqual IS NULL,
                     t.tgdeferrable,t.tginitdeferred,t.tgoldtable IS NULL AND t.tgnewtable IS NULL,
@@ -229,18 +250,20 @@ internal static partial class ChatSchemaContract
         }
     }
 
-    private static async Task ValidateGrantsAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct)
+    private static async Task ValidateGrantsAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct,
+        string[]? selected = null)
     {
+        var tables = selected ?? ChatTables;
         var expected = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var table in ChatTables)
+        foreach (var table in tables)
             foreach (var privilege in new[] { "SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER" })
                 expected.Add(table + "||weft_migrator|" + privilege);
-        expected.Add("chat_conversations||weft_chat_writer|DELETE");
+        if (tables.Contains("chat_conversations", StringComparer.Ordinal)) expected.Add("chat_conversations||weft_chat_writer|DELETE");
         foreach (var profile in new[] { ChatDatabaseProfile.Reader, ChatDatabaseProfile.Writer })
             foreach (var grant in ColumnGrants(profile))
             {
                 var parts = grant.Split('|');
-                if (ChatTables.Contains(parts[0], StringComparer.Ordinal)) expected.Add(parts[0] + "|" + parts[1] + "|" + ChatRoleGuard.RoleName(profile) + "|" + parts[2]);
+                if (tables.Contains(parts[0], StringComparer.Ordinal)) expected.Add(parts[0] + "|" + parts[1] + "|" + ChatRoleGuard.RoleName(profile) + "|" + parts[2]);
             }
         await using var command = new NpgsqlCommand("""
             SELECT r.relname::text,NULL::text,role.rolname,a.privilege_type,a.grantor=r.relowner AND NOT a.is_grantable
@@ -251,7 +274,7 @@ internal static partial class ChatSchemaContract
             CROSS JOIN LATERAL pg_catalog.aclexplode(c.attacl) a LEFT JOIN pg_catalog.pg_roles role ON role.oid=a.grantee
             WHERE r.relnamespace='weft'::regnamespace AND r.relname=ANY($1::text[])
             """, connection, transaction);
-        command.Parameters.AddWithValue(ChatTables);
+        command.Parameters.AddWithValue(tables);
         await using var reader = await command.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
             if (reader.IsDBNull(2) || !reader.GetBoolean(4) || !expected.Remove(reader.GetString(0) + "|" + (reader.IsDBNull(1) ? "" : reader.GetString(1)) + "|" + reader.GetString(2) + "|" + reader.GetString(3))) throw Refusal();

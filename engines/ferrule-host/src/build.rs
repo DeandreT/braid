@@ -9,9 +9,13 @@ pub const PROTOCOL: &str = "weft.ferrule-build.v1";
 pub const PROFILE: &str = "weft.ferrule-csharp-json.v1";
 pub const DOCUMENT_PROFILE: &str = "weft.ferrule-csharp-document.v1";
 pub const X12_INTERCHANGES_PROFILE: &str = "weft.ferrule-csharp-x12-interchanges.v1";
+pub const CSV_PROFILE: &str = "weft.ferrule-csharp-csv.v1";
 
 fn document_profile(profile: &str) -> bool {
-    matches!(profile, DOCUMENT_PROFILE | X12_INTERCHANGES_PROFILE)
+    matches!(
+        profile,
+        DOCUMENT_PROFILE | X12_INTERCHANGES_PROFILE | CSV_PROFILE
+    )
 }
 pub const MAX_SOURCE_BYTES: usize = 32 * 1024 * 1024;
 
@@ -32,6 +36,8 @@ pub struct Boundary {
     pub kind: &'static str,
     pub name: Option<String>,
     pub format: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub csv_dialect: Option<crate::csv_document::CsvDialect>,
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -74,7 +80,9 @@ pub fn handle(header: &[u8], reader: &mut impl Read, writer: &mut impl Write) ->
         native_digest: request.as_ref().map(|r| r.native_digest.as_str()),
         intent_digest: request.as_ref().map(|r| r.intent_digest.as_str()),
         engine_revision: ENGINE_REVISION,
-        profile: if request
+        profile: if request.as_ref().is_some_and(|r| r.profile == CSV_PROFILE) {
+            CSV_PROFILE
+        } else if request
             .as_ref()
             .is_some_and(|r| r.profile == X12_INTERCHANGES_PROFILE)
         {
@@ -118,7 +126,7 @@ pub fn generate(
     if request.protocol_version != PROTOCOL
         || !matches!(
             request.profile.as_str(),
-            PROFILE | DOCUMENT_PROFILE | X12_INTERCHANGES_PROFILE
+            PROFILE | DOCUMENT_PROFILE | X12_INTERCHANGES_PROFILE | CSV_PROFILE
         )
         || !matches!(request.operation.as_str(), "inspect" | "compile")
         || !valid_context_parts(
@@ -140,10 +148,27 @@ pub fn generate(
     }
     let decoded = decode::decode_native(native).map_err(|_| "invalidMapping")?;
     let project = &decoded.project;
+    let csv_policy = if request.profile == CSV_PROFILE {
+        Some(crate::csv_document::admit(project).map_err(|_| "unsupportedCsvPlan")?)
+    } else {
+        None
+    };
     use crate::preview::admission::plain_json;
     let format = |options: &ferrule_mapping::FormatOptions, path: Option<&str>| {
         if document_profile(&request.profile) {
             crate::document_format::DocumentFormat::from_options(options)
+                .and_then(|value| {
+                    let csv = matches!(
+                        value,
+                        crate::document_format::DocumentFormat::Csv
+                            | crate::document_format::DocumentFormat::Tsv
+                    );
+                    if csv == (request.profile == CSV_PROFILE) {
+                        Ok(value)
+                    } else {
+                        Err(crate::document_format::FormatRefusal::UnsupportedFamily)
+                    }
+                })
                 .map(|value| value.id())
                 .map_err(|_| "unsupported")
         } else if plain_json(options, path) {
@@ -162,6 +187,14 @@ pub fn generate(
         kind: "primaryInput",
         name: None,
         format: format(&project.source_options, project.source_path.as_deref())?,
+        csv_dialect: if request.profile == CSV_PROFILE {
+            Some(
+                crate::csv_document::CsvDialect::from_options(&project.source_options)
+                    .map_err(|_| "unsupportedCsvPlan")?,
+            )
+        } else {
+            None
+        },
     }];
     let mut names = std::collections::BTreeSet::new();
     for source in &project.extra_sources {
@@ -172,12 +205,21 @@ pub fn generate(
             kind: "namedInput",
             name: Some(source.name.clone()),
             format: format(&source.options, Some(&source.path))?,
+            csv_dialect: None,
         });
     }
     boundaries.push(Boundary {
         kind: "primaryOutput",
         name: None,
         format: format(&project.target_options, project.target_path.as_deref())?,
+        csv_dialect: if request.profile == CSV_PROFILE {
+            Some(
+                crate::csv_document::CsvDialect::from_options(&project.target_options)
+                    .map_err(|_| "unsupportedCsvPlan")?,
+            )
+        } else {
+            None
+        },
     });
     names.clear();
     for target in &project.extra_targets {
@@ -189,6 +231,7 @@ pub fn generate(
             kind: "namedOutput",
             name: Some(target.name.clone()),
             format: format(&target.options, target.path.as_deref())?,
+            csv_dialect: None,
         });
     }
     let program = ferrule_codegen::lower(project).map_err(|_| "unsupported")?;
@@ -197,7 +240,10 @@ pub fn generate(
     {
         return Err("unsupported");
     }
-    let artifacts = if document_profile(&request.profile)
+    let artifacts = if let Some(policy) = csv_policy {
+        ferrule_codegen_csharp::emit_with_csv_document_adapters(&program, &policy)
+            .map_err(|_| "unsupportedCsvPlan")?
+    } else if document_profile(&request.profile)
         && boundaries.iter().any(|boundary| boundary.format != "json")
     {
         let options = |options: &ferrule_mapping::FormatOptions| {
@@ -219,6 +265,8 @@ pub fn generate(
                 DocumentFormat::Edifact => EdifactBoundaryOptions::from_format_options(options)
                     .map(DocumentBoundaryOptions::Edifact)
                     .map_err(|_| "unsupported"),
+                DocumentFormat::Csv | DocumentFormat::Tsv => Err("unsupportedCsvPlan"),
+                DocumentFormat::Xml => Err("unsupportedXmlBuild"),
             }
         };
         let policy = ferrule_codegen::StaticDocumentBoundaryPolicy {
@@ -251,7 +299,7 @@ pub fn generate(
         ferrule_codegen_csharp::emit(&program).map_err(|_| "unsupported")?
     };
     let mut files = artifacts.into_files();
-    if document_profile(&request.profile) {
+    if document_profile(&request.profile) && request.profile != CSV_PROFILE {
         // This host-owned metadata carries only admitted syntax, not mapping logic.
         // It also covers headerless output from an optional-envelope X12 schema.
         let segment = |options: &ferrule_mapping::FormatOptions| {

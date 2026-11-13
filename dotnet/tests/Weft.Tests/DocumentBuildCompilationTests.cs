@@ -11,6 +11,11 @@ public sealed class DocumentBuildCompilationTests
     [InlineData(BuildWorkerProtocol.X12InterchangesProfile, "GeneratedMapping.Documents.cs", true)]
     [InlineData(BuildWorkerProtocol.Profile, "GeneratedMapping.Documents.cs", false)]
     [InlineData(BuildWorkerProtocol.DocumentProfile, "Arbitrary.cs", false)]
+    [InlineData(BuildWorkerProtocol.CsvProfile, "GeneratedMapping.Csv.cs", true)]
+    [InlineData(BuildWorkerProtocol.CsvProfile, "GeneratedMapping.CsvDocument.cs", true)]
+    [InlineData(BuildWorkerProtocol.CsvProfile, "GeneratedMapping.Documents.cs", false)]
+    [InlineData(BuildWorkerProtocol.DocumentProfile, "GeneratedMapping.CsvDocument.cs", false)]
+    [InlineData(BuildWorkerProtocol.CsvProfile, "GeneratedMapping.Csv.Custom.cs", false)]
     public async Task Only_the_document_profile_admits_the_fixed_document_companion(string profile, string companion, bool admitted)
     {
         var root = Directory.CreateTempSubdirectory("weft-document-compilation-").FullName;

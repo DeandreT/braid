@@ -1,11 +1,14 @@
 import { expect, test } from "@playwright/test";
 import { isReturnPath } from "../src/auth/return-path";
+import { mappingUpdateQuestion } from "../src/chat/mapping-update-question";
 import {
   citationLink,
   organizationConversation,
   workspaceAvailability,
   workspaceCitation,
   workspaceEvent,
+  mappingWriteReceipts,
+  type MappingWriteEvent,
 } from "../src/chat/workspace-chat-types";
 
 const org = "10000000-0000-4000-8000-000000000001";
@@ -27,6 +30,75 @@ const base = {
   version: null,
   sectionId: null,
 };
+
+test("Update carries the actual selected edit without depending on retained model history", () => {
+  const turn = { turnId: id, text: "Set the selected code to 🧵." };
+  const proposal: MappingWriteEvent = {
+    type: "mapping.write",
+    sequence: 7,
+    roundId: id,
+    outcome: "proposed",
+    reason: "outOfDate",
+    baseRevision: scope,
+    baseSequence: "2",
+    revisionId: null,
+    revisionSequence: null,
+    headRevisionId: id,
+    headSequence: "4",
+    operationCount: 1,
+    changes: [{ field: "code", before: "Not mapped", after: 'Constant "🧵"' }],
+    changesTruncated: false,
+  };
+  const question = mappingUpdateQuestion(turn, proposal, 32768)!;
+  const data = JSON.parse(question.slice(question.indexOf("\n") + 1));
+  expect(data.originalQuestion).toBe(turn.text);
+  expect(data.selectedChanges).toEqual(proposal.changes);
+  expect(data.baseRevision).toEqual(scope);
+  expect(data.sourceTurnId).toBe(turn.turnId);
+  expect(data.eventSequence).toBe(7);
+  const bytes = new TextEncoder().encode(question).byteLength;
+  expect(mappingUpdateQuestion(turn, proposal, bytes)).toBe(question);
+  expect(mappingUpdateQuestion(turn, proposal, bytes - 1)).toBeNull();
+  expect(
+    mappingUpdateQuestion(
+      { ...turn, text: "x".repeat(32768) },
+      proposal,
+      32768,
+    ),
+  ).toBeNull();
+  expect(
+    mappingUpdateQuestion(turn, { ...proposal, headRevisionId: null }, 32768),
+  ).toBeNull();
+  expect(
+    mappingUpdateQuestion(turn, { ...proposal, reason: "notPermitted" }, 32768),
+  ).toBeNull();
+  expect(
+    mappingUpdateQuestion(turn, { ...proposal, changesTruncated: true }, 32768),
+  ).toBeNull();
+  expect(
+    mappingUpdateQuestion(turn, { ...proposal, changes: [] }, 32768),
+  ).toBeNull();
+});
+
+test("durable save statuses never infer a success from a pending, malformed or foreign receipt", () => {
+  const pending = { requestId: id, status: "pending", write: null };
+  expect(mappingWriteReceipts({ receipts: [pending] }, org)).toEqual([pending]);
+  expect(
+    mappingWriteReceipts({ receipts: [{ ...pending, status: "saved" }] }, org),
+  ).toBeNull();
+  expect(
+    mappingWriteReceipts(
+      { receipts: [{ ...pending, status: "complete" }] },
+      org,
+    ),
+  ).toBeNull();
+  expect(
+    mappingWriteReceipts({ receipts: [pending, pending] }, org),
+  ).toBeNull();
+  expect(
+    mappingWriteReceipts({ receipts: Array(9).fill(pending) }, org),
+  ).toBeNull();
+});
 
 test("workspace conversation guards distinguish legacy pins from optional focus and bind the organization", () => {
   const c = {
@@ -167,6 +239,13 @@ test("every citation kind has a closed, same-organization shape and a concrete a
       version: "1",
     },
     { ...base, kind: "guideSection", sectionId: "chat" },
+    {
+      ...base,
+      kind: "creationProposal",
+      projectId: id,
+      subjectId: id,
+      proposalFingerprint: "a".repeat(64),
+    },
   ];
   for (const c of values) {
     expect(workspaceCitation(c, org), c.kind).toBe(true);
@@ -219,6 +298,77 @@ test("retained field and rule citations preserve exact report and UTF-8 resource
     expect(link).toContain(`#${kind}:field%2F%C3%A9%231`);
     expect(isReturnPath(link)).toBe(true);
   }
+});
+
+test("creation citations link only exact project-owned proposals with a canonical fingerprint", () => {
+  const citation = {
+    ...base,
+    kind: "creationProposal",
+    projectId: id,
+    subjectId: id,
+    proposalFingerprint: "ab".repeat(32),
+  };
+  expect(workspaceCitation(citation, org)).toBe(true);
+  if (!workspaceCitation(citation, org))
+    throw new Error("Invalid authored citation");
+  expect(citationLink(citation)).toBe(
+    `/catalog/organizations/${org}/projects/${id}/creation/${id}?fingerprint=${"ab".repeat(32)}`,
+  );
+  expect(
+    workspaceEvent(
+      { sequence: 1, roundId: id, type: "workspace.citation", citation },
+      org,
+    ),
+  ).toBe(true);
+  for (const change of [
+    { proposalFingerprint: null },
+    { proposalFingerprint: undefined },
+    { proposalFingerprint: "A".repeat(64) },
+    { proposalFingerprint: "a".repeat(63) },
+    { proposalFingerprint: "a".repeat(64) + "&approve=true" },
+    { projectId: null },
+    { subjectId: null },
+    { mappingId: id },
+    { revisionId: id },
+    { version: "1" },
+    { sectionId: "chat" },
+    { reportDerivationId: id },
+    { target: { kind: "field", resourceId: "f", diagnosticOrdinal: null } },
+  ])
+    expect(workspaceCitation({ ...citation, ...change }, org)).toBe(false);
+  expect(
+    workspaceCitation({ ...citation, kind: "project", subjectId: null }, org),
+  ).toBe(false);
+});
+
+test("specification disclosure admits the bounded tool payload without widening other disclosure kinds", () => {
+  const shared = {
+    sequence: 1,
+    roundId: id,
+    type: "data.shared",
+    projectId: id,
+    subjectId: id,
+    source: "specification",
+    version: null,
+    bytes: 12288,
+  };
+  expect(workspaceEvent(shared, org)).toBe(true);
+  expect(workspaceEvent({ ...shared, bytes: 8193 }, org)).toBe(true);
+  for (const change of [
+    { bytes: 12289 },
+    { bytes: 0 },
+    { bytes: -1 },
+    { bytes: 1.5 },
+    { bytes: "12" },
+    { projectId: null },
+    { subjectId: null },
+    { version: "1" },
+    { source: "unknown" },
+  ])
+    expect(workspaceEvent({ ...shared, ...change }, org)).toBe(false);
+  expect(workspaceEvent({ ...shared, source: "previewOutput" }, org)).toBe(
+    false,
+  );
 });
 
 test("workspace streams reject legacy report frames, invalid disclosure sizes and forged citations", () => {

@@ -57,6 +57,34 @@ project, a mapping in this project or a mapping you opened recently.
 **Download exact bytes** saves a document exactly as Weft stored it. Long
 documents are shortened on screen, but the download is always complete.
 
+## CSV and TSV document display
+
+CSV/TSV documents with valid recorded native dialect metadata open as a **Table**.
+Choose **Raw text** to inspect their original text. Header settings come from
+that metadata, not a filename or a guess at the first row. Cells stay in source
+order without trimming, type conversion or padding missing cells.
+
+The browser checks the complete document before showing a table, including rows
+it will not display. Its limits are:
+
+| Display limit | Maximum |
+| --- | --- |
+| Document bytes | 1 MiB |
+| Encoded cell content | 64 KiB |
+| Records, including a declared header | 10,000 |
+| Columns per record | 256 |
+| Parsed nodes, one per record and per cell | 100,000 |
+| Data rows shown | 200 |
+
+These are display limits, not execution limits. Native CSV execution allows up
+to 8 MiB per document, 1 MiB per cell, 100,000 records, 256 columns and 1,000,000
+materialized nodes; a run's configured limits may be lower. If the browser cannot
+show a table because of its limits, invalid bytes or missing or invalid dialect
+metadata, it explains the reason and keeps a bounded raw text or hex view.
+Raw text shows at most the first 64 KiB; the hex fallback shows at most 1 KiB.
+Downloads and regression comparisons use the original complete bytes, not the
+displayed table or shortened text.
+
 ## Read the mapping table
 
 The **Data mapping** view lists field connections: each **Incoming field**, the

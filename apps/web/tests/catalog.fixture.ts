@@ -613,6 +613,7 @@ export const synthetic = (() => {
     createProjects: false,
     deriveReports: false,
     editMetadata: false,
+    edit: false,
     manageMembership: false,
     preview: false,
     readReports: false,
@@ -622,7 +623,7 @@ export const synthetic = (() => {
   const context: components["schemas"]["CatalogContextV1"] = {
     actorPrincipalId: actor,
     allowedOrganizationId: org,
-    features: { ...featureActions, readCatalog: true },
+    features: { ...featureActions, readCatalog: true, xmlPreview: false },
     mode: "development",
     organizationActions: { createProjects: false },
     organizationName: "Synthetic UI boundary organization",

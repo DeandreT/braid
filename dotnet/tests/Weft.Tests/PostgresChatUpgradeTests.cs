@@ -1,5 +1,7 @@
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Npgsql;
 using Weft.Application;
 using Weft.Domain;
@@ -12,6 +14,7 @@ namespace Weft.Tests;
 [Collection(PostgresCollection.Name)]
 public sealed class PostgresChatUpgradeTests(PostgresFixture fixture)
 {
+    private static readonly ConditionalWeakTable<byte[], Dictionary<string, byte[]>> SnapshotParts = new();
     [PostgresFact]
     public async Task FreshConcurrentAndRepeatedInstallationKeepsExactHistoryAndAcknowledgedChatRows()
     {
@@ -243,34 +246,48 @@ public sealed class PostgresChatUpgradeTests(PostgresFixture fixture)
         if (installed) Assert.True(await CatalogSearchUpgradeTestSupport.AdmitAsync(test));
         await using var connection = PostgresChatSecurityTests.Open(test.MigrationConnectionString); await connection.OpenAsync();
         var text = new StringBuilder();
+        var parts = new Dictionary<string, byte[]>();
         foreach (var table in PostgresServerSessionUpgradeConservation.PrefixTables.Append("server_sessions"))
         {
             await using var rows = new NpgsqlCommand($"SELECT coalesce(jsonb_agg(to_jsonb(x) ORDER BY to_jsonb(x)::text),'[]'::jsonb)::text FROM weft.{table} x" + (table == "schema_migrations" ? " WHERE version<=10" : ""), connection);
-            text.Append(Assert.IsType<string>(await rows.ExecuteScalarAsync()));
+            var rowText = Assert.IsType<string>(await rows.ExecuteScalarAsync());
+            text.Append(rowText);
+            parts["rows:" + table] = SHA256.HashData(Encoding.UTF8.GetBytes(rowText));
         }
         await using var schema = new NpgsqlCommand(SnapshotSql, connection);
         schema.Parameters.AddWithValue(PostgresServerSessionUpgradeConservation.PrefixTables.Append("server_sessions").ToArray());
         schema.Parameters.AddWithValue(installed);
-        schema.Parameters.AddWithValue(new[] { ChatDatabaseProfile.Reader, ChatDatabaseProfile.Writer, ChatDatabaseProfile.Lifecycle }.SelectMany(p => ChatSchemaContract.ColumnGrants(p)
+        schema.Parameters.AddWithValue(new[] { ChatDatabaseProfile.Reader, ChatDatabaseProfile.Writer, ChatDatabaseProfile.Lifecycle, ChatDatabaseProfile.Approver }.SelectMany(p => ChatSchemaContract.ColumnGrants(p)
             .Select(g => g + "|" + ChatRoleGuard.RoleName(p))).ToArray());
         schema.Parameters.AddWithValue(ChatSchemaContract.FunctionNames);
         schema.Parameters.AddWithValue(PreviewSchemaTestContract.FunctionNames.Concat(RegressionSchemaTestContract.Functions).Concat(InterchangeSchemaTestContract.Functions).Append("index_catalog_report").ToArray());
         schema.Parameters.AddWithValue(PreviewSchemaTestContract.Roles.Concat(RegressionSchemaTestContract.Roles).Append("weft_account_display").ToArray());
-        schema.Parameters.AddWithValue(PreviewSchemaTestContract.ParentForeignKeys);
+        schema.Parameters.AddWithValue(PreviewSchemaTestContract.ParentForeignKeys.Concat(MappingDraftSchemaTestContract.PreviewParentForeignKeys).ToArray());
         schema.Parameters.AddWithValue(RegressionSchemaTestContract.Tables.Concat(InterchangeSchemaTestContract.Tables).Append("catalog_search_report_index").Append("account_display_metadata").ToArray());
         schema.Parameters.AddWithValue(CatalogSearchSchemaAdmission.IndexNames);
-        schema.Parameters.AddWithValue(AutomationSchemaAdmission.AllTriggerNames);
-        text.Append(Assert.IsType<string>(await schema.ExecuteScalarAsync()));
-        return SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString()));
+        // 0040 and 0045 each add exactly one named trigger to the old revision_ingestions relation.
+        schema.Parameters.AddWithValue(AutomationSchemaAdmission.AllTriggerNames.Append("chat_mapping_write_commit").Append("revision_ingestions_creation_guard").ToArray());
+        var schemaText = Assert.IsType<string>(await schema.ExecuteScalarAsync());
+        text.Append(schemaText);
+        using var document = JsonDocument.Parse(schemaText);
+        foreach (var property in document.RootElement.EnumerateObject()) parts["schema:" + property.Name] = SHA256.HashData(Encoding.UTF8.GetBytes(property.Value.GetRawText()));
+        var digest = SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString()));
+        SnapshotParts.Add(digest, parts);
+        return digest;
     }
-    private static void Same(byte[] before, byte[] after) => Assert.True(CryptographicOperations.FixedTimeEquals(before, after), "Chat migration changed historical rows, schema, authority or grants outside its exact additive delta.");
+    private static void Same(byte[] before, byte[] after)
+    {
+        var changed = SnapshotParts.TryGetValue(before, out var oldParts) && SnapshotParts.TryGetValue(after, out var newParts)
+            ? string.Join(", ", oldParts.Keys.Where(key => !CryptographicOperations.FixedTimeEquals(oldParts[key], newParts[key]))) : "unavailable";
+        Assert.True(CryptographicOperations.FixedTimeEquals(before, after), "Chat migration changed historical rows, schema, authority or grants outside its exact additive delta: " + changed);
+    }
 
     // Migration 0023 deliberately appends the publication store kind with its grants and
     // replaces the publication format check and guard body; maintenance admission pins
     // those exact objects, so only they are projected out of the conserved prefix.
     private const string SnapshotSql = """
         WITH old_relations AS (SELECT * FROM pg_catalog.pg_class WHERE relnamespace='weft'::regnamespace AND relname=ANY($1::text[])),
-        new_roles AS (SELECT oid,rolname FROM pg_catalog.pg_roles WHERE rolname IN ('weft_chat_reader','weft_chat_writer','weft_chat_lifecycle')),
+        new_roles AS (SELECT oid,rolname FROM pg_catalog.pg_roles WHERE rolname IN ('weft_chat_reader','weft_chat_writer','weft_chat_lifecycle','weft_chat_approver')),
         expected_columns AS (SELECT split_part(x,'|',1) tab,split_part(x,'|',2) col,split_part(x,'|',3) privilege,split_part(x,'|',4) role FROM unnest($3::text[]) x),
         columns AS (SELECT r.relname,a.* FROM old_relations r JOIN pg_catalog.pg_attribute a ON a.attrelid=r.oid AND a.attnum>0
             WHERE NOT ($2 AND r.relname='private_object_publications' AND a.attname='storage_kind')),

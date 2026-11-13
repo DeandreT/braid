@@ -40,14 +40,14 @@ public sealed class ProcessWorkerRunner : IInspectionWorkerRunner, IAsyncDisposa
         if (!Directory.Exists(options.TemporaryRoot))
             throw new ArgumentException("The temporary root must be an existing directory.", nameof(options));
         // A read-only root without a writable temporary volume fails at startup, not on every operation.
-        var probe = Path.Combine(options.TemporaryRoot, "weft-ferrule-probe-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(probe, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        Directory.Delete(probe);
+        ProbeTemporaryRoot(options.TemporaryRoot);
         // Each child inherits the service's own filters and must add exactly its three.
         inheritedFilters = ChildSandboxVerification.InheritedFilters();
     }
 
     public string BuildIdentity { get; }
+    internal static void ProbeTemporaryRoot(string root, Action<string>? delete = null) =>
+        WorkerDirectoryProbe.Run(root, "weft-ferrule-probe-", delete);
     public DockerWorkerProfile Profile => options.Profile;
 
     /// <summary>False once a cleanup could not be confirmed or the runner is stopping.</summary>
@@ -246,7 +246,7 @@ public sealed class ProcessWorkerRunner : IInspectionWorkerRunner, IAsyncDisposa
         ("Max file locks", 0),
         ("Max msgqueue size", 0),
         ("Max realtime priority", 0)
-    ]);
+    ], requireUnprivilegedIdentity: options.Profile == DockerWorkerProfile.Pdf);
 
     /// <summary>Kills a child that is still running and waits, within a bound, until it is reaped.</summary>
     private static async Task<bool> SettleAsync(Process process)

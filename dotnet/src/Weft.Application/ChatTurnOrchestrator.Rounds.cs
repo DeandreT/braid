@@ -102,6 +102,13 @@ public sealed partial class ChatTurnOrchestrator
             await RecheckAsync(s).ConfigureAwait(false);
             var context = ToolContext(s, i + 1);
             var result = await _toolPort.ExecuteAsync(context, call, s.Execution.Token).ConfigureAwait(false);
+            // Publish the immediate card while the normal fence permits it. Saved edits already have a durable
+            // pre-write journal identity, recoverable independently of this turn if publication fails or is cancelled.
+            if (result?.MappingWrite is { } write)
+            {
+                if (s.Conversation.Key.Kind != ChatConversationKind.Workspace) throw Stop(ChatOrchestrationOutcome.Denied);
+                await AppendAsync(s, ChatEventData.ForMappingWrite(Guid.NewGuid(), write)).ConfigureAwait(false);
+            }
             // A late result after cancellation/revocation is never accepted into provider history.
             await RecheckAsync(s).ConfigureAwait(false);
             if (result is null || result.Result.ByteCount > grounding.MaxToolResultBytes - s.ResultBytes ||
@@ -112,8 +119,10 @@ public sealed partial class ChatTurnOrchestrator
                 throw Stop(ChatOrchestrationOutcome.Denied);
             if (result.DataShared is { } source)
             {
-                await CheckPayloadAuthorityAsync(s, [.. s.PayloadSources, source]).ConfigureAwait(false);
+                var proposals = result.RetainedProposal is { } proposal ? new List<ChatRetainedProposalRead>(s.RetainedProposals) { proposal } : s.RetainedProposals;
+                await CheckPayloadAuthorityAsync(s, [.. s.PayloadSources, source], proposals).ConfigureAwait(false);
                 s.PayloadSources.Add(source);
+                if (result.RetainedProposal is { } retained) s.RetainedProposals.Add(retained);
             }
             s.ResultBytes += result.Result.ByteCount; s.RetrievedNodes += result.RetrievedNodes; s.ToolCalls++;
             var message = AiToolMessage.Create(call.CallId, call.Name, result.Result);

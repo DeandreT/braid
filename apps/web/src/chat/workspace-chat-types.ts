@@ -25,8 +25,15 @@ export type OrganizationConversation = Omit<
   revision: CatalogRevisionScope | null;
 };
 export type AnyConversation = ChatConversation | OrganizationConversation;
-export type WorkspaceCitation =
-  components["schemas"]["ChatWorkspaceCitationV1"];
+export type WorkspaceCitation = Omit<
+  components["schemas"]["ChatWorkspaceCitationV1"],
+  "kind"
+> & {
+  kind:
+    | components["schemas"]["ChatWorkspaceCitationV1"]["kind"]
+    | "creationProposal";
+  proposalFingerprint?: string | null;
+};
 export type WorkspaceCitationEvent = Extract<
   ChatEvent,
   { type: "workspace.citation" }
@@ -158,14 +165,93 @@ export function workspaceEvent(
         "previewOutput",
         "regressionCase",
         "regressionRunOutput",
+        "specification",
       ].includes(String(value.source)) &&
-      (value.version === null || decimal(value.version)) &&
-      integer(value.bytes, 8192) &&
+      (value.source === "specification"
+        ? value.version === null
+        : value.version === null || decimal(value.version)) &&
+      integer(value.bytes, value.source === "specification" ? 12288 : 8192) &&
       value.bytes > 0
     );
+  if (value.type === "mapping.write")
+    return mappingWrite(value, organizationId);
   return (
     value.type === "workspace.citation" &&
     workspaceCitation(value.citation, organizationId)
+  );
+}
+export type MappingWriteEvent = Extract<ChatEvent, { type: "mapping.write" }>;
+export interface MappingWriteReceipt {
+  requestId: string;
+  status: "pending" | "saved" | "notSaved";
+  write: MappingWriteEvent | null;
+}
+export function mappingWriteReceipts(
+  value: unknown,
+  organizationId: string,
+): MappingWriteReceipt[] | null {
+  if (
+    !object(value) ||
+    !Array.isArray(value.receipts) ||
+    value.receipts.length > 8
+  )
+    return null;
+  const ids = new Set<string>();
+  for (const receipt of value.receipts) {
+    if (
+      !object(receipt) ||
+      !isCatalogId(receipt.requestId) ||
+      ids.has(receipt.requestId) ||
+      !["pending", "saved", "notSaved"].includes(String(receipt.status))
+    )
+      return null;
+    ids.add(receipt.requestId);
+    if (
+      receipt.status === "saved"
+        ? !object(receipt.write) ||
+          receipt.write.type !== "mapping.write" ||
+          receipt.write.outcome !== "saved" ||
+          !workspaceEvent(receipt.write, organizationId)
+        : receipt.write !== null
+    )
+      return null;
+  }
+  return value.receipts as MappingWriteReceipt[];
+}
+function mappingWrite(
+  value: Record<string, unknown>,
+  organizationId: string,
+): boolean {
+  const base = value.baseRevision;
+  const optional = (id: unknown, sequence: unknown) =>
+    id === null ? sequence === null : isCatalogId(id) && decimal(sequence);
+  const saved = value.outcome === "saved";
+  return (
+    object(base) &&
+    base.organizationId === organizationId &&
+    [base.projectId, base.mappingId, base.revisionId].every(isCatalogId) &&
+    decimal(value.baseSequence) &&
+    (saved
+      ? value.reason === null && value.revisionId !== null
+      : value.outcome === "proposed" &&
+        (value.reason === "outOfDate"
+          ? value.headRevisionId !== null
+          : value.reason === "notPermitted" && value.headRevisionId === null) &&
+        value.revisionId === null) &&
+    optional(value.revisionId, value.revisionSequence) &&
+    optional(value.headRevisionId, value.headSequence) &&
+    integer(value.operationCount, 2000) &&
+    value.operationCount > 0 &&
+    typeof value.changesTruncated === "boolean" &&
+    Array.isArray(value.changes) &&
+    value.changes.length <= 8 &&
+    value.changes.every(
+      (c: unknown) =>
+        object(c) &&
+        [c.field, c.before, c.after].every(
+          (t) => typeof t === "string" && t.length > 0 && t.length <= 256,
+        ),
+    )
   );
 }
 export function workspaceCitation(
@@ -190,6 +276,8 @@ export function workspaceCitation(
     revision = mapping && isCatalogId(value.revisionId);
   const noReport = value.target === null && value.reportDerivationId === null;
   const noSubject = value.subjectId === null && value.version === null;
+  if (value.kind !== "creationProposal" && value.proposalFingerprint != null)
+    return false;
   if (value.kind === "guideSection")
     return (
       !project &&
@@ -203,6 +291,16 @@ export function workspaceCitation(
     );
   if (value.sectionId !== null || !project) return false;
   switch (value.kind) {
+    case "creationProposal":
+      return (
+        value.mappingId === null &&
+        value.revisionId === null &&
+        noReport &&
+        isCatalogId(value.subjectId) &&
+        value.version === null &&
+        typeof value.proposalFingerprint === "string" &&
+        /^[0-9a-f]{64}$/.test(value.proposalFingerprint)
+      );
     case "project":
       return (
         value.mappingId === null &&
@@ -282,6 +380,7 @@ const citationNames: Record<string, string> = {
   buildRun: "build",
   buildApproval: "build approval",
   buildEnvironment: "build environment",
+  creationProposal: "new mapping proposal",
   guideSection: "help",
   projectionDiagnostic: "explanation issue",
   validationDiagnostic: "validation issue",
@@ -294,6 +393,8 @@ export function citationName(kind: string | null | undefined): string {
 }
 export function citationLink(c: WorkspaceCitation): string {
   if (c.kind === "guideSection") return "/help/" + c.sectionId;
+  if (c.kind === "creationProposal")
+    return `/catalog/organizations/${c.organizationId}/projects/${c.projectId}/creation/${c.subjectId}?fingerprint=${c.proposalFingerprint}`;
   if (
     [
       "previewRun",

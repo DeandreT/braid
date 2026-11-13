@@ -62,8 +62,15 @@ internal static class ChatGrounding
     internal static ChatGroundingPolicyPin Pin(ChatToolRegistry tools) => ChatAiBridge.PinGroundingPolicy(PolicyId, PolicyVersion,
         Instructions, tools.Definitions, MaxRetrievedNodes, MaxToolResultBytes, MaxToolIterations);
 
-    internal static ChatProviderBudget ProviderBudget(ChatApiOptions options) => new(options.TurnDuration.Ticks, MaxRounds,
+    private static int Rounds(ChatGroundingPolicyPin? policy) => policy is
+    {
+        Id: Workspace.WorkspaceChatGrounding.PolicyId,
+        MaxToolIterations: Workspace.WorkspaceChatGrounding.CreationToolIterations
+    } ? 5 : MaxRounds;
+
+    internal static ChatProviderBudget ProviderBudget(ChatApiOptions options, ChatGroundingPolicyPin? policy = null) => new(options.TurnDuration.Ticks, Rounds(policy),
         1_048_576, 4_194_304, 131_072, MaxToolCalls, options.MaxOutputTokens);
 
     internal static ChatTurnBudget TurnBudget => new(MaxEvents, MaxEventBytes, MaxRounds);
+    internal static ChatTurnBudget TurnBudgetFor(ChatGroundingPolicyPin policy) => new(MaxEvents, MaxEventBytes, Rounds(policy));
 }

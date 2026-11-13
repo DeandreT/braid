@@ -180,7 +180,7 @@ public sealed class PostgresInterchangeTests(PostgresFixture fixture)
         await test.MigrateAsync();
         await test.MigrateAsync();
         Assert.Equal(before, await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(m) ORDER BY version)::text FROM weft.schema_migrations m WHERE version<=$1", previousVersion));
-        Assert.Equal(36L, await test.ScalarAsync<long>("SELECT count(*) FROM weft.schema_migrations"));
+        Assert.Equal(47L, await test.ScalarAsync<long>("SELECT count(*) FROM weft.schema_migrations"));
         Assert.Equal(nativeBefore, await test.ScalarAsync<string>("SELECT to_jsonb(r)::text FROM weft.mapping_revisions r"));
         await using var database = new PostgresIngestionDatabase(test.IngestionConnectionString);
         var restored = await new PostgresRevisionIngestionStore(database).GetReceiptAsync(actor, original.Facts.Project, original.Facts.OperationId);

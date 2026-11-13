@@ -67,6 +67,13 @@ evidence. The documentation PR does not itself qualify an application feature.
 
 P3 uses the ordered ownership/storage/ingestion/API/cache/maintenance/browser
 sequence in [the catalog persistence plan](docs/catalog-persistence-plan.md).
+
+[Mapping editing (#334)](https://github.com/DeandreT/weft/issues/334) adds
+author-private exact-base operation drafts, checkpoint/diff/preview/save/rebase,
+and a keyboard-accessible Angular editor over the same native/wasm Ferrule core.
+Its acceptance includes PostgreSQL privacy and recovery, generated HTTP/CLI
+parity, native/Node/Chromium equivalence, worker CSP isolation and live browser
+round trips. See [the session model and limits](docs/mapping-editing.md).
 P3c's two focused PRs and accepted defaults are defined in
 [the ingestion plan](docs/catalog-ingestion-plan.md); parent
 [#15](https://github.com/DeandreT/weft/issues/15) completes only after both.

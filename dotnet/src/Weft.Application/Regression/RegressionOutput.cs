@@ -31,30 +31,44 @@ public sealed class RegressionOutput
     public const int MaximumByteCount = 16 * 1024 * 1024;
     private readonly byte[] bytes;
 
-    private RegressionOutput(RegressionOutputKey key, byte[] bytes, string mediaType)
+    private RegressionOutput(RegressionOutputKey key, byte[] bytes, string mediaType, CsvDocumentDialect? csvDialect,
+        XmlDocumentMetadata? xmlMetadata)
     {
         Key = key;
         MediaType = mediaType;
+        CsvDialect = csvDialect;
+        XmlMetadata = xmlMetadata;
         this.bytes = bytes;
         Digest = Sha256Digest.FromBytes(bytes);
     }
 
     public RegressionOutputKey Key { get; }
     public string MediaType { get; }
+    public CsvDocumentDialect? CsvDialect { get; }
+    public XmlDocumentMetadata? XmlMetadata { get; }
     public int ByteCount => bytes.Length;
     public Sha256Digest Digest { get; }
     internal ReadOnlySpan<byte> Span => bytes;
 
     public static RegressionOutput Capture(RegressionOutputKey key, ReadOnlySpan<byte> bytes,
-        CancellationToken cancellationToken = default, string mediaType = PreviewPolicy.MediaType)
+        CancellationToken cancellationToken = default, string mediaType = PreviewPolicy.MediaType, CsvDocumentDialect? csvDialect = null,
+        XmlDocumentMetadata? xmlMetadata = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(key);
-        if (!DocumentPreviewPolicy.AdmitsMediaType(mediaType))
+        if (xmlMetadata is not null ? csvDialect is not null || !XmlDocumentPolicy.Admits(xmlMetadata, XmlDocumentRole.Output, mediaType)
+            : CsvDocumentPolicy.AdmitsMediaType(mediaType) ? !CsvDocumentPolicy.Admits(csvDialect, mediaType)
+            : !DocumentPreviewPolicy.AdmitsMediaType(mediaType) || csvDialect is not null)
             throw new RegressionComparisonException(RegressionComparisonFailure.InvalidInput);
         if (bytes.Length > MaximumByteCount)
             throw new RegressionComparisonException(RegressionComparisonFailure.ResourceLimit);
-        var output = new RegressionOutput(key, bytes.ToArray(), mediaType);
+        if (xmlMetadata is not null)
+        {
+            try { XmlDocumentSafety.Validate(bytes, cancellationToken); }
+            catch (XmlDocumentException error)
+            { throw new RegressionComparisonException(error.IsResourceLimit ? RegressionComparisonFailure.ResourceLimit : RegressionComparisonFailure.InvalidInput); }
+        }
+        var output = new RegressionOutput(key, bytes.ToArray(), mediaType, csvDialect, xmlMetadata);
         cancellationToken.ThrowIfCancellationRequested();
         return output;
     }

@@ -1,0 +1,60 @@
+:host {
+  display: block;
+}
+fieldset,
+.notice,
+.citation,
+.objects > li {
+  border: 1px solid var(--border, #777);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-block: 1rem;
+  min-width: 0;
+}
+fieldset {
+  display: grid;
+  gap: 0.75rem;
+}
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+textarea {
+  width: 100%;
+  resize: vertical;
+}
+.objects {
+  list-style: none;
+  padding: 0;
+}
+.bundle-id,
+.citation {
+  overflow-wrap: anywhere;
+}
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  max-height: 30rem;
+  overflow: auto;
+}
+button {
+  min-height: 2.75rem;
+  margin: 0.25rem;
+}
+h3 {
+  margin-top: 0;
+}
+@media (max-width: 40rem) {
+  .catalog-heading {
+    display: block;
+  }
+  button {
+    width: 100%;
+  }
+}

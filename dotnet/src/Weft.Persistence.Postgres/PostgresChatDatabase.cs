@@ -5,7 +5,7 @@ using Weft.Domain;
 
 namespace Weft.Persistence.Postgres;
 
-public enum ChatDatabaseProfile { Reader, Writer, Lifecycle }
+public enum ChatDatabaseProfile { Reader, Writer, Lifecycle, Approver }
 
 /// <summary>Owns a separate, resetting, lazily opened chat-only credential pool.</summary>
 public sealed class PostgresChatDatabase : IAsyncDisposable
@@ -16,7 +16,7 @@ public sealed class PostgresChatDatabase : IAsyncDisposable
 
     public PostgresChatDatabase(string connectionString, ChatDatabaseProfile profile)
     {
-        if (profile is not (ChatDatabaseProfile.Reader or ChatDatabaseProfile.Writer)) throw new ArgumentOutOfRangeException(nameof(profile));
+        if (profile is not (ChatDatabaseProfile.Reader or ChatDatabaseProfile.Writer or ChatDatabaseProfile.Approver)) throw new ArgumentOutOfRangeException(nameof(profile));
         Profile = profile;
         var normalized = PostgresConfiguration.Normalize(connectionString);
         _source = new(() => NpgsqlDataSource.Create(normalized));
@@ -33,7 +33,7 @@ public sealed class PostgresChatDatabase : IAsyncDisposable
 
     internal async Task<PostgresTransaction> BeginAsync(ActorContext actor, Guid organizationId, bool write, CancellationToken ct)
     {
-        if (write && Profile != ChatDatabaseProfile.Writer) throw new InvalidOperationException("Chat mutation requires its separate writer profile.");
+        if (write && Profile is not (ChatDatabaseProfile.Writer or ChatDatabaseProfile.Approver)) throw new InvalidOperationException("Chat mutation requires its separate mutation profile.");
         var connection = await Source.OpenConnectionAsync(ct);
         NpgsqlTransaction? transaction = null;
         try
@@ -61,7 +61,7 @@ public sealed class PostgresChatDatabase : IAsyncDisposable
                 FROM pg_catalog.pg_roles r WHERE r.rolname=current_user
                 """, connection, transaction))
             {
-                inspect.Parameters.AddWithValue("profile", Profile == ChatDatabaseProfile.Reader ? "weft_chat_reader" : "weft_chat_writer");
+                inspect.Parameters.AddWithValue("profile", ChatRoleGuard.RoleName(Profile));
                 if (await inspect.ExecuteScalarAsync(ct) is not true) throw new InvalidOperationException("Chat database profile is invalid.");
             }
             await using (var settings = new NpgsqlCommand("""
@@ -91,5 +91,28 @@ public sealed class PostgresChatDatabase : IAsyncDisposable
         NpgsqlDataSource? source;
         lock (_lifetime) { if (_disposed) return; _disposed = true; source = _source.IsValueCreated ? _source.Value : null; }
         if (source is not null) await source.DisposeAsync();
+    }
+
+    /// <summary>Admits the actual login and complete installed role/schema contracts without an invented actor context.</summary>
+    public async Task VerifyContractsAsync(CancellationToken ct)
+    {
+        await using var connection = await Source.OpenConnectionAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
+        await using (var settings = new NpgsqlCommand("SET LOCAL search_path=pg_catalog; SET LOCAL statement_timeout='15s'; SET LOCAL lock_timeout='5s'; SET LOCAL TimeZone='UTC'; SET LOCAL DateStyle='ISO, YMD'; SET LOCAL IntervalStyle='postgres'", connection, transaction))
+            await settings.ExecuteNonQueryAsync(ct);
+        await using (var identity = new NpgsqlCommand("""
+            SELECT current_user=session_user AND current_user=$1
+                AND current_setting('transaction_isolation')='read committed'
+                AND current_setting('session_replication_role')='origin' AND current_setting('row_security')='on'
+                AND current_setting('server_encoding')='UTF8' AND current_setting('client_encoding')='UTF8'
+                AND current_setting('standard_conforming_strings')='on'
+                AND coalesce(nullif(current_setting('weft.organization_id',true),''),'')=''
+                AND coalesce(nullif(current_setting('weft.chat_principal_id',true),''),'')=''
+            """, connection, transaction))
+        {
+            identity.Parameters.AddWithValue(ChatRoleGuard.RoleName(Profile));
+            if (await identity.ExecuteScalarAsync(ct) is not true) throw new InvalidOperationException("Chat database profile is invalid.");
+        }
+        await ChatRoleGuard.ValidateInstallationAsync(connection, transaction, Profile, ct);
     }
 }

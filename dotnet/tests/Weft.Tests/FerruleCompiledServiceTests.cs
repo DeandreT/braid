@@ -1233,9 +1233,7 @@ public sealed class FerruleCompiledServiceTests(Xunit.Abstractions.ITestOutputHe
             var options = new ProcessCompiledRuntimeOptions(PackagedFerruleService.Identity, Assembly, Launcher!, root, installation.Toolchain);
             // The installed hostfxr is an invalid object, then a valid native object without the hosting exports.
             await using (var malformed = new ProcessCompiledRuntimeRunner(options)) Assert.False(await malformed.ProbeAsync(default));
-            // Any real shared object without the hosting exports; Debian and Arch place libc differently.
-            var libc = new[] { "/usr/lib/x86_64-linux-gnu/libc.so.6", "/usr/lib64/libc.so.6", "/usr/lib/libc.so.6" }.First(File.Exists);
-            File.Copy(libc, BuildCompilation.HostFxr(installation.Toolchain), overwrite: true);
+            File.Copy(MappedLibc(), BuildCompilation.HostFxr(installation.Toolchain), overwrite: true);
             await using (var wrongExports = new ProcessCompiledRuntimeRunner(options)) Assert.False(await wrongExports.ProbeAsync(default));
             File.Delete(BuildCompilation.HostFxr(installation.Toolchain));
             Assert.Throws<ArgumentException>(() => new ProcessCompiledRuntimeRunner(options));
@@ -1243,6 +1241,14 @@ public sealed class FerruleCompiledServiceTests(Xunit.Abstractions.ITestOutputHe
         }
         finally { Directory.Delete(root, recursive: true); }
     }
+
+    // The libc this test process actually mapped: a genuine native ELF object without the
+    // hosting exports, independent of the distribution's library directory layout.
+    private static string MappedLibc() => File.ReadLines("/proc/self/maps")
+        .Select(line => line.Split(' ', 6, StringSplitOptions.RemoveEmptyEntries))
+        .Where(fields => fields.Length == 6).Select(fields => fields[5].Trim())
+        .Where(path => path.StartsWith('/') && System.IO.Path.GetFileName(path) == "libc.so.6")
+        .Distinct(StringComparer.Ordinal).Single();
 
     [ServiceCompileFact]
     public void Runtime_identity_binds_the_entry_point_host_and_launcher_independently_of_the_native_emitter()

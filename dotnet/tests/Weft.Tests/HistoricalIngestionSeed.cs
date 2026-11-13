@@ -23,7 +23,7 @@ internal static class HistoricalIngestionSeed
     private const int MaximumTableRows = 64;
     // Bound by this build's exact manifest, not by database-supplied history.
     private static int MaximumJournalRows => MigrationRunner.EmbeddedMigrations.Count;
-    private const int MaximumSchemaRows = 1024;
+    private const int MaximumSchemaRows = 2048;
     private const int MaximumSnapshotBytes = 2 * 1024 * 1024;
     private static readonly (string Name, string Order)[] Tables =
     [
@@ -43,8 +43,8 @@ internal static class HistoricalIngestionSeed
     internal static Task<IngestionReceipt> CommitCreateAsync(PostgresCase test, ActorContext actor,
         ProjectScope project, string name = "Synthetic catalog mapping",
         string description = "Synthetic C1 admission evidence only", bool valid = true,
-        string? filename = null, CancellationToken cancellationToken = default) =>
-        CommitAsync(test, actor, project, PostgresIngestionTestSupport.CreateIntent(name, description, filename),
+        string? filename = null, CancellationToken cancellationToken = default, byte[]? body = null) =>
+        CommitAsync(test, actor, project, PostgresIngestionTestSupport.CreateIntent(name, description, filename, body),
             valid, cancellationToken);
 
     internal static Task<IngestionReceipt> CommitAppendAsync(PostgresCase test, IngestionReceipt mapping,

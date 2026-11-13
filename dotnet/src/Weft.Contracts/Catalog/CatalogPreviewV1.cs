@@ -5,7 +5,8 @@ namespace Weft.Contracts.Catalog;
 /// <summary>
 /// A bounded sample preview of one exact revision. Input documents are base64 bytes so the
 /// server stores exactly what the caller supplied; the first input is the unnamed primary.
-/// Profile is optional: null preserves legacy JSON; document admission requires explicit native boundary formats.
+/// Profile is optional: null preserves legacy JSON. CSV/TSV uses its own explicit profile and saved native dialects;
+/// an empty content string is a present input only in that profile.
 /// </summary>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record CatalogPreviewSubmissionV1(
@@ -32,7 +33,7 @@ public sealed record CatalogPreviewInputV1(string Content, string? Name = null);
 /// </summary>
 public sealed record CatalogPreviewRunV1(
     string RunId,
-    CatalogRevisionScopeV1 Revision,
+    CatalogRevisionScopeV1? Revision,
     string RequestFingerprint,
     string CurrentDateTime,
     string State,
@@ -47,7 +48,14 @@ public sealed record CatalogPreviewRunV1(
     DateTimeOffset CreatedAtUtc,
     DateTimeOffset? StartedAtUtc,
     DateTimeOffset? FinishedAtUtc,
-    DateTimeOffset ExpiresAtUtc);
+    DateTimeOffset ExpiresAtUtc,
+    CatalogPreviewDraftSubjectV1? Draft = null)
+{
+    public string SubjectKind => Draft is null ? "revision" : "draft";
+}
+
+public sealed record CatalogPreviewDraftSubjectV1(CatalogMappingScopeV1 Mapping, string DraftId, string Version,
+    CatalogRevisionScopeV1 BaseRevision, string NativeDigest, int NativeByteCount);
 
 public sealed record CatalogPreviewFailureV1(string Code, string Message, bool MessageTruncated, string? Subject, bool SubjectTruncated);
 
@@ -62,7 +70,17 @@ public sealed record CatalogPreviewOutputV1(
     string MediaType,
     string RecordsWritten,
     string Sha256,
-    int ByteCount);
+    int ByteCount,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CsvDocumentDialectV1? CsvDialect = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] XmlDocumentMetadataV1? XmlMetadata = null);
+
+public sealed record XmlDocumentMetadataV1(string Schema, string SafetyProfile, XmlSchemaHintsV1? SchemaHints);
+public sealed record XmlSchemaHintsV1(string? NoNamespaceLocation, IReadOnlyList<XmlSchemaLocationV1> Locations);
+public sealed record XmlSchemaLocationV1(string Namespace, string Location);
+
+
+public sealed record CsvDocumentDialectV1(string Schema, string Delimiter, string? Quote, bool QuoteDisabled,
+    bool HasHeaderRow, bool Utf8Bom, bool PreserveEmptyStrings);
 
 /// <summary>Outcome is <c>created</c> or <c>replayed</c> for an identical resubmission of the same key.</summary>
 public sealed record CatalogPreviewSubmitResultV1(string Outcome, CatalogPreviewRunV1 Run);

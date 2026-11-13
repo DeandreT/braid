@@ -24,7 +24,7 @@ public static class BuildIntentCodec
                 "primaryOutput" => BuildBoundaryKind.PrimaryOutput,
                 "namedOutput" => BuildBoundaryKind.NamedOutput,
                 _ => throw Invalid()
-            }, value.GetProperty("name").ValueKind == JsonValueKind.Null ? null : Text(value, "name"), Text(value, "format"))).ToArray();
+            }, value.GetProperty("name").ValueKind == JsonValueKind.Null ? null : Text(value, "name"), Text(value, "format"), BuildCsvDialect.ReadOptional(value))).ToArray();
             var intent = new BuildIntent(Id(root, "buildId"), revision, Sha256Digest.Parse(Text(root, "nativeDigest")),
                 new(Text(root, "backendId"), Text(root, "engineRevision"), Text(root, "engineBuild"), Text(root, "adapterVersion")),
                 new(Text(root, "profileId"), root.GetProperty("profileVersion").GetInt32(), Text(root, "runtime"),

@@ -44,6 +44,7 @@ import {
   type RegressionRun,
   type RunPage,
 } from "./regression-api";
+import { canonicalDefinition } from "./regression-definition";
 import {
   RegressionViewRecovery,
   type DocumentDraft,
@@ -55,6 +56,17 @@ import {
 import { HelpLinkComponent } from "../../help/help-link.component";
 import { RegressionStatusComponent } from "../automation/regression-status.component";
 import { UnsentWork } from "../../workbench/unsent-work";
+import {
+  csvPreviewProfile,
+  csvRowsPolicy,
+  csvMetadata,
+  csvDialect as isCsvDialect,
+} from "../previews/csv-contract";
+import {
+  displayDocument,
+  type DocumentRepresentation,
+} from "../../workbench/workbench-documents";
+import { DocumentViewComponent } from "../../workbench/document-view.component";
 
 const encoder = new TextEncoder();
 const maxBytes = 8 * 1024 * 1024;
@@ -73,6 +85,7 @@ const maxBytes = 8 * 1024 * 1024;
     StatusChipComponent,
     MetadataValueComponent,
     HelpLinkComponent,
+    DocumentViewComponent,
     RegressionStatusComponent,
   ],
   templateUrl: "./revision-regression.component.html",
@@ -159,20 +172,21 @@ export class RevisionRegressionComponent {
   readonly parameters = signal<ParameterDraft[]>([]);
   readonly shown = signal<{
     name: string;
-    text: string;
-    truncated: boolean;
+    display: DocumentRepresentation;
   } | null>(null);
   name = "";
   clock = "";
   target = "all";
   targetName = "";
   documentMode = false;
+  csvMode = false;
   comparisonPolicy = exactPolicy;
   compareSeparators = true;
   ignoreControlNumbers = false;
   ignoreDates = false;
   readonly exactPolicy = exactPolicy;
   readonly ediPolicy = ediPolicy;
+  readonly csvRowsPolicy = csvRowsPolicy;
 
   constructor() {
     inject(UnsentWork).track(
@@ -268,6 +282,7 @@ export class RevisionRegressionComponent {
     this.target = "all";
     this.targetName = "";
     this.documentMode = false;
+    this.csvMode = false;
     this.comparisonPolicy = exactPolicy;
     this.compareSeparators = true;
     this.ignoreControlNumbers = this.ignoreDates = false;
@@ -279,6 +294,12 @@ export class RevisionRegressionComponent {
   }
   editNext(): void {
     const value = this.selected();
+    if (value?.definition.runtime.profile === "weft.ferrule-xml-preview.v1") {
+      this.notice.set(
+        "XML baselines and their saved metadata are read only. Run a new sample and explicitly save its outputs to create another baseline.",
+      );
+      return;
+    }
     if (
       !value ||
       !this.isCurrentRevision(value.revision) ||
@@ -297,6 +318,7 @@ export class RevisionRegressionComponent {
     this.target = definition.target.kind;
     this.targetName = definition.target.name || "";
     this.documentMode = definition.runtime.profile === documentProfile;
+    this.csvMode = definition.runtime.profile === csvPreviewProfile;
     this.comparisonPolicy = definition.comparisonPolicy;
     this.compareSeparators =
       definition.comparisonOptions?.compareSeparators ?? true;
@@ -315,6 +337,7 @@ export class RevisionRegressionComponent {
           item.name,
           item.bytesBase64Url,
           item.mediaType ?? "application/json",
+          item.csvDialect,
         ),
       ),
     );
@@ -330,6 +353,24 @@ export class RevisionRegressionComponent {
     const rows = output ? this.outputs : this.inputs;
     if (rows().length < (output ? 64 : 16))
       rows.update((values) => [...values, this.draft("new-name")]);
+  }
+  setRuntimeMode(mode: string): void {
+    if (mode === "csv" && !this.capabilities()?.csvRuntime) return;
+    this.csvMode = mode === "csv";
+    this.documentMode = mode === "document";
+    this.comparisonPolicy = exactPolicy;
+  }
+  csvComparisonAvailable(): boolean {
+    const outputs = this.outputs();
+    return (
+      this.csvMode &&
+      !!this.capabilities()?.csvRuntime &&
+      !!this.capabilities()?.comparisonPolicies?.includes(csvRowsPolicy) &&
+      outputs.length === 1 &&
+      !outputs[0]!.name &&
+      !!outputs[0]!.csvDialect &&
+      csvMetadata(outputs[0]!.mediaType, outputs[0]!.csvDialect)
+    );
   }
   updateDocument(
     output: boolean,
@@ -599,11 +640,9 @@ export class RevisionRegressionComponent {
       this.documentSelected.emit({ name: item.name, expected });
       return;
     }
-    const bytes = decodeBytes(item.bytesBase64Url);
     this.shown.set({
       name: item.name || "Primary output",
-      text: new TextDecoder().decode(bytes.subarray(0, 65536)),
-      truncated: bytes.length > 65536,
+      display: displayDocument(item),
     });
   }
   download(item: RegressionDocument): void {
@@ -624,7 +663,11 @@ export class RevisionRegressionComponent {
         ? ".x12"
         : item.mediaType === "application/edifact"
           ? ".edi"
-          : ".json");
+          : item.mediaType === "text/csv"
+            ? ".csv"
+            : item.mediaType === "text/tab-separated-values"
+              ? ".tsv"
+              : ".json");
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 0);
   }
@@ -722,11 +765,22 @@ export class RevisionRegressionComponent {
       );
     const inputs = this.documents(this.inputs(), false);
     const expected = this.documents(this.outputs(), true);
-    const runtime = this.documentMode ? cap.documentRuntime : cap.runtime;
+    const runtime = this.csvMode
+      ? cap.csvRuntime
+      : this.documentMode
+        ? cap.documentRuntime
+        : cap.runtime;
     if (
       !runtime ||
-      (!this.documentMode && this.comparisonPolicy !== exactPolicy) ||
-      ![exactPolicy, ediPolicy].includes(this.comparisonPolicy) ||
+      (!this.documentMode &&
+        !this.csvMode &&
+        this.comparisonPolicy !== exactPolicy) ||
+      ![exactPolicy, ediPolicy, csvRowsPolicy].includes(
+        this.comparisonPolicy,
+      ) ||
+      (this.csvMode && this.comparisonPolicy === ediPolicy) ||
+      (this.comparisonPolicy === csvRowsPolicy &&
+        !this.csvComparisonAvailable()) ||
       (this.comparisonPolicy === ediPolicy &&
         !cap.comparisonPolicies?.includes(ediPolicy))
     )
@@ -735,6 +789,16 @@ export class RevisionRegressionComponent {
       );
     if (this.target === "named" && !this.targetName)
       throw new Error("Enter the exact target name.");
+    if (
+      this.csvMode &&
+      (inputs.length !== 1 ||
+        this.target === "named" ||
+        expected.length !== 1 ||
+        expected[0]!.name !== null)
+    )
+      throw new Error(
+        "CSV/TSV cases require one primary input and one primary expected output.",
+      );
     const names = new Set<string>();
     const parameters = this.parameters().map(({ name, kind, value }) => {
       if (
@@ -794,12 +858,24 @@ export class RevisionRegressionComponent {
       names.add(name);
       const encoded =
         value.file?.encoded ?? encodeBytes(encoder.encode(value.text));
+      if (!output && !this.csvMode && encoded.length === 0)
+        throw new Error(
+          "Empty input files are allowed only with the explicit CSV/TSV runtime.",
+        );
       total += value.file?.length ?? encoder.encode(value.text).length;
       if (total > maxBytes)
         throw new Error(
           "Combined inputs and combined expected outputs must each fit within 8 MiB.",
         );
       const mediaType = value.mediaType ?? "application/json";
+      if (
+        output &&
+        this.csvMode &&
+        (!value.csvDialect || !csvMetadata(mediaType, value.csvDialect))
+      )
+        throw new Error(
+          "Use an expected CSV/TSV baseline from a verified native preview or saved case. Its dialect cannot be guessed from a file.",
+        );
       if (
         output &&
         this.documentMode &&
@@ -813,7 +889,8 @@ export class RevisionRegressionComponent {
       return {
         name,
         bytesBase64Url: encoded,
-        ...(output && this.documentMode ? { mediaType } : {}),
+        ...(output && (this.documentMode || this.csvMode) ? { mediaType } : {}),
+        ...(output && this.csvMode ? { csvDialect: value.csvDialect! } : {}),
       };
     });
   }
@@ -824,10 +901,17 @@ export class RevisionRegressionComponent {
     name: string | null,
     encoded: string,
     mediaType = "application/json",
+    metadata?: unknown,
   ): DocumentDraft {
+    if (
+      metadata !== undefined &&
+      (!isCsvDialect(metadata) || !csvMetadata(mediaType, metadata))
+    )
+      throw new RegressionError("incompatible");
     return {
       ...this.draft(name || ""),
       mediaType,
+      ...(metadata === undefined ? {} : { csvDialect: metadata }),
       file: {
         name: "Saved exact bytes",
         encoded,
@@ -871,6 +955,7 @@ export class RevisionRegressionComponent {
           target: this.target,
           targetName: this.targetName,
           documentMode: this.documentMode,
+          csvMode: this.csvMode,
           comparisonPolicy: this.comparisonPolicy,
           compareSeparators: this.compareSeparators,
           ignoreControlNumbers: this.ignoreControlNumbers,
@@ -901,6 +986,7 @@ export class RevisionRegressionComponent {
       this.target = draft.target;
       this.targetName = draft.targetName;
       this.documentMode = draft.documentMode ?? false;
+      this.csvMode = draft.csvMode ?? false;
       this.comparisonPolicy = draft.comparisonPolicy ?? exactPolicy;
       this.compareSeparators = draft.compareSeparators ?? true;
       this.ignoreControlNumbers = draft.ignoreControlNumbers ?? false;
@@ -968,34 +1054,6 @@ export class RevisionRegressionComponent {
 }
 function active(value: RegressionRun): boolean {
   return value.run.state === "queued" || value.run.state === "running";
-}
-function stable(value: unknown): string {
-  if (Array.isArray(value)) return "[" + value.map(stable).join(",") + "]";
-  if (value && typeof value === "object")
-    return (
-      "{" +
-      Object.entries(value)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([key, v]) => JSON.stringify(key) + ":" + stable(v))
-        .join(",") +
-      "}"
-    );
-  return JSON.stringify(value);
-}
-function canonicalDefinition(value: CaseDefinition): string {
-  const order = <T extends { name: string | null }>(items: T[]) =>
-    [...items].sort((a, b) => {
-      if (a.name === b.name) return 0;
-      if (a.name === null) return -1;
-      if (b.name === null) return 1;
-      return a.name < b.name ? -1 : 1;
-    });
-  return stable({
-    ...value,
-    namedInputs: order(value.namedInputs),
-    expected: order(value.expected),
-    parameters: order(value.parameters),
-  });
 }
 function errorText(error: unknown): string {
   const kind = error instanceof RegressionError ? error.kind : "unavailable";

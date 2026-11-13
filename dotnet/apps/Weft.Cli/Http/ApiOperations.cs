@@ -4,6 +4,7 @@ using Weft.Contracts.Builds;
 using Weft.Contracts.Catalog;
 using Weft.Contracts.Chat;
 using Weft.Contracts.Comparisons;
+using Weft.Contracts.Editing;
 using Weft.Contracts.Help;
 using Weft.Contracts.Operations;
 using Weft.Contracts.Regression;
@@ -29,7 +30,8 @@ internal sealed record ApiOperation(
     string ResponseMediaType = "application/json",
     IReadOnlyList<string>? AlternateResponseMediaTypes = null,
     bool RequiresAuthentication = true,
-    bool RetryOnFailure = true);
+    bool RetryOnFailure = true,
+    IReadOnlyDictionary<int, Type>? AlternateErrorBodies = null);
 
 internal static partial class ApiOperations
 {
@@ -59,6 +61,8 @@ internal static partial class ApiOperations
     private const string Mapping = Project + "/mappings/{mappingId}";
     private const string Revision = Mapping + "/revisions/{revisionId}";
     private const string Chat = Revision + "/chat";
+    private const string Drafts = Mapping + "/drafts";
+    private const string Draft = Drafts + "/{draftId}";
 
     private static readonly string[] OperationsQuery = ["offset", "limit", "since", "until", "caller", "outcome"];
     public static readonly ApiOperation GetReleaseTargets = Get("GetReleaseTargets", Mapping + "/operations", typeof(ReleaseOperationsPageV1), OperationsQuery);
@@ -95,6 +99,17 @@ internal static partial class ApiOperations
         "application/octet-stream", null, Accepted(typeof(CatalogRevisionIngestionResultV1)),
         query: ["head", "expectedHeadRevisionId", "originalFilename"], headers: Key);
     public static readonly ApiOperation GetCatalogRevision = Get("GetCatalogRevision", Revision, typeof(CatalogRevisionV1));
+    public static readonly ApiOperation CreateMappingDraft = Send("CreateMappingDraft", "POST", Drafts, "application/json", typeof(MappingDraftCreateV1), Created(typeof(MappingDraftResultV1)), headers: Key);
+    public static readonly ApiOperation ListMappingDrafts = Get("ListMappingDrafts", Drafts, typeof(MappingDraftListV1));
+    public static readonly ApiOperation GetMappingDraft = Get("GetMappingDraft", Draft, typeof(MappingDraftV1));
+    public static readonly ApiOperation GetMappingDraftOperations = Get("GetMappingDraftOperations", Draft + "/operations", typeof(EditScriptV1));
+    public static readonly ApiOperation PutMappingDraftOperations = Send("PutMappingDraftOperations", "PUT", Draft + "/operations", "application/json", typeof(EditScriptV1), Ok(typeof(MappingDraftResultV1)), headers: ["If-Match"]);
+    public static readonly ApiOperation CheckpointMappingDraft = Send("CheckpointMappingDraft", "POST", Draft + "/checkpoints", "application/json", typeof(MappingDraftVersionV1), Ok(typeof(MappingDraftResultV1)));
+    public static readonly ApiOperation CompareMappingDraft = Get("CompareMappingDraft", Draft + "/comparison", typeof(RevisionComparisonV1));
+    public static readonly ApiOperation PreviewMappingDraft = Send("PreviewMappingDraft", "POST", Draft + "/previews", "application/json", typeof(CatalogPreviewSubmissionV1), Created(typeof(CatalogPreviewSubmitResultV1)), headers: Key);
+    public static readonly ApiOperation SaveMappingDraft = Send("SaveMappingDraft", "POST", Draft + "/save", "application/json", typeof(MappingDraftSaveV1), Accepted(typeof(CatalogRevisionIngestionResultV1)), headers: Key);
+    public static readonly ApiOperation RebaseMappingDraft = Send("RebaseMappingDraft", "POST", Draft + "/rebase", "application/json", typeof(MappingDraftRebaseV1), Ok(typeof(MappingDraftResultV1)), headers: ["If-Match"]);
+    public static readonly ApiOperation DiscardMappingDraft = Send("DiscardMappingDraft", "DELETE", Draft, null, null, Ok(typeof(MappingDraftResultV1)), headers: ["If-Match"]);
     public static readonly ApiOperation GetCatalogRevisionIngestionReceipt = Get("GetCatalogRevisionIngestionReceipt",
         Project + "/revision-ingestions/{operationId}", typeof(CatalogRevisionIngestionReceiptV1));
     public static readonly ApiOperation ResumeCatalogRevisionIngestion = Send("ResumeCatalogRevisionIngestion", "POST",
@@ -130,11 +145,12 @@ internal static partial class ApiOperations
         typeof(RevisionComparisonV1), ["leftRevision", "leftProjection", "leftValidation", "rightRevision", "rightProjection", "rightValidation"]);
 
     public static readonly ApiOperation SubmitCatalogPreview = Send("SubmitCatalogPreview", "POST", Revision + "/previews",
-        "application/json", typeof(CatalogPreviewSubmissionV1), Created(typeof(CatalogPreviewSubmitResultV1)), headers: Key);
+        "application/json", typeof(CatalogPreviewSubmissionV1), Created(typeof(CatalogPreviewSubmitResultV1)), headers: Key) with
+    { AlternateErrorBodies = new Dictionary<int, Type> { [422] = typeof(CatalogXmlPreviewProblemV1) } };
     public static readonly ApiOperation GetCatalogPreview = Get("GetCatalogPreview", Organization + "/previews/{runId}", typeof(CatalogPreviewRunV1));
     public static readonly ApiOperation GetCatalogPreviewOutput = new("GetCatalogPreviewOutput", "GET",
         Organization + "/previews/{runId}/outputs/{ordinal}", None, None, null, null, Ok(null), typeof(CatalogErrorV1),
-        AlternateResponseMediaTypes: ["application/edi-x12", "application/edifact"]);
+        AlternateResponseMediaTypes: ["application/edi-x12", "application/edifact", "text/csv", "text/tab-separated-values", "application/xml"]);
     public static readonly ApiOperation CancelCatalogPreview = Send("CancelCatalogPreview", "POST", Organization + "/previews/{runId}/cancel",
         null, null, Ok(typeof(CatalogPreviewCancelResultV1)));
 
@@ -202,6 +218,8 @@ internal static partial class ApiOperations
         GetHealth, GetReadiness, GetCatalogContext, SearchCatalog, GetHelpSections, GetHelpSection, GetCatalogProjects, CreateCatalogProject, GetCatalogProject, GetCatalogMappings, CreateCatalogMapping,
         GetCatalogMapping, GetCatalogMappingMetadata, EditCatalogMappingMetadata, GetCatalogRevisions, AppendCatalogRevision,
         GetCatalogRevision, GetCatalogRevisionIngestionReceipt, ResumeCatalogRevisionIngestion, GetCatalogProjectionReport,
+        CreateMappingDraft, ListMappingDrafts, GetMappingDraft, GetMappingDraftOperations, PutMappingDraftOperations,
+        CheckpointMappingDraft, CompareMappingDraft, PreviewMappingDraft, SaveMappingDraft, RebaseMappingDraft, DiscardMappingDraft,
         GetCatalogInterchangeCapabilities, ReviewMfdCreate, ReviewMfdAppend, GetMfdImportReview, ConfirmMfdImport, ReviewMfdExport, DownloadMfdExport,
         GetCatalogValidationReport, GetRetainedCatalogProjectionReport, GetRetainedCatalogValidationReport,
         EnsureCatalogProjectionReport, EnsureCatalogValidationReport, GetCatalogRevisionComparison, SubmitCatalogPreview,
@@ -224,12 +242,43 @@ internal static partial class ApiOperations
     public static IReadOnlyDictionary<string, string> NotUsed { get; } = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         ["GetProjectionFixture"] = "a Development-only fixture route that the Session host does not map",
+        ["GetSpecIntakeCapabilities"] = "the browser specification-intake form uses current server capabilities",
+        ["CreateSpecBundle"] = "specification intake is currently exposed through the browser, not a CLI command",
+        ["GetSpecBundleInventory"] = "specification intake is currently exposed through the browser, not a CLI command",
+        ["TombstoneSpecBundle"] = "specification intake is currently exposed through the browser, not a CLI command",
+        ["UploadSpecSource"] = "specification intake is currently exposed through the browser, not a CLI command",
+        ["PasteSpecText"] = "specification intake is currently exposed through the browser, not a CLI command",
+        ["ReadSpecExtraction"] = "specification intake is currently exposed through the browser, not a CLI command",
+        ["TombstoneSpecSource"] = "specification intake is currently exposed through the browser, not a CLI command",
+        ["GetCreationCapabilities"] = "the browser project page uses current creation capabilities",
+        ["ListCreationProposals"] = "the browser proposal library discovers retained new mappings",
+        ["ReadCreationProposal"] = "the browser reviews the exact retained new-mapping proposal",
+        ["ApproveCreationProposal"] = "the browser approves the exact reviewed new-mapping proposal",
+        ["RecoverCreationProposal"] = "the browser recovers the durable new-mapping receipt",
+        ["PreviewCreationProposal"] = "the browser tests a private sample against the exact new-mapping proposal",
+        ["GetMappingDraftBase"] = "the browser edit module consumes opaque native base bytes; the CLI submits typed operation files and has no local core",
+        ["GetMappingDraftValidation"] = "the browser issues view consumes the detailed checkpoint report; the CLI checkpoint command reports its validity and issue count",
+        ["GetMappingDraftProjection"] = "the browser workbench consumes the detailed checkpoint projection; the CLI submits typed intent rather than rendering mappings",
+        ["RestoreMappingRevision"] = "the CLI does not expose revision restoration",
+        ["GetChatMappingWriteReceipts"] = "the CLI does not expose durable chat mapping-write receipt discovery",
+        ["RecoverChatMappingWriteReceipts"] = "the CLI does not expose chat mapping-write recovery",
+        ["GetChatMappingEditProposals"] = "the CLI does not expose the exact chat proposal review workflow",
+        ["GetChatMappingEditProposal"] = "the CLI does not expose the exact chat proposal review workflow",
+        ["GetChatMappingEditOperations"] = "the CLI does not expose the exact chat proposal review workflow",
+        ["ApproveChatMappingEditProposal"] = "the CLI has no exact proposal review and approval command",
+        ["RecoverChatMappingEditProposal"] = "the CLI does not expose approved chat proposal recovery",
         ["ReadBrowserAuthentication"] = "browser cookie-session sign-in; the CLI signs in with MSAL",
         ["BeginBrowserLogin"] = "browser cookie-session sign-in; the CLI signs in with MSAL",
         ["LogoutBrowserSession"] = "browser cookie-session sign-in; the CLI signs in with MSAL",
         ["ForgetDeniedLocalSession"] = "browser cookie-session sign-in; the CLI signs in with MSAL",
-        ["CompleteEntraLogin"] = "the browser sign-in callback; the CLI signs in with MSAL"
+        ["CompleteEntraLogin"] = "the browser sign-in callback; the CLI signs in with MSAL",
+        ["GetLocalSandbox"] = LocalSandbox,
+        ["DeployLocalSandbox"] = LocalSandbox,
+        ["GetLocalSandboxMessages"] = LocalSandbox,
+        ["GetLocalSandboxMessage"] = LocalSandbox,
+        ["SendLocalSandboxMessage"] = LocalSandbox
     };
+    private const string LocalSandbox = "the local sandbox runs only on Development hosts, which never accept the CLI's bearer sign-in";
 
     /// <summary>Headers that only authenticate a browser cookie session; a bearer request never sends them.</summary>
     public static IReadOnlySet<string> CookieSessionHeaders { get; } = new HashSet<string>(["Origin", "X-XSRF-TOKEN"], StringComparer.OrdinalIgnoreCase);

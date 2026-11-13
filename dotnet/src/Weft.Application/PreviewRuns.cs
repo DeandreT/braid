@@ -33,9 +33,9 @@ public enum PreviewRunOutcome
     AttemptsExhausted
 }
 
-/// <summary>A caller's preview request for one exact revision; RequestKey makes resubmission idempotent.</summary>
+/// <summary>A caller's preview request for one immutable subject; RequestKey makes resubmission idempotent.</summary>
 public sealed record PreviewRunSubmission(
-    RevisionScope Revision,
+    PreviewSubject Subject,
     Guid RequestKey,
     PreviewTargetSelection Target,
     PreviewInputDocument Primary,
@@ -71,12 +71,16 @@ public sealed record PreviewOutputDescriptor(
     string MediaType,
     long RecordsWritten,
     Sha256Digest Digest,
-    int ByteCount);
+    int ByteCount)
+{
+    public CsvDocumentDialect? CsvDialect { get; init; }
+    public XmlDocumentMetadata? XmlMetadata { get; init; }
+}
 
 /// <summary>The submitter's view of one run; outputs are present only for a succeeded run.</summary>
 public sealed record PreviewRunSnapshot(
     Guid RunId,
-    RevisionScope Revision,
+    PreviewSubject Subject,
     Guid RequestKey,
     string RequestFingerprint,
     string CurrentDateTime,
@@ -111,11 +115,11 @@ public sealed record PreviewRunClaim(
     int Attempt,
     Guid LeaseToken,
     DateTimeOffset LeaseExpiresAtUtc,
-    RevisionScope Revision,
+    PreviewSubject Subject,
     PrincipalId Submitter,
     string RequestDocument,
     string CurrentDateTime,
-    PrivateObjectReference NativeObject);
+    PreviewNativeSource Native);
 
 public sealed record PreviewClaimResult(PreviewClaimOutcome Outcome, PreviewRunClaim? Claim);
 
@@ -142,11 +146,19 @@ public enum PreviewCancelOutcome
 public sealed record PreviewOutputContent(Sha256Digest Digest, byte[] Content)
 {
     public string MediaType { get; init; } = PreviewPolicy.MediaType;
+    public CsvDocumentDialect? CsvDialect { get; init; }
+    public XmlDocumentMetadata? XmlMetadata { get; init; }
 }
 
 /// <summary>Writer port. Each call is one short transaction; none spans worker or storage I/O.</summary>
 public interface IPreviewRunStore
 {
+    /// <summary>
+    /// Proves the trusted current preview persistence contract before submission preflight can read
+    /// private native bytes. This performs no publication, queuing or authority grant; submission
+    /// must still recheck its schema and the actor's authority in its own transaction.
+    /// </summary>
+    Task RequireSubmissionAdmissionAsync(CancellationToken cancellationToken = default);
     Task<PreviewSubmitResult> SubmitAsync(ActorContext actor, PreviewRunRecord record, CancellationToken cancellationToken = default);
     Task<PreviewClaimResult> ClaimAsync(Guid organizationId, Guid runId, Guid owner, TimeSpan lease, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<PreviewStoredInput>> ReadInputsAsync(PreviewRunClaim claim, CancellationToken cancellationToken = default);
@@ -169,6 +181,8 @@ public sealed record PreviewInputDescriptor(int Ordinal, string? Name, Sha256Dig
 /// <summary>Submitter-only reads with fresh project authority; unauthorized and missing are indistinguishable.</summary>
 public interface IPreviewRunReader
 {
+    Task<DraftPreviewSubject?> ReadDraftSubjectAsync(ActorContext actor, MappingScope mapping, Guid requestKey,
+        CancellationToken cancellationToken = default) => Task.FromResult<DraftPreviewSubject?>(null);
     Task<PreviewRunSnapshot?> ReadAsync(ActorContext actor, Guid organizationId, Guid runId, CancellationToken cancellationToken = default);
     Task<PreviewOutputContent?> ReadOutputAsync(ActorContext actor, Guid organizationId, Guid runId, int ordinal,
         CancellationToken cancellationToken = default);
@@ -184,6 +198,7 @@ public interface IPreviewRunReader
 
 public sealed class PreviewRunOptions
 {
+    public bool XmlEnabled { get; init; }
     public int MaxAttempts { get; init; } = 3;
     public TimeSpan Lease { get; init; } = TimeSpan.FromSeconds(90);
     public TimeSpan Retention { get; init; } = TimeSpan.FromHours(24);

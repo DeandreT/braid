@@ -133,7 +133,7 @@ public sealed partial class FerruleDockerRunnerTests
         Assert.Same(inspection, provider.GetRequiredService<IInspectionWorkerRunner>());
         var conversion = provider.GetRequiredKeyedService<IInspectionWorkerRunner>("interchange");
         Assert.NotSame(inspection, conversion);
-        Assert.Equal(2, provider.GetServices<IHostedService>().OfType<InspectionWorkerHostLifetime>().Count());
+        Assert.Equal(3, provider.GetServices<IHostedService>().OfType<InspectionWorkerHostLifetime>().Count());
         var runner = interchange ? conversion : inspection;
         var work = runner.RunAsync(ReadOnlyMemory<byte>.Empty, CancellationToken.None);
         await creation.ExitWaitStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));

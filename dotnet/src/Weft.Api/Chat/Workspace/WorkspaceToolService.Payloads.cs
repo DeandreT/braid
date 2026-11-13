@@ -67,9 +67,10 @@ public sealed partial class WorkspaceToolService
         RequireFeature(features.Previews);
         var previews = Required<PreviewRunService>();
         var run = await previews.ReadAsync(scope.Actor, scope.Organization, runId, token) ?? throw new WorkspaceToolRefusal(WorkspaceToolOutcome.NotFound);
-        if (run.RunId != runId || run.Revision.OrganizationId != scope.Organization) throw new InvalidOperationException("Preview read scope mismatch.");
-        await RequireGrantAsync(scope, run.Revision.ProjectId, token);
-        var citation = ChatWorkspaceCitationFact.PreviewRun(run.Revision, runId);
+        var revision = PreviewRevision(run);
+        if (run.RunId != runId || revision.OrganizationId != scope.Organization) throw new InvalidOperationException("Preview read scope mismatch.");
+        await RequireGrantAsync(scope, revision.ProjectId, token);
+        var citation = ChatWorkspaceCitationFact.PreviewRun(revision, runId);
         if (input)
         {
             var inputs = await previews.ReadInputDescriptorsAsync(scope.Actor, scope.Organization, runId, token)
@@ -79,14 +80,14 @@ public sealed partial class WorkspaceToolService
                 ?? throw new WorkspaceToolRefusal(WorkspaceToolOutcome.NotFound);
             if (content.Digest != descriptor.Digest || content.Content.Length != descriptor.ByteCount)
                 throw new InvalidOperationException("Preview input identity mismatch.");
-            return new(run.Revision.ProjectId, ChatPayloadSource.PreviewInput, runId, null, Id(runId), descriptor.Name ?? "primary", null,
+            return new(revision.ProjectId, ChatPayloadSource.PreviewInput, runId, null, Id(runId), descriptor.Name ?? "primary", null,
                 content.Content, citation);
         }
         var output = run.Outputs.FirstOrDefault(item => item.Ordinal == ordinal) ?? throw new WorkspaceToolRefusal(WorkspaceToolOutcome.NotFound);
         var bytes = await previews.ReadOutputAsync(scope.Actor, scope.Organization, runId, ordinal, token)
             ?? throw new WorkspaceToolRefusal(WorkspaceToolOutcome.NotFound);
         if (bytes.Digest != output.Digest || bytes.Content.Length != output.ByteCount) throw new InvalidOperationException("Preview output identity mismatch.");
-        return new(run.Revision.ProjectId, ChatPayloadSource.PreviewOutput, runId, null, Id(runId), output.TargetName, output.MediaType,
+        return new(revision.ProjectId, ChatPayloadSource.PreviewOutput, runId, null, Id(runId), output.TargetName, output.MediaType,
             bytes.Content, citation);
     }
 

@@ -8,6 +8,11 @@ route or failed request. The status protocol and host profiles are described in
 
 ## Observation and authority
 
+[Mapping editing](mapping-editing.md) keeps durable operation drafts on the server.
+Unsaved operations and redo branches remain tab memory only. Identity boundaries
+terminate the edit worker and hide its projection; fresh same-owner admission can
+restore retained operations, while another owner clears them.
+
 `BrowserSessionApi` sends a fresh bodyless `GET /api/auth/session` with
 `X-Weft-Session: 1`. It accepts only the complete versioned status schema, including
 mode and authenticated-token/fingerprint coherence. Invalid responses, timeouts,

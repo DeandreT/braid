@@ -84,7 +84,7 @@ public sealed partial class PostgresChatStore
         ArgumentNullException.ThrowIfNull(data);
         if (data.Kind == ChatEventKind.Usage && ChatMetadataCodec.ReadUsage(data.MetadataJson!).RoundId != roundId ||
             data.Kind == ChatEventKind.ProviderFailure && ChatMetadataCodec.ReadFailure(data.MetadataJson!).RoundId != roundId ||
-            data.Kind == ChatEventKind.DataShared && key.Kind != ChatConversationKind.Workspace) throw ChatBounds.Invalid();
+            data.Kind is ChatEventKind.DataShared or ChatEventKind.MappingWrite && key.Kind != ChatConversationKind.Workspace) throw ChatBounds.Invalid();
         return AppendCoreAsync(actor, key, turnId, expectedVersion, roundId, fence, data.EventId, data.Kind, data.Text, data.MetadataJson, null, ct);
     }
 

@@ -16,6 +16,7 @@ public static class ApiConfiguration
         services.AddWeftRegressionRuns();
         services.AddWeftBuildApi();
         services.AddSingleton(new ReleaseOperationsOptions());
+        services.AddSingleton(new LocalSandboxOptions());
         services.AddSingleton(new CatalogAutomationOptions(false));
         services.ConfigureHttpJsonOptions(options => ProjectionJson.Configure(options.SerializerOptions));
         services.AddOpenApi(options => options.AddDocumentTransformer((document, context, _) =>
@@ -53,9 +54,12 @@ public static class ApiConfiguration
             CatalogEndpoints.TransformRevisionReportSchemas(document);
             CatalogEndpoints.TransformPreviewSchemas(document);
             ChatEndpoints.TransformSchemas(document);
+            CatalogEndpoints.TransformEditSchemas(document);
             AuthenticationOpenApi.Transform(document);
             // Last: every operation, including the authentication routes added above, declares its admitted schemes.
             ApiSecurity.Transform(document, context.DescriptionGroups);
+            Weft.Api.Specs.SpecOpenApi.Transform(document);
+            Weft.Api.Creation.CreationOpenApi.Transform(document);
             return Task.CompletedTask;
         }));
         return services;
