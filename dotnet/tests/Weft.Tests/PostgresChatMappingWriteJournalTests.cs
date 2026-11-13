@@ -18,7 +18,7 @@ public sealed class PostgresChatMappingWriteJournalTests(PostgresFixture fixture
         var substituted = new MappingEditProposal(NativeArtifact.Admit(p.Content.Base, "different"u8, 1024), p.Content.Operations, [])
         { VerifiedGeneration = p.Content.VerifiedGeneration };
         Assert.Equal(ChatMappingEditCreateOutcome.Refused, (await f.Journal.CreateAsync(f.Test.Actor,
-            new(p.Conversation, p.TurnId, p.RoundId, p.CallId, p.BaseSequence, substituted), default)).Outcome);
+            new ChatMappingEditProposal(p.Conversation, p.TurnId, p.RoundId, p.CallId, p.BaseSequence, substituted), default)).Outcome);
         // Unlike the malformed substitution above, this synthetic backend admission matches the changed bytes.
         // Keep the complete call identity so the real SQL immutable-content check must return Conflict.
         var changedArtifact = NativeArtifact.Admit(p.Content.Base, "different admitted native checkpoint bytes"u8, MappingEditPolicy.MaximumNativeBytes);
