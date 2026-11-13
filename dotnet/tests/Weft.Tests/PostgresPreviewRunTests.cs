@@ -113,7 +113,9 @@ public sealed class PostgresPreviewRunTests(PostgresFixture fixture)
         var before = await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(r) ORDER BY run_id)::text FROM weft.preview_runs r");
         var documents = await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(d) ORDER BY direction,ordinal)::text FROM weft.preview_documents d");
         await test.MigrateAsync();
-        Assert.Equal(before, await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(r)-'csv_profile' ORDER BY run_id)::text FROM weft.preview_runs r"));
+        // 0038 adds the draft subject columns and 0041 csv_profile; every pre-existing run stays a revision JSON run.
+        Assert.Equal(before, await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(r)-'csv_profile'-'draft_id'-'draft_version'-'draft_base_revision_id' ORDER BY run_id)::text FROM weft.preview_runs r"));
+        Assert.Equal(0L, await test.ScalarAsync<long>("SELECT count(*) FROM weft.preview_runs WHERE csv_profile OR draft_id IS NOT NULL OR draft_version IS NOT NULL OR draft_base_revision_id IS NOT NULL"));
         Assert.Equal(documents, await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(d)-'csv_input'-'csv_dialect' ORDER BY direction,ordinal)::text FROM weft.preview_documents d"));
         Assert.Equal(PreviewPolicy.MediaType, (await reads.ReadOutputAsync(actor, revision.OrganizationId, legacyRun, 0))!.MediaType);
         Assert.Equal(new PreviewSubmitResult(PreviewSubmitOutcome.Replayed, legacyRun), await store.SubmitAsync(actor,
