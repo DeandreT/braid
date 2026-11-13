@@ -265,7 +265,8 @@ public sealed class PostgresChatUpgradeTests(PostgresFixture fixture)
         schema.Parameters.AddWithValue(PreviewSchemaTestContract.ParentForeignKeys.Concat(MappingDraftSchemaTestContract.PreviewParentForeignKeys).ToArray());
         schema.Parameters.AddWithValue(RegressionSchemaTestContract.Tables.Concat(InterchangeSchemaTestContract.Tables).Append("catalog_search_report_index").Append("account_display_metadata").ToArray());
         schema.Parameters.AddWithValue(CatalogSearchSchemaAdmission.IndexNames);
-        schema.Parameters.AddWithValue(AutomationSchemaAdmission.AllTriggerNames);
+        // 0040 and 0045 each add exactly one named trigger to the old revision_ingestions relation.
+        schema.Parameters.AddWithValue(AutomationSchemaAdmission.AllTriggerNames.Append("chat_mapping_write_commit").Append("revision_ingestions_creation_guard").ToArray());
         var schemaText = Assert.IsType<string>(await schema.ExecuteScalarAsync());
         text.Append(schemaText);
         using var document = JsonDocument.Parse(schemaText);
