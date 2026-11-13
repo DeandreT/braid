@@ -22,8 +22,11 @@ internal static class ServerHostBrowserSecurity
             using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             using var response = await client.GetAsync(path, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
             ServerHostCheck.That(response.StatusCode == HttpStatusCode.OK, "A published browser resource was not served.");
+            var policy = path.StartsWith("/edit/", StringComparison.Ordinal)
+                ? Weft.Server.BrowserContentPolicy.Editor(client.BaseAddress!.GetLeftPart(UriPartial.Authority))
+                : Weft.Api.BrowserSecurityHeaders.ContentSecurityPolicy;
             foreach (var (name, value) in new[] {
-                ("Content-Security-Policy", Weft.Api.BrowserSecurityHeaders.ContentSecurityPolicy),
+                ("Content-Security-Policy", policy),
                 ("X-Content-Type-Options", "nosniff"), ("Referrer-Policy", "no-referrer"),
                 ("Cross-Origin-Opener-Policy", "same-origin"), ("Cross-Origin-Resource-Policy", "same-origin") })
                 ServerHostCheck.That(response.Headers.TryGetValues(name, out var values) && values.SequenceEqual([value]),
