@@ -183,6 +183,7 @@ public sealed partial class BearerSecurityContractTests
             app.MapWeftAuthentication();
             app.MapWeftCatalog();
             Weft.Api.Specs.SpecEndpoints.MapWeftSpecs(app);
+            Weft.Api.Creation.CreationEndpoints.MapWeftCreation(app);
             app.MapWeftHelp();
             app.MapWeftRegressionCases();
             app.MapWeftRegressionRuns();
