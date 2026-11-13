@@ -98,8 +98,12 @@ export class NetworkCaseOwner {
               }, 10000);
               const listener = (event: SecurityPolicyViolationEvent) => {
                 if (
+                  event.isTrusted &&
                   event.effectiveDirective ===
-                  (kind === "frame" ? "frame-src" : "worker-src")
+                    (kind === "frame" ? "frame-src" : "worker-src") &&
+                  event.violatedDirective === event.effectiveDirective &&
+                  event.blockedURI === target &&
+                  event.disposition === "enforce"
                 ) {
                   clearTimeout(timer);
                   remove();

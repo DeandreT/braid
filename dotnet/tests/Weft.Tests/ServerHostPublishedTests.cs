@@ -28,6 +28,7 @@ public sealed class ServerHostPublishedTests(PostgresFixture postgres)
             await using var host = ServerHostProcess.Start(environment);
             Uri origin = await host.WaitForLoopbackListenerAsync(); using var client = ServerHostHttp.Client(origin);
             ServerHostHttp.Mode(await ServerHostHttp.StartupStatusAsync(client), "disabled");
+            await ServerHostBrowserSecurity.CheckAsync(client);
             ServerHostHttp.Mode(await ServerHostHttp.SendAsync(client, "/api/auth/session", headers: new Dictionary<string, string> { ["X-Weft-Session"] = "1" }), "disabled");
             var health = await ServerHostHttp.SendAsync(client, "/api/v1/health");
             using var healthy = health.Json();
@@ -84,6 +85,7 @@ public sealed class ServerHostPublishedTests(PostgresFixture postgres)
             };
             reservation.Stop(); var host = test.Start(environment); using var client = ServerHostHttp.Client(origin);
             ServerHostHttp.Mode(await ServerHostHttp.StartupStatusAsync(client), "development");
+            await ServerHostBrowserSecurity.CheckAsync(client);
             var context = await ServerHostHttp.SendAsync(client, "/api/v1/catalog/context");
             using var body = context.Json(); var value = body.RootElement;
             ServerHostCheck.That(context.Status == 200 && value.GetProperty("mode").GetString() == "development"
@@ -135,6 +137,7 @@ public sealed class ServerHostPublishedTests(PostgresFixture postgres)
             using var client = ServerHostHttp.Client(test.Origin, test.Files.TlsCertificate);
             test.PositiveStatus(await ServerHostHttp.StartupStatusAsync(client, test.Cookies.Header));
             test.PositiveStatus(await test.StatusAsync(client)); test.PositiveContext(await test.ContextAsync(client));
+            await ServerHostBrowserSecurity.CheckAsync(client);
             ServerHostCheck.That((await ServerHostHttp.SendAsync(client, "/api/v1/examples/mappings")).Status == 404
                 && (await ServerHostHttp.SendAsync(client, "/openapi/v1.json")).Status == 404,
                 "Session inherited Development prototype endpoints.");

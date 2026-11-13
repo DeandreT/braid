@@ -61,8 +61,7 @@ authorization.
 After this fix, the complete pinned `npm run check` and `npm run build` passed.
 The production initial-bundle warning remains 655.72 kB against 500 kB.
 The final focused Playwright run passed all 11 `csv-workflow.spec.ts` tests,
-including both XML cases, with actual Chromium 156.0.8078.4 (Playwright revision
-1248) on Windows. The initial missing-browser failure was resolved by installing
+including both XML cases, with actual Chromium 156.0.8078.4 (Playwright revision 1248) on Windows. The initial missing-browser failure was resolved by installing
 the locked package's required Chromium revision. Browser execution exposed stale
 fixture responses: revision runs now include `subjectKind: "revision"` and
 `draft: null`; the XML-only capability fixture omits CSV comparison policies.

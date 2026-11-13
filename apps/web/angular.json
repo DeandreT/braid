@@ -56,7 +56,7 @@
             },
             "tsConfig": "tsconfig.browser-session-probe.json",
             "styles": ["src/style.css"],
-            "baseHref": "/__weft119_probe/",
+            "deployUrl": "/__weft119_probe/",
             "outputPath": {
               "base": "dist/browser-session-probe",
               "browser": "browser"
@@ -64,6 +64,11 @@
           },
           "configurations": {
             "production": {
+              "optimization": {
+                "scripts": true,
+                "styles": { "minify": true, "inlineCritical": false },
+                "fonts": false
+              },
               "budgets": [
                 {
                   "type": "initial",
@@ -78,7 +83,18 @@
           "defaultConfiguration": "production"
         },
         "serve": {
-          "builder": "@angular/build:dev-server",
+          "builder": "./tools/dev-server:dev-server",
+          "options": {
+            "hmr": false,
+            "liveReload": false,
+            "headers": {
+              "Content-Security-Policy": "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self'; child-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+              "X-Content-Type-Options": "nosniff",
+              "Referrer-Policy": "no-referrer",
+              "Cross-Origin-Opener-Policy": "same-origin",
+              "Cross-Origin-Resource-Policy": "same-origin"
+            }
+          },
           "defaultConfiguration": "development",
           "configurations": {
             "development": { "buildTarget": "weft:build:devServer" }

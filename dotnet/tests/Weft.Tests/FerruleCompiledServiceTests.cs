@@ -1233,7 +1233,9 @@ public sealed class FerruleCompiledServiceTests(Xunit.Abstractions.ITestOutputHe
             var options = new ProcessCompiledRuntimeOptions(PackagedFerruleService.Identity, Assembly, Launcher!, root, installation.Toolchain);
             // The installed hostfxr is an invalid object, then a valid native object without the hosting exports.
             await using (var malformed = new ProcessCompiledRuntimeRunner(options)) Assert.False(await malformed.ProbeAsync(default));
-            File.Copy("/usr/lib/x86_64-linux-gnu/libc.so.6", BuildCompilation.HostFxr(installation.Toolchain), overwrite: true);
+            // Any real shared object without the hosting exports; Debian and Arch place libc differently.
+            var libc = new[] { "/usr/lib/x86_64-linux-gnu/libc.so.6", "/usr/lib64/libc.so.6", "/usr/lib/libc.so.6" }.First(File.Exists);
+            File.Copy(libc, BuildCompilation.HostFxr(installation.Toolchain), overwrite: true);
             await using (var wrongExports = new ProcessCompiledRuntimeRunner(options)) Assert.False(await wrongExports.ProbeAsync(default));
             File.Delete(BuildCompilation.HostFxr(installation.Toolchain));
             Assert.Throws<ArgumentException>(() => new ProcessCompiledRuntimeRunner(options));

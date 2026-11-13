@@ -282,6 +282,25 @@ test("the header opens the guide contents", async ({ page }) => {
   await expect(page).toHaveURL(/\/help\/chat$/);
 });
 
+test("a nested deep link loads its entry assets from the root", async ({
+  page,
+}) => {
+  await install(page);
+  const assets: string[] = [];
+  page.on("response", (response) => {
+    if (["script", "stylesheet"].includes(response.request().resourceType()))
+      assets.push(`${response.status()} ${new URL(response.url()).pathname}`);
+  });
+  await page.goto("/help/overview");
+  await expect(
+    article(page).getByRole("heading", { level: 1, name: "Getting started" }),
+  ).toBeVisible();
+  expect(assets).toContain("200 /main.js");
+  expect(assets.filter((asset) => !/^200 \/(?!help\/)/.test(asset))).toEqual(
+    [],
+  );
+});
+
 test("a section renders its structure as text and links", async ({ page }) => {
   const fixture = await install(page);
   await page.goto("/help/overview");

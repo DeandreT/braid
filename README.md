@@ -16,23 +16,23 @@ not change feature availability or qualification status.
 
 ![Workbench showing a purchase order mapping's field connections](docs/images/workbench-mapping.png)
 
-*The revision workbench: each incoming field, the rule that uses it and the result field it fills.*
+_The revision workbench: each incoming field, the rule that uses it and the result field it fills._
 
 ![Sample preview with its JSON input and the mapped output](docs/images/workbench-preview.png)
 
-*Try a sample: run a saved revision on a sample document and read its exact output.*
+_Try a sample: run a saved revision on a sample document and read its exact output._
 
 ![Regression run result with expected and actual output side by side](docs/images/workbench-regression.png)
 
-*Regression tests: a saved case's run shows where the result differs from the expected output.*
+_Regression tests: a saved case's run shows where the result differs from the expected output._
 
 ![Comparison of two revisions grouped by inputs, fields, parameters and rules](docs/images/revision-comparison.png)
 
-*Compare revisions: semantic differences between two saved explanations.*
+_Compare revisions: semantic differences between two saved explanations._
 
 ![Workspace chat panel answering a question with citations](docs/images/chat.png)
 
-*Workspace chat: questions answered with links to their sources, with permission-controlled mapping edits when requested.*
+_Workspace chat: questions answered with links to their sources, with permission-controlled mapping edits after exact-proposal approval._
 
 Screenshots use demo data; see [docs/images](docs/images/README.md) for how they are produced.
 
@@ -142,6 +142,7 @@ See [Local development](docs/development.md) to run and verify the application.
 - [Authentication HTTP](docs/browser-authentication-http.md): session inspection, login/callback, acknowledged local logout and explicit local forgetting.
 - [API authentication](docs/api-authentication.md): the browser session and opt-in Entra bearer tokens for signed-in users' other clients, with rate limits and durable audit.
 - [Session host operations](docs/session-host.md): explicit host modes, private configuration, offline TLS, ingress, privacy and shutdown.
+- [Browser security](docs/browser-security.md): shared CSP and response headers and static asset handling.
 - [Runtime packaging](docs/runtime-packaging.md): container images, private delivery, the same-replica edge and the hosted-shape local stack.
 - [Azure deployment](docs/azure-deployment.md): Bicep templates, operator inputs, the deployment procedure and open hosting questions.
 - [Session-safe browser state](docs/browser-session-state.md): fresh identity observation, protected-view invalidation and private original-operation recovery.

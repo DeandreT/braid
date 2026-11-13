@@ -76,6 +76,7 @@ then retains/restores a typed-v2 proposal and approves its Partial coverage.
 That test uses synthetic compiler bytes and a synthetic physical-publication
 callback; it qualifies real document restoration and database boundaries, not
 native mapping execution or physical storage.
+
 ## Integrated runtime qualification
 
 Reviewed runtime `c2ba6f56306631766f23b834286c602176a9579f` and discovery

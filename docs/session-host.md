@@ -6,6 +6,12 @@ Absent mode preserves the old choice: catalog off means disabled; explicit catal
 
 Disabled and Development use a loopback HTTP listener. Disabled status is noncredential JSON with only version and mode; it creates no session, Entra or identity database resources. Enabled Development retains its existing identity/origin/environment checks and token contract. Its concrete origin must match the configured listener. `DevelopmentListenAddress.Parse` still accepts port zero. Only Disabled status may defer its origin: one actual nonzero bound loopback address is admitted after Kestrel starts, before application startup completes. Before that publication the status endpoint cannot return success. Neither Host nor forwarding headers select this origin.
 
+Both pipelines install the same [browser security headers](browser-security.md)
+before admission, static files and routing, including in packaged images. The app
+shell and every static asset use the strict same-origin CSP; authentication error
+documents retain their stricter policy. No environment enables inline scripts,
+`unsafe-eval` or `wasm-unsafe-eval`.
+
 Session requires the following explicit configuration. Deliver secrets through protected files, not command-line arguments or logged configuration dumps.
 
 | Setting | Required value |

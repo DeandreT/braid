@@ -42,6 +42,7 @@ internal static class SessionHostEntrypoint
                     });
                     web.Configure(app =>
                     {
+                        app.UseWeftBrowserSecurityHeaders();
                         requests.Use(app);
                         SessionHostTransport.Use(app, options);
                         app.Use(async (context, next) =>

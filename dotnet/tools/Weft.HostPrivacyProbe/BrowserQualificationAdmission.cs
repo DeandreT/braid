@@ -39,6 +39,7 @@ internal sealed partial class BrowserQualificationAdmission
             pending.Add(request.Proof, request);
         }
     }
+    private static readonly string[] ClassicScripts = ["/theme.js"];
     private bool Allowed(TransportAdmission item)
     {
         string path = item.RawTarget;
@@ -51,7 +52,8 @@ internal sealed partial class BrowserQualificationAdmission
             return item.Method == "GET" && item.Origin is null && item.Negative is null && new[] { "/api/auth/session", "/api/v1/catalog/context", "/api/v1/health", $"/api/v1/organizations/{input.Organization:D}/projects?limit=10" }.Contains(path);
         }
         // Module scripts and fonts are CORS-mode loads; Chromium sends the page Origin even same-origin.
-        bool cors = item.Destination is "script" or "font";
+        // The pre-paint theme loader is the one classic script: no-cors, without Origin.
+        bool cors = item.Destination == "font" || item.Destination == "script" && !ClassicScripts.Contains(path);
         return item.Method == "GET" && item.Negative is null && item.Site == "same-origin" && input.Assets.ContainsKey(path[1..])
             && item.Destination is "script" or "style" or "image" or "font"
             && item.Mode == (cors ? "cors" : "no-cors") && item.Origin == (cors ? input.Origin : null);

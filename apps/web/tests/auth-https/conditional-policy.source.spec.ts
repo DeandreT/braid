@@ -74,6 +74,18 @@ test("conditional source registration expectation does not need early metadata",
       value.site === "same-origin" &&
       value.origin === cfg.origin,
   );
+  const classic = expectedTuple(
+    { ...cfg, assets: ["theme.js"] },
+    new URL(cfg.origin + "/theme.js"),
+    "GET",
+    "Script",
+    "normal",
+  );
+  requireOwned(
+    classic.destination === "script" &&
+      classic.mode === "no-cors" &&
+      classic.origin === null,
+  );
   const style = expectedTuple(
     { ...cfg, assets: ["inert.css"] },
     new URL(cfg.origin + "/inert.css"),
