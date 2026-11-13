@@ -501,16 +501,23 @@ internal static class HistoricalIngestionSeed
             WHERE namespace.nspname='weft' ORDER BY relation.relname
             """),
         ("columns", """
-            SELECT jsonb_build_object('table',relation.relname,'number',attribute.attnum,'name',attribute.attname,
+            SELECT CASE WHEN count(*)<=1024 THEN jsonb_build_object('table',relation.relname,
+                'columns',jsonb_agg(column_row.value ORDER BY column_row.number)) END AS value
+            FROM pg_catalog.pg_class relation
+            JOIN pg_catalog.pg_namespace namespace ON namespace.oid=relation.relnamespace
+            CROSS JOIN LATERAL (
+              SELECT attribute.attnum AS number, jsonb_build_object('number',attribute.attnum,'name',attribute.attname,
                 'type',format_type(attribute.atttypid,attribute.atttypmod),'notNull',attribute.attnotnull,
                 'identity',attribute.attidentity,'generated',attribute.attgenerated,
                 'default',pg_get_expr(defaults.adbin,defaults.adrelid),
                 'acl',ARRAY(SELECT entry::text FROM unnest(attribute.attacl) entry ORDER BY entry::text)) AS value
-            FROM pg_catalog.pg_attribute attribute JOIN pg_catalog.pg_class relation ON relation.oid=attribute.attrelid
-            JOIN pg_catalog.pg_namespace namespace ON namespace.oid=relation.relnamespace
-            LEFT JOIN pg_catalog.pg_attrdef defaults ON defaults.adrelid=relation.oid AND defaults.adnum=attribute.attnum
+              FROM pg_catalog.pg_attribute attribute
+              LEFT JOIN pg_catalog.pg_attrdef defaults ON defaults.adrelid=relation.oid AND defaults.adnum=attribute.attnum
+              WHERE attribute.attrelid=relation.oid AND attribute.attnum>0 AND NOT attribute.attisdropped
+              ORDER BY attribute.attnum LIMIT 1025
+            ) column_row
             WHERE namespace.nspname='weft' AND relation.relkind IN ('r','p','v','m','f')
-              AND attribute.attnum>0 AND NOT attribute.attisdropped ORDER BY relation.relname,attribute.attnum
+            GROUP BY relation.relname ORDER BY relation.relname
             """),
         ("functions", """
             SELECT jsonb_build_object('name',function.proname,'identityArguments',pg_get_function_identity_arguments(function.oid),
