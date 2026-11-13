@@ -71,6 +71,16 @@ jobs:
           install -m 0555 "$CARGO_TARGET_DIR/release/weft-compile-sandbox" "$RUNNER_TEMP/weft-compile-sandbox"
           printf 'WEFT_COMPILE_SANDBOX_EXECUTABLE=%s\n' "$RUNNER_TEMP/weft-compile-sandbox" >> "$GITHUB_ENV"
           rm -rf "$CARGO_TARGET_DIR"
+      - name: Build the specification PDF worker
+        if: matrix.partition != 'browser'
+        env:
+          CARGO_TARGET_DIR: target/spec-pdf-worker
+        run: |
+          cargo +1.98.1 build --manifest-path engines/spec-pdf-worker/Cargo.toml --locked
+          # The PDF intake and creation evidence tests run this exact worker as their native child.
+          install -m 0555 "$CARGO_TARGET_DIR/debug/weft-spec-pdf-worker" "$RUNNER_TEMP/weft-spec-pdf-worker"
+          printf 'WEFT_TEST_PDF_EXECUTABLE=%s\n' "$RUNNER_TEMP/weft-spec-pdf-worker" >> "$GITHUB_ENV"
+          rm -rf "$CARGO_TARGET_DIR"
       - name: Build the restricted worker image
         run: |
           docker build --build-arg "WEFT_REVISION=$GITHUB_SHA" --iidfile "$RUNNER_TEMP/weft-worker-image-id" engines/ferrule-host
