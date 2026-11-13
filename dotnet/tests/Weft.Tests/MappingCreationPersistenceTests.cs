@@ -73,6 +73,33 @@ public sealed class MappingCreationPersistenceTests(PostgresFixture fixture)
     }
 
     [PostgresFact]
+    public async Task Shape_admits_an_unchanged_privilege_set_in_any_acl_order_but_not_a_changed_one()
+    {
+        await using var test = await fixture.CreateCaseAsync();
+        // Revoking and re-granting a role's existing privilege moves its ACL entry without changing any authority.
+        var grantee = await test.ScalarAsync<string>("""
+            SELECT pg_get_userbyid(a.grantee) FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) a
+            WHERE c.oid='weft.project_memberships'::regclass AND a.privilege_type='SELECT' AND NOT a.is_grantable AND a.grantee<>c.relowner
+            ORDER BY 1 LIMIT 1
+            """);
+        var before = await test.ScalarAsync<string>("SELECT relacl::text FROM pg_class WHERE oid='weft.project_memberships'::regclass");
+        await test.ExecuteAsync($"REVOKE SELECT ON weft.project_memberships FROM {grantee}; GRANT SELECT ON weft.project_memberships TO {grantee}");
+        Assert.NotEqual(before, await test.ScalarAsync<string>("SELECT relacl::text FROM pg_class WHERE oid='weft.project_memberships'::regclass"));
+        Assert.Equal(CreationSchemaAdmission.ShapeDigest, await ShapeAsync(test));
+        await test.ExecuteAsync($"GRANT UPDATE ON weft.project_memberships TO {grantee}");
+        Assert.NotEqual(CreationSchemaAdmission.ShapeDigest, await ShapeAsync(test));
+        await test.ExecuteAsync($"REVOKE UPDATE ON weft.project_memberships FROM {grantee}");
+        Assert.Equal(CreationSchemaAdmission.ShapeDigest, await ShapeAsync(test));
+
+        static async Task<string> ShapeAsync(PostgresCase test)
+        {
+            await using var connection = await test.Owner.OpenConnectionAsync();
+            await using var transaction = await connection.BeginTransactionAsync();
+            return await CreationSchemaAdmission.ShapeAsync(connection, transaction, default);
+        }
+    }
+
+    [PostgresFact]
     public async Task Decision_is_committed_and_independent_read_and_ingestion_complete_while_fenced()
     {
         await using var f = await Fixture.Create(fixture);
