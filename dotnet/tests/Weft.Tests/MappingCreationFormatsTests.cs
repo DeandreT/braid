@@ -19,16 +19,16 @@ public sealed class MappingCreationFormatsTests
     public async Task All_36_typed_boundary_pairs_compile_and_execute_two_fields()
     {
         foreach (var sourceFormat in Formats)
-        foreach (var targetFormat in Formats)
-        {
-            var source = Fixture(sourceFormat); var target = Fixture(targetFormat);
-            var plan = new MappingCreationPlan(new CreationPlanV2(source.Boundary, target.Boundary,
-                TargetScope(target.Boundary.Schema, target.Constants, source.Paths, target.Paths, [])));
-            var output = await CompileAndExecute(plan, source.Sample);
-            AssertOutput(targetFormat, output, "alpha", "beta");
-            var changed = source.Sample.Replace("alpha", "changedA").Replace("beta", "changedB");
-            AssertOutput(targetFormat, await CompileAndExecute(plan, changed), "changedA", "changedB");
-        }
+            foreach (var targetFormat in Formats)
+            {
+                var source = Fixture(sourceFormat); var target = Fixture(targetFormat);
+                var plan = new MappingCreationPlan(new CreationPlanV2(source.Boundary, target.Boundary,
+                    TargetScope(target.Boundary.Schema, target.Constants, source.Paths, target.Paths, [])));
+                var output = await CompileAndExecute(plan, source.Sample);
+                AssertOutput(targetFormat, output, "alpha", "beta");
+                var changed = source.Sample.Replace("alpha", "changedA").Replace("beta", "changedB");
+                AssertOutput(targetFormat, await CompileAndExecute(plan, changed), "changedA", "changedB");
+            }
     }
 
     [NativeFormatsFact]
@@ -455,8 +455,10 @@ public sealed class MappingCreationFormatsTests
         {
             CreationFormatOptions options = format switch
             {
-                "json" => new CreationJsonOptions(), "xml" => new CreationXmlOptions(),
-                "csv" => new CreationCsvOptions(true, true, false, true), _ => new CreationTsvOptions(true, true, false, true)
+                "json" => new CreationJsonOptions(),
+                "xml" => new CreationXmlOptions(),
+                "csv" => new CreationCsvOptions(true, true, false, true),
+                _ => new CreationTsvOptions(true, true, false, true)
             };
             var schema = Group("Document", [Scalar("code", xml: format == "xml" ? new("", Attribute: true) : null), Scalar("other")],
                 xml: format == "xml" ? new("urn:creation") : null);
@@ -464,7 +466,8 @@ public sealed class MappingCreationFormatsTests
             {
                 "json" => "{\"code\":\"alpha\",\"other\":\"beta\"}",
                 "xml" => "<Document xmlns=\"urn:creation\" code=\"alpha\"><other>beta</other></Document>",
-                "csv" => "code,other\nalpha,beta\n", _ => "code\tother\nalpha\tbeta\n"
+                "csv" => "code,other\nalpha,beta\n",
+                _ => "code\tother\nalpha\tbeta\n"
             };
             return new(new(schema, options), sample, [["code"], ["other"]], []);
         }
@@ -537,9 +540,15 @@ public sealed class MappingCreationFormatsTests
         var sampleBytes = Encoding.UTF8.GetBytes(sample);
         var header = JsonSerializer.SerializeToUtf8Bytes(new
         {
-            protocolVersion = "weft.ferrule-authored-preview.v1", requestId = Guid.NewGuid().ToString("D"), operation = "previewAuthored",
-            organizationId = project.OrganizationId.ToString("D"), projectId = project.ProjectId.ToString("D"), authoringId = authoring.ToString("D"),
-            proposalDigest = plan.Digest.Value, nativeDigest = Sha256Digest.FromBytes(native).Value, sampleDigest = Sha256Digest.FromBytes(sampleBytes).Value
+            protocolVersion = "weft.ferrule-authored-preview.v1",
+            requestId = Guid.NewGuid().ToString("D"),
+            operation = "previewAuthored",
+            organizationId = project.OrganizationId.ToString("D"),
+            projectId = project.ProjectId.ToString("D"),
+            authoringId = authoring.ToString("D"),
+            proposalDigest = plan.Digest.Value,
+            nativeDigest = Sha256Digest.FromBytes(native).Value,
+            sampleDigest = Sha256Digest.FromBytes(sampleBytes).Value
         });
         var response = await Preview([.. Frame(header), .. Frame(native), .. Frame(sampleBytes)]);
         using var stream = new MemoryStream(response);

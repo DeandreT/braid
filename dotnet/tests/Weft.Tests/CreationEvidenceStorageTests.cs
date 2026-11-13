@@ -102,12 +102,22 @@ public sealed class CreationEvidenceStorageTests
         // Frozen pre-mixed codec header and block order. Digest strings match the old converter.
         var header = JsonSerializer.SerializeToUtf8Bytes(new
         {
-            Version = 1, p.Author, p.Id, Key = p.RequestKey, Bundle = spec.Snapshot.Bundle,
+            Version = 1,
+            p.Author,
+            p.Id,
+            Key = p.RequestKey,
+            Bundle = spec.Snapshot.Bundle,
             Sources = new[] { new { Identity = new { identity.Source, SourceDigest = identity.SourceDigest.Value, identity.Format,
                 identity.ExtractorVersion, ProfileDigest = identity.ProfileDigest.Value, identity.Outcome, EvidenceDigest = identity.EvidenceDigest.Value } } },
-            Evidence = p.Notes.Evidence.ToArray(), Assumptions = p.Notes.Assumptions.ToArray(), Questions = p.Notes.Questions.ToArray(),
-            p.Request.Metadata, Backend = p.Request.BackendId, Filename = p.Request.OriginalFilename,
-            Engine = p.Compilation.EngineRevision, Worker = p.Compilation.WorkerBuild, Fingerprint = p.Fingerprint.Value
+            Evidence = p.Notes.Evidence.ToArray(),
+            Assumptions = p.Notes.Assumptions.ToArray(),
+            Questions = p.Notes.Questions.ToArray(),
+            p.Request.Metadata,
+            Backend = p.Request.BackendId,
+            Filename = p.Request.OriginalFilename,
+            Engine = p.Compilation.EngineRevision,
+            Worker = p.Compilation.WorkerBuild,
+            Fingerprint = p.Fingerprint.Value
         });
         return Storage([header, p.Plan.CopyBytes(), spec.Sources[0].CopyBytes(), spec.Extractions[0].CopyEvidenceBytes(),
             p.Compilation.CopyNative(), p.Compilation.CopyValidation(), p.Compilation.CopyProjection()]);

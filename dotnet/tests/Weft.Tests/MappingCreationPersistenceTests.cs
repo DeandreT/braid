@@ -1,5 +1,5 @@
-using Npgsql;
 using System.Text.Json;
+using Npgsql;
 using Weft.Application;
 using Weft.Domain;
 using Weft.Persistence.Postgres;
