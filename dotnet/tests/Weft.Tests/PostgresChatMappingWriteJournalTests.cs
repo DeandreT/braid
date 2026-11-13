@@ -19,6 +19,30 @@ public sealed class PostgresChatMappingWriteJournalTests(PostgresFixture fixture
         { VerifiedGeneration = p.Content.VerifiedGeneration };
         Assert.Equal(ChatMappingEditCreateOutcome.Refused, (await f.Journal.CreateAsync(f.Test.Actor,
             new(p.Conversation, p.TurnId, p.RoundId, p.CallId, p.BaseSequence, substituted), default)).Outcome);
+        // Unlike the malformed substitution above, this synthetic backend admission matches the changed bytes.
+        // Keep the complete call identity so the real SQL immutable-content check must return Conflict.
+        var changedArtifact = NativeArtifact.Admit(p.Content.Base, "different admitted native checkpoint bytes"u8, MappingEditPolicy.MaximumNativeBytes);
+        var generation = Assert.IsType<VerifiedMappingEditGeneration>(p.Content.VerifiedGeneration);
+        var changedContent = new MappingEditProposal(changedArtifact, p.Content.Operations, p.Content.Changes, p.Content.ChangesTruncated)
+        { VerifiedGeneration = new(f.Test.Actor.PrincipalId, new(p.Content.Base, changedArtifact.Digest, generation.Provenance.BackendProfile, true)) };
+        var changed = new ChatMappingEditProposal(p.Conversation, p.TurnId, p.RoundId, p.CallId, p.BaseSequence, changedContent);
+        Assert.Equal(p.CanonicalIdentity, changed.CanonicalIdentity);
+        Assert.Equal(p.ProposalId, changed.ProposalId); Assert.Equal(p.RequestKey, changed.RequestKey);
+        Assert.NotEqual(p.Fingerprint, changed.Fingerprint);
+        var conflict = await f.Journal.CreateAsync(f.Test.Actor, changed, default);
+        Assert.Equal(ChatMappingEditCreateOutcome.Conflict, conflict.Outcome); Assert.Null(conflict.State);
+        var retained = (await f.Journal.ReadAsync(f.Test.Actor, p.Conversation, p.TurnId, p.ProposalId, default))!;
+        Assert.Equal(ChatMappingEditStatus.AwaitingApproval, retained.Status);
+        Assert.Equal(p.Fingerprint, retained.Proposal.Fingerprint);
+        Assert.Equal(p.Content.Checkpoint.CopyBytes(), retained.Proposal.Content.Checkpoint.CopyBytes());
+        Assert.Equal(p.Content.Checkpoint.CopyBytes(), await f.Test.Case.ScalarAsync<byte[]>(
+            "SELECT native FROM weft.chat_edit_content WHERE proposal_id=$1", p.ProposalId));
+        Assert.Equal(ChatMappingEditProposalStorage.Encode(p), await f.Test.Case.ScalarAsync<byte[]>(
+            "SELECT encoding FROM weft.chat_edit_content WHERE proposal_id=$1", p.ProposalId));
+        Assert.Equal(p.Fingerprint.Value, await f.Test.Case.ScalarAsync<string>(
+            "SELECT fingerprint FROM weft.chat_edit_proposals WHERE proposal_id=$1", p.ProposalId));
+        Assert.Equal(1L, await f.Test.Case.ScalarAsync<long>("SELECT count(*) FROM weft.chat_edit_proposals"));
+        Assert.Equal(1L, await f.Test.Case.ScalarAsync<long>("SELECT count(*) FROM weft.chat_edit_content"));
         Assert.Equal(0L, await f.Test.Case.ScalarAsync<long>("SELECT count(*) FROM weft.chat_edit_approvals"));
         Assert.Equal(ChatMappingEditStatus.Approved, (await f.ApproveAsync())!.Status);
         var replay = (await f.ApproveAsync())!;
@@ -53,12 +77,19 @@ public sealed class PostgresChatMappingWriteJournalTests(PostgresFixture fixture
         Assert.Equal(IngestionPhase.Committed, committed.Receipt!.Phase);
         Assert.Equal(committed.Receipt.Facts.FutureRevision.RevisionId, await f.Test.Case.ScalarAsync<Guid>("SELECT revision_id FROM weft.chat_mapping_write_commits"));
         await using var restarted = new PostgresChatDatabase(f.Test.Case.ChatWriterConnectionString, ChatDatabaseProfile.Writer);
+        await using var restartedApprover = new PostgresChatDatabase(fixture.ChatApproverConnectionString(f.Test.Case), ChatDatabaseProfile.Approver);
         var journal = new PostgresChatStore(restarted);
         var saved = Assert.Single(await journal.ReadAsync(f.Test.Actor, f.Intent.Conversation, f.Intent.TurnId, default));
         Assert.Equal(committed.Receipt.Facts.FutureRevision.RevisionId, saved.Saved!.RevisionId);
         Assert.Equal(2, saved.Saved.Sequence);
         // No post-commit journal mutation or live-turn append is needed. Repeated read/retry preserves one version.
-        Assert.Equal(ChatMappingEditStatus.Saved, (await f.ApproveAsync())!.Status);
+        var p = f.Proposal;
+        var replay = (await new PostgresChatStore(restartedApprover).ApproveAndPrepareAsync(f.Test.Actor,
+            p.Conversation, p.TurnId, p.ProposalId, p.Fingerprint, default))!;
+        Assert.Equal(ChatMappingEditStatus.Saved, replay.Status);
+        Assert.Equal(saved.Key, replay.Receipt!.Key);
+        Assert.Equal(saved.Saved.RevisionId, replay.Receipt.Saved!.RevisionId);
+        Assert.Equal(saved.Saved.Sequence, replay.Receipt.Saved.Sequence);
         Assert.Equal(ChatMetadataCodec.MappingWrite(saved.Saved), ChatMetadataCodec.MappingWrite((await journal.ReadAsync(f.Test.Actor, f.Intent.Conversation, f.Intent.TurnId, default)).Single().Saved!));
         Assert.Equal(2L, await f.Test.Case.ScalarAsync<long>("SELECT count(*) FROM weft.mapping_revisions"));
         Assert.Equal(0L, await f.Test.Case.ScalarAsync<long>("SELECT count(*) FROM weft.chat_events WHERE kind=15"));
