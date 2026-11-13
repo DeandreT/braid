@@ -12,11 +12,17 @@ public sealed class PostgresChatMappingWriteJournalTests(PostgresFixture fixture
     public async Task Intent_acknowledgement_is_idempotent_exact_and_precedes_ingestion()
     {
         await using var f = await JournalFixture.CreateAsync(fixture);
-        Assert.True(await f.Journal.PrepareAsync(f.Test.Actor, f.Intent, default));
-        Assert.True(await f.Journal.PrepareAsync(f.Test.Actor, f.Intent, default));
-        Assert.False(await f.Journal.PrepareAsync(f.Test.Actor, f.Intent with { Native = NativeArtifact.Admit(f.Intent.Proposal.Base, "different"u8, 1024) }, default));
-        Assert.False(await f.Journal.PrepareAsync(f.Test.Actor, f.Intent with { Key = Guid.NewGuid() }, default));
+        // 0043 retired the writer's direct prepare: no intent without an exact approved proposal.
+        await Assert.ThrowsAsync<InvalidOperationException>(() => f.Journal.PrepareAsync(f.Test.Actor, f.Intent, default));
+        Assert.Equal(0L, await f.Test.Case.ScalarAsync<long>("SELECT count(*) FROM weft.chat_mapping_write_intents"));
+        Assert.Equal(ChatMappingEditCreateOutcome.Created, (await f.Journal.CreateAsync(f.Test.Actor, f.Proposal, default)).Outcome);
+        Assert.Null(await f.Approver.ApproveAndPrepareAsync(f.Test.Actor, f.Proposal.Conversation, f.Proposal.TurnId, f.Proposal.ProposalId,
+            Sha256Digest.FromBytes("different"u8), default));
+        Assert.Equal(0L, await f.Test.Case.ScalarAsync<long>("SELECT count(*) FROM weft.chat_mapping_write_intents"));
+        Assert.True(await f.ApproveAsync());
+        Assert.True(await f.ApproveAsync());
         Assert.Equal(1L, await f.Test.Case.ScalarAsync<long>("SELECT count(*) FROM weft.chat_mapping_write_intents"));
+        Assert.Equal(1L, await f.Test.Case.ScalarAsync<long>("SELECT count(*) FROM weft.chat_mapping_write_intents WHERE request_key=$1", f.Intent.Key));
         var pending = Assert.Single(await f.Journal.ReadAsync(f.Test.Actor, f.Intent.Conversation, f.Intent.TurnId, default));
         Assert.Equal("pending", pending.Status); Assert.Null(pending.OperationId); Assert.Null(pending.Saved);
         Assert.Empty(await f.Journal.ReadAsync(new(new(f.Test.Seed.Admitted)), f.Intent.Conversation, f.Intent.TurnId, default));
@@ -28,7 +34,7 @@ public sealed class PostgresChatMappingWriteJournalTests(PostgresFixture fixture
     public async Task Pending_ingestion_commit_survives_cancelled_turn_lost_event_ack_and_process_restart()
     {
         await using var f = await JournalFixture.CreateAsync(fixture);
-        Assert.True(await f.Journal.PrepareAsync(f.Test.Actor, f.Intent, default));
+        Assert.True(await f.ApproveAsync());
         var reserved = await f.Test.ReserveAsync(f.Intent.Key, f.AppendIntent());
         var claim = await f.Test.ClaimAsync(reserved);
         await f.Test.ReadyAsync(reserved, claim);
@@ -45,8 +51,9 @@ public sealed class PostgresChatMappingWriteJournalTests(PostgresFixture fixture
         var saved = Assert.Single(await journal.ReadAsync(f.Test.Actor, f.Intent.Conversation, f.Intent.TurnId, default));
         Assert.Equal(committed.Receipt.Facts.FutureRevision.RevisionId, saved.Saved!.RevisionId);
         Assert.Equal(2, saved.Saved.Sequence);
-        // No post-commit journal mutation or live-turn append is needed. Repeated read/retry preserves one version.
-        Assert.True(await journal.PrepareAsync(f.Test.Actor, f.Intent, default));
+        // No post-commit journal mutation or live-turn append is needed. Repeated read/approval preserves one version.
+        Assert.Equal(ChatMappingEditStatus.Saved, (await f.Approver.ApproveAndPrepareAsync(f.Test.Actor, f.Proposal.Conversation,
+            f.Proposal.TurnId, f.Proposal.ProposalId, f.Proposal.Fingerprint, default))!.Status);
         Assert.Equal(ChatMetadataCodec.MappingWrite(saved.Saved), ChatMetadataCodec.MappingWrite((await journal.ReadAsync(f.Test.Actor, f.Intent.Conversation, f.Intent.TurnId, default)).Single().Saved!));
         Assert.Equal(2L, await f.Test.Case.ScalarAsync<long>("SELECT count(*) FROM weft.mapping_revisions"));
         Assert.Equal(0L, await f.Test.Case.ScalarAsync<long>("SELECT count(*) FROM weft.chat_events WHERE kind=15"));
@@ -59,7 +66,7 @@ public sealed class PostgresChatMappingWriteJournalTests(PostgresFixture fixture
     public async Task A_conflicting_head_never_becomes_a_saved_receipt()
     {
         await using var f = await JournalFixture.CreateAsync(fixture);
-        Assert.True(await f.Journal.PrepareAsync(f.Test.Actor, f.Intent, default));
+        Assert.True(await f.ApproveAsync());
         var reserved = await f.Test.ReserveAsync(f.Intent.Key, f.AppendIntent());
         var claim = await f.Test.ClaimAsync(reserved); await f.Test.ReadyAsync(reserved, claim);
         var other = await f.Test.ReserveAsync(Guid.NewGuid(), f.AppendIntent());
@@ -75,7 +82,7 @@ public sealed class PostgresChatMappingWriteJournalTests(PostgresFixture fixture
     public async Task A_terminal_turn_without_any_reservation_is_not_restarted_by_recovery()
     {
         await using var f = await JournalFixture.CreateAsync(fixture);
-        Assert.True(await f.Journal.PrepareAsync(f.Test.Actor, f.Intent, default));
+        Assert.True(await f.ApproveAsync());
         var turn = (await f.Journal.ReadTurnAsync(f.Test.Actor, f.Intent.Conversation, f.Intent.TurnId))!;
         await f.Journal.FinishAsync(f.Test.Actor, f.Intent.Conversation, f.Intent.TurnId, turn.Version, ChatTurnPhase.Interrupted);
         var receipt = Assert.Single(await f.Journal.ReadAsync(f.Test.Actor, f.Intent.Conversation, f.Intent.TurnId, default));
@@ -86,7 +93,7 @@ public sealed class PostgresChatMappingWriteJournalTests(PostgresFixture fixture
     public async Task Current_permission_withdrawal_prevents_ingestion_commit_but_preserves_the_accepted_intent()
     {
         await using var f = await JournalFixture.CreateAsync(fixture);
-        Assert.True(await f.Journal.PrepareAsync(f.Test.Actor, f.Intent, default));
+        Assert.True(await f.ApproveAsync());
         var reserved = await f.Test.ReserveAsync(f.Intent.Key, f.AppendIntent());
         var claim = await f.Test.ClaimAsync(reserved); await f.Test.ReadyAsync(reserved, claim);
         await f.Test.Case.ExecuteAsync("UPDATE weft.project_memberships SET role='viewer',version=version+1 WHERE principal_id=$1", f.Test.Actor.PrincipalId.Value);
@@ -100,7 +107,7 @@ public sealed class PostgresChatMappingWriteJournalTests(PostgresFixture fixture
     public async Task An_expired_turn_can_read_a_later_commit_and_erasure_removes_only_private_replay_content()
     {
         await using var f = await JournalFixture.CreateAsync(fixture);
-        Assert.True(await f.Journal.PrepareAsync(f.Test.Actor, f.Intent, default));
+        Assert.True(await f.ApproveAsync());
         var reserved = await f.Test.ReserveAsync(f.Intent.Key, f.AppendIntent());
         var claim = await f.Test.ClaimAsync(reserved); await f.Test.ReadyAsync(reserved, claim);
         // Explicit synthetic clock movement inside an owned, disposable fixture only.
@@ -139,7 +146,7 @@ public sealed class PostgresChatMappingWriteJournalTests(PostgresFixture fixture
     public async Task A_saved_receipt_uses_its_self_contained_commit_fact_without_the_original_ingestion_lookup()
     {
         await using var f = await JournalFixture.CreateAsync(fixture);
-        Assert.True(await f.Journal.PrepareAsync(f.Test.Actor, f.Intent, default));
+        Assert.True(await f.ApproveAsync());
         var reserved = await f.Test.ReserveAsync(f.Intent.Key, f.AppendIntent());
         var claim = await f.Test.ClaimAsync(reserved); await f.Test.ReadyAsync(reserved, claim);
         var committed = (await f.Test.Store.FinalizeAsync(f.Test.Actor, claim)).Receipt!;
@@ -164,7 +171,7 @@ public sealed class PostgresChatMappingWriteJournalTests(PostgresFixture fixture
     public async Task Independent_receipt_HTTP_reads_check_creator_project_and_antiforgery_without_a_live_turn()
     {
         await using var f = await JournalFixture.CreateAsync(fixture);
-        Assert.True(await f.Journal.PrepareAsync(f.Test.Actor, f.Intent, default));
+        Assert.True(await f.ApproveAsync());
         var reserved = await f.Test.ReserveAsync(f.Intent.Key, f.AppendIntent());
         var claim = await f.Test.ClaimAsync(reserved); await f.Test.ReadyAsync(reserved, claim);
         await f.Test.Store.FinalizeAsync(f.Test.Actor, claim);
@@ -192,23 +199,37 @@ public sealed class PostgresChatMappingWriteJournalTests(PostgresFixture fixture
             Assert.Empty((await CatalogHttpTestSupport.JsonAsync(hidden)).GetProperty("receipts").EnumerateArray());
     }
 
-    private sealed class JournalFixture(PostgresIngestionTestSupport test, PostgresChatDatabase database,
-        PostgresChatStore journal, ChatMappingWriteIntent intent) : IAsyncDisposable
+    private sealed class JournalFixture(PostgresIngestionTestSupport test, PostgresChatDatabase database, PostgresChatDatabase approval,
+        ChatMappingEditProposal proposal, ChatMappingWriteIntent intent) : IAsyncDisposable
     {
         internal PostgresIngestionTestSupport Test => test;
-        internal PostgresChatStore Journal => journal;
+        internal PostgresChatStore Journal { get; } = new(database);
+        internal PostgresChatStore Approver { get; } = new(approval);
+        internal ChatMappingEditProposal Proposal => proposal;
+        // The intent the approved proposal records; its key is the proposal's request key.
         internal ChatMappingWriteIntent Intent => intent;
         internal IngestionIntent AppendIntent() => IngestionIntent.ForAppend(new(intent.Proposal.Base.OrganizationId, intent.Proposal.Base.ProjectId,
             intent.Proposal.Base.MappingId), "ferrule", null, new EqualHead(intent.Proposal.Base.RevisionId), intent.Native.Digest, intent.Native.ByteCount);
+
+        /// <summary>The production entrance since 0043: an exact proposal, then exact approval, records the intent.</summary>
+        internal async Task<bool> ApproveAsync()
+        {
+            var created = await Journal.CreateAsync(test.Actor, proposal, default);
+            Assert.Contains(created.Outcome, new[] { ChatMappingEditCreateOutcome.Created, ChatMappingEditCreateOutcome.Existing });
+            var state = await Approver.ApproveAndPrepareAsync(test.Actor, proposal.Conversation, proposal.TurnId, proposal.ProposalId, proposal.Fingerprint, default);
+            return state is { Status: ChatMappingEditStatus.Approved or ChatMappingEditStatus.Pending };
+        }
+
         internal static async Task<JournalFixture> CreateAsync(PostgresFixture fixture)
         {
             var test = await PostgresIngestionTestSupport.CreateAsync(fixture);
-            PostgresChatDatabase? database = null;
+            PostgresChatDatabase? database = null, approval = null;
             try
             {
                 var original = await test.CommitCreateAsync();
                 var scope = original.Facts.FutureRevision;
                 database = new(test.Case.ChatWriterConnectionString, ChatDatabaseProfile.Writer);
+                approval = new(fixture.ChatApproverConnectionString(test.Case), ChatDatabaseProfile.Approver);
                 var journal = new PostgresChatStore(database);
                 var now = new DateTimeOffset(await test.Case.ScalarAsync<DateTime>("SELECT statement_timestamp()"));
                 var key = ChatConversationKey.ForWorkspace(scope.OrganizationId, test.Actor.PrincipalId, Guid.NewGuid());
@@ -221,16 +242,25 @@ public sealed class PostgresChatMappingWriteJournalTests(PostgresFixture fixture
                 var round = PostgresChatTestSupport.Round();
                 var reserved = await journal.ReserveRoundAsync(test.Actor, key, id, started.Version, round);
                 await journal.AppendAsync(test.Actor, key, id, reserved.Turn!.Version, round.RoundId, round.Fence,
-                    new(Guid.NewGuid(), ChatEventKind.ToolStarted, "{\"v\":1,\"call\":\"call-a\",\"name\":\"save_mapping_edit\",\"ordinal\":1}"));
+                    new(Guid.NewGuid(), ChatEventKind.ToolStarted, "{\"v\":1,\"call\":\"call-a\",\"name\":\"propose_mapping_edit\",\"ordinal\":1}"));
                 var operations = MappingEditScript.Parse(System.Text.Encoding.UTF8.GetBytes(MappingEditScriptTests.Bind));
-                var proposal = new ChatMappingWriteFact(ChatMappingWriteOutcome.Proposed, ChatMappingWriteReason.NotPermitted,
+                var checkpoint = MappingDraftPersistenceTests.Checkpoint(scope);
+                // Test-only trusted backend fixture admission; production mints this only inside ProposeAsync.
+                var content = new MappingEditProposal(checkpoint.Artifact, operations, [])
+                { VerifiedGeneration = new(test.Actor.PrincipalId, checkpoint.Evidence.Facts.Provenance) };
+                var proposal = new ChatMappingEditProposal(key, id, round.RoundId, "call-a", 1, content);
+                var fact = new ChatMappingWriteFact(ChatMappingWriteOutcome.Proposed, ChatMappingWriteReason.NotPermitted,
                     scope, 1, null, null, null, null, operations.Count, operations.Digest, [new("code", "Not mapped", "Constant")], false);
-                var intent = new ChatMappingWriteIntent(key, id, round.RoundId, "call-a", WorkspaceToolService.WriteKey(id, "call-a"), proposal,
-                    MappingDraftPersistenceTests.Checkpoint(scope).Artifact);
-                return new(test, database, journal, intent);
+                var intent = new ChatMappingWriteIntent(key, id, round.RoundId, "call-a", proposal.RequestKey, fact, checkpoint.Artifact);
+                return new(test, database, approval, proposal, intent);
             }
-            catch { if (database is not null) await database.DisposeAsync(); await test.DisposeAsync(); throw; }
+            catch
+            {
+                if (database is not null) await database.DisposeAsync();
+                if (approval is not null) await approval.DisposeAsync();
+                await test.DisposeAsync(); throw;
+            }
         }
-        public async ValueTask DisposeAsync() { await database.DisposeAsync(); await test.DisposeAsync(); }
+        public async ValueTask DisposeAsync() { await database.DisposeAsync(); await approval.DisposeAsync(); await test.DisposeAsync(); }
     }
 }
