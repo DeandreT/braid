@@ -59,6 +59,16 @@ test("only shipped editor assets receive wasm permission and missing paths never
       shell.headers.get("Content-Security-Policy"),
       /unsafe-eval/,
     );
+    const head = await fetch(`${origin}/edit/worker.js`, { method: "HEAD" });
+    assert.equal(head.status, 200);
+    assert.equal(await head.text(), "");
+    const write = await fetch(`${origin}/edit/worker.js`, { method: "POST" });
+    assert.equal(write.status, 405);
+    assert.equal(write.headers.get("Allow"), "GET, HEAD");
+    assert.doesNotMatch(
+      write.headers.get("Content-Security-Policy"),
+      /unsafe-eval/,
+    );
   } finally {
     server.closeAllConnections();
     await new Promise((resolve) => server.close(resolve));

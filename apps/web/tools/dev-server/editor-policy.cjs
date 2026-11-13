@@ -12,8 +12,21 @@ const assets = new Map([
 // actual shipped files can receive the worker's narrowly scoped wasm policy.
 function editorMiddleware(publicDirectory, secure = false) {
   return (request, response, next) => {
-    const pathname = new URL(request.url, "http://localhost").pathname;
+    let pathname;
+    try {
+      pathname = new URL(request.url, "http://localhost").pathname;
+    } catch {
+      response.statusCode = 400;
+      response.end();
+      return;
+    }
     if (pathname !== "/edit" && !pathname.startsWith("/edit/")) return next();
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      response.statusCode = 405;
+      response.setHeader("Allow", "GET, HEAD");
+      response.end();
+      return;
+    }
     const mediaType = assets.get(pathname);
     const file = path.join(publicDirectory, pathname.slice(1));
     let exists = false;
