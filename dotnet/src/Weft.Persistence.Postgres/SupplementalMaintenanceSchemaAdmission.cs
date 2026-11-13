@@ -41,8 +41,10 @@ internal static class SupplementalMaintenanceSchemaAdmission
         await ValidateConstraintTriggersAsync(connection, transaction, tables.Keys.ToArray(), cancellationToken);
         await ValidatePoliciesAsync(connection, transaction, tables.Keys.ToArray(), cancellationToken);
         await ValidateFunctionsAsync(connection, transaction, cancellationToken);
-        await ValidateTriggersAsync(connection, transaction, tables, chatWrites, cancellationToken);
-        if (await CreationSchemaAdmission.ShapeAsync(connection, transaction, cancellationToken) != CreationSchemaAdmission.ShapeDigest)
+        // Like automation and chat writes, the creation supplement is validated whenever any of its objects exists.
+        var creation = await CreationSchemaAdmission.InstalledAsync(connection, transaction, cancellationToken);
+        await ValidateTriggersAsync(connection, transaction, tables, chatWrites, creation, cancellationToken);
+        if (creation && await CreationSchemaAdmission.ShapeAsync(connection, transaction, cancellationToken) != CreationSchemaAdmission.ShapeDigest)
             throw Refusal("Creation publication guards and their authority dependencies must match the admitted schema.");
         await ValidateIndexesAsync(connection, transaction, cancellationToken);
         await ValidateGrantsAsync(connection, transaction, cancellationToken);
@@ -142,7 +144,7 @@ internal static class SupplementalMaintenanceSchemaAdmission
         bool SecurityDefiner, string Body, string SearchPath);
 
     private static async Task ValidateTriggersAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
-        IReadOnlyDictionary<string, CatalogSchemaContract.Table> tables, bool chatWrites, CancellationToken cancellationToken)
+        IReadOnlyDictionary<string, CatalogSchemaContract.Table> tables, bool chatWrites, bool creation, CancellationToken cancellationToken)
     {
         var expected = MaintenanceSchemaContract.Triggers.Select(trigger => new ExpectedTrigger(
             trigger.Name, trigger.Table, trigger.Function, trigger.Events, true,
@@ -151,8 +153,9 @@ internal static class SupplementalMaintenanceSchemaAdmission
         if (chatWrites)
             expected.Add(new("chat_mapping_write_commit", "revision_ingestions", "audit_chat_mapping_write_commit", 17,
                 true, ChatSchemaContract.MappingCommitTriggerBody, "pg_catalog, weft, pg_temp"));
-        expected.Add(new("revision_ingestions_creation_guard", "revision_ingestions", "creation_ingestion_guard", 23,
-            true, CreationSchemaAdmission.IngestionGuardBody, "pg_catalog, weft, pg_temp"));
+        if (creation)
+            expected.Add(new("revision_ingestions_creation_guard", "revision_ingestions", "creation_ingestion_guard", 23,
+                true, CreationSchemaAdmission.IngestionGuardBody, "pg_catalog, weft, pg_temp"));
         // Validate the retained older guard as well: this admits the complete set,
         // never an arbitrary extra trigger or a count relaxed to at least one.
         foreach (var table in tables.Values.Where(table => table.FunctionBody is not null &&

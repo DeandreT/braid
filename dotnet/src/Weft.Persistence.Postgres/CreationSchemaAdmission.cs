@@ -18,6 +18,21 @@ internal static class CreationSchemaAdmission
         .Select(m => m.Groups[1].Value).Distinct(StringComparer.Ordinal).ToArray();
     internal static readonly string[] Roles = ["weft_creation_reader", "weft_creation_writer", "weft_creation_approver"];
 
+    /// <summary>Whether any object 0045 or 0046 creates under its own name exists. None means an older schema;
+    /// any one is a (possibly partial) installation that must match the complete admitted shape.</summary>
+    internal static async Task<bool> InstalledAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct)
+    {
+        await using var command = new NpgsqlCommand("""
+            SELECT EXISTS(SELECT 1 FROM pg_catalog.pg_class c WHERE c.relnamespace='weft'::regnamespace AND c.relname=ANY($1::text[]))
+                OR EXISTS(SELECT 1 FROM pg_catalog.pg_proc p WHERE p.pronamespace='weft'::regnamespace AND p.proname=ANY($2::text[]))
+                OR EXISTS(SELECT 1 FROM pg_catalog.pg_trigger t JOIN pg_catalog.pg_class c ON c.oid=t.tgrelid
+                    WHERE c.relnamespace='weft'::regnamespace AND t.tgname='revision_ingestions_creation_guard')
+            """, connection, transaction);
+        command.Parameters.AddWithValue(Tables);
+        command.Parameters.AddWithValue(Functions);
+        return await command.ExecuteScalarAsync(ct).ConfigureAwait(false) is true;
+    }
+
     internal static async Task<string> ShapeAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct)
     {
         await using var command = new NpgsqlCommand("""
