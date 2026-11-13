@@ -41,7 +41,15 @@
             "devServer": {
               "optimization": false,
               "sourceMap": true,
-              "index": "index.dev.html"
+              "index": "index.dev.html",
+              "assets": [
+                {
+                  "glob": "**/*",
+                  "input": "public",
+                  "output": "/",
+                  "ignore": ["edit/**"]
+                }
+              ]
             }
           },
           "defaultConfiguration": "production"

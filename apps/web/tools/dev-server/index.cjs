@@ -3,6 +3,8 @@
 // element, so relative entry assets would resolve under a nested deep link.
 const { createRequire } = require("node:module");
 const { executeDevServerBuilder } = require("@angular/build");
+const { join } = require("node:path");
+const { editorAssets } = require("./editor-assets.cjs");
 // Use the exact architect instance @angular/build itself was built against.
 const { createBuilder } = createRequire(
   require.resolve("@angular/build/package.json"),
@@ -17,6 +19,13 @@ const rootAbsoluteEntryAssets = (html) =>
 module.exports = createBuilder((options, context) =>
   executeDevServerBuilder(options, context, {
     indexHtmlTransformer: async (html) => rootAbsoluteEntryAssets(html),
+    middleware: [
+      editorAssets(
+        join(context.workspaceRoot, "apps/web/public/edit"),
+        options.host ?? "localhost",
+        options.port ?? 4200,
+      ),
+    ],
   }),
 );
 module.exports.rootAbsoluteEntryAssets = rootAbsoluteEntryAssets;
