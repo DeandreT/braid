@@ -44,6 +44,11 @@ public sealed class AuthenticationHttpOptions
 
     [JsonIgnore] public AuthenticationHttpMode Mode { get; }
     [JsonIgnore] public string ExpectedOrigin { get; }
+    /// <summary>
+    /// The configured origin, or the validated bound origin after Disabled port-zero startup.
+    /// Null until that listener has been admitted; never derived from request headers.
+    /// </summary>
+    [JsonIgnore] public string? AdmittedBrowserOrigin => AdmittedOrigin?.Value;
     internal string Scheme { get; }
     internal string Authority { get; }
     internal IPAddress? DisabledListenerAddress { get; }

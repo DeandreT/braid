@@ -1,3 +1,5 @@
+using Weft.Api.Auth;
+
 namespace Weft.Server;
 
 /// <summary>The shell cannot compile wasm. Only the path-confined dedicated editor worker can.</summary>
@@ -17,6 +19,19 @@ internal static class BrowserContentPolicy
     internal static void Use(IApplicationBuilder app, string publicOrigin)
     {
         var editor = Editor(publicOrigin);
+        Use(app, () => editor);
+    }
+
+    internal static void Use(IApplicationBuilder app, AuthenticationHttpOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        // The Disabled binder validates the configured loopback address and publishes
+        // one actual listener origin. Request headers never select or change it.
+        Use(app, () => options.AdmittedBrowserOrigin is { } origin ? Editor(origin) : null);
+    }
+
+    private static void Use(IApplicationBuilder app, Func<string?> editorPolicy)
+    {
         var files = app.ApplicationServices.GetRequiredService<IWebHostEnvironment>().WebRootFileProvider;
         app.Use(async (context, next) =>
         {
@@ -27,12 +42,13 @@ internal static class BrowserContentPolicy
                 var editPath = path.StartsWithSegments("/edit");
                 // Only shipped worker assets get the wasm policy; the shell fallback must never serve HTML under it.
                 var asset = editPath && files.GetFileInfo(path.Value!) is { Exists: true, IsDirectory: false };
-                context.Response.Headers.ContentSecurityPolicy = asset ? editor : Shell;
+                var editor = asset ? editorPolicy() : null;
+                context.Response.Headers.ContentSecurityPolicy = editor ?? Shell;
                 context.Response.Headers.XContentTypeOptions = "nosniff";
                 context.Response.Headers["Referrer-Policy"] = "no-referrer";
-                if (editPath && !asset)
+                if (editPath && (!asset || editor is null))
                 {
-                    context.Response.StatusCode = StatusCodes.Status404NotFound;
+                    context.Response.StatusCode = asset ? StatusCodes.Status503ServiceUnavailable : StatusCodes.Status404NotFound;
                     return;
                 }
             }
