@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.Versioning;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Weft.Application;
 using Weft.Deployment;
 using Weft.Jobs;
 using Weft.Worker;
@@ -96,7 +97,28 @@ public sealed class WorkerCredentialSettingsTests : IDisposable
         var services = new ServiceCollection();
         services.AddWeftBuildWorkerWithRunner(read, () => throw new InvalidOperationException("Unexpected runner creation."));
         services.AddWeftRegressionWorker(read, () => throw new InvalidOperationException("Unexpected runtime read."));
-        Assert.Equal(["WEFT_BUILD_WORKER_ENABLED", "WEFT_REGRESSION_WORKER_ENABLED"], reads);
+        // The XML child switch is read even when its parent is disabled, so an
+        // enabled child cannot be silently ignored. It is a plain flag, never a credential.
+        Assert.Equal(["WEFT_BUILD_WORKER_ENABLED", "WEFT_REGRESSION_WORKER_ENABLED", XmlPreviewAdmission.RegressionEnabledSetting], reads);
+        Assert.DoesNotContain(reads, name => name.EndsWith(WorkerCredentialSettings.FileSuffix, StringComparison.Ordinal));
+        Assert.Empty(services);
+    }
+
+    [Fact]
+    public void An_enabled_xml_regression_child_refuses_a_disabled_worker_before_any_credential_file()
+    {
+        var reads = new List<string>();
+        var read = WorkerCredentialSettings.Resolve(name =>
+        {
+            reads.Add(name);
+            if (name == XmlPreviewAdmission.RegressionEnabledSetting) return "true";
+            return name.EndsWith(WorkerCredentialSettings.FileSuffix, StringComparison.Ordinal) ? Path.Combine(root, "absent") : null;
+        });
+        var services = new ServiceCollection();
+        var error = Assert.Throws<ArgumentException>(() =>
+            services.AddWeftRegressionWorker(read, () => throw new InvalidOperationException("Unexpected runtime read.")));
+        Assert.Contains("requires its parent workflow", error.Message, StringComparison.Ordinal);
+        Assert.Equal(["WEFT_REGRESSION_WORKER_ENABLED", XmlPreviewAdmission.RegressionEnabledSetting], reads);
         Assert.Empty(services);
     }
 
