@@ -82,7 +82,7 @@ URLs, traces or logs. Cross-request equality is not an atomic identity guarantee
 
 Callback401 reads `Sign-in could not be completed`;503 reads `Sign-in is
 temporarily unavailable`. The static document contains only a fixed Return to
-Weft link to `/`, no dynamic/provider/request values. Navigation/tab closure is
+return link to `/`, no dynamic/provider/request values. Navigation/tab closure is
 not successful sign-in; a future UI must explicitly observe fresh status and
 catalog admission. Operational failure is not anonymous success or automatic
 retry. Lost database acknowledgement/header delivery remains ambiguous without

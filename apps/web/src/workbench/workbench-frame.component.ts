@@ -92,6 +92,14 @@ export class WorkbenchFrameComponent {
   constructor() {
     const destroy = inject(DestroyRef);
     effect(() => this.sharedCommands.entries.set(this.paletteItems()));
+    effect(() => {
+      const selection = this.state.selection();
+      queueMicrotask(() => {
+        this.revealTab(`[data-workflow="${selection.view}"]`);
+        this.revealTab(`[data-dock="${selection.dock}"]`);
+        this.revealTab(`[data-inspector="${selection.inspectorTab}"]`);
+      });
+    });
     const subscriptions = this.sharedCommands.chosen.subscribe((item) =>
       this.choose(item),
     );
@@ -160,11 +168,6 @@ export class WorkbenchFrameComponent {
   selectView(view: WorkbenchView, focus = false): void {
     this.state.dispatch({ kind: "view", view });
     if (focus) this.focus(`[data-workflow="${view}"]`);
-    queueMicrotask(() =>
-      this.element.nativeElement
-        .querySelector(`[data-workflow="${view}"]`)
-        ?.scrollIntoView({ block: "nearest", inline: "nearest" }),
-    );
   }
   selectDock(dock: DockView, focus = false): void {
     if (this.state.layout().dockCollapsed)
@@ -213,9 +216,21 @@ export class WorkbenchFrameComponent {
     const index = values.indexOf(this.state.layout().density);
     this.state.updateLayout({ density: values[(index + 1) % values.length]! });
   }
+  private revealTab(selector: string): void {
+    const tab = this.element.nativeElement.querySelector<HTMLElement>(selector);
+    const nav = tab?.parentElement;
+    if (!tab || !nav || !tab.getClientRects().length) return;
+    const item = tab.getBoundingClientRect();
+    const viewport = nav.getBoundingClientRect();
+    if (item.left < viewport.left) nav.scrollLeft += item.left - viewport.left;
+    else if (item.right > viewport.right)
+      nav.scrollLeft += item.right - viewport.right;
+  }
   private focus(selector: string): void {
     queueMicrotask(() =>
-      this.element.nativeElement.querySelector<HTMLElement>(selector)?.focus(),
+      this.element.nativeElement
+        .querySelector<HTMLElement>(selector)
+        ?.focus({ preventScroll: true }),
     );
   }
 }

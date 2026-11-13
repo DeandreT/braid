@@ -86,7 +86,7 @@ doesn't ask the model again.
 Each conversation has a retention period set by your administrators. After it
 ends, the conversation's content can be erased.
 
-If Weft can't confirm that a question was received, it keeps the question in
+If braid can't confirm that a question was received, it keeps the question in
 the tab and offers **Recover original question**, which sends exactly the same
 question again.
 

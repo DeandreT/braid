@@ -103,7 +103,7 @@ Never serialize component state. Resource IDs, text searches, expanded group
 keys, selection, private samples, operation/recovery state and credentials are
 not layout preferences. Unavailable browser storage, invalid JSON, oversized
 records and unknown versions fall back to defaults without blocking access.
-The default row height remains 28 px, with 32 px comfortable and 24 px dense.
+The default row height is comfortable at 32 px, with 28 px compact and 24 px dense.
 Key-column pinning yields on narrow screens so it cannot cover the other fields.
 Keep a minimum scrollable table viewport when enlarged text wraps the controls;
 horizontal containment alone is not proof that keyboard users can reach the rows.

@@ -3,6 +3,10 @@ import { mkdir } from "node:fs/promises";
 import { workspaceFixture, legacyId } from "./workspace-chat.fixture";
 import { projectPath } from "./catalog.fixture";
 import {
+  backToUnifiedChat,
+  waitForUnifiedRoute,
+} from "./unified-navigation.fixture";
+import {
   chooseSavedConversation,
   historyTrigger,
   openMore,
@@ -20,7 +24,17 @@ async function createConversation(page: Page): Promise<string> {
   const selector = historyTrigger(chat(page));
   await expect(selector).not.toHaveAttribute("data-conversation-id", "");
   await expect(selector).not.toHaveAttribute("data-conversation-id", previous!);
-  return (await selector.getAttribute("data-conversation-id"))!;
+  const selected = (await selector.getAttribute("data-conversation-id"))!;
+  await expect(
+    chat(page).getByRole("button", { name: "New conversation", exact: true }),
+  ).toBeEnabled();
+  await waitForUnifiedRoute(
+    page,
+    new URL(page.url()).pathname === "/chat"
+      ? `/chat?conversationId=${selected}`
+      : undefined,
+  );
+  return selected;
 }
 
 test("returning to a previous chat URL reconciles with the actual panel and protects its draft", async ({
@@ -32,11 +46,22 @@ test("returning to a previous chat URL reconciles with the actual panel and prot
     b = await createConversation(page);
   await chooseSavedConversation(chat(page), a);
   await expect(page).toHaveURL(new RegExp(`conversationId=${a}`));
+  await waitForUnifiedRoute(page, `/chat?conversationId=${a}`);
   await page
     .getByRole("navigation", { name: "Workspace", exact: true })
-    .getByRole("link", { name: "Help", exact: true })
+    .getByRole("link", { name: "Help & guide", exact: true })
     .click();
+  await expect(page).toHaveURL(/\/help$/);
+  await waitForUnifiedRoute(page, "/help");
   await chooseSavedConversation(chat(page), b);
+  await expect(historyTrigger(chat(page))).toHaveAttribute(
+    "data-conversation-id",
+    b,
+  );
+  await expect(
+    chat(page).getByRole("button", { name: "New conversation", exact: true }),
+  ).toBeEnabled();
+  await waitForUnifiedRoute(page, "/help");
   await chat(page).getByLabel("Question", { exact: true }).fill("Keep B draft");
   let warnings = 0;
   page.on("dialog", async (dialog) => {
@@ -44,6 +69,7 @@ test("returning to a previous chat URL reconciles with the actual panel and prot
     await dialog.dismiss();
   });
   await page.goBack();
+  await waitForUnifiedRoute(page);
   await expect(page).toHaveURL(new RegExp(`conversationId=${b}`));
   await expect(historyTrigger(chat(page))).toHaveAttribute(
     "data-conversation-id",
@@ -93,12 +119,7 @@ for (const ambiguous of [false, true])
         .getByRole("button", { name: "Send question", exact: true })
         .click();
       await pending;
-      for (
-        let steps = 0;
-        steps < 6 && !new URL(page.url()).pathname.startsWith("/chat");
-        steps++
-      )
-        await page.goBack();
+      await backToUnifiedChat(page);
       await expect(page).toHaveURL(new RegExp(`conversationId=${a}`));
       expect(a).not.toBe(b);
       release();
@@ -167,12 +188,7 @@ for (const outcome of ["ready", "unavailable", "identityRejected"] as const)
     try {
       await refreshChat(chat(page));
       await pending;
-      for (
-        let steps = 0;
-        steps < 6 && !new URL(page.url()).pathname.startsWith("/chat");
-        steps++
-      )
-        await page.goBack();
+      await backToUnifiedChat(page);
       await expect(page).toHaveURL(new RegExp(`conversationId=${a}`));
       await chat(page)
         .getByRole("button", { name: "Hide chat", exact: true })
@@ -423,7 +439,7 @@ test("an in-flight answer survives hiding and content navigation without another
       .click();
     await page
       .getByRole("navigation", { name: "Workspace", exact: true })
-      .getByRole("link", { name: "Help", exact: true })
+      .getByRole("link", { name: "Help & guide", exact: true })
       .click();
     await openChat(page);
     expect(streams).toBe(1);
@@ -505,7 +521,7 @@ test("one conversation and unsent draft survive route changes, resizing and hide
   );
   await page
     .getByRole("navigation", { name: "Workspace", exact: true })
-    .getByRole("link", { name: "Help", exact: true })
+    .getByRole("link", { name: "Help & guide", exact: true })
     .click();
   await expect(page).toHaveURL(/\/help$/);
   await expect(question).toHaveValue(
@@ -631,6 +647,10 @@ test("global navigation, search and account remain inside the unified shell", as
 }) => {
   const fixture = await workspaceFixture(page);
   await page.goto(fixture.data.browserPath);
+  await waitForUnifiedRoute(page, fixture.data.browserPath);
+  await expect(
+    page.getByRole("button", { name: /^Search \/ Go to/ }),
+  ).toBeVisible();
   await page.keyboard.press("Control+k");
   const dialog = page.getByRole("dialog", {
     name: "Search / Go to",

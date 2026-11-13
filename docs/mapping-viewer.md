@@ -1,6 +1,6 @@
 # Mapping viewer
 
-The Angular workbench reads Weft's generated public contracts. Mapping reports
+The Angular workbench reads braid's generated public contracts. Mapping reports
 come from retained revisions through the qualified restricted backend;
 display-only browser fixtures remain explicitly synthetic.
 The native file stays authoritative and is never rewritten by the viewer.

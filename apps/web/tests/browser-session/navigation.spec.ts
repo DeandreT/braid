@@ -235,7 +235,7 @@ for (const feature of ["metadata", "upload", "append"] as const)
       await hiddenWorkspace(app, feature);
       accept = true;
       await catalogLink(app).click();
-      await expect.poll(() => page.title()).toBe("Catalog · Weft");
+      await expect.poll(() => page.title()).toBe("Catalog · braid");
       expect(new URL(page.url()).pathname === "/catalog").toBe(true);
       expect(decisions.length === 2 && decisions.every(Boolean)).toBe(true);
       expect(await mounted!.evaluate((node) => node.isConnected)).toBe(false);
@@ -306,7 +306,7 @@ test("visible metadata navigation keeps the ordinary in-page leave decision", as
     await catalogLink(app).click();
     await expect(button(app, "Discard changes and leave")).toBeVisible();
     await button(app, "Discard changes and leave").click();
-    await expect.poll(() => page.title()).toBe("Catalog · Weft");
+    await expect.poll(() => page.title()).toBe("Catalog · braid");
     expect(new URL(page.url()).pathname === "/catalog").toBe(true);
     noAutomaticWrites(app, 0);
     expect(dialogs === 0 && !dialogFailure).toBe(true);

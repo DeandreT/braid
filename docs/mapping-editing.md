@@ -45,6 +45,10 @@ offers field mapping controls and a typed-parameter editor for the full operatio
 vocabulary. Schemas, named boundaries, user functions, joins, filter/map sequences,
 XML types, dynamic fields and format options remain read-only and are preserved.
 
+In a narrow or short focused Inspector, **Apply mapping** returns to the mapping
+and focuses the selected field after a successful edit. The normal desktop split
+view keeps the Inspector open.
+
 Undo and redo use Ferrule commands rather than retained whole-project snapshots.
 Only the effective operation list is autosaved. The redo branch remains private
 tab memory. A session boundary terminates the worker and hides its view; the same
@@ -84,19 +88,19 @@ not lose the operation log or create another revision on retry.
 
 Under `/api/v1/organizations/{org}/projects/{project}/mappings/{mapping}/drafts`:
 
-| Method and suffix | Purpose |
-| --- | --- |
-| `POST`, `GET` | Create with `baseRevisionId` and idempotency key; list own open drafts |
-| `GET /{draft}` | Metadata and ETag |
-| `GET /{draft}/base` | Verified exact immutable native bytes |
-| `GET`, `PUT /{draft}/operations` | Read or conditionally replace the closed operation log |
-| `POST /{draft}/checkpoints` | Checkpoint a named version |
-| `GET /{draft}/checkpoints/current/{validation,projection}` | Current authoritative reports |
-| `GET /{draft}/comparison` | Semantic base/checkpoint comparison |
-| `POST /{draft}/previews` | Submit an independently retained preview |
-| `POST /{draft}/save` | Conditional revision ingestion |
-| `POST /{draft}/rebase` | Explicit current-head rebase with `If-Match` |
-| `DELETE /{draft}` | Conditional discard |
+| Method and suffix                                          | Purpose                                                                |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `POST`, `GET`                                              | Create with `baseRevisionId` and idempotency key; list own open drafts |
+| `GET /{draft}`                                             | Metadata and ETag                                                      |
+| `GET /{draft}/base`                                        | Verified exact immutable native bytes                                  |
+| `GET`, `PUT /{draft}/operations`                           | Read or conditionally replace the closed operation log                 |
+| `POST /{draft}/checkpoints`                                | Checkpoint a named version                                             |
+| `GET /{draft}/checkpoints/current/{validation,projection}` | Current authoritative reports                                          |
+| `GET /{draft}/comparison`                                  | Semantic base/checkpoint comparison                                    |
+| `POST /{draft}/previews`                                   | Submit an independently retained preview                               |
+| `POST /{draft}/save`                                       | Conditional revision ingestion                                         |
+| `POST /{draft}/rebase`                                     | Explicit current-head rebase with `If-Match`                           |
+| `DELETE /{draft}`                                          | Conditional discard                                                    |
 
 All responses use `no-store`; unsafe methods use normal catalog origin/request-token
 admission. Checkpoint, rebase and save share a two-permit local gate and return 503

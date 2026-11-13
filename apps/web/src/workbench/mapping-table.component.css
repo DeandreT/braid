@@ -4,13 +4,17 @@
   min-width: 0;
   min-height: 0;
   height: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--wb-border, var(--border));
+  border-radius: 8px;
+  background: var(--surface);
 }
 .wb-table-toolbar {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 4px;
-  padding: 6px;
+  gap: 8px;
+  padding: 12px;
   border-bottom: 1px solid var(--wb-border, var(--border));
 }
 .wb-table-toolbar input[type="search"] {
@@ -34,8 +38,9 @@ summary {
 .wb-table-toolbar select,
 button {
   border: 1px solid var(--wb-control-border);
-  border-radius: 3px;
-  padding: 3px 6px;
+  border-radius: 6px;
+  padding: 7px 10px;
+  min-height: 36px;
   background: var(--surface);
   color: var(--text);
 }
@@ -57,6 +62,13 @@ summary:focus-visible {
   flex: 1;
   min-height: calc(160px + var(--wb-table-scrollbar-height, 0px));
   overflow: auto;
+  overscroll-behavior: contain;
+}
+:host-context(.wb-dock-expanded) .wb-table-scroll {
+  min-height: calc(96px + var(--wb-table-scrollbar-height, 0px));
+}
+:host-context(.wb-dock-expanded) .wb-table-toolbar {
+  padding-block: 8px;
 }
 table {
   border-collapse: collapse;
@@ -66,7 +78,7 @@ table {
 }
 th,
 td {
-  padding: 3px 6px;
+  padding: 3px 10px;
   border-bottom: 1px solid var(--wb-border, var(--border));
   height: var(--wb-row-height, 28px);
   overflow: hidden;
@@ -78,7 +90,7 @@ thead th {
   position: sticky;
   top: 0;
   z-index: 1;
-  font-weight: 500;
+  font-weight: 600;
   background: var(--wb-role-tint, var(--surface-muted-2));
   color: var(--wb-role-text, var(--text-muted-31));
   box-shadow: inset 0 2px var(--wb-role-text, transparent);
@@ -107,6 +119,8 @@ thead th > button {
   text-align: left;
   border: 0;
   background: none;
+  border-radius: 0;
+  min-height: 28px;
 }
 .wb-group-row .wb-muted {
   margin-left: auto;
@@ -130,6 +144,12 @@ tbody tr:not(.wb-group-row):not(.wb-selected):hover td {
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: left;
+  border-radius: 0;
+  min-height: 0;
+  color: var(--wb-output-text);
+}
+tbody tr:not(.wb-group-row) td:first-child > span:not(.wb-muted) {
+  color: var(--wb-source-text);
 }
 code {
   font-size: 0.75rem;
@@ -164,7 +184,7 @@ code {
 }
 .wb-inline-lineage {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   overflow: auto;
   white-space: nowrap;
   background: var(--surface-subtle-5);
@@ -174,6 +194,9 @@ code {
   align-items: center;
   gap: 5px;
   color: var(--wb-role-text);
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--wb-role-tint);
 }
 .wb-inline-lineage small {
   font: inherit;
@@ -209,7 +232,11 @@ code {
   position: relative;
 }
 .wb-columns summary {
-  padding: 3px 6px;
+  box-sizing: border-box;
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 1px solid var(--wb-control-border);
+  border-radius: 6px;
   cursor: pointer;
 }
 .wb-columns > div {
@@ -230,13 +257,16 @@ code {
 }
 .wb-columns input {
   width: auto;
+  min-height: auto;
+  accent-color: var(--accent-3);
 }
 .wb-table-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  padding: 4px 6px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
   border-top: 1px solid var(--wb-border, var(--border));
   font-size: 0.6875rem;
   color: var(--text-muted-10);
@@ -245,6 +275,33 @@ code {
   display: flex;
   gap: 5px;
   align-items: center;
+}
+.wb-table-footer button {
+  min-height: 28px;
+  padding: 3px 8px;
+}
+@media (max-width: 679px) {
+  .wb-table-toolbar input[type="search"] {
+    flex-basis: 100%;
+  }
+  .wb-table-toolbar button,
+  .wb-table-toolbar input,
+  .wb-table-toolbar select,
+  .wb-columns summary,
+  .wb-table-footer button {
+    min-height: 44px;
+  }
+  .wb-columns input {
+    min-height: auto;
+  }
+  .wb-table-toolbar {
+    padding: 10px;
+    gap: 6px;
+  }
+  .wb-table-toolbar > select {
+    flex: 1;
+    max-width: 100%;
+  }
 }
 .wb-sr-only {
   position: absolute;

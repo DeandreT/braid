@@ -25,7 +25,7 @@ organization policy without disabling the mapping viewer or preview.
 
 ## Model-independent boundary
 
-Weft owns a conversation protocol rather than adopting one vendor's SDK models
+braid owns a conversation protocol rather than adopting one vendor's SDK models
 as its domain. Provider adapters may use maintained SDKs internally.
 
 | Contract | Application-owned contents |
@@ -184,7 +184,7 @@ the bearer value is a Microsoft Entra token for
 [Chat turn HTTP API](chat-http.md). On Azure Container Apps the token comes from the
 platform's identity endpoint (the default `"source": "containerApps"`); on an Azure
 virtual machine, add `"source": "instanceMetadata"` to read it from the VM's Instance
-Metadata Service at `169.254.169.254`. There, the VM must let only the Weft server's
+Metadata Service at `169.254.169.254`. There, the VM must let only the braid server's
 network reach that address, since any process that reaches it can obtain the VM's
 tokens. A local setup can use a `file` credential holding
 a Databricks token instead. Profile loading keeps the two apart: a credential that a
@@ -197,8 +197,8 @@ The workspace needs:
   `functionTools`;
 - the identity added to the workspace as a service principal, with **Can Query** on
   the serving endpoint;
-- network access from Weft to the workspace, publicly or through a private endpoint
-  whose DNS zone is linked to Weft's virtual network, and no IP access list that
+- network access from braid to the workspace, publicly or through a private endpoint
+  whose DNS zone is linked to braid's virtual network, and no IP access list that
   refuses it.
 
 The request carries `model`, `stream`, `max_tokens`, `messages` and `tools`, and not

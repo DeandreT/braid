@@ -157,7 +157,7 @@ export class HelpPageComponent {
   private applyTitle(): void {
     const section = this.section();
     this.title.setTitle(
-      section ? `${section.title} · Help · Weft` : "Help · Weft",
+      section ? `${section.title} · Help · braid` : "Help · braid",
     );
   }
 

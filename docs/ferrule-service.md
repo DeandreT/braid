@@ -1,9 +1,9 @@
 # Ferrule service
 
-The Ferrule service answers questions about mapping revisions for hosted Weft:
+The Ferrule service answers questions about mapping revisions for hosted braid:
 inspection, validation, projection, typed edit checkpoints and bounded document sample preview. When compilation is
-enabled it also compiles deployable mapping libraries. Weft users never see it;
-Weft hosts call it on their behalf. It is one stateless, long-running HTTP service
+enabled it also compiles deployable mapping libraries. braid users never see it;
+braid hosts call it on their behalf. It is one stateless, long-running HTTP service
 image that any container platform can run and scale by adding replicas. The
 per-operation Docker runners remain the local development and test runners.
 
@@ -234,7 +234,7 @@ between operations, so platforms may add or remove replicas at any time; a
 stopping replica refuses new operations and answers admitted ones after their
 children settle.
 
-## Weft service runner
+## braid service runner
 
 `FerruleServiceRunner` implements the inspection, edit and preview runner seam
 (`IInspectionWorkerRunner`) against the service, one runner per profile. The Ferrule
@@ -385,7 +385,7 @@ inspection transport keeps using Docker.
 
 Stronger isolation than one replica's child processes comes from the platform. A
 platform sandbox plugs in as an `IFerruleServiceConnector` (in
-`Weft.MappingBackends.Workers`) without changing core Weft, the runner or the
+`Weft.MappingBackends.Workers`) without changing core braid, the runner or the
 service. A connector opens one channel per operation and supplies only the
 transport and the caller's authentication. It must deliver every request of a
 channel, including the cancellation, to the same service instance, and must never
@@ -452,7 +452,7 @@ a writable `/tmp` and a TCP listener:
 
 1. Build the native worker image from `engines/ferrule-host`, then the service image
    from `engines/ferrule-service/Dockerfile` with that native image and the SHA-256 of
-   its `/ferrule-host`. Configure Weft hosts with `WEFT_FERRULE_WORKER_IMAGE` set to
+   its `/ferrule-host`. Configure braid hosts with `WEFT_FERRULE_WORKER_IMAGE` set to
    `sha256:` followed by the image's `io.weft.ferrule.worker-sha256` label.
 2. Create one RSA service certificate for all replicas and one client certificate per
    calling host. Give the service its PEM bundle and the client pins; give each host

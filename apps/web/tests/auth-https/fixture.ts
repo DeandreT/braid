@@ -390,7 +390,7 @@ export class HttpsFixture {
     await this.activate(
       this.panel().getByRole("button", { name: "Check session", exact: true }),
     );
-    await this.summary("Signed in to Weft");
+    await this.summary("Signed in to braid");
     await this.responseTail;
   }
   async login(authenticated: boolean): Promise<void> {
@@ -414,7 +414,7 @@ export class HttpsFixture {
     );
   }
   async authenticated(): Promise<void> {
-    await this.summary("Signed in to Weft");
+    await this.summary("Signed in to braid");
     await this.responseTail;
     requireOwned(
       this.callbackSuccess > 0 &&

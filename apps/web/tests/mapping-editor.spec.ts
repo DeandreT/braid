@@ -201,9 +201,31 @@ test("real edit wasm: keyboard mapping, exact values, autosave, undo and accessi
     .analyze();
   expect(accessibility.violations).toEqual([]);
   // A hung dedicated worker is terminated, and a restart replays only retained intent.
-  await page
-    .getByRole("button", { name: /Back to work|Hide inspector/ })
-    .click();
+  const viewport = page.viewportSize();
+  expect(viewport).not.toBeNull();
+  if (viewport!.width < 480) {
+    const showInspector = page.getByRole("button", {
+      name: "Show inspector",
+      exact: true,
+    });
+    await expect(showInspector).toBeVisible();
+    await expect(showInspector).toHaveAttribute("aria-expanded", "false");
+    await expect(
+      page.locator("weft-mapping-editor #wb-main-panel"),
+    ).toBeVisible();
+    await expect(field).toBeVisible();
+    await expect(field).toBeFocused();
+    const dock = page.locator("weft-mapping-editor #wb-dock-panel");
+    await expect(dock).toHaveCount(1);
+    await expect(dock).toBeHidden();
+  } else {
+    await expect(
+      page.getByRole("button", { name: "Hide inspector", exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: /Back to work|Hide inspector/ })
+      .click();
+  }
   await page.getByRole("button", { name: "Back to saved version" }).click();
   let hang = true;
   await page.route("**/edit/worker.js", async (route) => {

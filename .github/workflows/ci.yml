@@ -52,6 +52,10 @@ jobs:
           cargo +1.98.1 fmt --manifest-path engines/ferrule-host/Cargo.toml --check
           cargo +1.98.1 clippy --manifest-path engines/ferrule-host/Cargo.toml --all-targets --locked -- -D warnings
           cargo +1.98.1 test --manifest-path engines/ferrule-host/Cargo.toml --locked
+          # The creation evidence storage test requires the actual portable authoring compiler.
+          cargo +1.98.1 build --manifest-path engines/ferrule-host/Cargo.toml --package weft-ferrule-core --example authoring_protocol --release --locked
+          install -m 0555 "$CARGO_TARGET_DIR/release/examples/authoring_protocol" "$RUNNER_TEMP/weft-authoring-protocol"
+          printf 'WEFT_AUTHORING_TEST_EXECUTABLE=%s\n' "$RUNNER_TEMP/weft-authoring-protocol" >> "$GITHUB_ENV"
       - name: Verify native and wasm edit equivalence
         run: |
           CARGO_TARGET_DIR=target/edit-qualification cargo +1.98.1 build --manifest-path engines/ferrule-edit-wasm/Cargo.toml --release --target wasm32-unknown-unknown --features qualification --locked
@@ -70,6 +74,14 @@ jobs:
           # The Ferrule service compile tests run this exact launcher around the pinned SDK's compiler.
           install -m 0555 "$CARGO_TARGET_DIR/release/weft-compile-sandbox" "$RUNNER_TEMP/weft-compile-sandbox"
           printf 'WEFT_COMPILE_SANDBOX_EXECUTABLE=%s\n' "$RUNNER_TEMP/weft-compile-sandbox" >> "$GITHUB_ENV"
+          rm -rf "$CARGO_TARGET_DIR"
+      - name: Build the native PDF test prerequisite
+        env:
+          CARGO_TARGET_DIR: target/spec-pdf-worker
+        run: |
+          cargo +1.98.1 build --manifest-path engines/spec-pdf-worker/Cargo.toml --release --locked
+          install -m 0555 "$CARGO_TARGET_DIR/release/weft-spec-pdf-worker" "$RUNNER_TEMP/weft-spec-pdf-worker"
+          printf 'WEFT_TEST_PDF_EXECUTABLE=%s\n' "$RUNNER_TEMP/weft-spec-pdf-worker" >> "$GITHUB_ENV"
           rm -rf "$CARGO_TARGET_DIR"
       - name: Build the restricted worker image
         run: |

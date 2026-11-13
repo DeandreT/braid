@@ -117,6 +117,7 @@ public sealed class CreationCapabilitiesTests
         internal readonly IdentityPorts Identity = new();
         internal readonly Admission Admission = new();
         internal HttpClient Client = null!;
+        private static DateTimeOffset DatabaseNow() => DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
         internal static async Task<Host> Start(bool missingRuntime = false)
         {
             var h = new Host(); var org = WorkspaceToolFixture.Organization;
@@ -133,17 +134,18 @@ public sealed class CreationCapabilitiesTests
             sessions.Create = (intent, _) =>
             {
                 sessions.Row = new(intent.Key, intent.BindingId, intent.BindingVersion, intent.LoginEpoch,
-                    ServerSessionPolicy.InitialLifetime(DateTimeOffset.UtcNow, intent.VerifiedLoginDeadlineUtc)!, 1, intent.CopyProtectedTicket());
+                    ServerSessionPolicy.InitialLifetime(DatabaseNow(), intent.VerifiedLoginDeadlineUtc)!, 1, intent.CopyProtectedTicket());
                 return Task.FromResult(ServerSessionWriteResult.ForAcknowledgedFacts(ServerSessionWriteOutcome.Created, sessions.Row));
             };
-            sessions.Observe = (key, _) => Task.FromResult(ServerSessionPolicy.ObserveCurrent(key, DateTimeOffset.UtcNow, sessions.Row,
+            sessions.Observe = (key, _) => Task.FromResult(ServerSessionPolicy.ObserveCurrent(key, DatabaseNow(), sessions.Row,
                 sessions.Row is { } row ? new(row.BindingId, row.BindingVersion, h.Identity.Actor, true, true) : null));
             b.Services.AddWeftBrowserSessions(new("https://localhost"), h.profile, sessions, sessions, TimeProvider.System);
             b.Services.AddWeftSessionCatalog(new(org), new(), new(), new(), new());
             b.Services.AddWeftBearerAccess(new(org), h.Identity, h.Identity, h.Identity);
             h.app = b.Build(); h.app.MapWeftCreation();
+            // Trusted issuance accepts database-representable timestamps, not arbitrary host-clock ticks.
             h.app.MapGet("/__issue", async (HttpContext c, ServerSessionBrowser browser) =>
-            { await browser.IssueFreshAsync(c, Guid.NewGuid(), 1, h.Identity.Actor, DateTimeOffset.UtcNow.AddMinutes(30), c.RequestAborted); return Results.NoContent(); });
+            { await browser.IssueFreshAsync(c, Guid.NewGuid(), 1, h.Identity.Actor, DatabaseNow().AddMinutes(30), c.RequestAborted); return Results.NoContent(); });
             await h.app.StartAsync(); h.Client = h.app.GetTestClient(); h.Client.BaseAddress = new("https://localhost");
             h.Client.DefaultRequestHeaders.Authorization = new("Bearer", "fixture-token"); return h;
         }

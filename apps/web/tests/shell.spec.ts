@@ -20,7 +20,7 @@ test("the packaged C# host serves nested Angular navigation and preserves API 40
     origin +
       "/catalog/organizations/10000000-0000-4000-8000-000000000001/projects",
   );
-  await expect(page.getByRole("link", { name: "Weft home" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "braid home" })).toBeVisible();
   await expect(disabledHost(page)).toBeVisible();
   const missing = await request.get(origin + "/api/v1/missing");
   expect(missing.status()).toBe(404);
@@ -84,7 +84,7 @@ test("a host without browser sign-in explains its sign-in page", async ({
 }) => {
   await page.goto("/sign-in?returnTo=%2Fcatalog");
   await expect(
-    page.getByRole("heading", { level: 1, name: "Sign in to Weft" }),
+    page.getByRole("heading", { level: 1, name: "Sign in to braid" }),
   ).toBeVisible();
   await expect(page.getByRole("status").first()).toHaveText(
     "This host has no browser sign-in.",
@@ -123,7 +123,7 @@ for (const target of ["/help", "/help/reports#coverage"]) {
     );
     await page.goto(target);
     await expect(
-      page.getByRole("heading", { level: 1, name: "Sign in to Weft" }),
+      page.getByRole("heading", { level: 1, name: "Sign in to braid" }),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Sign in with Microsoft", exact: true }),

@@ -266,6 +266,12 @@ test("layout normalization cannot capture sample bytes or request tokens", () =>
     dockCollapsed: true,
   });
   expect(JSON.stringify(value)).not.toContain("private");
+  expect(normalizeWorkbenchLayout(undefined).dockHeight).toBe(320);
+  expect(normalizeWorkbenchLayout({ dockHeight: "invalid" }).dockHeight).toBe(
+    320,
+  );
+  expect(normalizeWorkbenchLayout({ dockHeight: 220 }).dockHeight).toBe(220);
+  expect(normalizeWorkbenchLayout({ dockHeight: 9000 }).dockHeight).toBe(480);
 });
 
 test("an admission refresh keeps only nonprivate workflow navigation", () => {

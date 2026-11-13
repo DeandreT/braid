@@ -6,10 +6,10 @@ summary: Add a new mapping from its native file, or upload a changed file as a n
 ---
 
 Publishers and administrators can add mappings to a project and upload new
-revisions of existing mappings. Weft stores the exact bytes of the file you
+revisions of existing mappings. braid stores the exact bytes of the file you
 choose; it never rewrites or converts the file.
 
-Weft accepts mappings in Ferrule's native JSON format, up to 4 MiB per file. It
+braid accepts mappings in Ferrule's native JSON format, up to 4 MiB per file. It
 doesn't convert XML, MapForce files or project bundles, and it doesn't fetch
 files that a mapping refers to.
 
@@ -22,10 +22,10 @@ files that a mapping refers to.
    the name of the file you chose; you can change it.
 5. Choose **Upload mapping**.
 
-One file creates one mapping and its first revision. When Weft confirms the
+One file creates one mapping and its first revision. When braid confirms the
 upload, it says **Mapping saved**. Choose **View revision** to open it.
 
-If the mapping engine finds problems in the file, Weft still saves it and says
+If the mapping engine finds problems in the file, braid still saves it and says
 **Mapping saved with validation issues**. Open the revision and read its
 [validation](reports.md#validation) to see what's wrong.
 
@@ -40,22 +40,22 @@ If the mapping engine finds problems in the file, Weft still saves it and says
 The mapping's name and description don't change. Older revisions, and the
 reports saved for them, stay available.
 
-If someone else uploads a revision while you are working, Weft doesn't save
+If someone else uploads a revision while you are working, braid doesn't save
 yours on top of theirs. It asks you to choose **Review current head** first, so
 you can check their change before you upload again.
 
 ## While an upload is in progress
 
-Keep the tab open until Weft confirms the result. **Stop waiting** stops the
+Keep the tab open until braid confirms the result. **Stop waiting** stops the
 page from waiting, but the server may still finish the upload.
 
-If Weft can't confirm the result, it says **Upload outcome is unknown** or
+If braid can't confirm the result, it says **Upload outcome is unknown** or
 **Append outcome is unknown**. Choose **Resend original upload** (or **Resend
-original append**) to send exactly the same request again. Weft recognises it
+original append**) to send exactly the same request again. braid recognises it
 and never saves the file twice. Don't start a new upload with the same file
 until you know what happened. See
 [When a result isn't confirmed](unconfirmed-results.md).
 
 Leaving the page, reloading it or closing the tab discards the file you
-selected and any recovery information. Weft asks before you leave a page with
+selected and any recovery information. braid asks before you leave a page with
 unsent or unconfirmed work.

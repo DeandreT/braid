@@ -8,7 +8,7 @@ const contents: HelpSectionList = {
     {
       id: "overview",
       title: "Getting started",
-      summary: "What Weft does and where to begin.",
+      summary: "What braid does and where to begin.",
     },
     {
       id: "reports",
@@ -29,12 +29,12 @@ const sections: Record<string, HelpSection> = {
   overview: {
     id: "overview",
     title: "Getting started",
-    summary: "What Weft does and where to begin.",
+    summary: "What braid does and where to begin.",
     blocks: [
       {
         kind: "paragraph",
         content: [
-          text("Weft keeps "),
+          text("braid keeps "),
           { kind: "strong", text: "every revision" },
           text(" and shows its "),
           { kind: "emphasis", text: "explanation" },
@@ -50,7 +50,7 @@ const sections: Record<string, HelpSection> = {
           text("."),
         ],
       },
-      { kind: "heading", level: 2, anchor: "words", text: "Words Weft uses" },
+      { kind: "heading", level: 2, anchor: "words", text: "Words braid uses" },
       {
         kind: "list",
         ordered: false,
@@ -211,20 +211,72 @@ const article = (page: Page) => page.locator("article.help-article");
 const contentsNav = (page: Page) =>
   page.getByRole("navigation", { name: "User guide" });
 
+test("the shell uses lowercase braid branding without changing technical API names", async ({
+  page,
+}) => {
+  await install(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/help");
+  const home = page.getByRole("link", { name: "braid home", exact: true });
+  await expect(home).toBeVisible();
+  await expect(home.locator(".brand-name")).toHaveText("braid.");
+  await expect(home.locator(".brand-mark")).toHaveText("b");
+  await expect(home.locator(".brand-mark")).toHaveAttribute(
+    "aria-hidden",
+    "true",
+  );
+  await expect(page).toHaveTitle("Help · braid");
+  await expect(page.locator('meta[name="description"]')).toHaveAttribute(
+    "content",
+    "Understand, test, and deploy your data mappings with braid.",
+  );
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth,
+    ),
+  ).toBe(false);
+});
+
+test("the sign-in wordmark, monogram and title use lowercase braid", async ({
+  page,
+}) => {
+  await install(page);
+  await page.route("**/api/auth/session", (route) =>
+    route.fulfill({
+      json: {
+        version: 1,
+        mode: "session",
+        state: "anonymous",
+        authActionRequestToken: "YXV0aC1h",
+        requestToken: null,
+        identityContext: null,
+        displayName: null,
+      },
+    }),
+  );
+  await page.goto("/sign-in");
+  await expect(
+    page.getByRole("heading", { name: "Sign in to braid", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".sign-in-brand .brand-name")).toHaveText("braid.");
+  await expect(page.locator(".sign-in-brand .brand-mark")).toHaveText("b");
+  await expect(page).toHaveTitle("Sign in · braid");
+});
+
 test("the header opens the guide contents", async ({ page }) => {
   await install(page);
   await page.goto("/catalog");
-  await page.getByRole("link", { name: "Help", exact: true }).click();
+  await page.getByRole("link", { name: "Help & guide", exact: true }).click();
   await expect(page).toHaveURL(/\/help$/);
-  await expect(page).toHaveTitle("Help · Weft");
+  await expect(page).toHaveTitle("Help · braid");
   await expect(
     page.getByRole("heading", { level: 1, name: "User guide" }),
   ).toBeVisible();
   const index = page.getByRole("list", { name: "Guide sections" });
   await expect(index.getByRole("listitem")).toHaveCount(3);
-  await expect(index).toContainText("What Weft does and where to begin.");
+  await expect(index).toContainText("What braid does and where to begin.");
   await expect(
-    page.getByRole("link", { name: "Help", exact: true }),
+    page.getByRole("link", { name: "Help & guide", exact: true }),
   ).toHaveAttribute("aria-current", "page");
   await index.getByRole("link", { name: "Chat about a revision" }).click();
   await expect(page).toHaveURL(/\/help\/chat$/);
@@ -233,22 +285,22 @@ test("the header opens the guide contents", async ({ page }) => {
 test("a section renders its structure as text and links", async ({ page }) => {
   const fixture = await install(page);
   await page.goto("/help/overview");
-  await expect(page).toHaveTitle("Getting started · Help · Weft");
+  await expect(page).toHaveTitle("Getting started · Help · braid");
   const body = article(page);
   await expect(
     body.getByRole("heading", { level: 1, name: "Getting started" }),
   ).toBeVisible();
-  await expect(body).toContainText("What Weft does and where to begin.");
+  await expect(body).toContainText("What braid does and where to begin.");
   await expect(
     body.locator("strong", { hasText: "every revision" }),
   ).toBeVisible();
   await expect(body.locator("em", { hasText: "explanation" })).toBeVisible();
   await expect(body.locator("p code", { hasText: "weft help" })).toBeVisible();
   await expect(body.locator(".help-body p").first()).toHaveText(
-    "Weft keeps every revision and shows its explanation. Run weft help or read about coverage.",
+    "braid keeps every revision and shows its explanation. Run weft help or read about coverage.",
   );
   await expect(
-    body.getByRole("heading", { level: 2, name: "Words Weft uses" }),
+    body.getByRole("heading", { level: 2, name: "Words braid uses" }),
   ).toHaveAttribute("id", "help-words");
   await expect(
     body.getByRole("heading", { level: 3, name: "Roles" }),
@@ -262,7 +314,7 @@ test("a section renders its structure as text and links", async ({ page }) => {
   await expect(body.locator("pre code")).toHaveText("weft help\n  --verbose");
   const outline = body.getByRole("navigation", { name: "On this page" });
   await expect(outline.getByRole("link")).toHaveText([
-    "Words Weft uses",
+    "Words braid uses",
     "Where to start",
     "Commands",
   ]);
@@ -306,7 +358,7 @@ test("links between sections open the anchored heading", async ({ page }) => {
   await expect(
     article(page).getByRole("heading", { level: 2, name: "Commands" }),
   ).toBeFocused();
-  await expect(page).toHaveTitle("Getting started · Help · Weft");
+  await expect(page).toHaveTitle("Getting started · Help · braid");
 });
 
 test("guide text is never interpreted as markup", async ({ page }) => {
@@ -458,7 +510,7 @@ test("going back restores the reading position instead of the anchor", async ({
   await page.goBack();
   await expect(page).toHaveURL(/\/help\/reports#coverage$/);
   await expect(page).toHaveTitle(
-    "Reports, coverage and diagnostics · Help · Weft",
+    "Reports, coverage and diagnostics · Help · braid",
   );
   await expect(
     article(page).getByRole("heading", { level: 2, name: "Coverage" }),
@@ -515,8 +567,9 @@ test("a contextual help link opens its section in a new tab", async ({
   await reports.install();
   await page.goto(reports.data.browserPath);
   await expect(
-    page.getByRole("heading", { level: 1, name: "Version 1" }),
+    page.getByRole("heading", { level: 1, name: reports.data.mapping.name }),
   ).toBeVisible();
+  await expect(page.locator(".wb-version-number")).toHaveText("Version 1");
   const link = page.getByRole("link", {
     name: "About reports (opens in a new tab)",
   });
@@ -528,7 +581,8 @@ test("a contextual help link opens its section in a new tab", async ({
   ]);
   await expect(help).toHaveURL(/\/help\/reports$/);
   await expect(
-    page.getByRole("heading", { level: 1, name: "Version 1" }),
+    page.getByRole("heading", { level: 1, name: reports.data.mapping.name }),
   ).toBeVisible();
+  await expect(page.locator(".wb-version-number")).toHaveText("Version 1");
   await help.close();
 });

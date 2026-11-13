@@ -15,23 +15,23 @@
 button {
   font: inherit;
   cursor: pointer;
-  min-height: 32px;
+  min-height: 36px;
 }
 button:focus-visible {
   outline: 2px solid var(--wb-focus);
-  outline-offset: -2px;
+  outline-offset: -3px;
 }
 .wb-spacer {
   flex: 1;
 }
 .wb-context {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 4px 12px;
+  padding: 16px 20px 12px;
   min-height: 40px;
-  border-bottom: 1px solid var(--border);
 }
 .wb-context > * {
   flex: 1;
@@ -39,31 +39,54 @@ button:focus-visible {
 }
 .wb-workflow-bar {
   display: flex;
+  flex-shrink: 0;
+  align-items: stretch;
   min-width: 0;
+  padding: 0 20px;
   border-bottom: 1px solid var(--border);
-  background: var(--surface-subtle);
+  background: var(--surface);
 }
 .wb-workflow-bar nav {
   display: flex;
+  gap: 6px;
   min-width: 0;
   flex: 1;
-  overflow: auto;
+  overflow-x: auto;
   scrollbar-width: thin;
+  scroll-padding-inline: 8px;
 }
 .wb-workflow-bar button,
 .wb-inspector-tabs button,
 .wb-dock-tabs button {
+  flex-shrink: 0;
   border: 0;
+  border-radius: 0;
   background: none;
-  padding: 6px 8px;
-  font-size: 0.75rem;
+  padding: 10px 12px;
+  font-size: 0.8125rem;
   color: var(--text-muted);
   white-space: nowrap;
 }
-[aria-selected="true"] {
-  color: var(--wb-selection-text) !important;
-  box-shadow: inset 0 -2px var(--wb-selection-text);
+.wb-workflow-bar button:hover,
+.wb-inspector-tabs button:hover,
+.wb-dock-tabs button:hover {
+  color: var(--text);
+  background: var(--surface-subtle);
+}
+button[aria-selected="true"] {
+  color: var(--wb-selection-text);
+  background: var(--wb-selection-tint);
+  box-shadow: inset 0 -3px var(--wb-selection-text);
   font-weight: 650;
+}
+.wb-workflow-bar .wb-inspector-toggle {
+  align-self: center;
+  min-height: 32px;
+  margin-left: 12px;
+  padding: 5px 8px;
+  border: 1px solid var(--wb-control-border);
+  border-radius: 6px;
+  font-size: 0.75rem;
 }
 .wb-workspace {
   display: flex;
@@ -84,64 +107,88 @@ button:focus-visible {
   flex-shrink: 0;
   min-height: 0;
   border-top: 1px solid var(--border);
-  background: var(--surface-muted-11);
+  background: var(--surface);
 }
 .wb-dock-collapsed {
   height: auto;
+  background: var(--surface-subtle);
 }
 .wb-dock-tabs {
   display: flex;
   align-items: center;
   flex-shrink: 0;
   min-width: 0;
-  overflow: auto;
   border-bottom: 1px solid var(--border);
-  scrollbar-width: thin;
+  padding: 0 12px;
 }
 .wb-dock-tabs nav {
   display: flex;
-  flex-shrink: 0;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.wb-dock-tabs .wb-dock-collapse {
+  margin-left: 8px;
+  padding: 4px 10px;
+  font-size: 1rem;
+}
+.wb-dock-collapsed .wb-dock-tabs button {
+  padding-block: 6px;
 }
 .wb-dock-body {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 8px 12px;
+  overscroll-behavior: contain;
+  padding: 12px 20px;
 }
 .wb-inspector {
   min-width: 0;
 }
 .wb-inspector-tabs {
   display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: thin;
   border-bottom: 1px solid var(--border);
 }
+.wb-inspector-tabs button {
+  padding: 6px 12px;
+  font-size: 0.75rem;
+}
 .wb-inspector-body {
-  padding: 8px 0;
+  padding: 12px 0 4px;
 }
 .wb-tray-splitter {
   position: relative;
   height: 8px;
   flex-shrink: 0;
-  background: var(--surface-muted-27);
+  background: var(--surface-subtle);
 }
 .wb-status {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 8px;
   overflow-x: auto;
   white-space: nowrap;
-  scrollbar-width: none;
-  padding: 4px 8px;
-  background: var(--surface-muted-28);
+  scrollbar-width: thin;
+  padding: 4px 12px;
+  background: var(--surface-subtle);
   border-top: 1px solid var(--border);
   color: var(--wb-evidence-text);
   font-size: 0.6875rem;
 }
 .wb-status button {
+  min-height: 28px;
   border: 0;
   background: none;
+  color: inherit;
   padding: 0 4px;
   font-size: inherit;
+}
+.wb-dock-expanded .wb-context {
+  padding-block: 10px;
 }
 .wb-focused-tray .wb-canvas {
   display: none;
@@ -154,7 +201,30 @@ button:focus-visible {
   display: none !important;
 }
 @media (max-width: 679px) {
-  button {
+  .wb-context,
+  .wb-dock-expanded .wb-context {
+    padding: 12px 16px;
+  }
+  .wb-workflow-bar {
+    padding-inline: 8px;
+  }
+  .wb-workflow-bar nav {
+    gap: 2px;
+  }
+  button,
+  .wb-workflow-bar .wb-inspector-toggle {
     min-height: 44px;
+  }
+  .wb-workflow-bar .wb-inspector-toggle {
+    margin-left: 4px;
+    padding-inline: 6px;
+    max-width: 110px;
+    white-space: normal;
+  }
+  .wb-dock-tabs {
+    padding-inline: 4px;
+  }
+  .wb-dock-body {
+    padding: 12px 16px;
   }
 }

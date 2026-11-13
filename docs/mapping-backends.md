@@ -9,7 +9,7 @@ capability gates. This contract does not introduce an executable mapping languag
 
 ## Responsibilities
 
-Weft owns discovery, ownership, revisions, presentation, authorization, and
+braid owns discovery, ownership, revisions, presentation, authorization, and
 operation orchestration. A mapping backend owns native artifact decoding,
 validation, precise transformation semantics, and runtime diagnostics.
 
@@ -28,7 +28,7 @@ mappings are an optional runtime with a separate capability gate.
 | `preview` | Ordered output artifacts, counts, bounded trace/diagnostics | Exact formats, inputs, target, limits, and host policy accepted |
 | `build`, later | Immutable runtime artifact and provenance manifest | Exact generator/runtime capability accepted |
 
-Weft provides field-lineage and rule-detail tools over the projection. It must
+braid provides field-lineage and rule-detail tools over the projection. It must
 not compute output values using a second implementation of mapping semantics.
 Each adapter publishes the capabilities of a particular revision and operation,
 not a single global boolean such as "Ferrule supports deployment."
@@ -161,7 +161,7 @@ source-emission contract. Its bounded route, dialect metadata and empty-document
 semantics do not expand the existing persisted preview or deployment profiles.
 
 Bound every native document before decoding, including legacy unmarked project
-files. Ferrule's logical path acceptance is broader than Weft's storage policy;
+files. Ferrule's logical path acceptance is broader than braid's storage policy;
 the host validates traversal-free input identities and remaps output identities
 before publication. Enforce deadline/memory/CPU limits around the process because
 parsing, builtin evaluation, and serialization cannot all be cooperatively
@@ -170,9 +170,9 @@ inspection input rather than a complete host-resource permission inventory.
 
 If reproducible replay or diagnostic normalization needs an additional public
 Ferrule API, open a focused upstream issue and PR, qualify that increment, and
-pin its resulting commit in the dependent Weft PR. Ferrule's selected revision
+pin its resulting commit in the dependent braid PR. Ferrule's selected revision
 includes the payload-clock override merged in [#728](https://github.com/DeandreT/ferrule/pull/728).
-Its presence does not activate or qualify a Weft execution profile.
+Its presence does not activate or qualify a braid execution profile.
 
 Generation, `.mfd` interoperability, and browser WASM execution are optional
 backend capabilities with separate acceptance gates. Do not infer any of them

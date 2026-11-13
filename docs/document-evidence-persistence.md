@@ -60,7 +60,7 @@ The final retry (`document-audit-inventory-final.trx`) passed 25/25 with zero
 skips, including that audit case and 24 catalog/build/release inventory cases.
 Together these receipts cover 123 distinct passing cases; this is not a claim
 of a single clean 123-case run. Receipts are in
-`C:/example/evidence/document-persistence-checks`.
+`%LOCALAPPDATA%/Temp/opencode/document-persistence-checks`.
 
 Qualification used .NET SDK 10.0.112, native PostgreSQL 16.15, and the real
 `weft-spec-pdf-worker.exe` child for the mixed-document case. Coverage includes

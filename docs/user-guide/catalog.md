@@ -6,7 +6,9 @@ summary: Browse projects, mappings and revisions, understand project roles, and 
 ---
 
 The catalog lists the projects, mappings and revisions you can see. Choose
-**Catalog** in the header to open it.
+**Catalog** in the workspace navigation to open it. Medium-width screens show
+navigation icons with named links; hover over an icon to see its name. On a
+phone, open **Menu** first.
 
 ## Projects
 
@@ -36,7 +38,7 @@ Each revision has a file status:
 
 - **File accepted**: the file passed the mapping engine's checks when it was
   uploaded.
-- **Saved with validation issues**: Weft saved the file, but the mapping
+- **Saved with validation issues**: braid saved the file, but the mapping
   engine's checks found problems in it. The revision stays in the history and
   you can still open it and read its [validation](reports.md#validation).
 
@@ -49,19 +51,19 @@ uploaded, so you can share it safely.
 Each project member has one role in that project. A role in one project gives
 no access to any other project.
 
-| Role | What it allows |
-| --- | --- |
-| Viewer | Browse the project's mappings and revisions, read and generate reports, compare revisions, use chat, and see the names of saved regression tests. |
-| Runner | Everything a viewer can do, plus try samples, open saved regression tests and run them. |
-| Publisher | Everything a runner can do, plus upload mappings and revisions, edit mapping names and descriptions, save regression tests, and approve and prepare builds. |
-| Administrator | Everything a publisher can do, plus manage build environments. |
+| Role          | What it allows                                                                                                                                              |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Viewer        | Browse the project's mappings and revisions, read and generate reports, compare revisions, use chat, and see the names of saved regression tests.           |
+| Runner        | Everything a viewer can do, plus try samples, open saved regression tests and run them.                                                                     |
+| Publisher     | Everything a runner can do, plus upload mappings and revisions, edit mapping names and descriptions, save regression tests, and approve and prepare builds. |
+| Administrator | Everything a publisher can do, plus manage build environments.                                                                                              |
 
-Your Weft administrator adds members and changes their roles; the app has no
+Your braid administrator adds members and changes their roles; the app has no
 screen for this. Some features can also be turned off for your workspace. When
 a feature is off, or your role doesn't allow an action, its controls are hidden
 or shown as unavailable.
 
-Weft checks your current role again for every action. If your role changes
+braid checks your current role again for every action. If your role changes
 while a page is open, your next action uses the new role.
 
 ## Create a project
@@ -73,10 +75,10 @@ administrator of an existing project doesn't give you this permission.
 2. Enter a **Name** and, if you like, a **Description**.
 3. Choose **Create project**.
 
-When Weft confirms the creation, you become the new project's administrator.
+When braid confirms the creation, you become the new project's administrator.
 Choose **Open project** to go to it.
 
-If Weft can't confirm whether the project was created, it says **Creation
+If braid can't confirm whether the project was created, it says **Creation
 outcome is unknown**. Choose **Recover creation** to send the same request again;
 it can't create a second project. See
 [When a result isn't confirmed](unconfirmed-results.md).

@@ -5,7 +5,7 @@ order: 7
 summary: Read a revision's explanation and validation, generate them, and understand coverage and diagnostics.
 ---
 
-Weft saves two reports for each revision. They are independent of each other,
+braid saves two reports for each revision. They are independent of each other,
 and each belongs to that exact revision.
 
 - The **explanation** shows how each result field is filled: which incoming
@@ -21,7 +21,7 @@ headings at the top show each report's state, for example
 ## Generate a report
 
 You don't normally need to. The first time anyone who can generate reports
-opens a revision, Weft generates any report that isn't saved yet. While it
+opens a revision, braid generates any report that isn't saved yet. While it
 works, the **Data mapping** view says it's generating this version's reports
 and checks their progress for you. Checking never starts another attempt.
 
@@ -69,7 +69,7 @@ The validation header says one of:
 - **Validation has no validity decision**: the check ran but returned no
   verdict.
 
-A long list of findings may be shortened. Weft then shows how many findings
+A long list of findings may be shortened. braid then shows how many findings
 there are in total and how many it returned.
 
 Validation and coverage measure different things. A valid file can still have a
@@ -84,7 +84,7 @@ the investigation dock to see them, grouped by report:
 - validation notices describe problems in the mapping file.
 
 Each diagnostic has a severity, a message and, where known, its location in the
-mapping file. When Weft can tie a diagnostic to exactly one field or rule, it
+mapping file. When braid can tie a diagnostic to exactly one field or rule, it
 offers a button such as **Inspect linked field** that selects it in the table.
 A diagnostic without a link still shows its location in the file.
 

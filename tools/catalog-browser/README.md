@@ -2,7 +2,7 @@
 
 `operator.mjs` is the disposable integration fixture used by
 `npm run test:catalog-browser`. It uses Node core modules, ordinary published
-Weft tools, the pinned native worker and a new PostgreSQL database. It creates
+braid tools, the pinned native worker and a new PostgreSQL database. It creates
 projects and native revision history through product HTTP, then serves the
 packaged Angular app with only catalog-reader credentials. There is no product
 test-control endpoint.

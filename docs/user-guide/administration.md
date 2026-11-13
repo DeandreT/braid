@@ -28,7 +28,7 @@ The app shows the link only once. It expires after 24 hours. Revoke an unused
 invitation if it was sent to the wrong person or the link is lost.
 
 The recipient opens the link and chooses **Sign in and redeem invitation**.
-Weft binds the verified tenant and object ID, not an email address. Signing in
+braid binds the verified tenant and object ID, not an email address. Signing in
 alone does not grant access to projects omitted from the invitation.
 
 ## Project access

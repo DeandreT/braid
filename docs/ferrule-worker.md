@@ -4,7 +4,7 @@ The C# application uses `IMappingInspectionBackend` to inspect and validate and
 `IMappingProjectionBackend` to explain immutable native artifacts. The first
 adapter, `FerruleInspectionBackend`, talks
 to a restricted Rust worker. It keeps Ferrule types and native JSON decoding
-inside that worker; application results contain Weft-owned data and evidence.
+inside that worker; application results contain braid-owned data and evidence.
 
 Hosted environments that cannot run Docker use the same worker binary and
 protocols inside the [Ferrule service](ferrule-service.md).
@@ -106,7 +106,7 @@ and cleanup failure remain distinct outcomes.
 `IMappingEditBackend` replays the closed `ferrule.edit.v1` operation vocabulary
 against exact server-owned base bytes. `weft-ferrule-core`, under the worker's
 `core/` directory, shares Ferrule's codec, `edit-ops` command history, validation
-and Weft's projection walker with the browser wasm module. The host retains its
+and braid's projection walker with the browser wasm module. The host retains its
 existing library exports and binary entry point; preview, build and sandbox code
 are not dependencies of the shared core.
 

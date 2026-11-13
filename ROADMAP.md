@@ -1,4 +1,4 @@
-# Weft delivery plan
+# braid delivery plan
 
 Each increment links its tracking issue, implementing pull requests and contract
 documentation. The early increments are recorded in
@@ -431,8 +431,24 @@ separate gate from these local and template ones.
 
 Queue triggers, scheduled execution, additional preview formats, model providers,
 identity providers, and production mapping engines each get their own scoped
-increments after the relevant contracts are exercised. Full visual authoring and
-AI edits require a separate proposal and revision-preservation acceptance gate.
+increments after the relevant contracts are exercised. The implemented opt-in
+editor and exact-proposal AI edits retain their approval and revision-preservation
+gates. Further visual-authoring scope needs its own proposal and acceptance.
+
+Document-worker chronology: the initial Windows/implementation records in
+[Document worker](docs/spec-document-worker.md),
+[Native PDF runner](docs/spec-pdf-native-runner.md) and
+[Document host](docs/spec-document-host.md) predate the completed
+[installed-worker qualification](docs/spec-document-installed-qualification.md)
+and [hostile/lifecycle follow-up](docs/spec-document-installed-hostile-qualification.md).
+Four initial cases and the separate 16-case follow-up passed with zero failures
+or skips, closing the reviewed bounded local Linux scope. Exact-parser,
+shared-control and separately pinned probe evidence retain their stated limits.
+Public PDF factory and filesystem spec-store refusal gates remain unchanged;
+these results do not activate them. AppArmor enforcement and production-environment
+equivalence are not established; different/final installations need their own
+approved identities and executed results. Live-provider/Azure acceptance remains
+deferred.
 
 ## Verification expectations
 

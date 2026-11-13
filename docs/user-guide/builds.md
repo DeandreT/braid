@@ -31,7 +31,7 @@ A build needs:
   CSV/TSV mappings. CSV/TSV requires one primary input and one primary output,
   with the dialect saved in the native revision.
 
-If any of these is missing, Weft refuses the approval or the build.
+If any of these is missing, braid refuses the approval or the build.
 
 CSV builds are separately opt-in: an administrator must enable
 `WEFT_BUILDS_CSV_ENABLED=true` and configure the matching compiler and runtime.
@@ -41,18 +41,18 @@ cannot support build approval or compiled qualification.
 
 ## Prepare a build
 
-1. In the workbench, open the **Prepare** view. Weft loads its environments,
+1. In the workbench, open the **Prepare** view. braid loads its environments,
    your approvals, your preparation history and saved test runs.
 2. Under **Environment version**, choose an active environment.
 3. Under **Required test result**, choose **Verify this evidence** next to a
-   finished run. Weft checks that its result matches the saved expectation using
+   finished run. braid checks that its result matches the saved expectation using
    exact-byte comparison.
 4. Choose **Approve preparation**. This records your approval of this
    revision, environment and test result.
 5. Under **Your approvals**, open the approval and choose
    **Prepare approved version**.
 
-Weft queues the build and shows its progress. Under
+braid queues the build and shows its progress. Under
 **Your preparation history**, open a build to see its state:
 
 - **Preparation complete**: the compiled file was made and saved.
@@ -88,9 +88,9 @@ become a CSV environment automatically.
 
 The mapping endpoint lets other systems send documents to a mapping and receive
 its output, without using the browser. Putting a build in use happens outside
-the browser, through your Weft operators:
+the browser, through your braid operators:
 
-1. They **qualify** a completed build: Weft runs the build's saved regression
+1. They **qualify** a completed build: braid runs the build's saved regression
    test against the compiled file and records the result. Qualification requires
    exact-byte agreement for **All outputs**, with every declared output in the
    baseline and matching media types and, for CSV/TSV, native dialects. A

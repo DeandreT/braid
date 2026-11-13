@@ -68,7 +68,7 @@ fixture responses: revision runs now include `subjectKind: "revision"` and
 `draft: null`; the XML-only capability fixture omits CSV comparison policies.
 After those fixture corrections, formatting and browser TypeScript checks passed
 again. Isolated final browser output is under
-`C:/example/evidence/weft-xml-p2-browser-passed`.
+`%LOCALAPPDATA%/Temp/opencode/weft-xml-p2-browser-passed`.
 
 ## Remaining runtime qualification gaps
 

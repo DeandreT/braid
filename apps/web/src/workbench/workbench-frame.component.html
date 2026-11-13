@@ -2,6 +2,7 @@
   class="wb-frame"
   [style.--wb-row-height]="rowHeight() + 'px'"
   [class.wb-focused-tray]="focusedTray() && !state.layout().dockCollapsed"
+  [class.wb-dock-expanded]="!state.layout().dockCollapsed"
 >
   <header class="wb-context">
     <ng-content select="[workbench-context]" />
@@ -95,6 +96,7 @@
         </nav>
         <span class="wb-spacer"></span
         ><button
+          class="wb-dock-collapse"
           type="button"
           [attr.aria-label]="
             state.layout().dockCollapsed

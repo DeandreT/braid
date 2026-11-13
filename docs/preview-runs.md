@@ -130,7 +130,7 @@ the [private storage selection](private-storage-blob.md#host-selection)
 opened read-only),
 `WEFT_FERRULE_WORKER_IMAGE`, optional `WEFT_DOCKER_EXECUTABLE` and optional
 `WEFT_PREVIEW_LEASE_SECONDS` (35–600). With `WEFT_FERRULE_RUNNER=service` it runs
-previews through the [Ferrule service](ferrule-service.md#weft-service-runner) instead of
+previews through the [Ferrule service](ferrule-service.md#braid-service-runner) instead of
 Docker. With a filesystem root it runs as the same operating-system user that owns
 the root. A worker that only serves
 [hosted inspection](ferrule-worker.md#worker-inspection-service) sets
@@ -138,7 +138,7 @@ the root. A worker that only serves
 
 Migration `0013_preview_messages.sql` creates the `weft_messages` schema and grants
 the preview writer `USAGE` and `CREATE` on it only. Wolverine creates and owns its
-envelope, queue and node tables there on startup; Weft tables and grants are not
+envelope, queue and node tables there on startup; braid tables and grants are not
 affected. The writer connection must be direct or session pooled, because
 Wolverine's durability agent uses session advisory locks.
 

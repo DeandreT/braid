@@ -1,172 +1,313 @@
-<div class="catalog-heading">
+<div class="catalog-heading review-heading">
   <div>
+    <p class="review-eyebrow">Document to mapping · Proposal review</p>
     <h1>Review new mapping</h1>
-    <p>
-      Test a sample, review the requirements, then approve this exact proposal.
+    <p class="review-intro">
+      Review the requirements, test a sample, then approve this exact proposal.
     </p>
   </div>
-  <button type="button" (click)="refresh()" [disabled]="busy()">
+  <button
+    class="review-button"
+    type="button"
+    (click)="refresh()"
+    [disabled]="busy()"
+  >
     Refresh proposal and access
   </button>
 </div>
-<p role="status" aria-live="polite">{{ message() }}</p>
+@if (!visible() || !proposal()) {
+  <p class="review-status" role="status" aria-live="polite">
+    {{ busy() ? "Loading proposal and checking access…" : message() }}
+  </p>
+}
 @if (visible()) {
   @if (proposal(); as p) {
-    <section aria-label="Exact creation proposal">
-      <h2>{{ p.name }}</h2>
-      @if (p.description) {
-        <p>{{ p.description }}</p>
-      }
-      <dl>
-        <dt>Proposal fingerprint</dt>
-        <dd>
-          <code>{{ p.fingerprint }}</code>
-        </dd>
-        <dt>Source snapshot</dt>
-        <dd>
-          <code>{{ p.snapshotDigest }}</code>
-        </dd>
-        <dt>Native mapping digest</dt>
-        <dd>
-          <code>{{ p.nativeDigest }}</code>
-        </dd>
-      </dl>
-      <details>
-        <summary>Exact mapping plan</summary>
-        <pre>{{ p.planJson }}</pre>
-      </details>
-      <h3>Source evidence</h3>
-      <ul>
-        @for (e of p.evidence; track $index) {
-          <li>
-            <a [routerLink]="evidenceLink(e.bundleId)"
-              >Source {{ e.sourceId }}, version {{ e.sourceVersion }}, chunk
-              {{ e.chunkOrdinal }}</a
+    <div class="review-layout" [attr.aria-busy]="busy()">
+      <div class="review-main">
+        <section
+          class="review-panel requirements-panel"
+          aria-label="Exact creation proposal"
+        >
+          <div class="review-title">
+            <h2>{{ p.name }}</h2>
+            <span
+              class="review-badge"
+              [class.review-badge-attention]="!p.approved"
             >
-          </li>
-        }
-      </ul>
-      <h3>Open questions</h3>
-      @if (!p.questions.length) {
-        <p>No open questions were recorded.</p>
-      }
-      <ul>
-        @for (q of p.questions; track $index) {
-          <li>
-            {{ q.text }}
-            @if (q.critical) {
-              <strong>Answer required before approval.</strong>
-            }
-          </li>
-        }
-      </ul>
-      <fieldset [disabled]="busy() || (p.approved && !retryable())">
-        <legend>Assumptions</legend>
-        @if (!p.assumptions.length) {
-          <p>No assumptions were recorded.</p>
-        }
-        @for (a of p.assumptions; track a.id) {
-          @if (a.critical) {
-            <label
-              ><input
-                type="checkbox"
-                [ngModel]="accepted().has(a.id)"
-                (ngModelChange)="accept(a.id, $event)"
-              />
-              I accept: {{ a.text }}</label
-            >
-          } @else {
-            <p>{{ a.text }}</p>
+              {{
+                p.receipt?.phase === "Committed"
+                  ? "Saved"
+                  : p.approved
+                    ? "Approval retained"
+                    : "Review required"
+              }}
+            </span>
+          </div>
+          @if (p.description) {
+            <p class="review-description">{{ p.description }}</p>
           }
-        }
-      </fieldset>
-      <p>
-        For corrections or unanswered requirements, return to the conversation
-        and request a new proposal. Each proposal has its own approval.
-      </p>
-      <a routerLink="/chat" [queryParams]="feedbackParams"
-        >Give feedback in chat</a
-      >
-      <p>
-        Only this proposal's identity is carried over. Samples and output stay
-        on this review page.
-      </p>
-      <a [routerLink]="libraryLink">Your new mapping proposals</a>
-    </section>
-    <section aria-label="Sample execution">
-      <h2>Test a sample</h2>
-      <fieldset [disabled]="busy()">
-        <legend>Sample input (maximum 1 MiB)</legend>
-        <label
-          >Paste sample input<textarea
-            rows="6"
-            [ngModel]="sample()"
-            (ngModelChange)="setSample($event)"
-          ></textarea>
-        </label>
-        <label
-          >Or choose a sample file<input
-            type="file"
-            (change)="chooseFile($event)"
-        /></label>
-        @if (file(); as f) {
-          <p>{{ f.name }} · {{ f.size }} bytes</p>
-        }
-        <button type="button" (click)="act('preview')">Run sample</button>
-      </fieldset>
-      @if (output(); as o) {
-        <section aria-label="Verified sample output">
-          <h3>Sample output · {{ o.format }}</h3>
-          <p>
-            {{ o.mediaType }} · <code>{{ o.digest }}</code>
-          </p>
-          <pre>{{ o.text }}</pre>
-        </section>
-      }
-    </section>
-    <section aria-label="Save exact proposal">
-      <h2>Save mapping</h2>
-      @if (p.receipt; as receipt) {
-        <p>Save status: {{ receipt.phase }}</p>
-        @if (receipt.phase === "Committed") {
-          <a [routerLink]="revisionLink(receipt.mappingId, receipt.revisionId)"
-            >Open saved revision</a
+          <h3 class="review-step-heading">
+            <span class="review-step" aria-hidden="true">1</span>
+            Review requirements &amp; evidence
+          </h3>
+          <fieldset
+            class="review-assumptions"
+            [disabled]="busy() || (p.approved && !retryable())"
           >
-        }
-      }
-      @if (!p.approved || retryable()) {
-        <label
-          ><input
-            type="checkbox"
-            [ngModel]="reviewed()"
-            (ngModelChange)="reviewed.set($event)"
-            [disabled]="busy()"
-          />
-          I've reviewed this exact mapping plan and its source evidence.</label
+            <legend class="review-visually-hidden">Assumptions</legend>
+            @if (!p.assumptions.length) {
+              <p class="review-muted">No assumptions were recorded.</p>
+            }
+            @for (a of p.assumptions; track a.id) {
+              @if (a.critical) {
+                <div class="review-critical">
+                  <p class="review-critical-title">
+                    Critical assumption · Acceptance required
+                  </p>
+                  <label class="review-check">
+                    <input
+                      type="checkbox"
+                      [ngModel]="accepted().has(a.id)"
+                      (ngModelChange)="accept(a.id, $event)"
+                    />
+                    <span>I accept: {{ a.text }}</span>
+                  </label>
+                </div>
+              }
+            }
+            @for (a of p.assumptions; track a.id) {
+              @if (!a.critical) {
+                <p class="review-assumption">{{ a.text }}</p>
+              }
+            }
+          </fieldset>
+          <div
+            class="review-questions"
+            [class.review-questions-empty]="!p.questions.length"
+          >
+            <h4>Open questions</h4>
+            @if (!p.questions.length) {
+              <p class="review-muted">No open questions were recorded.</p>
+            } @else {
+              <ul>
+                @for (q of p.questions; track $index) {
+                  @if (q.critical) {
+                    <li class="review-critical">
+                      {{ q.text }}
+                      <strong>Answer required before approval.</strong>
+                    </li>
+                  }
+                }
+                @for (q of p.questions; track $index) {
+                  @if (!q.critical) {
+                    <li>{{ q.text }}</li>
+                  }
+                }
+              </ul>
+            }
+          </div>
+          <div class="review-evidence">
+            <h4>Source evidence</h4>
+            <ul>
+              @for (e of p.evidence; track $index) {
+                <li>
+                  <a [routerLink]="evidenceLink(e.bundleId)">
+                    Source {{ e.sourceId }}, version {{ e.sourceVersion }},
+                    chunk {{ e.chunkOrdinal }}
+                  </a>
+                </li>
+              }
+            </ul>
+          </div>
+          <details class="review-disclosure">
+            <summary>Exact proposal identity</summary>
+            <dl class="review-digests">
+              <dt>Proposal fingerprint</dt>
+              <dd>
+                <code>{{ p.fingerprint }}</code>
+              </dd>
+              <dt>Source snapshot</dt>
+              <dd>
+                <code>{{ p.snapshotDigest }}</code>
+              </dd>
+              <dt>Mapping plan digest</dt>
+              <dd>
+                <code>{{ p.planDigest }}</code>
+              </dd>
+              <dt>Native mapping digest</dt>
+              <dd>
+                <code>{{ p.nativeDigest }}</code>
+              </dd>
+            </dl>
+          </details>
+          <details class="review-disclosure">
+            <summary>
+              Exact mapping plan
+              <span class="review-muted">· inspect before approval</span>
+            </summary>
+            <pre>{{ p.planJson }}</pre>
+          </details>
+        </section>
+        <section
+          class="review-panel sample-panel"
+          aria-label="Sample execution"
         >
-        <button
-          type="button"
-          (click)="act('approve')"
-          [disabled]="busy() || !canApprove()"
-        >
-          {{
-            p.approved
-              ? "Retry saving this exact mapping"
-              : "Approve and save this mapping"
-          }}
-        </button>
-      } @else {
-        <p>Approval is retained for this exact proposal.</p>
-      }
-      @if (uncertain()) {
-        <p>
-          The save response is unconfirmed. Check its status before another
-          approval.
+          <h2 class="review-step-heading">
+            <span class="review-step" aria-hidden="true">2</span>
+            Test a sample
+          </h2>
+          <fieldset class="review-sample-input" [disabled]="busy()">
+            <legend>Sample input (maximum 1 MiB)</legend>
+            <label class="review-sample-label">
+              Paste sample input
+              <textarea
+                rows="3"
+                placeholder="Paste sample input here"
+                [ngModel]="sample()"
+                (ngModelChange)="setSample($event)"
+              ></textarea>
+            </label>
+            <div class="review-sample-actions">
+              <button
+                class="review-button review-primary"
+                type="button"
+                (click)="act('preview')"
+              >
+                Run sample
+              </button>
+              <label class="review-file-label">
+                Or choose a sample file
+                <input type="file" (change)="chooseFile($event)" />
+              </label>
+            </div>
+            @if (file(); as f) {
+              <p class="review-muted">{{ f.name }} · {{ f.size }} bytes</p>
+            }
+          </fieldset>
+          @if (output(); as o) {
+            <section class="review-output" aria-label="Verified sample output">
+              <h3>Sample output · {{ o.format }}</h3>
+              <p class="review-muted">{{ o.mediaType }}</p>
+              <pre>{{ o.text }}</pre>
+              <details class="review-disclosure">
+                <summary>Sample output digest</summary>
+                <code>{{ o.digest }}</code>
+              </details>
+            </section>
+          } @else {
+            <p class="review-muted review-sample-empty">
+              No sample output shown.
+            </p>
+          }
+        </section>
+      </div>
+      <section class="review-panel save-panel" aria-label="Save exact proposal">
+        <h2 class="review-step-heading">
+          <span class="review-step" aria-hidden="true">3</span>
+          Save mapping
+        </h2>
+        <p class="review-status" role="status" aria-live="polite">
+          {{ busy() ? "Working on this exact proposal…" : message() }}
         </p>
-      }
-      <button type="button" (click)="act('recover')" [disabled]="busy()">
-        Check save status
-      </button>
-    </section>
+        @if (p.receipt; as receipt) {
+          <div class="review-receipt">
+            <p>
+              Save status: <strong>{{ receipt.phase }}</strong>
+            </p>
+            @if (receipt.phase === "Committed") {
+              <a
+                [routerLink]="
+                  revisionLink(receipt.mappingId, receipt.revisionId)
+                "
+                >Open saved revision</a
+              >
+            }
+          </div>
+        }
+        @if (!p.approved || retryable()) {
+          <label class="review-check review-confirmation">
+            <input
+              type="checkbox"
+              [ngModel]="reviewed()"
+              (ngModelChange)="reviewed.set($event)"
+              [disabled]="busy()"
+            />
+            <span
+              >I've reviewed this exact mapping plan and its source
+              evidence.</span
+            >
+          </label>
+          <button
+            class="review-button review-primary review-save-button"
+            type="button"
+            (click)="act('approve')"
+            [disabled]="busy() || !canApprove()"
+            aria-describedby="review-approval-help"
+          >
+            {{
+              p.approved
+                ? "Retry saving this exact mapping"
+                : "Approve and save this mapping"
+            }}
+          </button>
+          <p
+            class="review-muted review-approval-help"
+            id="review-approval-help"
+          >
+            @if (busy()) {
+              Wait for the current request to finish.
+            } @else if (uncertain()) {
+              Check save status below before another approval.
+            } @else if (!canApprove()) {
+              Resolve critical open questions, accept critical assumptions, and
+              confirm your review to enable approval.
+            } @else {
+              Approval applies only to this exact proposal.
+            }
+          </p>
+        } @else {
+          <p class="review-muted">
+            Approval is retained for this exact proposal.
+          </p>
+        }
+        <div class="review-feedback">
+          <h3>Need a correction?</h3>
+          <p>
+            For corrections or unanswered requirements, return to the
+            conversation and request a new proposal. Each proposal has its own
+            approval.
+          </p>
+          <a
+            class="review-button"
+            routerLink="/chat"
+            [queryParams]="feedbackParams"
+            >Give feedback in chat</a
+          >
+          <p class="review-muted">
+            Only this proposal's identity is carried over. Samples and output
+            stay on this review page.
+          </p>
+          <a class="review-library-link" [routerLink]="libraryLink"
+            >Your new mapping proposals</a
+          >
+        </div>
+        <div class="review-recovery">
+          @if (uncertain()) {
+            <p class="review-critical">
+              The save response is unconfirmed. Check its status before another
+              approval.
+            </p>
+          }
+          <button
+            class="review-button"
+            type="button"
+            (click)="act('recover')"
+            [disabled]="busy()"
+          >
+            Check save status
+          </button>
+        </div>
+      </section>
+    </div>
   }
 }

@@ -1,6 +1,8 @@
-# Native PDF runner and canonical evidence (review pending)
+# Native PDF runner and canonical evidence (initial implementation record)
 
-This unit composes the reviewed Rust PDF parser with the existing native service self-hardening implementation and parent runner. Public PDF admission remains closed pending live Linux qualification.
+This unit, initially recorded as review pending, composes the reviewed Rust PDF parser with the existing native service self-hardening implementation and parent runner. Public PDF admission remains closed; the historical Linux qualification refusal is unchanged.
+
+Later [installed-worker qualification](spec-document-installed-qualification.md) and the [hostile/lifecycle follow-up](spec-document-installed-hostile-qualification.md) passed four initial cases and a separate 16-case follow-up, with zero failures or skips, closing the reviewed bounded local Linux scope. Exact-PDF parsing/lifecycle results and shared-control evidence retain their distinct limits; AppArmor enforcement and production-environment equivalence are not established. Different/final installations need their own approved identities and executed results. The public PDF factory and filesystem spec-store refusal gates remain unchanged; these records do not activate either path.
 
 ## Evidence contract for consumers
 
@@ -42,9 +44,9 @@ The native profile is fixed: 10 CPU seconds, 512 MiB address-space ceiling, 64 d
 
 Qualification admission also executes the actual parser with empty nonprivate input under containment and requires its source-bound malformed response. A probe is only one check, not full host qualification. Deployment must provide an immutable/read-only executable and trusted native loader/libraries for the entire runner lifetime; a startup measurement is not an atomic replacement-proof execution mechanism.
 
-Public `QualifiedPdfProcessWorker.Create` returns unavailable on every platform: `pdf-worker-platform-unsupported` outside Linux and `pdf-worker-linux-qualification-pending` on Linux. There is no configuration boolean to open this gate. A reviewed activation change is required after remote qualification.
+Public `QualifiedPdfProcessWorker.Create` returns unavailable on every platform: `pdf-worker-platform-unsupported` outside Linux and `pdf-worker-linux-qualification-pending` on Linux. There is no configuration boolean to open this gate. A separate reviewed activation change is still required; the later local qualification does not change this refusal.
 
-## Verification and pending qualification
+## Historical Windows verification and initial qualification boundary
 
 Windows verification: **182 focused .NET tests passed, zero failed/skipped** (the prior 171 plus eleven PDF tests). Actual native child tests cover real multipage PDFs, blank-page retention, OCR refusal, malformed refusal, source tampering, invalid page order, nonzero exits, cancellation/deadlines, stdout caps, physical evidence caps, citations, snapshot stability and build/profile pins. Review regressions verify legacy dispatch refusal and the absence of a public canonical-result constructor/factory. Rust has **14 passing tests**: eleven existing PDF/core/process cases, one shared startup-category test, two native-profile/platform tests. Portable tests use a test-only unrestricted process helper and do not qualify Linux containment.
 
@@ -60,6 +62,6 @@ Set `WEFT_TEST_PDF_EXECUTABLE` to that build's absolute executable path and `DOT
 dotnet test dotnet/tests/Weft.Tests/Weft.Tests.csproj --filter "FullyQualifiedName~SpecPdfProcessTests|FullyQualifiedName~SpecDocumentWorkerTests|FullyQualifiedName~SpecOfficeExtractionTests|FullyQualifiedName~SpecPdfWorkerResponseTests|FullyQualifiedName~SpecIntakeTests" --nologo --verbosity minimal -m:1 -p:OpenApiGenerateDocuments=false --no-restore
 ```
 
-Linux x86-64 qualification remains outstanding: compile the exact locked native build, pin its digest independently, verify its immutable deployment and loader, then exercise actual readable/encrypted/image-only/malformed PDFs through the internal qualification composition. Verify pre-input procfs admission, network/file/process denial, memory/CPU exhaustion, wall deadlines, output overflow, cancellation, reap/pipe/directory cleanup and shutdown races. This Windows run has no Linux execution evidence. Any Linux compile or runtime incompatibility must be resolved and reviewed before opening public admission.
+At the initial Windows boundary, Linux x86-64 qualification was outstanding: the exact locked build and independent digest pin, immutable deployment/loader, actual readable/encrypted/image-only/malformed PDFs, pre-input procfs admission, network/file/process denial, memory/CPU exhaustion, wall deadlines, output overflow, cancellation, reap/pipe/directory cleanup and shutdown races were identified for review. That Windows run had no Linux execution evidence. The later linked records supply the bounded local results, distinguishing shared native resource/denial evidence from exact-PDF workload/lifecycle checks; they do not claim exact-PDF exhaustion or signal attribution. This historical checklist does not expand that closed scope. Public admission remains a separate reviewed gate.
 
-Migration coordination: the future ordered `0046` must admit PDF format 6, Partial outcome 5 and extractor/profile identities through the existing registry and source-format checks. Keep immutable `0044` at Git blob `5363b15807cfc9b23e6b8cfb4eddf45018f6c1c7`. The creation wrapper can consume the result contract above after review; storage decoding and activation require their separately coordinated integration.
+Initial migration coordination: the then-future ordered `0046` was required to admit PDF format 6, Partial outcome 5 and extractor/profile identities through the existing registry and source-format checks. Keep immutable `0044` at Git blob `5363b15807cfc9b23e6b8cfb4eddf45018f6c1c7`. The initial boundary allowed the creation wrapper to consume this result contract after review, with storage decoding and activation requiring separately coordinated integration. Later [host composition](spec-document-host.md) and qualification records describe actual schema-46 admission separately; storage and public activation retain their own gates.

@@ -4,6 +4,10 @@ Authenticated catalog, mapping, search, operations, administration, notification
 guide and conversation routes share a full-width shell, navigation rail, account
 menu and Search / Go to palette. Sign-in and invitation entry remain separate
 identity boundaries. Existing URLs and admission checks keep their meanings.
+Desktop navigation shows labels beside its icons; narrow screens expose the
+same destinations through Menu and a contained scrolling strip. The revision
+heading names the mapping, with the pinned version shown separately beside its
+current status and head marker. See [Workspace layout](ui-ux-refresh.md).
 The revision page uses a data canvas and a bottom inspector/evidence tray. The displayed revision
 is immutable: opening a workflow tab does not follow the mapping's current head.
 The head marker describes the metadata read, not a continuously refreshed claim.
@@ -13,6 +17,10 @@ The head marker describes the metadata read, not a continuously refreshed claim.
 *The revision page: workflow tabs, the data canvas and the collapsed inspector tray.*
 
 ## Navigation and inspection
+
+Workflow, investigation and nested Inspector tabs retain their keyboard-selected
+state and reveal the active tab within their own strip. This does not scroll the
+whole workspace or change the pinned revision.
 
 When editing is enabled and the caller can edit, **Edit mapping** opens an
 author-private draft in the same table/inspector/dock layout. Enter on a field

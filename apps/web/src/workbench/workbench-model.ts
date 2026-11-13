@@ -37,7 +37,7 @@ export const defaultWorkbenchLayout: Readonly<WorkbenchLayout> = Object.freeze({
   density: "comfortable",
   inspectorWidth: 244,
   inspectorCollapsed: true,
-  dockHeight: 220,
+  dockHeight: 320,
   dockCollapsed: true,
 });
 export const rowHeights: Readonly<Record<WorkbenchDensity, number>> = {
@@ -64,7 +64,7 @@ export function normalizeWorkbenchLayout(value: unknown): WorkbenchLayout {
       : "comfortable",
     inspectorWidth: bounded("inspectorWidth", 244, 210, 420),
     inspectorCollapsed: source.inspectorCollapsed !== false,
-    dockHeight: bounded("dockHeight", 220, 140, 480),
+    dockHeight: bounded("dockHeight", 320, 140, 480),
     dockCollapsed: source.dockCollapsed !== false,
   };
 }

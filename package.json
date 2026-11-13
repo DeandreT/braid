@@ -1,5 +1,6 @@
 {
-  "name": "weft",
+  "name": "braid",
+  "description": "braid — understand, test, and deploy your data mappings.",
   "version": "0.1.0",
   "private": true,
   "workspaces": [

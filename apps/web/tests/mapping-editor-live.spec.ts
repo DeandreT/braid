@@ -99,7 +99,7 @@ test("actual draft edit, reload, checkpoint, semantic diff, preview, save and ex
     .click();
   await expect(page).not.toHaveURL(revisionPath(manifest.editor));
   await expect(
-    page.getByRole("heading", { name: "Version 2", exact: true }),
+    page.locator(".wb-version-number").filter({ hasText: /^Version 2$/ }),
   ).toBeVisible();
 
   // Explicitly start on the old revision, never silently on the new head.
@@ -129,6 +129,6 @@ test("actual draft edit, reload, checkpoint, semantic diff, preview, save and ex
     .getByRole("button", { name: "Save new version", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Version 3", exact: true }),
+    page.locator(".wb-version-number").filter({ hasText: /^Version 3$/ }),
   ).toBeVisible();
 });
