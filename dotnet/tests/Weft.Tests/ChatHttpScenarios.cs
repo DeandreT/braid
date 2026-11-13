@@ -47,7 +47,7 @@ internal static class ChatHttpScenarios
             Assert.Equal(H.ProfileId, profile.GetProperty("profileId").GetString());
             Assert.Equal("Fixture model", profile.GetProperty("displayName").GetString());
             Assert.True(body.GetProperty("toolsEnabled").GetBoolean());
-            Assert.Equal(60, body.GetProperty("limits").GetProperty("turnSeconds").GetInt32());
+            Assert.Equal(H.TurnSeconds, body.GetProperty("limits").GetProperty("turnSeconds").GetInt32());
             Assert.DoesNotContain("127.0.0.1", body.GetRawText(), StringComparison.Ordinal);
         }
         var token = await api.TokenAsync();
