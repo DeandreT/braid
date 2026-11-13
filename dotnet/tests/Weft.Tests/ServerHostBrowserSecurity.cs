@@ -7,7 +7,7 @@ namespace Weft.Tests;
 internal static class ServerHostBrowserSecurity
 {
     // Exercise the actual published host, not a test-only middleware pipeline.
-    internal static async Task CheckAsync(HttpClient client)
+    internal static async Task CheckAsync(HttpClient client, string? publicOrigin = null)
     {
         var assembly = Environment.GetEnvironmentVariable("WEFT_HOST_TEST_SERVER_PATH");
         ServerHostCheck.That(assembly is not null, "The published browser host was not supplied.");
@@ -23,7 +23,7 @@ internal static class ServerHostBrowserSecurity
             using var response = await client.GetAsync(path, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
             ServerHostCheck.That(response.StatusCode == HttpStatusCode.OK, "A published browser resource was not served.");
             var policy = path.StartsWith("/edit/", StringComparison.Ordinal)
-                ? Weft.Server.BrowserContentPolicy.Editor(client.BaseAddress!.GetLeftPart(UriPartial.Authority))
+                ? Weft.Server.BrowserContentPolicy.Editor(publicOrigin ?? client.BaseAddress!.GetLeftPart(UriPartial.Authority))
                 : Weft.Api.BrowserSecurityHeaders.ContentSecurityPolicy;
             foreach (var (name, value) in new[] {
                 ("Content-Security-Policy", policy),
