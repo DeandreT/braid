@@ -317,10 +317,10 @@ public sealed class SpecHttpTests
             sessions.Create = (intent, _) =>
             {
                 sessions.Row = new(intent.Key, intent.BindingId, intent.BindingVersion, intent.LoginEpoch,
-                    ServerSessionPolicy.InitialLifetime(DateTimeOffset.UtcNow, intent.VerifiedLoginDeadlineUtc)!, 1, intent.CopyProtectedTicket());
+                    ServerSessionPolicy.InitialLifetime(DatabaseNow(), intent.VerifiedLoginDeadlineUtc)!, 1, intent.CopyProtectedTicket());
                 return Task.FromResult(ServerSessionWriteResult.ForAcknowledgedFacts(ServerSessionWriteOutcome.Created, sessions.Row));
             };
-            sessions.Observe = (key, _) => Task.FromResult(ServerSessionPolicy.ObserveCurrent(key, DateTimeOffset.UtcNow, sessions.Row,
+            sessions.Observe = (key, _) => Task.FromResult(ServerSessionPolicy.ObserveCurrent(key, DatabaseNow(), sessions.Row,
                 sessions.Row is { } row ? new(row.BindingId, row.BindingVersion, h.Ports.Actor, true, true) : null));
             b.Services.AddWeftBrowserSessions(new("https://localhost"), h.profile, sessions, sessions, TimeProvider.System);
             b.Services.AddWeftSessionCatalog(new(h.Scope.Project.OrganizationId), new(), new(), new(), new());
@@ -328,13 +328,20 @@ public sealed class SpecHttpTests
             b.Services.AddSingleton(new SpecApiOptions(true)); b.Services.AddSingleton<ISpecBundleServiceFactory>(h.Ports);
             h.app = b.Build(); h.app.MapWeftSpecs();
             h.app.MapGet("/__issue", async (Microsoft.AspNetCore.Http.HttpContext c, ServerSessionBrowser browser) =>
-            { await browser.IssueFreshAsync(c, Guid.NewGuid(), 1, h.Ports.Actor, DateTimeOffset.UtcNow.AddMinutes(30), c.RequestAborted); return Microsoft.AspNetCore.Http.Results.NoContent(); });
+            { await browser.IssueFreshAsync(c, Guid.NewGuid(), 1, h.Ports.Actor, DatabaseNow().AddMinutes(30), c.RequestAborted); return Microsoft.AspNetCore.Http.Results.NoContent(); });
             h.app.MapGet("/__token", async (Microsoft.AspNetCore.Http.HttpContext c, ServerSessionBrowser browser) =>
                 Microsoft.AspNetCore.Http.Results.Text(await browser.IssueRequestTokenAsync(c, c.RequestAborted)));
             await h.app.StartAsync();
             h.Client = h.app.GetTestClient(); h.Client.BaseAddress = new("https://localhost");
             h.Client.DefaultRequestHeaders.Authorization = new("Bearer", "fixture-token");
             return h;
+        }
+        // Session facts are PostgreSQL instants: whole microseconds. The recording session
+        // ports stand in for the database clock, so they never pass sub-microsecond ticks.
+        private static DateTimeOffset DatabaseNow()
+        {
+            var now = DateTimeOffset.UtcNow;
+            return now.AddTicks(-(now.Ticks % 10));
         }
         internal Task<HttpResponseMessage> Create() => Client.PutAsJsonAsync(Path, new SpecCreateV1(Guid.NewGuid()));
         internal SpecUploadV1 Upload() => new(Guid.NewGuid(), 1, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 2, "json");
