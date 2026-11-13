@@ -130,7 +130,7 @@ internal sealed class ChatHttpTestSupport : IAsyncDisposable
                 Weft.Api.Auth.AuthenticationEndpoints.AddWeftAuthenticationHttp(builder.Services,
                     new(Weft.Api.Auth.AuthenticationHttpMode.Development, configured), builder.Environment);
             app = builder.Build();
-            if (browserWebRoot is not null) { app.UseDefaultFiles(); app.UseStaticFiles(); }
+            if (browserWebRoot is not null) { app.UseWeftBrowserSecurityHeaders(); app.UseDefaultFiles(); app.UseStaticFiles(); }
             app.MapWeftCatalog();
             app.MapWeftChat();
             if (browserWebRoot is not null)

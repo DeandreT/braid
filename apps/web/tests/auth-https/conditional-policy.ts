@@ -45,6 +45,8 @@ export type Tuple = Readonly<{
 export type DocumentPhase =
   "normal" | "callback" | "return" | "replay" | "reload" | "vector";
 export type DocumentSite = "none" | "same-origin";
+// Keep in step with BrowserQualificationAdmission.ClassicScripts.
+const classicScripts = ["/theme.js"];
 // CONDITIONAL expectation from a closed operation/category, NOT reported metadata.
 // Registration alone is not a valid consumable proof; final host equality is mandatory.
 export function expectedTuple(
@@ -115,7 +117,11 @@ export function expectedTuple(
     Image: ["image", "no-cors"],
     Font: ["font", "cors"],
   };
-  const tuple = entry[resource];
+  // The pre-paint theme loader is a classic script: no-cors and no Origin.
+  const tuple =
+    resource === "Script" && classicScripts.includes(url.pathname)
+      ? (["script", "no-cors"] as [string, string])
+      : entry[resource];
   requireOwned(tuple);
   return {
     destination: tuple[0],

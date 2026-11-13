@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { test } from "node:test";
 import {
   browserFixtureMigrations,
@@ -20,6 +21,31 @@ test("production entry assets do not depend on an admitted base element", () => 
     configuration.projects.weft.architect.build.configurations.production
       .deployUrl,
     "/",
+  );
+});
+
+test("the development server keeps entry assets root-absolute without deployUrl", () => {
+  const read = (path) =>
+    JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8"));
+  assert.equal(
+    read("../../apps/web/angular.json").projects.weft.architect.serve.builder,
+    "./tools/dev-server:dev-server",
+  );
+  // The copied option schema must track the pinned stock dev-server builder.
+  assert.deepEqual(
+    read("../../apps/web/tools/dev-server/schema.json"),
+    read(
+      "../../node_modules/@angular/build/src/builders/dev-server/schema.json",
+    ),
+  );
+  const { rootAbsoluteEntryAssets } = createRequire(import.meta.url)(
+    "../../apps/web/tools/dev-server/index.cjs",
+  );
+  assert.equal(
+    rootAbsoluteEntryAssets(
+      '<script type="module" src="/@vite/client"></script><link rel="stylesheet" href="styles.css"><link rel="modulepreload" href="chunk-A.js"><script src="main.js" type="module"></script><link rel="icon" href="data:,"><script src="https://example.test/x.js"></script>',
+    ),
+    '<script type="module" src="/@vite/client"></script><link rel="stylesheet" href="/styles.css"><link rel="modulepreload" href="/chunk-A.js"><script src="/main.js" type="module"></script><link rel="icon" href="data:,"><script src="https://example.test/x.js"></script>',
   );
 });
 
