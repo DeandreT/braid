@@ -295,7 +295,15 @@ test("a nested deep link loads its entry assets from the root", async ({
   await expect(
     article(page).getByRole("heading", { level: 1, name: "Getting started" }),
   ).toBeVisible();
-  expect(assets).toContain("200 /main.js");
+  const mainEntries = await page
+    .locator("script[src]")
+    .evaluateAll((scripts) =>
+      scripts
+        .map((script) => script.getAttribute("src") ?? "")
+        .filter((src) => /^\/main(?:-[A-Za-z0-9_-]+)?\.js$/.test(src)),
+    );
+  expect(mainEntries).toHaveLength(1);
+  expect(assets).toContain(`200 ${mainEntries[0]}`);
   expect(assets.filter((asset) => !/^200 \/(?!help\/)/.test(asset))).toEqual(
     [],
   );
