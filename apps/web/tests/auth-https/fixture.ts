@@ -18,6 +18,7 @@ import {
 import { BrowserRootFetch, type AppRequest } from "./root-fetch";
 import { blinkRestriction, browserRestriction } from "./conditional-policy";
 import { sessionSummaryMatches } from "./summary";
+import { StageDiagnostics, type CleanupStage } from "./stage-diagnostics";
 
 const unresolved = [
   "login.microsoftonline.com",
@@ -43,6 +44,7 @@ export async function until(
 }
 export class HttpsFixture {
   readonly cfg: Input = input();
+  readonly diagnostics = new StageDiagnostics(this.cfg.root);
   readonly control = new Control(this.cfg);
   browser: Browser | null = null;
   context: BrowserContext | null = null;
@@ -53,6 +55,7 @@ export class HttpsFixture {
     (request) => this.authorize(request),
     (request) => this.admitApplication(request),
     (body) => this.loginIssued(body),
+    this.diagnostics,
   );
   get networkBoundary(): BrowserRootFetch {
     return this.boundary;
@@ -108,6 +111,7 @@ export class HttpsFixture {
     });
   }
   async open(): Promise<void> {
+    this.diagnostics.body("launch");
     this.browser = await chromium.launch({
       executablePath: this.cfg.chromium,
       headless: false,
@@ -128,8 +132,11 @@ export class HttpsFixture {
         browserRestriction,
       ],
     });
+    this.diagnostics.body("version"); // Launch returned; no version operand retained.
     requireOwned(this.browser.version() === "157.0.8090.0");
+    this.diagnostics.body("rootFetch");
     await this.boundary.install(this.browser); // BEFORE any context/page creation
+    this.diagnostics.body("context");
     this.context = await this.browser.newContext({
       ignoreHTTPSErrors: false,
       serviceWorkers: "block",
@@ -146,6 +153,7 @@ export class HttpsFixture {
           ++this.unexpected;
       }
     });
+    this.diagnostics.body("pageBinding");
     this.page = await this.context.newPage();
     await this.boundary.bind(this.context, this.page);
     this.page.on("response", (response) => {
@@ -155,13 +163,16 @@ export class HttpsFixture {
     this.page.on("pageerror", () => {
       ++this.errors;
     });
+    this.diagnostics.body("navigation");
     await this.page.goto(this.cfg.origin + "/auth-qualification");
+    this.diagnostics.body("anonymous");
     await this.summary("Not signed in");
     requireOwned(
       await this.page.evaluate(
         () => isSecureContext && location.protocol === "https:",
       ),
     );
+    this.diagnostics.body("scenario");
   }
   private async response(response: Response): Promise<void> {
     const url = new URL(response.url());
@@ -662,7 +673,14 @@ export class HttpsFixture {
     await this.summary("Not signed in");
   }
   close(): Promise<void> {
-    return (this.closeOriginal ??= this.closeCore());
+    if (!this.closeOriginal) {
+      this.closeOriginal = this.closeCore();
+      void this.closeOriginal.then(
+        () => {},
+        () => this.diagnostics.cleanupFailed(),
+      );
+    }
+    return this.closeOriginal;
   }
   private async settleCatalogEntry(): Promise<void> {
     const expected = `/catalog/organizations/${this.cfg.organization}/projects`;
@@ -687,7 +705,7 @@ export class HttpsFixture {
     this.closing = true;
     for (const challenge of this.challenges) challenge.resolve(null);
     let failed = false;
-    const begin = (start: () => Promise<void>) => {
+    const begin = (stage: CleanupStage, start: () => Promise<void>) => {
       let original: Promise<void>;
       try {
         original = start();
@@ -695,26 +713,34 @@ export class HttpsFixture {
         original = Promise.reject(safeFailure());
       }
       this.closureOriginals.push(original);
-      return Promise.allSettled([original]);
+      return Promise.allSettled([original]).then((result) => {
+        if (result[0]?.status !== "fulfilled")
+          this.diagnostics.cleanupFailed(stage);
+        return result;
+      });
     };
     const join = async (observed: Promise<PromiseSettledResult<void>[]>) => {
       if ((await observed)[0]?.status !== "fulfilled") failed = true;
     };
     const attempt = async (start: () => Promise<void>) => {
-      await join(begin(start));
+      await join(begin("boundary", start));
     };
     // Initiate cancellation before joining protocol/owner drains: a pending
     // callback must not have to wait for a close that is itself waiting for it.
-    const sealed = begin(() => this.boundary.seal());
+    this.diagnostics.cleanup("seal");
+    const sealed = begin("seal", () => this.boundary.seal());
     const context = begin(
+      "context",
       () => (this.contextClose ??= this.context?.close() ?? Promise.resolve()),
     );
     const browser = begin(
+      "browser",
       () => (this.browserClose ??= this.browser?.close() ?? Promise.resolve()),
     );
     await join(sealed);
     await join(context);
     await join(browser);
+    this.diagnostics.cleanup("boundary");
     await attempt(() => this.boundary.afterBrowserClosed());
     let index = 0;
     while (index < this.tasks.length) {
@@ -731,6 +757,7 @@ export class HttpsFixture {
     }
     // Parent's final ACK is forbidden until BOTH cleanup owners' originals settle.
     requireOwned(!failed && this.errors === 0 && this.unexpected === 0);
+    this.diagnostics.cleanup("finalStop");
     const closed = await this.control.call("stop");
     this.boundary.verifyClosedObservation(closed);
     await this.control.drain();
