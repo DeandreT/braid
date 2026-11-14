@@ -11,23 +11,39 @@ internal static class CreationSchemaAdmission
         MigrationRunner.EmbeddedMigrations.Single(m => m.Version == 45).Sql,
         @"CREATE FUNCTION weft\.creation_ingestion_guard\(\).*?AS \$body\$(.*?)\$body\$;", System.Text.RegularExpressions.RegexOptions.Singleline).Groups[1].Value;
     // Catalog shape captured from the actual complete migration, independent of its journal claim.
-    internal const string ShapeDigest = "77c8a1b6c7e14bad1f7efe2ee636b2248e0ba6c37d1f4fc8d50af7010dc35371";
+    // ACL entries are hashed in sorted order: PostgreSQL moves a re-granted entry, which changes no authority.
+    internal const string ShapeDigest = "d7c7ba0d0fbd88f3ca74f94c5cc110c88383d81423f6ecbb28434fbec7d83deb";
     internal static readonly string[] Tables = ["creation_proposals", "creation_sources", "creation_approvals"];
     internal static readonly string[] Functions = System.Text.RegularExpressions.Regex.Matches(
         MigrationRunner.EmbeddedMigrations.Single(m => m.Version == 45).Sql + DocumentEvidenceSchemaAdmission.MigrationSql, @"CREATE (?:OR REPLACE )?FUNCTION weft\.((?:creation_|document_evidence_)\w+)\(")
         .Select(m => m.Groups[1].Value).Distinct(StringComparer.Ordinal).ToArray();
     internal static readonly string[] Roles = ["weft_creation_reader", "weft_creation_writer", "weft_creation_approver"];
 
+    /// <summary>Whether any object 0045 or 0046 creates under its own name exists. None means an older schema;
+    /// any one is a (possibly partial) installation that must match the complete admitted shape.</summary>
+    internal static async Task<bool> InstalledAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct)
+    {
+        await using var command = new NpgsqlCommand("""
+            SELECT EXISTS(SELECT 1 FROM pg_catalog.pg_class c WHERE c.relnamespace='weft'::regnamespace AND c.relname=ANY($1::text[]))
+                OR EXISTS(SELECT 1 FROM pg_catalog.pg_proc p WHERE p.pronamespace='weft'::regnamespace AND p.proname=ANY($2::text[]))
+                OR EXISTS(SELECT 1 FROM pg_catalog.pg_trigger t JOIN pg_catalog.pg_class c ON c.oid=t.tgrelid
+                    WHERE c.relnamespace='weft'::regnamespace AND t.tgname='revision_ingestions_creation_guard')
+            """, connection, transaction);
+        command.Parameters.AddWithValue(Tables);
+        command.Parameters.AddWithValue(Functions);
+        return await command.ExecuteScalarAsync(ct).ConfigureAwait(false) is true;
+    }
+
     internal static async Task<string> ShapeAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct)
     {
         await using var command = new NpgsqlCommand("""
             WITH entries AS (
                 SELECT 'table/'||c.relname AS key, jsonb_build_array(c.relkind,c.relpersistence,c.relrowsecurity,c.relforcerowsecurity,c.relispartition,
-                    pg_get_userbyid(c.relowner),c.relacl::text)::text AS value
+                    pg_get_userbyid(c.relowner),CASE WHEN c.relacl IS NULL THEN NULL ELSE ARRAY(SELECT acl_entry::text FROM unnest(c.relacl) acl_entry ORDER BY acl_entry::text COLLATE "C")::text END)::text AS value
                 FROM pg_class c WHERE c.relnamespace='weft'::regnamespace AND c.relname=ANY($1)
                 UNION ALL
                 SELECT 'column/'||c.relname||'/'||a.attnum, jsonb_build_array(a.attname,format_type(a.atttypid,a.atttypmod),a.attnotnull,a.attidentity,a.attgenerated,
-                    pg_get_expr(d.adbin,d.adrelid),a.attacl::text,co.collname)::text
+                    pg_get_expr(d.adbin,d.adrelid),CASE WHEN a.attacl IS NULL THEN NULL ELSE ARRAY(SELECT acl_entry::text FROM unnest(a.attacl) acl_entry ORDER BY acl_entry::text COLLATE "C")::text END,co.collname)::text
                 FROM pg_class c JOIN pg_attribute a ON a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped
                 LEFT JOIN pg_attrdef d ON d.adrelid=c.oid AND d.adnum=a.attnum LEFT JOIN pg_collation co ON co.oid=a.attcollation
                 WHERE c.relnamespace='weft'::regnamespace AND c.relname=ANY($1)
@@ -47,7 +63,7 @@ internal static class CreationSchemaAdmission
                 FROM pg_class c JOIN pg_trigger t ON t.tgrelid=c.oid AND NOT t.tgisinternal WHERE c.relnamespace='weft'::regnamespace
                     AND (c.relname=ANY($1) OR t.tgname='revision_ingestions_creation_guard')
                 UNION ALL
-                SELECT 'function/'||p.oid::regprocedure::text,jsonb_build_array(pg_get_function_result(p.oid),p.prosrc,p.prosecdef,pg_get_userbyid(p.proowner),p.proconfig,p.provolatile,p.proisstrict,p.proparallel,p.proacl::text,
+                SELECT 'function/'||p.oid::regprocedure::text,jsonb_build_array(pg_get_function_result(p.oid),p.prosrc,p.prosecdef,pg_get_userbyid(p.proowner),p.proconfig,p.provolatile,p.proisstrict,p.proparallel,CASE WHEN p.proacl IS NULL THEN NULL ELSE ARRAY(SELECT acl_entry::text FROM unnest(p.proacl) acl_entry ORDER BY acl_entry::text COLLATE "C")::text END,
                     p.proargnames,p.prokind,p.proleakproof,p.proargmodes,pg_get_expr(p.proargdefaults,0),p.prosupport::regproc::text)::text
                 FROM pg_proc p WHERE p.pronamespace='weft'::regnamespace AND (p.proname LIKE 'creation\_%' ESCAPE '\' OR p.proname LIKE 'spec\_%' ESCAPE '\' OR p.proname='document_evidence_schema_version'
                     OR EXISTS(SELECT 1 FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid WHERE t.tgfoid=p.oid AND c.relnamespace='weft'::regnamespace AND c.relname=ANY($1)))

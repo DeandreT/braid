@@ -7,9 +7,12 @@ internal static partial class ChatSchemaContract
     internal static string MappingCommitTriggerBody => Body("audit_chat_mapping_write_commit");
     /// <summary>Catalog-only admission before any existing source guard omits the one additive commit trigger.
     /// No chat data, new grants, generic trigger exception or target-captured fingerprint is accepted.</summary>
-    internal static async Task ValidateMappingCommitAuditAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct)
+    /// <returns>Whether the chat mapping-write supplement is installed. It is absent only before migration 0039, and
+    /// then nothing is validated; any owned object makes it installed, so a partial supplement is refused in full.</returns>
+    internal static async Task<bool> ValidateMappingCommitAuditAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct)
     {
         _ = WriteJournalSource.Value; _ = EditProposalSource.Value;
+        if (!await MappingWritesInstalledAsync(connection, transaction, ct)) return false;
         foreach (var table in new[] { WriteIntents, WriteCommits, EditProposals, EditApprovals })
         {
             await ValidateRelationAsync(connection, transaction, table, ct);
@@ -33,5 +36,31 @@ internal static partial class ChatSchemaContract
             WHERE t.tgname='chat_mapping_write_commit'
             """, connection, transaction);
         if (await command.ExecuteScalarAsync(ct) is not true) throw Refusal();
+        return true;
+    }
+
+    // Every object 0039, 0040 and 0043 create under its own name. Any one of them is a (possibly partial)
+    // installation, never an old schema; only an older prefix with none of them skips this supplement.
+    internal static readonly string[] MappingWriteTables = ["chat_mapping_write_audit", "chat_mapping_write_intents",
+        "chat_mapping_write_content", "chat_mapping_write_commits", "chat_edit_proposals", "chat_edit_content", "chat_edit_approvals"];
+    internal static readonly string[] MappingWriteFunctions = ["audit_chat_mapping_write", "audit_chat_mapping_write_commit",
+        "guard_chat_mapping_write_audit", "guard_chat_mapping_write_content", "chat_mapping_write_prepare", "chat_mapping_write_read",
+        "chat_edit_create", "chat_edit_read", "chat_edit_list", "chat_edit_approve"];
+    internal static readonly string[] MappingWriteTriggers = ["chat_mapping_write_audit", "chat_mapping_write_commit"];
+
+    internal static async Task<bool> MappingWritesInstalledAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct)
+    {
+        await using var command = new NpgsqlCommand("""
+            SELECT EXISTS(SELECT 1 FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
+                    WHERE n.nspname='weft' AND c.relname=ANY($1::text[]))
+                OR EXISTS(SELECT 1 FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
+                    WHERE n.nspname='weft' AND p.proname=ANY($2::text[]))
+                OR EXISTS(SELECT 1 FROM pg_catalog.pg_trigger t JOIN pg_catalog.pg_class c ON c.oid=t.tgrelid
+                    JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='weft' AND t.tgname=ANY($3::text[]))
+            """, connection, transaction);
+        command.Parameters.AddWithValue(MappingWriteTables);
+        command.Parameters.AddWithValue(MappingWriteFunctions);
+        command.Parameters.AddWithValue(MappingWriteTriggers);
+        return await command.ExecuteScalarAsync(ct) is true;
     }
 }

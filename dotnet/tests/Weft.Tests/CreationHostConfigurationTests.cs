@@ -1,5 +1,5 @@
-using System.Net;
 using System.Diagnostics;
+using System.Net;
 using Microsoft.Extensions.DependencyInjection;
 using Weft.Api.Creation;
 using Weft.Application;
@@ -289,7 +289,8 @@ public sealed class CreationHostConfigurationTests(PostgresFixture postgres)
         var authoring = new NativeProtocolRunner(authoringPath, build, DockerWorkerProfile.Authoring.MaximumOutputBytes);
         var preview = new NativeProtocolRunner(previewPath, build, DockerWorkerProfile.AuthoredPreview.MaximumOutputBytes);
         await using var server = new WorkerTransportServer(new WorkerTransportServerOptions(new IPEndPoint(IPAddress.Loopback, 0), serverCertificate,
-            [InspectionTransportTests.TransportCase.Pin(clientCertificate)]) { ServiceRoutes = true, EngineRevision = FerruleInspectionBackend.EngineRevision },
+            [InspectionTransportTests.TransportCase.Pin(clientCertificate)])
+        { ServiceRoutes = true, EngineRevision = FerruleInspectionBackend.EngineRevision },
             new Dictionary<string, IInspectionWorkerRunner> { [FerruleServiceProtocol.AuthoringProfile] = authoring, [FerruleServiceProtocol.AuthoredPreviewProfile] = preview });
         await server.StartAsync(default);
         var connector = new PinnedServiceConnector(new(new Uri("https://127.0.0.1:" + server.Port), InspectionTransportTests.TransportCase.Pin(serverCertificate), clientCertificate));
@@ -318,8 +319,13 @@ public sealed class CreationHostConfigurationTests(PostgresFixture postgres)
         {
             Calls++;
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct); deadline.CancelAfter(TimeSpan.FromSeconds(20));
-            using var process = Process.Start(new ProcessStartInfo(path) { RedirectStandardInput = true, RedirectStandardOutput = true,
-                RedirectStandardError = true, UseShellExecute = false })!;
+            using var process = Process.Start(new ProcessStartInfo(path)
+            {
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            })!;
             async Task<byte[]> Drain(Stream stream, int bound)
             {
                 using var bytes = new MemoryStream(); var buffer = new byte[8192];
@@ -356,7 +362,8 @@ public sealed class CreationHostConfigurationTests(PostgresFixture postgres)
             var runners = new Dictionary<string, IInspectionWorkerRunner> { [FerruleServiceProtocol.AuthoringProfile] = host.Authoring };
             if (preview) runners.Add(FerruleServiceProtocol.AuthoredPreviewProfile, host.Preview);
             host.server = new(new WorkerTransportServerOptions(new IPEndPoint(IPAddress.Loopback, 0), host.serverCertificate,
-                [InspectionTransportTests.TransportCase.Pin(host.clientCertificate)]) { ServiceRoutes = true, EngineRevision = FerruleInspectionBackend.EngineRevision }, runners);
+                [InspectionTransportTests.TransportCase.Pin(host.clientCertificate)])
+            { ServiceRoutes = true, EngineRevision = FerruleInspectionBackend.EngineRevision }, runners);
             await host.server.StartAsync(default);
             host.Connector = new(new(new Uri("https://127.0.0.1:" + host.server.Port), InspectionTransportTests.TransportCase.Pin(host.serverCertificate), host.clientCertificate));
             return host;

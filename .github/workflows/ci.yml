@@ -53,9 +53,11 @@ jobs:
           cargo +1.98.1 clippy --manifest-path engines/ferrule-host/Cargo.toml --all-targets --locked -- -D warnings
           cargo +1.98.1 test --manifest-path engines/ferrule-host/Cargo.toml --locked
           # The creation evidence storage test requires the actual portable authoring compiler.
-          cargo +1.98.1 build --manifest-path engines/ferrule-host/Cargo.toml --package weft-ferrule-core --example authoring_protocol --release --locked
+          cargo +1.98.1 build --manifest-path engines/ferrule-host/Cargo.toml --package weft-ferrule-core --example authoring_protocol --example authored_preview_protocol --release --locked
           install -m 0555 "$CARGO_TARGET_DIR/release/examples/authoring_protocol" "$RUNNER_TEMP/weft-authoring-protocol"
+          install -m 0555 "$CARGO_TARGET_DIR/release/examples/authored_preview_protocol" "$RUNNER_TEMP/weft-authored-preview-protocol"
           printf 'WEFT_AUTHORING_TEST_EXECUTABLE=%s\n' "$RUNNER_TEMP/weft-authoring-protocol" >> "$GITHUB_ENV"
+          printf 'WEFT_AUTHORED_PREVIEW_TEST_EXECUTABLE=%s\n' "$RUNNER_TEMP/weft-authored-preview-protocol" >> "$GITHUB_ENV"
       - name: Verify native and wasm edit equivalence
         run: |
           CARGO_TARGET_DIR=target/edit-qualification cargo +1.98.1 build --manifest-path engines/ferrule-edit-wasm/Cargo.toml --release --target wasm32-unknown-unknown --features qualification --locked

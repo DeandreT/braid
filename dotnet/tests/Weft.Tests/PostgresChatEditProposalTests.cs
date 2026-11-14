@@ -109,7 +109,7 @@ public sealed class PostgresChatEditProposalTests(PostgresFixture fixture)
             await using (var hold = new NpgsqlCommand($"SELECT pg_advisory_lock({gateKey})", gate)) await hold.ExecuteNonQueryAsync();
             var application = "weft-proposal-receipt-race-" + authority;
             await using var caller = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(fixture.ChatApproverConnectionString(f.Test.Case))
-                { Pooling = false, ApplicationName = application }.ConnectionString);
+            { Pooling = false, ApplicationName = application }.ConnectionString);
             await caller.OpenAsync();
             await using (var bind = new NpgsqlCommand("SELECT set_config('weft.organization_id',$1,false),set_config('weft.chat_principal_id',$2,false)", caller))
             {

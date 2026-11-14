@@ -36,50 +36,50 @@ public sealed class CreationProviderContractTests
     public async Task Synthetic_provider_wire_uses_advertised_contract_and_real_compiler_for_every_format_pair()
     {
         foreach (var source in Formats)
-        foreach (var target in Formats)
-        {
-            var f = new CreationRuntimeFixture("Synthetic specification: copy code; retain explicit envelope fields.");
-            var registrations = new ServiceCollection(); f.Register(registrations);
-            registrations.AddSingleton<IMappingCreationCompiler>(new FerruleMappingCreationCompiler(new(new MappingAuthoringBackendTests.NativeRunner())));
-            using var provider = registrations.BuildServiceProvider(); var service = CreationRuntimeToolTests.Service(provider);
-            var arguments = Arguments(f, Plan(source, target));
-            await using var wire = new ChatOrchestrationFixture(async (exchange, ct) =>
+            foreach (var target in Formats)
             {
-                using var request = exchange.Request.Json();
-                if (exchange.Ordinal == 1)
+                var f = new CreationRuntimeFixture("Synthetic specification: copy code; retain explicit envelope fields.");
+                var registrations = new ServiceCollection(); f.Register(registrations);
+                registrations.AddSingleton<IMappingCreationCompiler>(new FerruleMappingCreationCompiler(new(new MappingAuthoringBackendTests.NativeRunner())));
+                using var provider = registrations.BuildServiceProvider(); var service = CreationRuntimeToolTests.Service(provider);
+                var arguments = Arguments(f, Plan(source, target));
+                await using var wire = new ChatOrchestrationFixture(async (exchange, ct) =>
                 {
-                    var instruction = request.RootElement.GetProperty("messages")[0].GetProperty("content").GetString()!;
-                    Assert.Contains("weft.creation-plan.v2", instruction); Assert.Contains("Position/position", instruction);
-                    Assert.Contains("root scope iteration:null", instruction);
-                    var definition = request.RootElement.GetProperty("tools").EnumerateArray().Select(t => t.GetProperty("function"))
-                        .Single(t => t.GetProperty("name").GetString() == "propose_mapping_creation");
-                    Assert.Contains("weft.creation-plan.v2", definition.GetProperty("description").GetString());
-                    await exchange.RespondAsync("text/event-stream", AiHttpFixture.Utf8(ChatOrchestrationFixture.Call(0, "synthetic-call", arguments,
-                        "propose_mapping_creation") + ChatOrchestrationFixture.Finish("tool_calls") + ChatOrchestrationFixture.Done), ct);
-                }
-                else
-                {
-                    var last = request.RootElement.GetProperty("messages").EnumerateArray().Last(m => m.GetProperty("role").GetString() == "tool");
-                    Assert.True(f.State is not null, source + "->" + target + ": " + last.GetProperty("content").GetString());
-                    Assert.Contains(f.State.Proposal.Fingerprint.Value, last.GetProperty("content").GetString());
-                    await exchange.RespondAsync("text/event-stream", AiHttpFixture.Utf8(ChatOrchestrationFixture.Text("Review the retained proposal.") +
-                        ChatOrchestrationFixture.Finish("stop") + ChatOrchestrationFixture.Done), ct);
-                }
-            }, actor: WorkspaceToolFixture.Actor, conversation: f.Catalog.Conversation(), tools: service.PayloadManifest!.Value,
-                toolPort: service, instructions: WorkspaceChatGrounding.Instructions, workspaceCitationPort: service, contextPort: service, payloadsAllowed: true);
-            var budget = new ChatProviderBudget(600_000_000, 3, 1_048_576, 4_194_304, 131_072, 8, 2048);
-            var turn = new ChatTurnIntent(Guid.NewGuid(), new(Guid.NewGuid(), "Create the requested synthetic mapping.", [], budget,
-                service.PayloadGrounding!, ChatTurnFocus.None), ChatAiBridge.PinProfile("fixture", wire.Profile), new(256, 262_144, 3),
-                ChatOrchestrationFixture.Now.AddTicks(budget.DurationTicks));
-            Assert.Equal(ChatOrchestrationOutcome.Completed, (await ChatOrchestrationFixture.FinishExecution(wire.Begin(turn))).Outcome);
-            Assert.Equal(2, wire.Server.RequestCount);
-            var compilation = f.State!.Proposal.Compilation;
-            Assert.Equal(FerruleInspectionBackend.EngineRevision, compilation.EngineRevision);
-            Assert.True(JsonSerializer.Deserialize<MappingAuthoringValidation>(compilation.CopyValidation())!.IsValid);
-            Assert.Equal(Sha256Digest.FromBytes(compilation.CopyNative()), compilation.NativeDigest);
-            Assert.Single(wire.Store.Events(turn.TurnId), e => e.Kind == ChatEventKind.WorkspaceCitation);
-            Assert.Equal(0, f.Creates); Assert.Equal(0, f.Leases); Assert.False(f.State.Approved);
-        }
+                    using var request = exchange.Request.Json();
+                    if (exchange.Ordinal == 1)
+                    {
+                        var instruction = request.RootElement.GetProperty("messages")[0].GetProperty("content").GetString()!;
+                        Assert.Contains("weft.creation-plan.v2", instruction); Assert.Contains("Position/position", instruction);
+                        Assert.Contains("root scope iteration:null", instruction);
+                        var definition = request.RootElement.GetProperty("tools").EnumerateArray().Select(t => t.GetProperty("function"))
+                            .Single(t => t.GetProperty("name").GetString() == "propose_mapping_creation");
+                        Assert.Contains("weft.creation-plan.v2", definition.GetProperty("description").GetString());
+                        await exchange.RespondAsync("text/event-stream", AiHttpFixture.Utf8(ChatOrchestrationFixture.Call(0, "synthetic-call", arguments,
+                            "propose_mapping_creation") + ChatOrchestrationFixture.Finish("tool_calls") + ChatOrchestrationFixture.Done), ct);
+                    }
+                    else
+                    {
+                        var last = request.RootElement.GetProperty("messages").EnumerateArray().Last(m => m.GetProperty("role").GetString() == "tool");
+                        Assert.True(f.State is not null, source + "->" + target + ": " + last.GetProperty("content").GetString());
+                        Assert.Contains(f.State.Proposal.Fingerprint.Value, last.GetProperty("content").GetString());
+                        await exchange.RespondAsync("text/event-stream", AiHttpFixture.Utf8(ChatOrchestrationFixture.Text("Review the retained proposal.") +
+                            ChatOrchestrationFixture.Finish("stop") + ChatOrchestrationFixture.Done), ct);
+                    }
+                }, actor: WorkspaceToolFixture.Actor, conversation: f.Catalog.Conversation(), tools: service.PayloadManifest!.Value,
+                    toolPort: service, instructions: WorkspaceChatGrounding.Instructions, workspaceCitationPort: service, contextPort: service, payloadsAllowed: true);
+                var budget = new ChatProviderBudget(600_000_000, 3, 1_048_576, 4_194_304, 131_072, 8, 2048);
+                var turn = new ChatTurnIntent(Guid.NewGuid(), new(Guid.NewGuid(), "Create the requested synthetic mapping.", [], budget,
+                    service.PayloadGrounding!, ChatTurnFocus.None), ChatAiBridge.PinProfile("fixture", wire.Profile), new(256, 262_144, 3),
+                    ChatOrchestrationFixture.Now.AddTicks(budget.DurationTicks));
+                Assert.Equal(ChatOrchestrationOutcome.Completed, (await ChatOrchestrationFixture.FinishExecution(wire.Begin(turn))).Outcome);
+                Assert.Equal(2, wire.Server.RequestCount);
+                var compilation = f.State!.Proposal.Compilation;
+                Assert.Equal(FerruleInspectionBackend.EngineRevision, compilation.EngineRevision);
+                Assert.True(JsonSerializer.Deserialize<MappingAuthoringValidation>(compilation.CopyValidation())!.IsValid);
+                Assert.Equal(Sha256Digest.FromBytes(compilation.CopyNative()), compilation.NativeDigest);
+                Assert.Single(wire.Store.Events(turn.TurnId), e => e.Kind == ChatEventKind.WorkspaceCitation);
+                Assert.Equal(0, f.Creates); Assert.Equal(0, f.Leases); Assert.False(f.State.Approved);
+            }
     }
 
     [Theory]
@@ -139,8 +139,13 @@ public sealed class CreationProviderContractTests
     public void Proposal_context_parser_requires_exact_identity_and_excludes_other_modes_arguments()
     {
         var manifest = WorkspaceToolRegistry.Definitions(new(false, false, false, false, Creation: true), true);
-        var args = new JsonObject { ["projectId"] = Guid.NewGuid().ToString("D"), ["mode"] = "proposal",
-            ["proposalId"] = Guid.NewGuid().ToString("D"), ["fingerprint"] = new string('a', 64) };
+        var args = new JsonObject
+        {
+            ["projectId"] = Guid.NewGuid().ToString("D"),
+            ["mode"] = "proposal",
+            ["proposalId"] = Guid.NewGuid().ToString("D"),
+            ["fingerprint"] = new string('a', 64)
+        };
         var call = WorkspaceToolRegistry.Parse("read_specification", args.ToJsonString(), manifest);
         Assert.Equal(new string('a', 64), call.Text("fingerprint", 64));
         foreach (var key in new[] { "proposalId", "fingerprint" })

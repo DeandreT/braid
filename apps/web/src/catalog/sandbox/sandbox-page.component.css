@@ -1,0 +1,109 @@
+:host {
+  display: block;
+  min-width: 0;
+  padding: 20px;
+}
+
+.catalog-page {
+  max-width: 1280px;
+  margin-inline: auto;
+}
+
+h1 {
+  margin-top: 0;
+  font-size: 1.6rem;
+}
+
+h2 {
+  margin-top: 0;
+  font-size: 1.15rem;
+}
+
+.catalog-page > div > section {
+  min-width: 0;
+  margin-block: 20px;
+  padding: 18px;
+  border: 1px solid var(--border-4);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+label,
+form {
+  display: grid;
+  gap: 8px;
+}
+
+label {
+  margin-block: 12px;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+form > button,
+section > button {
+  justify-self: start;
+  margin: 4px 8px 4px 0;
+}
+
+select,
+textarea,
+input:not([type="checkbox"]) {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--border-4);
+  border-radius: 6px;
+  background: var(--surface-subtle);
+  color: var(--text);
+  font: inherit;
+}
+
+textarea,
+pre {
+  font-family: var(--font-mono, monospace);
+}
+
+textarea {
+  resize: vertical;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 8px 16px;
+}
+
+dt {
+  color: var(--text-muted);
+}
+
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+pre {
+  max-height: 360px;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 6px;
+  background: var(--surface-subtle);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  :host {
+    padding: 12px;
+  }
+
+  .catalog-page > div > section {
+    padding: 12px;
+  }
+
+  dl {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

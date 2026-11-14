@@ -42,6 +42,8 @@
     "playwright.comparison.config.ts",
     "tests/browser-auth-controls.spec.ts",
     "tests/operations.spec.ts",
+    "playwright.sandbox.config.ts",
+    "tests/sandbox.spec.ts",
     "tests/sign-in-entry.spec.ts",
     "playwright.regression.config.ts",
     "playwright.regression-live.config.ts",

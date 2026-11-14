@@ -71,6 +71,7 @@ internal sealed class ServerHostOptions
         }
         if (Flag(read, "WEFT_DEV_IDENTITY_ENABLED") || new[]
             { "WEFT_DEV_PRINCIPAL_ID", "WEFT_DEV_ORGANIZATION_ID", "WEFT_DEV_BROWSER_ORIGIN", "WEFT_DEV_LISTEN_ADDR" }
+            .Concat(LocalSandboxHostConfiguration.Settings)
             .Any(name => read(name) is not null)) throw Failure();
         var publicOrigin = Required(read, "WEFT_PUBLIC_ORIGIN");
         _ = new ServerSessionBrowserOptions(publicOrigin);

@@ -10,10 +10,16 @@ public sealed class PostgresChatMappingWriteJournalTests(PostgresFixture fixture
     [PostgresFact]
     public async Task Intent_acknowledgement_is_idempotent_exact_and_precedes_ingestion()
     {
-        await using var f = await JournalFixture.CreateAsync(fixture);
+        await using var f = await JournalFixture.CreateAsync(fixture, recordProposal: false);
+        // 0043 retired the writer's direct prepare: no intent without an exact approved proposal.
+        await Assert.ThrowsAsync<InvalidOperationException>(() => f.Journal.PrepareAsync(f.Test.Actor, f.Intent, default));
         Assert.Equal(0L, await f.Test.Case.ScalarAsync<long>("SELECT count(*) FROM weft.chat_mapping_write_intents"));
+        Assert.Equal(ChatMappingEditCreateOutcome.Created, (await f.Journal.CreateAsync(f.Test.Actor, f.Proposal, default)).Outcome);
+        Assert.Equal(ChatMappingEditCreateOutcome.Existing, (await f.Journal.CreateAsync(f.Test.Actor, f.Proposal, default)).Outcome);
+        Assert.Null(await f.ApproveAsync(Sha256Digest.FromBytes("different"u8)));
         Assert.Null(await f.ApproveAsync(Sha256Digest.FromBytes("different native bytes"u8)));
         Assert.Null(await f.ApproveAsync(proposalId: Guid.NewGuid()));
+        Assert.Equal(0L, await f.Test.Case.ScalarAsync<long>("SELECT count(*) FROM weft.chat_mapping_write_intents"));
         var p = f.Proposal;
         var substituted = new MappingEditProposal(NativeArtifact.Admit(p.Content.Base, "different"u8, 1024), p.Content.Operations, [])
         { VerifiedGeneration = p.Content.VerifiedGeneration };
@@ -53,6 +59,7 @@ public sealed class PostgresChatMappingWriteJournalTests(PostgresFixture fixture
         Assert.Equal(1L, await f.Test.Case.ScalarAsync<long>("SELECT count(*) FROM weft.chat_edit_approvals"));
         Assert.Equal(0L, await f.Test.Case.ScalarAsync<long>("SELECT count(*) FROM weft.revision_ingestions WHERE operation_kind='append'"));
         Assert.Equal(1L, await f.Test.Case.ScalarAsync<long>("SELECT count(*) FROM weft.chat_mapping_write_intents"));
+        Assert.Equal(1L, await f.Test.Case.ScalarAsync<long>("SELECT count(*) FROM weft.chat_mapping_write_intents WHERE request_key=$1", f.Intent.Key));
         var pending = Assert.Single(await f.Journal.ReadAsync(f.Test.Actor, f.Intent.Conversation, f.Intent.TurnId, default));
         Assert.Equal("pending", pending.Status); Assert.Null(pending.OperationId); Assert.Null(pending.Saved);
         Assert.Empty(await f.Journal.ReadAsync(new(new(f.Test.Seed.Admitted)), f.Intent.Conversation, f.Intent.TurnId, default));
@@ -82,7 +89,7 @@ public sealed class PostgresChatMappingWriteJournalTests(PostgresFixture fixture
         var saved = Assert.Single(await journal.ReadAsync(f.Test.Actor, f.Intent.Conversation, f.Intent.TurnId, default));
         Assert.Equal(committed.Receipt.Facts.FutureRevision.RevisionId, saved.Saved!.RevisionId);
         Assert.Equal(2, saved.Saved.Sequence);
-        // No post-commit journal mutation or live-turn append is needed. Repeated read/retry preserves one version.
+        // No post-commit journal mutation or live-turn append is needed. Repeated read/approval preserves one version.
         var p = f.Proposal;
         var replay = (await new PostgresChatStore(restartedApprover).ApproveAndPrepareAsync(f.Test.Actor,
             p.Conversation, p.TurnId, p.ProposalId, p.Fingerprint, default))!;
@@ -249,13 +256,16 @@ public sealed class PostgresChatMappingWriteJournalTests(PostgresFixture fixture
         internal PostgresChatStore Journal => proposal.Writer;
         internal PostgresCatalogDatabase Catalog => catalog;
         internal ChatMappingEditProposal Proposal => proposal.Proposal;
+        // The intent the approved proposal records; its key is the proposal's request key.
         internal ChatMappingWriteIntent Intent => intent;
+        /// <summary>The production entrance since 0043: exact approval of the fixture's recorded proposal creates the intent.</summary>
         internal Task<ChatMappingEditState?> ApproveAsync(Sha256Digest? fingerprint = null, Guid? proposalId = null) =>
             proposal.Approver.ApproveAndPrepareAsync(Test.Actor, intent.Conversation, intent.TurnId,
                 proposalId ?? proposal.Proposal.ProposalId, fingerprint ?? proposal.Proposal.Fingerprint, default);
         internal IngestionIntent AppendIntent() => IngestionIntent.ForAppend(new(intent.Proposal.Base.OrganizationId, intent.Proposal.Base.ProjectId,
             intent.Proposal.Base.MappingId), "ferrule", null, new EqualHead(intent.Proposal.Base.RevisionId), intent.Native.Digest, intent.Native.ByteCount);
-        internal static async Task<JournalFixture> CreateAsync(PostgresFixture fixture)
+
+        internal static async Task<JournalFixture> CreateAsync(PostgresFixture fixture, bool recordProposal = true)
         {
             var proposal = await PostgresChatEditProposalTests.ProposalFixture.CreateAsync(fixture);
             PostgresCatalogDatabase? catalog = null;
@@ -263,7 +273,8 @@ public sealed class PostgresChatMappingWriteJournalTests(PostgresFixture fixture
             {
                 var p = proposal.Proposal;
                 var content = p.Content;
-                Assert.Equal(ChatMappingEditCreateOutcome.Created, (await proposal.Writer.CreateAsync(proposal.Test.Actor, p, default)).Outcome);
+                if (recordProposal)
+                    Assert.Equal(ChatMappingEditCreateOutcome.Created, (await proposal.Writer.CreateAsync(proposal.Test.Actor, p, default)).Outcome);
                 var fact = new ChatMappingWriteFact(ChatMappingWriteOutcome.Proposed, ChatMappingWriteReason.NotPermitted,
                     content.Base, p.BaseSequence, null, null, null, null, content.Operations.Count, content.Operations.Digest,
                     content.Changes.Select(change => new ChatMappingChange(change.Field, change.Before, change.After)).ToArray(), content.ChangesTruncated);

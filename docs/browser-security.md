@@ -43,6 +43,14 @@ no-store headers and the Session transport's HTTPS policy remain in force.
 The outer helper restores missing headers even when an inner error handler clears
 the response. HTTP parsing errors before application middleware remain server-owned.
 
+The mapping editor's dedicated worker has a separate policy on the shipped
+`/edit/worker.js`, `/edit/core.js` and `/edit/core.wasm` assets. It allows wasm
+compilation only inside that worker and confines script imports to the same
+origin's `/edit/` directory. The shell never receives `wasm-unsafe-eval`.
+The development builder serves those files through its own middleware rather
+than Angular's earlier static middleware. Missing editor assets return 404
+instead of the HTML shell.
+
 ## Checks
 
 - `BrowserSecurityHeadersTests` checks static GET, HEAD and conditional responses,
@@ -50,8 +58,9 @@ the response. HTTP parsing errors before application middleware remain server-ow
 - Published-host checks enumerate every file under `wwwroot` and request it, plus
   the root shell and a nested route, in disabled, Development and Session mode.
 - The Angular development server sends the same headers, with HMR and live reload
-  disabled. No development-only script or connection allowance is added. A small
-  builder wrapper keeps entry assets root-absolute, so nested deep links load.
+  disabled. The editor asset exception has the same path boundary as the
+  packaged host. A small builder wrapper keeps entry assets root-absolute, so
+  nested deep links load without a base element.
 - The nonshipped HTTPS authentication qualification host retains its separate,
   stricter worker policy. Its `network-frame` and `network-worker` scenarios
   require one trusted, enforced violation for the expected directive and target.

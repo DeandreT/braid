@@ -150,7 +150,8 @@ other environments. See [Projection v1](projection-contract.md) for their scope.
 `deploy/local/dev-up.sh` starts every feature of the Development profile on
 loopback in one command: catalog reads, metadata edits and project creation,
 native upload and report derivation, retained reports and revision comparison,
-chat through a local Ollama model, previews, regression cases and runs, and builds.
+chat through a local Ollama model, previews, regression cases and runs, builds, and
+the local deployment sandbox.
 It needs Linux with user systemd, Docker with BuildKit, Node and the pinned .NET
 SDK on `PATH` (or `DOTNET_ROOT`) with its ASP.NET Core runtime.
 
@@ -186,6 +187,10 @@ It then:
    logs to `~/.local/share/weft-dev/logs`.
 7. Creates the default project "Local project" through the product API and grants
    the principal its Administrator role.
+8. Enables the [local deployment sandbox](local-sandbox.md), with its history under
+   `~/.local/share/weft-dev/sandbox`. Each mapping's **Local sandbox** page deploys a
+   completed build to a sandbox target and sends sample messages to its active release,
+   using the combined compiler image as the Docker compiled runtime.
 
 Open `http://127.0.0.1:4100/catalog`. `~/.local/share/weft-dev/status.sh` reports
 the units, containers and endpoints, and `~/.local/share/weft-dev/stop.sh` stops

@@ -136,7 +136,6 @@ public sealed class CreationRuntimeHttpTests
         internal HttpClient Client = null!;
         internal string CollectionPath => $"/api/v1/organizations/{Fixture.Bundle.Project.OrganizationId}/projects/{Fixture.Bundle.Project.ProjectId}/creation-proposals";
         internal string Path => $"/api/v1/organizations/{Fixture.Bundle.Project.OrganizationId}/projects/{Fixture.Bundle.Project.ProjectId}/creation-proposals/{Fixture.State!.Proposal.Id}";
-        private static DateTimeOffset DatabaseNow() => DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
         internal static async Task<Host> Start()
         {
             var h = new Host(); var org = h.Fixture.Bundle.Project.OrganizationId;
@@ -147,10 +146,10 @@ public sealed class CreationRuntimeHttpTests
             sessions.Create = (intent, _) =>
             {
                 sessions.Row = new(intent.Key, intent.BindingId, intent.BindingVersion, intent.LoginEpoch,
-                ServerSessionPolicy.InitialLifetime(DatabaseNow(), intent.VerifiedLoginDeadlineUtc)!, 1, intent.CopyProtectedTicket());
+                ServerSessionPolicy.InitialLifetime(SessionStoreTestHarness.DatabaseNow(), intent.VerifiedLoginDeadlineUtc)!, 1, intent.CopyProtectedTicket());
                 return Task.FromResult(ServerSessionWriteResult.ForAcknowledgedFacts(ServerSessionWriteOutcome.Created, sessions.Row));
             };
-            sessions.Observe = (key, _) => Task.FromResult(ServerSessionPolicy.ObserveCurrent(key, DatabaseNow(), sessions.Row,
+            sessions.Observe = (key, _) => Task.FromResult(ServerSessionPolicy.ObserveCurrent(key, SessionStoreTestHarness.DatabaseNow(), sessions.Row,
                 sessions.Row is { } row ? new(row.BindingId, row.BindingVersion, h.Identity.Actor, true, true) : null));
             b.Services.AddWeftBrowserSessions(new("https://localhost"), h.profile, sessions, sessions, TimeProvider.System);
             b.Services.AddWeftSessionCatalog(new(org), new(), new(), new(), new());
@@ -158,7 +157,7 @@ public sealed class CreationRuntimeHttpTests
             h.app = b.Build(); h.app.MapWeftCreation();
             // Trusted issuance accepts database-representable timestamps, not arbitrary host-clock ticks.
             h.app.MapGet("/__issue", async (HttpContext c, ServerSessionBrowser browser) =>
-            { await browser.IssueFreshAsync(c, Guid.NewGuid(), 1, h.Identity.Actor, DatabaseNow().AddMinutes(30), c.RequestAborted); return Results.NoContent(); });
+            { await browser.IssueFreshAsync(c, Guid.NewGuid(), 1, h.Identity.Actor, SessionStoreTestHarness.DatabaseNow().AddMinutes(30), c.RequestAborted); return Results.NoContent(); });
             await h.app.StartAsync(); h.Client = h.app.GetTestClient(); h.Client.BaseAddress = new("https://localhost");
             h.Client.DefaultRequestHeaders.Authorization = new("Bearer", "fixture-token"); return h;
         }

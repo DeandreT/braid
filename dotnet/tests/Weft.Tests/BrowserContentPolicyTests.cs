@@ -60,6 +60,7 @@ public sealed class BrowserContentPolicyTests
             builder.WebHost.UseTestServer();
             builder.Logging.ClearProviders();
             await using var app = builder.Build();
+            app.UseWeftBrowserSecurityHeaders();
             BrowserContentPolicy.Use(app, "https://weft.example");
             app.UseDefaultFiles();
             app.UseStaticFiles();
@@ -71,6 +72,8 @@ public sealed class BrowserContentPolicyTests
             using var asset = await client.GetAsync("/edit/worker.js");
             Assert.Equal(HttpStatusCode.OK, asset.StatusCode);
             Assert.Equal(editor, asset.Headers.GetValues("Content-Security-Policy").Single());
+            Assert.Equal("same-origin", asset.Headers.GetValues("Cross-Origin-Opener-Policy").Single());
+            Assert.Equal("same-origin", asset.Headers.GetValues("Cross-Origin-Resource-Policy").Single());
 
             foreach (var path in new[] { "/edit/missing", "/edit", "/edit/", "/edit/nested/index.html" })
             {

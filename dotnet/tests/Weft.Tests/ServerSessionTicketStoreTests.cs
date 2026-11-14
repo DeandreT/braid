@@ -437,6 +437,14 @@ internal sealed class SessionStoreTestHarness : IDisposable
     internal static readonly Guid Binding = Guid.Parse("20000000-0000-0000-0000-000000000002");
     internal static readonly PrincipalId Owner = new(Guid.Parse("30000000-0000-0000-0000-000000000003"));
     internal static readonly DateTimeOffset Now = new DateTimeOffset(2030, 1, 2, 3, 4, 5, TimeSpan.Zero).AddTicks(1234560);
+
+    /// <summary>The current UTC time as a PostgreSQL instant: whole microseconds. Session facts and verified
+    /// deadlines refuse sub-microsecond clock ticks, so recording session ports must never pass them.</summary>
+    internal static DateTimeOffset DatabaseNow()
+    {
+        var now = DateTimeOffset.UtcNow;
+        return now.AddTicks(-(now.Ticks % 10));
+    }
     internal static readonly DateTimeOffset Deadline = Now.AddMinutes(60);
     private readonly string directory;
     private readonly RSA rsa;

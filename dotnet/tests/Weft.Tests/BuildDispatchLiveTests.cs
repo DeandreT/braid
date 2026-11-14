@@ -9,6 +9,7 @@ using System.Text.Json.Nodes;
 using Weft.Application;
 using Weft.Application.Regression;
 using Weft.Deployment;
+using Weft.Deployment.Sandbox;
 using Weft.Domain;
 using Weft.MappingBackends;
 using Weft.MappingBackends.Workers;
@@ -38,7 +39,10 @@ public sealed class BuildDispatchLiveTests(PostgresFixture fixture, ITestOutputH
     [CompiledRuntimeDispatchFact]
     public Task Persisted_compiled_build_invocation_matches_saved_evidence_and_rechecks_revocation() => QualifyAsync(true);
 
-    private async Task QualifyAsync(bool invokeCompiled)
+    [CompiledRuntimeDispatchFact]
+    public Task Local_sandbox_deploys_sends_rolls_back_and_replays_through_the_real_host() => QualifyAsync(true, sandbox: true);
+
+    private async Task QualifyAsync(bool invokeCompiled, bool sandbox = false)
     {
         var image = Environment.GetEnvironmentVariable("WEFT_BUILD_WORKER_IMAGE")!;
         Assert.Equal(image, Environment.GetEnvironmentVariable("WEFT_FERRULE_WORKER_IMAGE"));
@@ -84,7 +88,21 @@ public sealed class BuildDispatchLiveTests(PostgresFixture fixture, ITestOutputH
             FerruleRevisionReportBackendFactory.CreateProfile(image), new(storedObjectByteLimit: reportLimit), () => native.Native.Runner);
         var reports = native.NewReports(registry: reportRegistry);
         _ = RevisionReportTestSupport.Available(await reports.EnsureAsync(native.Actor, revision, RevisionReportOperation.Projection));
-        await using var api = await BuildApiLiveHost.StartAsync(native, image, reportLimit);
+        var sandboxSettings = sandbox ? new Dictionary<string, string>
+        {
+            ["WEFT_RELEASE_OPERATIONS_ENABLED"] = "true",
+            ["WEFT_RELEASE_READER_CONNECTION_STRING"] = native.Case.RegressionConnectionString("weft_release_reader"),
+            ["WEFT_RELEASE_WRITER_CONNECTION_STRING"] = native.Case.RegressionConnectionString("weft_release_writer"),
+            ["WEFT_QUALIFICATION_READER_CONNECTION_STRING"] = native.Case.RegressionConnectionString("weft_qualification_reader"),
+            ["WEFT_LOCAL_SANDBOX_ENABLED"] = "true",
+            ["WEFT_LOCAL_SANDBOX_RUNTIME_IMAGE"] = Environment.GetEnvironmentVariable("WEFT_COMPILED_RUNTIME_IMAGE")!,
+            ["WEFT_LOCAL_SANDBOX_HISTORY_DIRECTORY"] = native.Root.NewDirectory("sandbox-history"),
+            ["WEFT_LOCAL_SANDBOX_QUALIFICATION_WRITER_CONNECTION_STRING"] = native.Case.RegressionConnectionString("weft_qualification_writer"),
+            ["WEFT_LOCAL_SANDBOX_BUILD_READER_CONNECTION_STRING"] = native.Case.RegressionConnectionString("weft_build_reader"),
+            ["WEFT_LOCAL_SANDBOX_INVOCATION_WRITER_CONNECTION_STRING"] = native.Case.RegressionConnectionString("weft_invocation_writer"),
+            ["WEFT_LOCAL_SANDBOX_INVOCATION_GRANT_WRITER_CONNECTION_STRING"] = native.Case.RegressionConnectionString("weft_invocation_grant_writer")
+        } : null;
+        await using var api = await BuildApiLiveHost.StartAsync(native, image, reportLimit, sandboxSettings);
         BuildIntent Intent() => new(Guid.NewGuid(), revision, value.NativeDigest,
             new("ferrule", FerruleInspectionBackend.EngineRevision, image, FerrulePreviewBackend.AdapterBuild), FerruleBuildCompiler.Profile,
             [new(BuildBoundaryKind.PrimaryInput, null, "json"), new(BuildBoundaryKind.PrimaryOutput, null, "json")], environment, Guid.NewGuid(), runId);
@@ -126,9 +144,82 @@ public sealed class BuildDispatchLiveTests(PostgresFixture fixture, ITestOutputH
         await api.SubmitAsync(first, replay: true);
         if (invocation is not null)
         {
+            if (sandbox) await QualifySandbox();
             var firstProof = await InvokeAndCompare(first);
             var secondProof = await InvokeAndCompare(second);
             await QualifyLocalReleases(firstProof, secondProof);
+        }
+
+        async Task QualifySandbox()
+        {
+            async Task<JsonElement> Request(System.Net.Http.HttpMethod method, string suffix, object? body = null, string? etag = null)
+            {
+                using var response = await api.SandboxAsync(revision, method, suffix, body, etag);
+                Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
+                using var document = JsonDocument.Parse(await response.Content.ReadAsByteArrayAsync());
+                return document.RootElement.Clone();
+            }
+            var post = System.Net.Http.HttpMethod.Post;
+            var get = System.Net.Http.HttpMethod.Get;
+            var deployment = Guid.NewGuid();
+            using (var csrf = await api.SandboxAsync(revision, post, "/sandbox/deployments/" + deployment, new { buildId = first.BuildId }, antiforgery: false))
+                Assert.Equal(System.Net.HttpStatusCode.Forbidden, csrf.StatusCode);
+            var deployed = await Request(post, "/sandbox/deployments/" + deployment, new { buildId = first.BuildId });
+            Assert.Equal("activated", deployed.GetProperty("outcome").GetString());
+            var targetId = deployed.GetProperty("target").GetProperty("targetId").GetString()!;
+            var firstRelease = deployed.GetProperty("releaseId").GetString()!;
+            var firstQualification = deployed.GetProperty("qualificationId").GetString()!;
+            var replayedDeployment = await Request(post, "/sandbox/deployments/" + deployment, new { buildId = first.BuildId });
+            Assert.Equal("replayed", replayedDeployment.GetProperty("outcome").GetString());
+            var messages = "/sandbox/" + targetId + "/messages";
+            var messageId = Guid.NewGuid();
+            var sample = new { source = "case", reference = value.CaseId.ToString("D") + "/1" };
+            var original = await Request(post, messages + "/" + messageId, sample);
+            Assert.Equal("completed", original.GetProperty("status").GetString());
+            var outputBytes = original.GetProperty("outputs")[0].GetProperty("content").GetBytesFromBase64();
+            Assert.Equal(expected, outputBytes);
+            Assert.Equal(first.BuildId.ToString("D"), original.GetProperty("buildId").GetString());
+            var repeated = await Request(post, messages + "/" + messageId, sample);
+            Assert.Equal(original.GetProperty("sentAtUtc").GetString(), repeated.GetProperty("sentAtUtc").GetString());
+            var secondDeployment = await Request(post, "/sandbox/deployments/" + Guid.NewGuid(), new { buildId = second.BuildId });
+            Assert.Equal("activated", secondDeployment.GetProperty("outcome").GetString());
+            Assert.Equal(targetId, secondDeployment.GetProperty("target").GetProperty("targetId").GetString());
+            var version = secondDeployment.GetProperty("target").GetProperty("version").GetString();
+            await Request(post, "/operations/" + targetId + "/actions/" + Guid.NewGuid(), new
+            {
+                action = "rollback",
+                environmentId = environment.EnvironmentId,
+                environmentVersion = "1",
+                qualificationId = firstQualification,
+                sourceReleaseId = firstRelease
+            }, "\"" + version + "\"");
+            var replay = await Request(post, messages + "/" + Guid.NewGuid(), new { source = "replay", replayOf = messageId });
+            Assert.Equal("completed", replay.GetProperty("status").GetString());
+            Assert.NotEqual(firstRelease, replay.GetProperty("releaseId").GetString());
+            Assert.Equal(first.BuildId.ToString("D"), replay.GetProperty("buildId").GetString());
+            Assert.Equal(outputBytes, replay.GetProperty("outputs")[0].GetProperty("content").GetBytesFromBase64());
+            var page = await Request(get, messages);
+            Assert.Equal(2, page.GetProperty("items").GetArrayLength());
+            Assert.All(page.GetProperty("items").EnumerateArray(), row => Assert.Equal(JsonValueKind.Null, row.GetProperty("inputs")[0].GetProperty("content").ValueKind));
+            var state = await Request(get, "/sandbox");
+            var currentVersion = state.GetProperty("targets")[0].GetProperty("version").GetString();
+            await Request(post, "/operations/" + targetId + "/actions/" + Guid.NewGuid(), new
+            {
+                action = "disable",
+                environmentId = environment.EnvironmentId,
+                environmentVersion = "1",
+                qualificationId = (string?)null,
+                sourceReleaseId = (string?)null
+            }, "\"" + currentVersion + "\"");
+            var denied = await Request(post, messages + "/" + Guid.NewGuid(), sample);
+            Assert.NotEqual("completed", denied.GetProperty("status").GetString());
+            await native.Case.ExecuteAsync("UPDATE weft.project_memberships SET role='viewer',version=version+1 WHERE organization_id=$1 AND project_id=$2 AND principal_id=$3",
+                revision.OrganizationId, revision.ProjectId, native.Actor.PrincipalId.Value);
+            using (var revoked = await api.SandboxAsync(revision, get, messages + "/" + messageId))
+                Assert.Equal(System.Net.HttpStatusCode.NotFound, revoked.StatusCode);
+            await native.Case.ExecuteAsync("UPDATE weft.project_memberships SET role='administrator',version=version+1 WHERE organization_id=$1 AND project_id=$2 AND principal_id=$3",
+                revision.OrganizationId, revision.ProjectId, native.Actor.PrincipalId.Value);
+            output.WriteLine("Scratch sandbox HTTP: qualification, target reuse, activation, machine-ledger send, history, rollback, replay/output comparison, disable, antiforgery and current-role refusal verified with Docker compiled runtime.");
         }
 
         async Task<BuildQualification> InvokeAndCompare(BuildIntent intent)

@@ -138,7 +138,8 @@ public sealed class DocumentJsonPersistenceTests(PostgresFixture fixture)
     }
 
     private static PreviewRunSubmission Submission(RevisionScope revision) => new(revision, Guid.NewGuid(), PreviewTargetSelection.All,
-        new(null, XmlPreviewWorkflowTests.Input, xmlMetadata: XmlDocumentMetadata.WithoutHints), [], []) { Profile = PreviewExecutionProfile.XmlDocument };
+        new(null, XmlPreviewWorkflowTests.Input, xmlMetadata: XmlDocumentMetadata.WithoutHints), [], [])
+    { Profile = PreviewExecutionProfile.XmlDocument };
     private static PreviewRunRecord Record(PreviewRunSubmission submission) => new(submission,
         PreviewRequestDocument.Encode(submission, PreviewLimits.Default), "2026-11-12T00:00:00Z", 3, TimeSpan.FromHours(24));
 }
