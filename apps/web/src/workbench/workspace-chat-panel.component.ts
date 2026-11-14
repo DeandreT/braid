@@ -59,7 +59,7 @@ import { ResizeHandleComponent } from "./resize-handle.component";
           [hidden]="!chat.opened()"
         >
           <h2 id="workspace-chat-heading" class="chat-sr-only" tabindex="-1">
-            Ask Weft
+            Ask braid
           </h2>
           <weft-revision-chat
             [context]="context"

@@ -2,19 +2,19 @@
 id: overview
 title: Getting started
 order: 1
-summary: What Weft does, the words it uses, and where to begin.
+summary: What braid does, the words it uses, and where to begin.
 ---
 
-Weft helps you understand, test and prepare data mappings. A mapping describes
-how incoming documents become result documents. Weft keeps every version of a
+braid helps you understand, test and prepare data mappings. A mapping describes
+how incoming documents become result documents. braid keeps every version of a
 mapping, explains what it does, checks it for problems, and lets you try it on
 sample data before anyone relies on it.
 
-Weft currently works with mappings saved in Ferrule's native JSON format.
+braid currently works with mappings saved in Ferrule's native JSON format.
 
-## Words Weft uses
+## Words braid uses
 
-- **Organization**: your company's Weft workspace. The workspace decides which
+- **Organization**: your company's braid workspace. The workspace decides which
   organization you work in; you don't choose it.
 - **Project**: a group of related mappings. Your role in a project decides what
   you can do with its mappings.
@@ -25,7 +25,7 @@ Weft currently works with mappings saved in Ferrule's native JSON format.
   file adds a new revision and keeps the old ones.
 - **Head**: the newest revision of a mapping.
 - **Reports**: the *explanation* (how each result field is filled) and the
-  *validation* (problems found in the file) that Weft saves for one exact
+  *validation* (problems found in the file) that braid saves for one exact
   revision.
 
 ## Where to start
@@ -39,7 +39,8 @@ Weft currently works with mappings saved in Ferrule's native JSON format.
 
 ## Finding help
 
-Choose **Help** in the header at any time. Each help page has its own address,
+Choose **Help & guide** in the workspace navigation at any time. On a narrow
+screen, open **Menu** first. Each help page has its own address,
 so you can bookmark it or share it with a colleague.
 
 To work from a terminal, see [Using the command line](cli.md).

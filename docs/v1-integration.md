@@ -1,8 +1,10 @@
 # Combined v1 integration — 2026-11-12
 
-Local implementation and portable qualification are complete. Actual Linux/Blob
-acceptance and the deferred live-provider/Azure work remain gated. The latest
-results are recorded in the final verification sections below.
+Local implementation, portable verification and the subsequently reviewed bounded
+Linux/PostgreSQL/Azurite qualification are complete. Live-provider acceptance and
+actual Azure deployment remain explicitly deferred by the user. Historical
+checkpoints below retain their original scope; the current local follow-up and
+remaining acceptance gates are recorded at the end.
 
 Original local integration in `C:/example/checkout`, from clean `5cd3a631`:
 
@@ -48,7 +50,7 @@ Used pinned .NET SDK 10.0.112, Node 22.23.3, and npm 12.1.0.
   output against the 500 kB warning budget.
 - Final focused portable .NET run: 1,249 passed, 184 skipped, zero failures.
 - Targeted .NET formatting verification, shell syntax validation and `git diff
-  --check` passed.
+--check` passed.
 - Actual headless Chromium: document suites 33 passed; exact proposal review
   8 passed; intake 13 passed. These suites include some pure parser cases and
   use authored HTTP fixtures, not live PostgreSQL/Blob/provider services.
@@ -348,15 +350,91 @@ trees remain identical to qualified `85c483e0`; only browser tests and
 qualification documentation changed afterward. The Release/native and frontend
 production qualifications therefore retain their exact source correspondence.
 
-### Remaining gates
+### Current local follow-up
 
-- XML filesystem-prefix conservation on Linux.
-- Linux private-file/session configuration, native workers and sandbox execution.
-- Hosted Blob-backed specification intake and publication recovery.
-- Full hosted approval/receipt flows and provider-backed end-to-end execution.
-- Azure provisioning/deployment and protected credential delivery in that lane.
+The later local Linux lane closes the previously pending XML filesystem-prefix,
+protected session, installed document-worker and matching-image sandbox checks
+within their reviewed scope. The pinned PostgreSQL/Azurite selection passed
+159/159, including durable specification publication and recovery. The actual
+matching-image Docker selection passed all four previously skipped cases. These
+are local service and emulator results, not actual Azure storage acceptance.
 
-Specification intake remains opt-in, and filesystem specification publication
-remains unavailable. Browser fixture success does not qualify these backends.
-The remote Linux qualification lane receives exact published integration heads
-through issue #155. `C:/example/checkout` main remains preserved.
+The separately approved installed image passed its initial four cases and the
+subsequent exact 16-case hostile/resource/lifecycle selection with zero skips.
+The latter passed on its first execution, including all four witnessed real
+default-host Office/PDF shutdown races. Gate/driver settlement, owned-container
+absence and empty Office/PDF work roots were verified. Native CPU/PDF control
+evidence remains compositional; exact-parser exhaustion, exhaustive hostile-input
+coverage, AppArmor and production-environment equivalence are not claimed.
+
+See the maintained [creation sandbox qualification](creation-sandbox-qualification.md),
+[specification Blob qualification](spec-blob-qualification.md),
+[installed document qualification](spec-document-installed-qualification.md) and
+[installed hostile/lifecycle qualification](spec-document-installed-hostile-qualification.md)
+for the selected receipts, reviewed identities and limits. Selections overlap and
+must not be summed into a whole-project test total.
+
+The visible product name is now lowercase `braid`, with compatibility identifiers
+retained. The approved catalog, revision workbench and exact creation-review
+layouts are implemented in Angular. Static design proposals and documentation
+screenshots illustrate the UI; they do not establish application behavior.
+See [Workspace layout](ui-ux-refresh.md).
+
+#### UI implementation qualification
+
+Integrated-07 passed all 15 build/check commands with pinned Node 22.23.3,
+npm 12.1.0 and SDK 10.0.112. Its freshly collected development selection
+executed 671 cases: **667 passed, four exact approved optional captures skipped,
+zero failures, retries or flaky results**. All 88 UX matrix executions passed:
+22 cases in each desktop/mobile, light/dark project, including all 17 actual
+workbench states and five added navigation cases. The separate production
+help/theme smoke passed **17/17**. Twelve documentation captures passed with
+fresh source/fixture/image provenance; these illustrate rather than qualify
+behavior. App/probe initial-bundle warnings remain 681.66 kB/1.40 MB, below
+their unchanged error budgets.
+
+The separate integrated-07 published-shell editor selection passed all four
+actual cases with zero skips or retries, including the entire 360px keyboard
+journey. Its 203-file DLL closure was conserved. The production editor package
+was reproduced byte-identically in two clean builds using Rust 1.98.1 and
+wasm-bindgen 0.2.129. Both Angular builds contained the exact six approved assets,
+with Wasm SHA-256
+`80e3ffa6eb485854b000bb1c2a84e35b2d6df79e8f79021f2cfb71c9cfcbcf3c`.
+Historical native conservation is 1,781 unchanged files plus the approved Wasm
+packaging-lock repair adding four existing dependency edges; package versions
+and checksums, all 47 migrations and 13 protected paths were unchanged.
+
+The compact rail corrects a confirmed application layout conflict at 680px;
+the original chat-boundary assertions are byte-identical. All 18 unified cases
+and both 22-case light/dark UX selections passed in a separate 62-case preflight.
+Two additional normal-fixture keyboard controls passed Enter activation and
+240px-height last-target reachability at both 680px and 1023px. All original
+17 UX case bytes, editor assertions and timeouts remain preserved.
+
+Current-build actual-app visual review passed its core criteria, with 62 selected
+PNGs: 38 main, 12 geometry, three focus and nine tablet supplements. The extra
+demo banner made the screenshot helper's 240px reachability probe inconclusive;
+that limitation remains recorded separately from the passing normal-fixture
+keyboard controls. These are bounded local results. Earlier failed attempts
+remain failed and retained, including integrated-06's 646 passes, one boundary
+failure and four optional skips. Overlapping selections must not be summed.
+All five final command checks passed: formatting, contracts, browser TypeScript,
+documentation-image consistency and diff whitespace. Frozen application/native,
+harness and editor inputs were conserved; only the authorized documentation
+image/provenance group changed. Owned processes and validation ports settled,
+while the unrelated demo and its original 34 served files remained unchanged.
+
+### Remaining acceptance gates
+
+- An approved real-provider document-to-new-mapping, sample, feedback and exact
+  approved-save demonstration, including the retained authorization and recovery
+  requirements in issue #443.
+- Authorized Azure provisioning/deployment, protected credential delivery and
+  verification of actual hosted storage, identity and execution behavior.
+
+Both gates remain user-deferred. No provider request, credential request or Azure
+activation follows from local qualification. Specification intake remains opt-in;
+public PDF convenience activation and filesystem specification publication retain
+their existing refusal gates. Browser fixtures and templates do not establish
+hosted acceptance. `C:/example/checkout` main and the published integration checkpoint
+remain preserved; renewed local changes are uncommitted.

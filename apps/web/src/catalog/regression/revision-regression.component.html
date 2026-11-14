@@ -4,7 +4,15 @@
   aria-labelledby="regression-title"
   [attr.aria-busy]="busy() ? 'true' : null"
 >
-  <h2 id="regression-title">Regression tests</h2>
+  <header class="regression-heading">
+    <div>
+      <h2 id="regression-title">Regression tests</h2>
+      <p>Check this saved version against reviewed expected results.</p>
+    </div>
+    <weft-help-link [section]="'regression-tests'"
+      >About regression tests</weft-help-link
+    >
+  </header>
   @if (!capabilities()) {
     <p>
       Save test cases and compare their results, including exact formatting.
@@ -25,9 +33,6 @@
       </button>
     }
   }
-  <weft-help-link [section]="'regression-tests'"
-    >About regression tests</weft-help-link
-  >
   @if (error(); as message) {
     <p class="regression-error" role="alert">{{ message }}</p>
   }
@@ -105,71 +110,81 @@
     </div>
     @if (cases(); as page) {
       @if (workbench()) {
-        <table class="wb-case-table" aria-label="Saved regression cases">
-          <thead>
-            <tr>
-              <th
-                [attr.aria-sort]="caseAscending() ? 'ascending' : 'descending'"
-              >
-                <button
-                  type="button"
-                  (click)="caseAscending.set(!caseAscending())"
-                >
-                  Case {{ caseAscending() ? "↑" : "↓" }}
-                </button>
-              </th>
-              <th>Version</th>
-              <th>Revision</th>
-              <th>Saved (UTC)</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (item of visibleCases(); track item.caseId) {
-              <tr
-                [class.selected]="
-                  selected()?.caseId === item.caseId &&
-                  selected()?.version === item.version
-                "
-              >
-                <td>{{ item.name }}</td>
-                <td>{{ item.version }}</td>
-                <td>
-                  {{
-                    item.revision.revisionId === revision().scope.revisionId
-                      ? "Pinned revision"
-                      : "Other revision"
-                  }}
-                </td>
-                <td>
-                  <weft-metadata-value
-                    kind="time"
-                    label="Test saved time"
-                    [value]="item.createdAtUtc"
-                  />
-                </td>
-                <td>
-                  @if (capability.readSamples) {
-                    <button
-                      type="button"
-                      class="catalog-button"
-                      (click)="openCase(item.caseId, item.version)"
-                      [disabled]="busy() || !!pendingCase() || !!pendingRun()"
-                    >
-                      Open {{ item.name }}
-                    </button>
-                  } @else {
-                    Metadata only
-                  }
-                </td>
-              </tr>
-            } @empty {
+        <h3 class="regression-section-title">Saved cases</h3>
+        <div
+          class="regression-table regression-saved-table"
+          role="region"
+          aria-label="Saved regression cases"
+          tabindex="0"
+        >
+          <table class="wb-case-table" aria-label="Saved regression cases">
+            <thead>
               <tr>
-                <td colspan="5">No matching saved cases on this page.</td>
+                <th
+                  [attr.aria-sort]="
+                    caseAscending() ? 'ascending' : 'descending'
+                  "
+                >
+                  <button
+                    type="button"
+                    (click)="caseAscending.set(!caseAscending())"
+                  >
+                    Case {{ caseAscending() ? "↑" : "↓" }}
+                  </button>
+                </th>
+                <th>Version</th>
+                <th>Revision</th>
+                <th>Saved (UTC)</th>
+                <th>Action</th>
               </tr>
-            }
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              @for (item of visibleCases(); track item.caseId) {
+                <tr
+                  [class.selected]="
+                    selected()?.caseId === item.caseId &&
+                    selected()?.version === item.version
+                  "
+                >
+                  <td>{{ item.name }}</td>
+                  <td>{{ item.version }}</td>
+                  <td>
+                    {{
+                      item.revision.revisionId === revision().scope.revisionId
+                        ? "Pinned revision"
+                        : "Other revision"
+                    }}
+                  </td>
+                  <td>
+                    <weft-metadata-value
+                      kind="time"
+                      label="Test saved time"
+                      [value]="item.createdAtUtc"
+                    />
+                  </td>
+                  <td>
+                    @if (capability.readSamples) {
+                      <button
+                        type="button"
+                        class="catalog-button"
+                        (click)="openCase(item.caseId, item.version)"
+                        [disabled]="busy() || !!pendingCase() || !!pendingRun()"
+                      >
+                        Open {{ item.name }}
+                      </button>
+                    } @else {
+                      Metadata only
+                    }
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="5">No matching saved cases on this page.</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
       } @else {
         @if (!page.cases.length) {
           <p>No saved test cases on this page.</p>
@@ -663,50 +678,60 @@
       </div>
     }
     @if (history(); as page) {
-      <h3>Your run history</h3>
+      <h3 class="regression-section-title">Your run history</h3>
       @if (workbench()) {
-        <table class="wb-case-table" aria-label="Regression run history">
-          <thead>
-            <tr>
-              <th>Run</th>
-              <th>State</th>
-              <th>Case version</th>
-              <th>Revision</th>
-              <th>Started (UTC)</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (item of page.runs; track item.runId) {
+        <div
+          class="regression-table regression-saved-table"
+          role="region"
+          aria-label="Regression run history"
+          tabindex="0"
+        >
+          <table class="wb-case-table" aria-label="Regression run history">
+            <thead>
               <tr>
-                <td>
-                  <button
-                    type="button"
-                    class="catalog-button"
-                    (click)="openRun(item.runId)"
-                    [disabled]="busy() || !!pendingRun()"
-                    [attr.aria-label]="'Open run ' + item.runId"
-                  >
-                    Open run {{ item.runId.slice(0, 8) }}
-                  </button>
-                </td>
-                <td>{{ label(item.state) }}</td>
-                <td>{{ item.version }}</td>
-                <td>
-                  {{
-                    item.revision.revisionId === revision().scope.revisionId
-                      ? "Pinned revision"
-                      : "Other revision"
-                  }}
-                </td>
-                <td>{{ item.createdAtUtc | date: "short" : "UTC" }}</td>
+                <th>Run</th>
+                <th>State</th>
+                <th>Case version</th>
+                <th>Revision</th>
+                <th>Started (UTC)</th>
               </tr>
-            } @empty {
-              <tr>
-                <td colspan="5">No runs on this page.</td>
-              </tr>
-            }
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              @for (item of page.runs; track item.runId) {
+                <tr [class.selected]="run()?.run?.runId === item.runId">
+                  <td>
+                    <button
+                      type="button"
+                      class="catalog-button"
+                      (click)="openRun(item.runId)"
+                      [disabled]="busy() || !!pendingRun()"
+                      [attr.aria-label]="'Open run ' + item.runId"
+                    >
+                      Open run {{ item.runId.slice(0, 8) }}
+                    </button>
+                  </td>
+                  <td>{{ label(item.state) }}</td>
+                  <td>{{ item.version }}</td>
+                  <td>
+                    {{
+                      item.revision.revisionId === revision().scope.revisionId
+                        ? "Pinned revision"
+                        : "Other revision"
+                    }}
+                  </td>
+                  <td>{{ item.createdAtUtc | date: "short" : "UTC" }}</td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="5">No runs on this page.</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <p class="regression-history-note">
+          Completed is a run state. Open a run to review its comparison result.
+        </p>
       } @else {
         @if (!page.runs.length) {
           <p>No runs on this page.</p>

@@ -171,7 +171,7 @@ test("an unsubmitted project draft warns before sign-in without exposing its con
   await description.fill("Unsubmitted private notes");
   await account.click();
   await expect(warning).toBeVisible();
-  await page.getByRole("link", { name: "Help", exact: true }).click();
+  await page.getByRole("link", { name: "Help & guide", exact: true }).click();
   await expect(page).toHaveURL(/\/help$/);
   await account.click();
   await expect(warning).toBeVisible();
@@ -191,7 +191,7 @@ test("an unavailable organization read does not block the guide or retry endless
   ).toBeVisible();
   await page.locator("#account-trigger").click();
   const menu = page.getByRole("region", { name: "Sign-in and session" });
-  await expect(menu).toContainText("Signed in to Weft");
+  await expect(menu).toContainText("Signed in to braid");
   await expect(menu.locator(".session-organization")).toHaveCount(0);
   expect(fixture.contextReads).toBe(1);
   expect(fixture.unexpected).toEqual([]);
@@ -257,7 +257,7 @@ for (const refusal of [401, 403]) {
     ).toBeVisible();
     await page.locator("#account-trigger").click();
     const menu = page.getByRole("region", { name: "Sign-in and session" });
-    await expect(menu).toContainText("Signed in to Weft");
+    await expect(menu).toContainText("Signed in to braid");
     // Let the reclassification render and any scheduled effects run before
     // asserting the read count. The denied organization is never auto-retried.
     await page.evaluate(

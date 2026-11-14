@@ -148,7 +148,7 @@ test("new return flow rejects duplicate or unknown sign-in query keys", async ({
     source.anonymous();
     await page.goto(`/sign-in?${query}`);
     await expect(
-      page.getByRole("heading", { name: "Sign in to Weft", exact: true }),
+      page.getByRole("heading", { name: "Sign in to braid", exact: true }),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Sign in with Microsoft", exact: true }),

@@ -23,7 +23,7 @@ turn checks off for future versions without removing saved results.
 ## Require passing checks before builds
 
 A project administrator can enable **Require passing exact-revision regression**.
-Weft then refuses approval and qualification until all current cases pass on the
+braid then refuses approval and qualification until all current cases pass on the
 exact version being built. A pass on a different version does not count.
 
 ## Choose notifications

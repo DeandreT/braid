@@ -79,7 +79,7 @@ export class BrowserAuthControlsComponent {
       case "authenticationRequired":
         return "Sign-in required";
       case "authenticated":
-        return "Signed in to Weft";
+        return "Signed in to braid";
       case "unavailable":
         return "Sign-in status unavailable";
     }
@@ -97,7 +97,7 @@ export class BrowserAuthControlsComponent {
       case "authenticationRequired":
         return "The current local session cannot grant access. Sign in again, or review explicit local recovery.";
       case "authenticated":
-        return "Catalog permissions are checked separately for each operation. Sign out ends only this local Weft session.";
+        return "Catalog permissions are checked separately for each operation. Sign out ends only this local braid session.";
       case "unavailable":
         return "Protected content is hidden. An unavailable check does not mean you are signed out.";
     }

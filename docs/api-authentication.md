@@ -88,7 +88,7 @@ builds.
   admits takes a bearer token. The `/api/auth/*` routes refuse any `Authorization`
   header with `400`, whether or not bearer access is enabled.
 - **One credential.** A bearer request must carry exactly one `Authorization: Bearer
-  <token>` header and no cookie at all, so a bearer token never mixes with Weft's
+  <token>` header and no cookie at all, so a bearer token never mixes with braid's
   session or antiforgery cookies. Without bearer access, an `Authorization` header on
   a business route is refused with `401` before the session is read, even alongside
   a valid session cookie.

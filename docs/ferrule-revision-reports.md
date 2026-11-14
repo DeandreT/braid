@@ -1,7 +1,7 @@
 # Trusted Ferrule revision reports
 
 Issue [#54](https://github.com/DeandreT/weft/issues/54) connects the existing
-restricted Ferrule worker to Weft's owned revision-report contracts. It builds
+restricted Ferrule worker to braid's owned revision-report contracts. It builds
 on the [stored report codec](revision-report-codec.md). Private-object
 publication and metadata orchestration follow in #55; persisted-report routes
 follow in #51. This adapter does not establish those later capabilities.

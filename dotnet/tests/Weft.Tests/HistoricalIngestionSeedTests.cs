@@ -172,11 +172,39 @@ public sealed class HistoricalIngestionSeedTests(PostgresFixture fixture)
         var count = MigrationRunner.EmbeddedMigrations.Count;
         var snapshot = await HistoricalIngestionSeed.CaptureSnapshotAsync(test);
         using (var schema = JsonDocument.Parse(snapshot.SchemaStateJson))
+        {
             Assert.Equal(count, schema.RootElement.GetProperty("journal").GetArrayLength());
+            // Grouping is lossless: keep the original row cap per relation and the
+            // shared byte cap, rather than truncating columns or raising either cap.
+            var columns = schema.RootElement.GetProperty("columns");
+            var expectedColumns = await test.ScalarAsync<long>("""
+                SELECT count(*) FROM pg_catalog.pg_attribute a
+                JOIN pg_catalog.pg_class c ON c.oid=a.attrelid
+                WHERE c.relnamespace='weft'::regnamespace AND c.relkind IN ('r','p','v','m','f')
+                  AND a.attnum>0 AND NOT a.attisdropped
+                """);
+            Assert.Equal(expectedColumns, columns.EnumerateArray().Sum(row => (long)row.GetProperty("columns").GetArrayLength()));
+            Assert.All(columns.EnumerateArray(), row => Assert.InRange(row.GetProperty("columns").GetArrayLength(), 1, 1024));
+        }
         await test.ExecuteAsync("INSERT INTO weft.schema_migrations(version,checksum) VALUES($1,repeat('0',64))", count + 1);
         var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => HistoricalIngestionSeed.CaptureSnapshotAsync(test));
         Assert.Contains("no truncated snapshot", refused.Message, StringComparison.Ordinal);
         Assert.Equal((long)count + 1, await test.ScalarAsync<long>("SELECT count(*) FROM weft.schema_migrations"));
+    }
+
+    [PostgresFact]
+    public async Task SnapshotRefusesPerRelationColumnOverflowWithoutReturningAPartialGroup()
+    {
+        await using var test = await CreateOriginalCaseAsync();
+        await test.ExecuteAsync("""
+            DO $seed$ BEGIN
+                EXECUTE 'CREATE TABLE weft.snapshot_column_budget (' ||
+                    (SELECT string_agg('c' || n::text || ' integer', ',' ORDER BY n) FROM generate_series(1,1025) n) || ')';
+            END $seed$;
+            """);
+        var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => HistoricalIngestionSeed.CaptureSnapshotAsync(test));
+        Assert.Contains("no truncated snapshot", refused.Message, StringComparison.Ordinal);
+        Assert.Equal(1025L, await test.ScalarAsync<long>("SELECT count(*) FROM pg_attribute WHERE attrelid='weft.snapshot_column_budget'::regclass AND attnum>0"));
     }
 
     private async Task<PostgresCase> CreateOriginalCaseAsync()

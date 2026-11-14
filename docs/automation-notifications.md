@@ -108,7 +108,7 @@ webhook delivery. No invitation secret, secret hash or redemption token enters
 the notification tables or envelope.
 
 The notification outbox commits with the source event. Events contain only their
-type, IDs, timestamp and a Weft link, never payloads, parameters, mapping names,
+type, IDs, timestamp and a braid link, never payloads, parameters, mapping names,
 email addresses, tokens, worker messages or private diagnostics. Event uniqueness
 and delivery identities make source replay safe. Receivers should deduplicate on
 the event ID: external delivery is at least once because a connection can fail

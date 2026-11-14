@@ -10,6 +10,8 @@ public sealed class PostgresMigrationTests(PostgresFixture fixture)
     private const string IngestionChecksum = "d61a8bc2d56b6a39607414cf0f14c58db511594369ac124fd270a08f77455ae5";
     private const string CatalogChecksum = "0ed73cc9d597390366b661beb24f3bdfeddf1dbd9d49812ae575c2c42283fff3";
     private const string MetadataChecksum = "7335f18b8c5686b9e3ba3a2b9719d52e51fb22f5c07071e201bb7a239a48b113";
+    internal const string MappingCreationChecksum = "b431accbe354bfcb9a3332729752bf32f7f0297fbaacb51bd0b466ed58054b30";
+    internal const string DocumentEvidenceChecksum = "e6e3f5e2320ed4010359dfdd849d645c15e6266aae645b2cffccee2b0e90a608";
     private static string ProjectCreationChecksum => ProjectCreationTestSupport.MigrationChecksum;
     private static string RevisionDerivationChecksum => RevisionDerivationSchemaContract.MigrationChecksum;
     private static string MaintenanceChecksum => MaintenanceSchemaContract.MigrationChecksum;
@@ -31,7 +33,7 @@ public sealed class PostgresMigrationTests(PostgresFixture fixture)
         InterchangeSchemaTestContract.MigrationChecksum, CatalogSearchSchemaAdmission.MigrationChecksum, RegressionSchemaTestContract.AutomationChecksum, RegressionSchemaTestContract.ReleaseOperationsChecksum,
         ChatSchemaContract.WorkspaceMigrationChecksum, PreviewSchemaTestContract.ReadsMigrationChecksum,
         RegressionSchemaTestContract.DocumentPreviewsChecksum, RegressionSchemaTestContract.X12InterchangeBuildsChecksum, RegressionSchemaTestContract.ComparisonSettlementChecksum, MappingDraftSchemaTestContract.DraftChecksum, MappingDraftSchemaTestContract.PreviewChecksum, ChatSchemaContract.MappingWriteMigrationChecksum, ChatSchemaContract.WriteJournalMigrationChecksum, RegressionSchemaTestContract.CsvDocumentsChecksum, XmlPreviewSchemaAdmission.MigrationChecksum,
-        ChatSchemaContract.EditProposalMigrationChecksum, SpecSchemaTestContract.Checksum, CreationSchemaAdmission.MigrationChecksum, DocumentEvidenceSchemaAdmission.MigrationChecksum,
+        ChatSchemaContract.EditProposalMigrationChecksum, SpecSchemaTestContract.Checksum, MappingCreationChecksum, DocumentEvidenceChecksum,
         DocumentJsonSchemaAdmission.MigrationChecksum];
     [PostgresFact]
     public async Task EmptyInstallationAndRepeatedMigrationPreserveOriginalFactsAndJournal()

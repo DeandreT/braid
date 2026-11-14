@@ -12,6 +12,7 @@ test("owned HTTPS finite transport adversary", async () => {
     await fixture.open();
     await owner.run();
   } catch {
+    fixture.diagnostics.bodyFailed();
     primaryFailed = true;
   }
   const result = await cleanup.run(
@@ -19,6 +20,8 @@ test("owned HTTPS finite transport adversary", async () => {
     () => fixture.close(),
     () => owner.drain(),
   );
+  if (result.drainFailed) fixture.diagnostics.cleanupFailed("boundary");
+  fixture.diagnostics.write();
   if (result.primaryFailed || result.closeFailed || result.drainFailed)
     throw new CleanupFailure(result);
 });

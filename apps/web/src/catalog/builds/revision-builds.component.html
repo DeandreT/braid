@@ -4,32 +4,48 @@
   aria-labelledby="builds-title"
   [attr.aria-busy]="busy()"
 >
-  <h2 id="builds-title">{{ copy.title }}</h2>
-  <p>
-    Prepare this saved version using the test result selected below. This will
-    not change the version currently in use.
-  </p>
-  <weft-help-link [section]="'builds'">About builds</weft-help-link>
-  @if (!capabilities()) {
-    @if (pending()) {
-      <p role="status">
-        A previous request is still being tracked. Check access to its result
-        before sending another request.
+  <header class="builds-heading">
+    <div>
+      <h2 id="builds-title">{{ copy.title }}</h2>
+      <p>
+        Prepare this saved version using the test result selected below. This
+        will not change the version currently in use.
       </p>
-    }
-    @if (busy()) {
-      <p role="status">Loading preparation records…</p>
-    } @else {
-      <button
-        class="catalog-button catalog-button-primary"
-        type="button"
-        (click)="load()"
-      >
-        {{ copy.load }}
-      </button>
-    }
+    </div>
+    <weft-help-link [section]="'builds'">About builds</weft-help-link>
+  </header>
+  @if (!capabilities()) {
+    <section
+      class="builds-load-controls"
+      aria-labelledby="builds-controls-title"
+    >
+      <h3 id="builds-controls-title">Preparation controls</h3>
+      @if (error(); as value) {
+        <div class="builds-error" role="alert">
+          <strong>Preparation unavailable</strong>
+          <p>{{ value }}</p>
+        </div>
+      }
+      @if (pending()) {
+        <p role="status">
+          A previous request is still being tracked. Check access to its result
+          before sending another request.
+        </p>
+      }
+      @if (busy()) {
+        <p role="status">Loading preparation records…</p>
+      } @else {
+        <button
+          class="catalog-button catalog-button-primary"
+          type="button"
+          (click)="load()"
+        >
+          {{ copy.load }}
+        </button>
+      }
+    </section>
   }
-  @if (error(); as value) {
+  @if (capabilities() && error(); as value) {
     <p class="builds-error" role="alert">{{ value }}</p>
   }
   @if (notice(); as value) {
@@ -104,205 +120,212 @@
         </div>
       </section>
     }
-    <section class="builds-section" aria-labelledby="builds-environment-title">
-      <h3 id="builds-environment-title">Environment version</h3>
-      <div class="builds-actions">
+    <div class="builds-setup">
+      <section
+        class="builds-section"
+        aria-labelledby="builds-environment-title"
+      >
+        <h3 id="builds-environment-title">Environment version</h3>
+        <div class="builds-actions">
+          <button
+            class="catalog-button"
+            type="button"
+            (click)="loadEnvironments()"
+            [disabled]="busy()"
+          >
+            Refresh environments
+          </button>
+          @if (canAdminister()) {
+            <button
+              class="catalog-button"
+              type="button"
+              (click)="loadEnvironmentAdministration()"
+              [disabled]="busy()"
+            >
+              Environment administration
+            </button>
+          }
+        </div>
+        @if (environments(); as page) {
+          <label
+            >Environment version
+            <select
+              aria-label="Environment version"
+              [ngModel]="
+                selectedEnvironment()
+                  ? environmentKey(selectedEnvironment()!)
+                  : ''
+              "
+              (ngModelChange)="selectEnvironment($event)"
+              [disabled]="busy() || !!pending()"
+            >
+              <option value="">Select a version</option>
+              @for (item of page.environments; track environmentKey(item)) {
+                <option [value]="environmentKey(item)">
+                  {{ item.reference.environmentId }} · v{{
+                    item.reference.version
+                  }}
+                  · {{ item.active ? "Active" : "Inactive" }}
+                </option>
+              }
+            </select>
+          </label>
+          @if (!page.environments.length) {
+            <p>No environment versions on this page.</p>
+          }
+          @if (page.nextEnvironmentId) {
+            <button
+              class="catalog-button"
+              type="button"
+              (click)="loadEnvironments(true)"
+              [disabled]="busy()"
+            >
+              Next environments
+            </button>
+          }
+        }
+        @if (selectedEnvironment(); as value) {
+          <p>
+            {{ value.active ? "Active" : "Retained, inactive" }} ·
+            {{ value.profile.runtime }} {{ value.profile.runtimeVersion }} · v{{
+              value.reference.version
+            }}.
+          </p>
+        }
+        @if (environmentCapabilities(); as administration) {
+          @if (administration.canCreateVersions) {
+            <p>
+              Administrators register only a server-offered profile. A new
+              version supersedes the old one.
+            </p>
+            @if (administration.documentProfile || administration.csvProfile) {
+              <label
+                >Compiler profile<select
+                  aria-label="Compiler profile"
+                  [ngModel]="documentEnvironment()"
+                  (ngModelChange)="documentEnvironment.set($event)"
+                >
+                  <option ngValue="json">Legacy JSON</option>
+                  @if (administration.documentProfile) {
+                    <option ngValue="document">
+                      Declared document formats
+                    </option>
+                  }
+                  @if (administration.csvProfile) {
+                    <option ngValue="csv">CSV / TSV with native dialect</option>
+                  }
+                  @if (administration.interchangeProfile) {
+                    <option ngValue="interchanges">
+                      X12 MapForce interchanges
+                    </option>
+                  }
+                </select></label
+              >
+            }
+            <div class="builds-actions">
+              <button
+                class="catalog-button"
+                type="button"
+                (click)="registerEnvironment()"
+                [disabled]="busy() || !!pending()"
+              >
+                Register new environment
+              </button>
+              <button
+                class="catalog-button"
+                type="button"
+                (click)="registerEnvironment(true)"
+                [disabled]="
+                  busy() || !!pending() || !selectedEnvironment()?.active
+                "
+              >
+                Register next version
+              </button>
+            </div>
+          } @else {
+            <p>Your current access cannot create environment versions.</p>
+          }
+        }
+      </section>
+      <section class="builds-section" aria-labelledby="builds-evidence-title">
+        <h3 id="builds-evidence-title">Required test result</h3>
+        <p>
+          Select a completed run to check whether its result matches the saved
+          expectation for this version. Build qualification requires exact
+          bytes; a CSV row-comparison pass does not qualify a build.
+        </p>
         <button
           class="catalog-button"
           type="button"
-          (click)="loadEnvironments()"
+          (click)="loadEvidence()"
           [disabled]="busy()"
         >
-          Refresh environments
+          Refresh saved regression runs
         </button>
-        @if (canAdminister()) {
-          <button
-            class="catalog-button"
-            type="button"
-            (click)="loadEnvironmentAdministration()"
-            [disabled]="busy()"
-          >
-            Environment administration
-          </button>
-        }
-      </div>
-      @if (environments(); as page) {
-        <label
-          >Environment version
-          <select
-            aria-label="Environment version"
-            [ngModel]="
-              selectedEnvironment()
-                ? environmentKey(selectedEnvironment()!)
-                : ''
-            "
-            (ngModelChange)="selectEnvironment($event)"
-            [disabled]="busy() || !!pending()"
-          >
-            <option value="">Select a version</option>
-            @for (item of page.environments; track environmentKey(item)) {
-              <option [value]="environmentKey(item)">
-                {{ item.reference.environmentId }} · v{{
-                  item.reference.version
-                }}
-                · {{ item.active ? "Active" : "Inactive" }}
-              </option>
+        @if (evidencePage(); as page) {
+          <ul class="builds-list">
+            @for (item of page.runs; track item.runId) {
+              @if (isCurrent(item)) {
+                <li>
+                  <div>
+                    Test version {{ item.version }} · {{ label(item.state) }}
+                    <details>
+                      <summary>Run reference</summary>
+                      <code>{{ item.runId }}</code>
+                    </details>
+                  </div>
+                  <button
+                    class="catalog-button"
+                    type="button"
+                    (click)="selectEvidence(item.runId)"
+                    [disabled]="
+                      busy() || !!pending() || item.state !== 'completed'
+                    "
+                  >
+                    Verify this evidence
+                  </button>
+                </li>
+              }
             }
-          </select>
-        </label>
-        @if (!page.environments.length) {
-          <p>No environment versions on this page.</p>
+          </ul>
+          @if (page.nextRunId) {
+            <button
+              class="catalog-button"
+              type="button"
+              (click)="loadEvidence(true)"
+              [disabled]="busy()"
+            >
+              Next regression runs
+            </button>
+          }
         }
-        @if (page.nextEnvironmentId) {
-          <button
-            class="catalog-button"
-            type="button"
-            (click)="loadEnvironments(true)"
-            [disabled]="busy()"
-          >
-            Next environments
-          </button>
-        }
-      }
-      @if (selectedEnvironment(); as value) {
-        <p>
-          {{ value.active ? "Active" : "Retained, inactive" }} ·
-          {{ value.profile.runtime }} {{ value.profile.runtimeVersion }} · v{{
-            value.reference.version
-          }}.
-        </p>
-      }
-      @if (environmentCapabilities(); as administration) {
-        @if (administration.canCreateVersions) {
-          <p>
-            Administrators register only a server-offered profile. A new version
-            supersedes the old one.
+        @if (evidence(); as value) {
+          <p role="status">
+            Result matches the saved expectation, including formatting.
           </p>
-          @if (administration.documentProfile || administration.csvProfile) {
-            <label
-              >Compiler profile<select
-                aria-label="Compiler profile"
-                [ngModel]="documentEnvironment()"
-                (ngModelChange)="documentEnvironment.set($event)"
-              >
-                <option ngValue="json">Legacy JSON</option>
-                @if (administration.documentProfile) {
-                  <option ngValue="document">Declared document formats</option>
-                }
-                @if (administration.csvProfile) {
-                  <option ngValue="csv">CSV / TSV with native dialect</option>
-                }
-                @if (administration.interchangeProfile) {
-                  <option ngValue="interchanges">
-                    X12 MapForce interchanges
-                  </option>
-                }
-              </select></label
-            >
-          }
-          <div class="builds-actions">
-            <button
-              class="catalog-button"
-              type="button"
-              (click)="registerEnvironment()"
-              [disabled]="busy() || !!pending()"
-            >
-              Register new environment
-            </button>
-            <button
-              class="catalog-button"
-              type="button"
-              (click)="registerEnvironment(true)"
-              [disabled]="
-                busy() || !!pending() || !selectedEnvironment()?.active
-              "
-            >
-              Register next version
-            </button>
-          </div>
-        } @else {
-          <p>Your current access cannot create environment versions.</p>
+          <details class="builds-evidence-reference">
+            <summary>Selected test result reference</summary>
+            <code>{{ value.runId }}</code>
+          </details>
         }
-      }
-    </section>
-    <section class="builds-section" aria-labelledby="builds-evidence-title">
-      <h3 id="builds-evidence-title">Required test result</h3>
-      <p>
-        Select a completed run to check whether its result matches the saved
-        expectation for this version. Build qualification requires exact bytes;
-        a CSV row-comparison pass does not qualify a build.
-      </p>
-      <button
-        class="catalog-button"
-        type="button"
-        (click)="loadEvidence()"
-        [disabled]="busy()"
-      >
-        Refresh saved regression runs
-      </button>
-      @if (evidencePage(); as page) {
-        <ul class="builds-list">
-          @for (item of page.runs; track item.runId) {
-            @if (isCurrent(item)) {
-              <li>
-                <div>
-                  Test version {{ item.version }} · {{ label(item.state) }}
-                  <details>
-                    <summary>Run reference</summary>
-                    <code>{{ item.runId }}</code>
-                  </details>
-                </div>
-                <button
-                  class="catalog-button"
-                  type="button"
-                  (click)="selectEvidence(item.runId)"
-                  [disabled]="
-                    busy() || !!pending() || item.state !== 'completed'
-                  "
-                >
-                  Verify this evidence
-                </button>
-              </li>
-            }
-          }
-        </ul>
-        @if (page.nextRunId) {
+        <div class="builds-actions">
           <button
-            class="catalog-button"
+            class="catalog-button builds-primary"
             type="button"
-            (click)="loadEvidence(true)"
-            [disabled]="busy()"
+            (click)="approve()"
+            [disabled]="
+              busy() ||
+              !!pending() ||
+              !cap.approveBuilds ||
+              !selectedEnvironment()?.active ||
+              !evidence()
+            "
           >
-            Next regression runs
+            {{ copy.approve }}
           </button>
-        }
-      }
-      @if (evidence(); as value) {
-        <p role="status">
-          Result matches the saved expectation, including formatting.
-        </p>
-        <details class="builds-evidence-reference">
-          <summary>Selected test result reference</summary>
-          <code>{{ value.runId }}</code>
-        </details>
-      }
-      <div class="builds-actions">
-        <button
-          class="catalog-button builds-primary"
-          type="button"
-          (click)="approve()"
-          [disabled]="
-            busy() ||
-            !!pending() ||
-            !cap.approveBuilds ||
-            !selectedEnvironment()?.active ||
-            !evidence()
-          "
-        >
-          {{ copy.approve }}
-        </button>
-      </div>
-    </section>
+        </div>
+      </section>
+    </div>
     <section class="builds-section" aria-labelledby="builds-approvals-title">
       <h3 id="builds-approvals-title">{{ copy.approvals }}</h3>
       <button
@@ -438,73 +461,84 @@
       </button>
       @if (history(); as page) {
         @if (workbench()) {
-          <table class="wb-build-table" [attr.aria-label]="copy.history">
-            <thead>
-              <tr>
-                <th>Preparation</th>
-                <th>State</th>
-                <th>Prepared file</th>
-                <th>Version</th>
-                <th>Started (UTC)</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (item of page.runs; track item.buildId) {
+          <div
+            class="builds-table-region"
+            role="region"
+            [attr.aria-label]="copy.history"
+            tabindex="0"
+          >
+            <table class="wb-build-table" [attr.aria-label]="copy.history">
+              <thead>
                 <tr>
-                  <td>
-                    <button
-                      class="catalog-button"
-                      type="button"
-                      (click)="openRun(item.buildId)"
-                      [disabled]="busy() || !!pending()"
-                    >
-                      {{ copy.openResult }}
-                    </button>
-                    <details>
-                      <summary>Identity</summary>
-                      <code>{{ item.buildId }}</code>
-                    </details>
-                  </td>
-                  <td>
-                    <weft-status-chip [status]="buildStatus(item.state)" />
-                    @if (item.outcome) {
+                  <th>Preparation</th>
+                  <th>State</th>
+                  <th>Prepared file</th>
+                  <th>Version</th>
+                  <th>Started (UTC)</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of page.runs; track item.buildId) {
+                  <tr
+                    [class.selected]="selectedRun()?.buildId === item.buildId"
+                  >
+                    <td>
+                      <button
+                        class="catalog-button"
+                        type="button"
+                        (click)="openRun(item.buildId)"
+                        [disabled]="busy() || !!pending()"
+                      >
+                        {{ copy.openResult }}
+                      </button>
                       <details>
-                        <summary>Technical details</summary>
-                        State: {{ item.state }} · Outcome: {{ item.outcome }}
+                        <summary>Identity</summary>
+                        <code>{{ item.buildId }}</code>
                       </details>
-                    }
-                  </td>
-                  <td>
-                    @if (item.artifact; as file) {
+                    </td>
+                    <td>
+                      <weft-status-chip [status]="buildStatus(item.state)" />
+                      @if (item.outcome) {
+                        <details>
+                          <summary>Technical details</summary>
+                          State: {{ item.state }} · Outcome: {{ item.outcome }}
+                        </details>
+                      }
+                    </td>
+                    <td>
+                      @if (item.artifact; as file) {
+                        <weft-metadata-value
+                          kind="bytes"
+                          label="Prepared file size"
+                          [value]="file.byteCount"
+                        />
+                      } @else {
+                        Not available
+                      }
+                    </td>
+                    <td>
+                      {{
+                        isCurrent(item)
+                          ? "Viewing this version"
+                          : "Other version"
+                      }}
+                    </td>
+                    <td>
                       <weft-metadata-value
-                        kind="bytes"
-                        label="Prepared file size"
-                        [value]="file.byteCount"
+                        kind="time"
+                        label="Preparation time"
+                        [value]="item.createdAtUtc"
                       />
-                    } @else {
-                      Not available
-                    }
-                  </td>
-                  <td>
-                    {{
-                      isCurrent(item) ? "Viewing this version" : "Other version"
-                    }}
-                  </td>
-                  <td>
-                    <weft-metadata-value
-                      kind="time"
-                      label="Preparation time"
-                      [value]="item.createdAtUtc"
-                    />
-                  </td>
-                </tr>
-              } @empty {
-                <tr>
-                  <td colspan="5">No preparations on this page.</td>
-                </tr>
-              }
-            </tbody>
-          </table>
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="5">No preparations on this page.</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
         } @else {
           <ul class="builds-list">
             @for (item of page.runs; track item.buildId) {

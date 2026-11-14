@@ -44,7 +44,7 @@ fields are explicit. Generations cross as exact decimal strings. Successful
 metadata identifies the immutable derivation and its actual start/finish times;
 pending or failed attempts do not become retained successful-report links.
 
-The nested Weft report preserves exact values, typed paths, native evidence,
+The nested braid report preserves exact values, typed paths, native evidence,
 coverage gaps and validation findings. False validation is a usable report.
 Validation links require an explicitly selected, independently verified matching
 projection; stored validation remains unlinked. Private storage references,

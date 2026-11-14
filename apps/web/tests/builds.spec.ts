@@ -91,7 +91,10 @@ test("the Prepare tab reads its records once when shown and nothing while hidden
     if (request.method() === "GET" && name) reads.push(name);
   });
   await buildFixture(page, false);
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Version 1");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    synthetic.mapping.name,
+  );
+  await expect(page.locator(".wb-version-number")).toHaveText("Version 1");
   await page.waitForTimeout(500);
   expect(reads).toEqual([]);
   await openPrepare(page);
@@ -469,7 +472,10 @@ test("controls requested during a routine refresh load after it without disturbi
   page,
 }) => {
   await buildFixture(page, false);
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Version 1");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    synthetic.mapping.name,
+  );
+  await expect(page.locator(".wb-version-number")).toHaveText("Version 1");
   let release!: () => void;
   const gate = new Promise<void>((resolve) => {
     release = resolve;
@@ -513,7 +519,10 @@ test("controls requested during a routine refresh load after it without disturbi
     "aria-busy",
     "true",
   );
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Version 1");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    synthetic.mapping.name,
+  );
+  await expect(page.locator(".wb-version-number")).toHaveText("Version 1");
 });
 
 test("a failed session check keeps the uncertain original request", async ({
@@ -826,6 +835,14 @@ test("narrow keyboard interaction keeps the build panel within the viewport", as
       exact: true,
     }),
   ).toBeVisible();
+  // The select is visible before the remaining preparation records finish loading.
+  // Native focus() is a no-op while that loading state keeps it disabled.
+  await expect(
+    panel(page).getByRole("combobox", {
+      name: "Environment version",
+      exact: true,
+    }),
+  ).toBeEnabled();
   await panel(page)
     .getByRole("combobox", { name: "Environment version", exact: true })
     .focus();

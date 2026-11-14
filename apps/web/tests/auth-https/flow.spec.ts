@@ -44,6 +44,7 @@ test("actual owned HTTPS authentication qualification", async () => {
       }
     }
   } catch {
+    fixture.diagnostics.bodyFailed();
     primary = true;
   }
   try {
@@ -51,5 +52,6 @@ test("actual owned HTTPS authentication qualification", async () => {
   } catch {
     cleanup = true;
   }
+  fixture.diagnostics.write();
   if (primary || cleanup) throw safeFailure();
 });

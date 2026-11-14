@@ -41,6 +41,7 @@ test("app and probe omit forbidden base tags and inline critical-CSS script hand
     .architect;
   for (const [target, index] of [
     ["build", "apps/web/index.html"],
+    ["build", "apps/web/index.dev.html"],
     [
       "browser-session-probe",
       "apps/web/tests/browser-session/probe-index.html",
@@ -62,6 +63,9 @@ test("app and probe omit forbidden base tags and inline critical-CSS script hand
     read("apps/web/src/main.ts"),
     /provide: APP_BASE_HREF, useValue: "\/"/,
   );
+  assert.deepEqual(config.build.configurations.devServer.assets[0].ignore, [
+    "edit/**",
+  ]);
 });
 
 test("a missing or changed header fails independently, including missing CSP", () => {

@@ -23,7 +23,7 @@ internal static class HistoricalIngestionSeed
     private const int MaximumTableRows = 64;
     // Bound by this build's exact manifest, not by database-supplied history.
     private static int MaximumJournalRows => MigrationRunner.EmbeddedMigrations.Count;
-    private const int MaximumSchemaRows = 2048;
+    private const int MaximumSchemaRows = 1024;
     private const int MaximumSnapshotBytes = 2 * 1024 * 1024;
     private static readonly (string Name, string Order)[] Tables =
     [
@@ -62,7 +62,17 @@ internal static class HistoricalIngestionSeed
     }
 
     private static async Task<IngestionReceipt> CommitAsync(PostgresCase test, ActorContext actor,
-        ProjectScope project, IngestionIntent intent, bool valid, CancellationToken cancellationToken)
+        ProjectScope project, IngestionIntent intent, bool valid, CancellationToken cancellationToken) =>
+        (await SeedAsync(test, actor, project, intent, valid, cancellationToken)).Receipt;
+
+    // Explicitly separate from the original two-script fixture. Used only by the genuine chat upgrade test.
+    internal static Task<(IngestionReceipt Receipt, IngestionClaim Claim)> SeedChatAppendAsync(PostgresCase test,
+        ActorContext actor, ProjectScope project, IngestionIntent intent, Guid key, bool commit) =>
+        SeedAsync(test, actor, project, intent, true, default, key, commit);
+
+    private static async Task<(IngestionReceipt Receipt, IngestionClaim Claim)> SeedAsync(PostgresCase test, ActorContext actor,
+        ProjectScope project, IngestionIntent intent, bool valid, CancellationToken cancellationToken,
+        Guid? chatKey = null, bool commit = true)
     {
         ArgumentNullException.ThrowIfNull(test);
         ArgumentNullException.ThrowIfNull(actor);
@@ -75,10 +85,16 @@ internal static class HistoricalIngestionSeed
             Add(migrationLock, "key", NpgsqlDbType.Bigint, MigrationLock);
             await migrationLock.ExecuteNonQueryAsync(cancellationToken);
         }
-        await RequireOriginalSchemaAsync(connection, transaction, cancellationToken);
+        if (chatKey is null) await RequireOriginalSchemaAsync(connection, transaction, cancellationToken);
+        else
+        {
+            if (chatKey == Guid.Empty || intent.Kind != IngestionOperationKind.Append || intent.HeadCondition is not EqualHead)
+                throw new InvalidOperationException("The historical chat fixture requires an exact append key and head.");
+            await RequireChatPrefixAsync(connection, transaction, cancellationToken);
+        }
 
         var operation = Guid.NewGuid();
-        var key = Guid.NewGuid();
+        var key = chatKey ?? Guid.NewGuid();
         var revision = new RevisionScope(project.OrganizationId, project.ProjectId,
             intent.Target?.MappingId ?? Guid.NewGuid(), Guid.NewGuid());
         var native = new PrivateObjectReference(PrivateObjectId.Create(revision, PrivateObjectClass.NativeArtifact),
@@ -97,7 +113,7 @@ internal static class HistoricalIngestionSeed
              expected_head_revision_id,phase,lease_generation,claim_count)
             VALUES (@organization,@project,@operation,@actor,@kind,@key,1,@fingerprint,@target,@mapping,@revision,
                     @object,'native',@digest,@bytes,@document,@dependencies,@backend,@engine,@build,@adapter,
-                    @policy,@limit,@filename,@name,@description,'any',NULL,'reserved',0,0)
+                    @policy,@limit,@filename,@name,@description,@head,@expected,'reserved',0,0)
             RETURNING created_at
             """))
         {
@@ -123,6 +139,8 @@ internal static class HistoricalIngestionSeed
             Add(reserve, "filename", NpgsqlDbType.Text, intent.OriginalFilename);
             Add(reserve, "name", NpgsqlDbType.Text, intent.CreateMetadata?.Name);
             Add(reserve, "description", NpgsqlDbType.Text, intent.CreateMetadata?.Description);
+            Add(reserve, "head", NpgsqlDbType.Text, intent.HeadCondition is EqualHead ? "equal" : "any");
+            Add(reserve, "expected", NpgsqlDbType.Uuid, (intent.HeadCondition as EqualHead)?.RevisionId);
             reservedAt = await ReadTimestampAsync(reserve, cancellationToken);
         }
         var facts = new ReservedIngestionFacts(project, operation, actor.PrincipalId, key, fingerprint, intent,
@@ -236,6 +254,15 @@ internal static class HistoricalIngestionSeed
             await RequireOneAsync(ready, cancellationToken);
         }
 
+        var claimFacts = new IngestionClaim(project, operation, actor.PrincipalId, instance, token, 1, startedAt.AddSeconds(120));
+        if (!commit)
+        {
+            var pending = new IngestionReceipt(facts, IngestionPhase.Ready, 1, 1, 1, stagedAt, 1,
+                [new IngestionAttemptReceipt(1, startedAt, finishedAt, completion, classification)], null, null);
+            await transaction.CommitAsync(cancellationToken);
+            return (pending, claimFacts);
+        }
+
         long sequence = 1;
         if (intent.Kind == IngestionOperationKind.Append)
         {
@@ -340,7 +367,22 @@ internal static class HistoricalIngestionSeed
         var receipt = new IngestionReceipt(facts, IngestionPhase.Committed, 1, 1, 1, stagedAt, 1,
             [new IngestionAttemptReceipt(1, startedAt, finishedAt, completion, classification)], committed, publishedAt);
         await transaction.CommitAsync(cancellationToken);
-        return receipt;
+        return (receipt, claimFacts);
+    }
+
+    private static async Task RequireChatPrefixAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct)
+    {
+        await using var command = Command(connection, transaction, """
+            SELECT version,checksum FROM weft.schema_migrations
+            WHERE current_user='weft_migrator' AND session_user=current_user ORDER BY version
+            """);
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        foreach (var migration in MigrationRunner.EmbeddedMigrations.Take(40))
+        {
+            if (!await reader.ReadAsync(ct) || reader.GetInt32(0) != migration.Version || reader.GetString(1) != migration.Checksum)
+                throw new InvalidOperationException("Historical chat seeding requires the exact populated version-40 prefix.");
+        }
+        if (await reader.ReadAsync(ct)) throw new InvalidOperationException("Historical chat seeding cannot run after version 40.");
     }
 
     private static async Task RequireOriginalSchemaAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
@@ -459,16 +501,23 @@ internal static class HistoricalIngestionSeed
             WHERE namespace.nspname='weft' ORDER BY relation.relname
             """),
         ("columns", """
-            SELECT jsonb_build_object('table',relation.relname,'number',attribute.attnum,'name',attribute.attname,
+            SELECT CASE WHEN count(*)<=1024 THEN jsonb_build_object('table',relation.relname,
+                'columns',jsonb_agg(column_row.value ORDER BY column_row.number)) END AS value
+            FROM pg_catalog.pg_class relation
+            JOIN pg_catalog.pg_namespace namespace ON namespace.oid=relation.relnamespace
+            CROSS JOIN LATERAL (
+              SELECT attribute.attnum AS number, jsonb_build_object('number',attribute.attnum,'name',attribute.attname,
                 'type',format_type(attribute.atttypid,attribute.atttypmod),'notNull',attribute.attnotnull,
                 'identity',attribute.attidentity,'generated',attribute.attgenerated,
                 'default',pg_get_expr(defaults.adbin,defaults.adrelid),
                 'acl',ARRAY(SELECT entry::text FROM unnest(attribute.attacl) entry ORDER BY entry::text)) AS value
-            FROM pg_catalog.pg_attribute attribute JOIN pg_catalog.pg_class relation ON relation.oid=attribute.attrelid
-            JOIN pg_catalog.pg_namespace namespace ON namespace.oid=relation.relnamespace
-            LEFT JOIN pg_catalog.pg_attrdef defaults ON defaults.adrelid=relation.oid AND defaults.adnum=attribute.attnum
+              FROM pg_catalog.pg_attribute attribute
+              LEFT JOIN pg_catalog.pg_attrdef defaults ON defaults.adrelid=relation.oid AND defaults.adnum=attribute.attnum
+              WHERE attribute.attrelid=relation.oid AND attribute.attnum>0 AND NOT attribute.attisdropped
+              ORDER BY attribute.attnum LIMIT 1025
+            ) column_row
             WHERE namespace.nspname='weft' AND relation.relkind IN ('r','p','v','m','f')
-              AND attribute.attnum>0 AND NOT attribute.attisdropped ORDER BY relation.relname,attribute.attnum
+            GROUP BY relation.relname ORDER BY relation.relname
             """),
         ("functions", """
             SELECT jsonb_build_object('name',function.proname,'identityArguments',pg_get_function_identity_arguments(function.oid),

@@ -162,7 +162,7 @@ const ids = (href: string): Scope => {
 };
 const signInStatus = (page: Page) =>
   page
-    .getByRole("region", { name: "Sign in to Weft" })
+    .getByRole("region", { name: "Sign in to braid" })
     .getByRole("status")
     .first();
 const workflow = (page: Page, name: string) =>

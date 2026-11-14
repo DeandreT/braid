@@ -28,8 +28,8 @@ public sealed class ServerHostPublishedTests(PostgresFixture postgres)
             await using var host = ServerHostProcess.Start(environment);
             Uri origin = await host.WaitForLoopbackListenerAsync(); using var client = ServerHostHttp.Client(origin);
             ServerHostHttp.Mode(await ServerHostHttp.StartupStatusAsync(client), "disabled");
-            // Disabled mode retains the configured port-zero origin; the bound socket is deliberately dynamic.
-            await ServerHostBrowserSecurity.CheckAsync(client, "http://127.0.0.1:0");
+            // Disabled mode admits the actual listener origin after the dynamic socket binds.
+            await ServerHostBrowserSecurity.CheckAsync(client);
             ServerHostHttp.Mode(await ServerHostHttp.SendAsync(client, "/api/auth/session", headers: new Dictionary<string, string> { ["X-Weft-Session"] = "1" }), "disabled");
             var health = await ServerHostHttp.SendAsync(client, "/api/v1/health");
             using var healthy = health.Json();

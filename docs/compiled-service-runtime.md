@@ -37,7 +37,7 @@ bound into the build intent. Explicit zero-byte CSV frames are valid; missing
 frames are not. JSON/EDI retain their nonempty input rules and original wire
 representations. Media comes from the admitted boundary, not a filename.
 
-The generated parser enforces native CSV input limits. Output retains Weft's
+The generated parser enforces native CSV input limits. Output retains braid's
 smaller requested byte limit and is checked for the native 1 MiB cell,
 100,000-record (including header), 256-column and 1,000,000-node ceilings before
 publication. Typed CSV size failures return a resource-limit outcome without

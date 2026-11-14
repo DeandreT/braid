@@ -16,7 +16,7 @@ internal sealed class RevisionReportCommitAckLossRelay : IAsyncDisposable
 {
     private const int MaximumFrameLength = 4 * 1024 * 1024;
     private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
-    private readonly CancellationTokenSource _lifetime = new(TimeSpan.FromSeconds(90));
+    private readonly CancellationTokenSource _lifetime = new(TimeSpan.FromSeconds(20));
     private readonly TaskCompletionSource _acknowledgementWithheld = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource _disconnect = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly string _upstreamHost;

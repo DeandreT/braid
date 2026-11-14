@@ -1257,7 +1257,7 @@ test("signed-out session cannot load private chat", async ({ page }) => {
   const f = await fixture(page, { session: true });
   await page.goto(f.data.browserPath);
   await expect(
-    page.getByRole("heading", { name: "Sign in to Weft", exact: true }),
+    page.getByRole("heading", { name: "Sign in to braid", exact: true }),
   ).toBeVisible();
   await expect(page).toHaveURL(/\/sign-in\?returnTo=/);
   expect(f.reads.filter((p) => p.includes("/chat"))).toHaveLength(0);

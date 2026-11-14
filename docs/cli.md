@@ -1,4 +1,4 @@
-# Weft CLI
+# braid CLI
 
 ## Administration
 
@@ -30,10 +30,13 @@ Administrative edits are not retried after uncertain transport results. Read the
 current state before sending another edit. Role boundaries, last-administrator
 protection and soft deactivation are described in [Administration](administration.md).
 
-`weft` works with the Weft API as the signed-in user. It signs in to Microsoft Entra ID as a
+`weft` works with the braid API as the signed-in user. It signs in to Microsoft Entra ID as a
 public client application and sends the user's delegated access token, so every command has
 exactly the user's own project roles and the server's feature settings, as in the browser.
 Source: `dotnet/apps/Weft.Cli`.
+
+The command remains `weft`, and package names, profiles, token-cache paths and
+scope identifiers retain their existing technical names.
 
 ## Install
 
@@ -60,12 +63,12 @@ The CLI targets linux-x64 and win-x64.
 
 ## Entra registration and server settings
 
-The CLI needs its own app registration in the Weft tenant:
+The CLI needs its own app registration in the braid tenant:
 
 - a public client: enable **Allow public client flows** for device-code sign-in, and add the
   redirect URI `http://localhost` on the **Mobile and desktop applications** platform for
   `weft login --browser`;
-- a delegated API permission for the Weft API application's scope (for example
+- a delegated API permission for the braid API application's scope (for example
   `api://<Weft application ID>/weft.api`), with the consent the tenant requires.
 
 The server accepts the CLI's tokens only when bearer access is enabled for this client ID; see
@@ -90,7 +93,7 @@ weft profile remove <name>
   loopback address, for local development.
 - The authority is always `https://login.microsoftonline.com/<tenant>`. Nothing in a request,
   a profile or the environment can point sign-in elsewhere.
-- The scope must be the delegated Weft scope; `.default` scopes are refused.
+- The scope must be the delegated braid scope; `.default` scopes are refused.
 
 Profiles live in `config.json` in the CLI's directory: `WEFT_CONFIG_DIR` if it is set,
 otherwise `%APPDATA%\Weft` on Windows and `$XDG_CONFIG_HOME/weft` (or `~/.config/weft`)
@@ -299,7 +302,7 @@ build proof.
 | 10 | Rate limited after the retries (`429`) |
 | 11 | Feature disabled or temporarily unavailable (`404 unavailable`, `503`) |
 | 12 | Server failure (`5xx`) |
-| 13 | The server was unreachable, or its response was not a valid Weft response |
+| 13 | The server was unreachable, or its response was not a valid braid response |
 | 14 | No operating-system protected token store |
 | 15 | A waited-for operation finished without success |
 | 130 | Canceled |

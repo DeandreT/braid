@@ -988,7 +988,7 @@ test("the public sign-in page remains reachable while protected status is unavai
   guarded(async () => {
     app.plans.set("status", refused(503));
     await app.open("/sign-in");
-    await expect.poll(() => page.title()).toBe("Sign in · Weft");
+    await expect.poll(() => page.title()).toBe("Sign in · braid");
     await expect(
       page.getByRole("button", { name: "Check again", exact: true }),
     ).toBeVisible();

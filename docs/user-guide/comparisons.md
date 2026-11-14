@@ -21,7 +21,7 @@ Then choose the other revision from the list with **Use as left** or
 **Use as right**. **Swap left and right** exchanges them.
 
 The comparison starts when both revisions have a saved explanation. If one side
-has none, Weft says so and links to that revision's report controls, where you
+has none, braid says so and links to that revision's report controls, where you
 can [generate it](reports.md#generate-a-report). A comparison never generates
 reports itself. Validation is compared when it has been saved for both sides.
 
@@ -32,7 +32,7 @@ Results are grouped by kind, such as fields or rules. Each item is one of:
 - **Matched**: found in both revisions. Its changed aspects are listed.
 - **Only in left** or **Only in right**: found in one revision only. A renamed
   field appears once on each side.
-- **Ambiguous**: more than one counterpart is possible, so Weft doesn't pair
+- **Ambiguous**: more than one counterpart is possible, so braid doesn't pair
   them. The possible counterparts on each side are listed.
 
 Matched items with no observed difference are hidden. Choose
@@ -46,7 +46,7 @@ items were left out to keep the result within limits, or some facts couldn't be
 compared. Facts that couldn't be compared are marked with the reason, and are
 never reported as equal.
 
-Weft says no differences were observed only when both explanations are complete
+braid says no differences were observed only when both explanations are complete
 and nothing was uncertain or left out. Even then, matching explanations don't
 prove that the two revisions produce the same output. Run your
 [regression tests](regression-tests.md) on both to check that.

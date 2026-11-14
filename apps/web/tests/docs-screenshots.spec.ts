@@ -568,9 +568,13 @@ test("workbench sample preview", async ({ page }, testInfo) => {
   const runId = id("80000000", 1);
   const runPath = `/api/v1/organizations/${scope.organizationId}/previews/${runId}`;
   const output = actual.replace("10/21/2026", "2026-10-21");
-  const run = (state: "queued" | "completed") => ({
+  const run = (
+    state: "queued" | "completed",
+  ): Schema["CatalogPreviewRunV1"] => ({
     runId,
     revision: scope,
+    subjectKind: "revision",
+    draft: null,
     requestFingerprint: "b".repeat(64),
     currentDateTime: "2026-10-24T14:58:00Z",
     state,

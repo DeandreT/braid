@@ -1,5 +1,7 @@
 # Document worker host
 
+The initial Windows/source verification below predates the [completed local installed-worker qualification](spec-document-installed-qualification.md) and [hostile/lifecycle follow-up](spec-document-installed-hostile-qualification.md): four initial cases and the separate 16-case follow-up passed with zero failures or skips. That reviewed bounded local Linux scope is closed; AppArmor enforcement and production-environment equivalence are not established. Different/final installations need their own approved identities and executed results. Public PDF factory and filesystem spec-store refusal gates remain unchanged; these results do not activate them.
+
 ## Startup contract
 
 With spec intake enabled, `WEFT_SPEC_DOCUMENT_WORKERS` accepts `disabled` (default) or `optional`. Disabled startup reads no worker settings and opens no workers or installation paths. With intake disabled, worker configuration is ignored. Unknown modes or malformed/missing optional-mode settings fail configuration validation.
@@ -44,7 +46,7 @@ Windows portable tests cover disabled/default behavior, configuration pins/paths
 & $env:DOTNET_HOST_PATH test dotnet/tests/Weft.Tests/Weft.Tests.csproj --filter 'FullyQualifiedName~SpecDocumentHostTests|FullyQualifiedName~SpecDocumentHostPostgresTests' -m:1 -p:OpenApiGenerateDocuments=false
 ```
 
-Linux source build commands (run on a Linux build machine; not executed by this Windows unit):
+Linux source build commands (not executed by the initial Windows implementation unit; later installed execution is linked above):
 
 ```sh
 dotnet publish dotnet/apps/Weft.DocumentWorker/Weft.DocumentWorker.csproj -c Release -r linux-x64 --self-contained false -p:OpenApiGenerateDocuments=false
@@ -64,12 +66,12 @@ This gate exercises real installation validation, both workers' startup probes, 
 
 The same Linux test class also includes a real hardlink regression: it creates disjoint directories, mutates a file through its hardlink and verifies refusal using synthetic bind-mount records. This test runs automatically on Linux without mount privileges. It does not claim to exercise actual read-only bind mounts.
 
-Actual Linux execution remains pending. Deployment qualification must additionally exercise readable/malformed/encrypted/image-only documents, resource exhaustion, filesystem/network/process denial, cancellation, cleanup and shutdown under the final deployment restrictions. Portable tests and source compilation do not establish those results.
+At the initial Windows implementation boundary, actual Linux execution was pending, with readable/malformed/encrypted/image-only documents, resource exhaustion, filesystem/network/process denial, cancellation, cleanup and shutdown under final deployment restrictions identified for qualification. The later records above close their stated bounded local scope and distinguish exact-parser results from shared-control and separately pinned probe evidence. This historical checklist does not expand that closed scope. Portable tests and source compilation alone do not establish those results.
 
-### Recorded source verification
+### Historical Windows/source verification
 
-On Windows with .NET 10.0.112 and isolated PostgreSQL 16.15: the host/intake/Office/PDF regression selection passed 218 tests, with eight skips (seven existing Linux HTTP gates and the new opt-in installation gate). After adding strict lowercase-pin validation and native-entrypoint failure coverage, the host selection passed 19 tests with the one Linux installation skip. Actual schema-46 validation ran successfully in both selections. Linux build and startup commands above have not been executed here.
+On Windows with .NET 10.0.112 and isolated PostgreSQL 16.15: the host/intake/Office/PDF regression selection passed 218 tests, with eight skips (seven existing Linux HTTP gates and the new opt-in installation gate). After adding strict lowercase-pin validation and native-entrypoint failure coverage, the host selection passed 19 tests with the one Linux installation skip. Actual schema-46 validation ran successfully in both selections. Linux build and startup commands above had not been executed in that Windows run.
 
-After independent-review fixes for disjoint-root hardlink aliases and retained cleanup ownership: focused host tests passed **24**, with **two Linux skips**; the full host/intake/Office/PDF regression selection passed **227**, with **nine skips** (seven existing Linux HTTP gates plus installation and hardlink tests). Cleanup regressions cover pre-pair factory failure, unavailable and admitted worker disposal failures, repeated stop/dispose faults, and propagation of unknown startup failures. These runs include actual PostgreSQL schema-46 checks. Actual Linux hardlink and installation execution remain pending.
+After independent-review fixes for disjoint-root hardlink aliases and retained cleanup ownership: focused host tests passed **24**, with **two Linux skips**; the full host/intake/Office/PDF regression selection passed **227**, with **nine skips** (seven existing Linux HTTP gates plus installation and hardlink tests). Cleanup regressions cover pre-pair factory failure, unavailable and admitted worker disposal failures, repeated stop/dispose faults, and propagation of unknown startup failures. These runs include actual PostgreSQL schema-46 checks. Actual Linux hardlink and installation execution were pending at that historical boundary.
 
 After the pre-registration filesystem-probe fix: focused host tests passed **30**, with **two Linux skips**; regression selection passed **233**, with **nine skips**. Both production probe routines are exercised with actual directory creation and nonempty-directory deletion failure, injected access-denied deletion, retained identical faults across startup/stop/dispose, and successful directory cleanup. These portable tests invoke the constructor's probe routine directly; they do not claim Linux constructor/process qualification.

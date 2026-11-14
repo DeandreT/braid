@@ -72,6 +72,7 @@ fn xml_is_explicit_and_carries_role_valid_metadata_not_design_file_extensions() 
         .unwrap();
     assert!(metadata.schema_hints.is_none());
     assert!(artifact.csv_dialect.is_none());
+    assert!(artifact.flex_text_settings.is_none());
     let output = std::str::from_utf8(&outcome.outputs[0]).unwrap();
     assert!(output.contains("<code>A</code>"));
     assert!(output.contains("<quantity>2</quantity>"));

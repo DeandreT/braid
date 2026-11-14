@@ -16,7 +16,7 @@ test("HTTPS session status rejects missing, different and internally altered tex
     null,
     "",
     " \n\t ",
-    "Signed in to Weft",
+    "Signed in to braid",
     "Not  signed in",
     "Not\nsigned in",
     "Not signed in: unavailable",

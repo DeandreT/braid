@@ -6,7 +6,7 @@ summary: Save test cases with expected output, run them against a revision and r
 ---
 
 A regression test saves sample inputs together with the output you expect. When
-you run it, Weft compares the real output with the expected output using the
+you run it, braid compares the real output with the expected output using the
 case's saved comparison policy. Exact bytes is the default; the separately
 enabled CSV/TSV runtime also offers ordered row/cell comparison. Use test data,
 not production data.
@@ -19,7 +19,7 @@ not production data.
 
 ## Open the tests
 
-In the workbench, open the **Tests** view. Weft loads the saved test cases
+In the workbench, open the **Tests** view. braid loads the saved test cases
 and your run history, and shows the default comparison. Use
 **Filter cases** to find a case, and choose **Open** next to it to see its
 inputs, parameters, test date and time, and expected outputs.
@@ -94,13 +94,13 @@ Queued and running tests can be refreshed or cancelled.
 A finished run shows one of:
 
 - **Matches expected result**: every output matches under the saved policy.
-- **Result differs from expected**: at least one output differs. Weft lists
+- **Result differs from expected**: at least one output differs. braid lists
   each differing output, with a byte offset for byte differences or a row and
   column for CSV cell differences.
 - **Expected result needed**: the test has no expected output.
 - **Could not run this test successfully**: the run failed, so there was no
   output to compare.
-- **Comparison not supported**: Weft can't compare this kind of result.
+- **Comparison not supported**: braid can't compare this kind of result.
 - **Comparison not performed**: the comparison could not be evaluated, for
   example because a CSV/TSV document is invalid. Read the diagnostic before
   changing or rerunning the case.
@@ -119,7 +119,7 @@ runs. **Refresh run history** reads it again.
 
 ## If a save or run isn't confirmed
 
-If Weft can't confirm whether a test was saved or a run started, it keeps the
+If braid can't confirm whether a test was saved or a run started, it keeps the
 original request and shows **Check previous save** or **Check previous run**.
 Choose **Check saved version** or **Check original run** to see what happened,
 or retry the original request. Retrying never creates a second case or run. See

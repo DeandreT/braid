@@ -16,6 +16,7 @@ import { TransportVector } from "./transport-vector";
 import { requestHeaders } from "./request-headers";
 import { PauseOwner, type PauseLease } from "./pause-owner";
 import { zeroBaseline, exactBackstops } from "./backstop-counters";
+import type { StageDiagnostics } from "./stage-diagnostics";
 
 type Pause = {
   requestId: string;
@@ -97,6 +98,7 @@ export class BrowserRootFetch {
     private readonly native: (request: AppRequest) => Promise<NativeReply>,
     private readonly app: (request: AppRequest) => Promise<MutationResult>,
     private readonly login: (body: string) => void,
+    private readonly diagnostics?: StageDiagnostics,
   ) {
     this.vector = new TransportVector(cfg, control);
   }
@@ -152,6 +154,7 @@ export class BrowserRootFetch {
         { urlPattern: "*", requestStage: "Response" },
       ],
     });
+    this.diagnostics?.body("baseline"); // Fetch.enable returned; no protocol operands.
     const counts = await this.control.call("counts");
     this.generation = counts.processGeneration;
     requireOwned(this.generation === 1);

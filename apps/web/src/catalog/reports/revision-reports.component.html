@@ -1,16 +1,29 @@
 @if (workbench()) {
   <section class="wb-reports" aria-label="Saved reports">
     <div class="wb-report-bar">
-      <h3 id="saved-explanation-title" tabindex="-1">
-        Explanation:
+      <h3
+        id="saved-explanation-title"
+        tabindex="-1"
+        [class.wb-report-failed]="
+          projection().response?.body?.state === 'failed'
+        "
+      >
+        <strong>Explanation:</strong>
         {{
           projection().response
             ? lifecycle(projection().response!.body.state)
             : phase(projection(), "projection")
         }}
       </h3>
-      <h3 id="saved-validation-title" tabindex="-1">
-        Validation:
+      <h3
+        id="saved-validation-title"
+        tabindex="-1"
+        [class.wb-report-failed]="
+          validation().response?.body?.state === 'failed' ||
+          validation().response?.body?.report?.isValid === false
+        "
+      >
+        <strong>Validation:</strong>
         {{
           validation().response?.body?.report
             ? validationTitle(validation().response!.body.report!)

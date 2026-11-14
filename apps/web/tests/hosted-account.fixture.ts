@@ -10,7 +10,7 @@ export async function expectSignedInAccount(page: Page): Promise<void> {
     exact: true,
   });
   await expect(menu.getByRole("status").first()).toHaveText(
-    "Signed in to Weft",
+    "Signed in to braid",
   );
   await trigger.click();
   await expect(trigger).toHaveAttribute("aria-expanded", "false");

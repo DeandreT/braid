@@ -193,7 +193,7 @@ public sealed class PostgresChatEditProposalTests(PostgresFixture fixture)
         Assert.Equal(1L, await f.Test.Case.ScalarAsync<long>("SELECT count(*) FROM weft.chat_edit_proposals WHERE generation_provenance::jsonb->>'Confirmed'='true'"));
     }
 
-    private sealed class ProposalFixture(PostgresIngestionTestSupport test, PostgresChatDatabase writerDb, PostgresChatDatabase approvalDb,
+    internal sealed class ProposalFixture(PostgresIngestionTestSupport test, PostgresChatDatabase writerDb, PostgresChatDatabase approvalDb,
         ChatMappingEditProposal proposal) : IAsyncDisposable
     {
         internal PostgresIngestionTestSupport Test => test;
@@ -226,7 +226,8 @@ public sealed class PostgresChatEditProposalTests(PostgresFixture fixture)
                     new(Guid.NewGuid(), ChatEventKind.ToolStarted, "{\"v\":1,\"call\":\"call-a\",\"name\":\"propose_mapping_edit\",\"ordinal\":1}"));
                 var checkpoint = MappingDraftPersistenceTests.Checkpoint(scope);
                 // Test-only trusted backend fixture admission; production mints this only inside ProposeAsync.
-                var content = new MappingEditProposal(checkpoint.Artifact, MappingEditScript.Parse(Encoding.UTF8.GetBytes(MappingEditScriptTests.Bind)), [])
+                var content = new MappingEditProposal(checkpoint.Artifact, MappingEditScript.Parse(Encoding.UTF8.GetBytes(MappingEditScriptTests.Bind)),
+                    [new("code", "Not mapped", "Constant")])
                 { VerifiedGeneration = new(test.Actor.PrincipalId, checkpoint.Evidence.Facts.Provenance) };
                 return new(test, writer, approval, new(key, id, round.RoundId, "call-a", 1, content));
             }

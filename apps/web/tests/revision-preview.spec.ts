@@ -450,7 +450,10 @@ test("headerless custom X12 stays raw without guessed boundaries", async ({
 async function open(page: Page) {
   await page.goto(revisionPath(scope));
   await page.getByRole("tab", { name: "Try sample", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Version 1");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    synthetic.mapping.name,
+  );
+  await expect(page.locator(".wb-version-number")).toHaveText("Version 1");
 }
 
 test("mixed X12 output keeps each interchange declaration and both business records", async ({

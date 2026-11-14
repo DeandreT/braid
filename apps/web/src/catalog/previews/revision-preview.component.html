@@ -1,10 +1,42 @@
-<section class="catalog-summary preview" aria-labelledby="sample-preview-title">
-  <h2 id="sample-preview-title">Sample preview</h2>
-  <p class="catalog-intro">
-    Run this saved revision on sample documents. Results are kept for a limited
-    time and only you can read them.
-  </p>
-  <weft-help-link [section]="'previews'">About samples</weft-help-link>
+<section
+  class="catalog-summary preview"
+  role="region"
+  aria-labelledby="sample-preview-title"
+>
+  <header class="preview-heading">
+    <div>
+      <h2 id="sample-preview-title">Sample preview</h2>
+      <p class="catalog-intro">
+        Run this saved revision on sample documents. Results are kept for a
+        limited time and only you can read them.
+      </p>
+      <weft-help-link [section]="'previews'">About samples</weft-help-link>
+    </div>
+    @if (allowed()) {
+      <div class="preview-heading-actions">
+        @if (preview.active()) {
+          <button
+            class="catalog-button"
+            type="button"
+            (click)="preview.cancel()"
+            [disabled]="
+              preview.busy() !== null || preview.run()?.cancelRequested
+            "
+          >
+            Cancel preview
+          </button>
+        }
+        <button
+          class="catalog-button catalog-button-primary"
+          type="submit"
+          form="revision-preview-form"
+          [disabled]="preview.busy() !== null || preview.active()"
+        >
+          {{ preview.busy() === "submitting" ? "Submitting…" : "Run preview" }}
+        </button>
+      </div>
+    }
+  </header>
   @if (!allowed()) {
     <p class="preview-note" role="note">
       Your project role ({{ mapping().access.role }}) cannot run previews.
@@ -39,6 +71,7 @@
     }
     <div class="preview-layout">
       <form
+        id="revision-preview-form"
         class="preview-form"
         (submit)="$event.preventDefault(); preview.submit()"
       >
@@ -73,28 +106,6 @@
               </option>
             }
           </select>
-          <span class="preview-spacer"></span>
-          @if (preview.active()) {
-            <button
-              class="catalog-button"
-              type="button"
-              (click)="preview.cancel()"
-              [disabled]="
-                preview.busy() !== null || preview.run()?.cancelRequested
-              "
-            >
-              Cancel preview
-            </button>
-          }
-          <button
-            class="catalog-button catalog-button-primary"
-            type="submit"
-            [disabled]="preview.busy() !== null || preview.active()"
-          >
-            {{
-              preview.busy() === "submitting" ? "Submitting…" : "Run preview"
-            }}
-          </button>
         </div>
         @if (preview.xmlProfile()) {
           <p class="preview-hint">
@@ -332,11 +343,12 @@
           }
         </fieldset>
       </form>
-      <div class="preview-results">
+      <div class="preview-results" role="region" aria-label="Sample results">
         @if (!preview.error() && !preview.run()) {
-          <p class="preview-results-empty">
-            Results appear here after you run the sample.
-          </p>
+          <div class="preview-results-empty">
+            <h3>No sample results yet</h3>
+            <p>Results appear here after you run the sample.</p>
+          </div>
         }
         @if (preview.error(); as kind) {
           <div class="preview-error" role="alert">

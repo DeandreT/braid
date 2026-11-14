@@ -1,6 +1,6 @@
 # Ferrule native projection
 
-`IMappingProjectionBackend.ProjectAsync` produces a Weft-owned
+`IMappingProjectionBackend.ProjectAsync` produces a braid-owned
 `ProjectionDocumentV1` from an immutable native artifact. Ferrule's pinned codec
 decodes the original bytes in the restricted worker. A bounded structural walker
 then reads schemas, graph expressions, target bindings, scopes, failure rules,

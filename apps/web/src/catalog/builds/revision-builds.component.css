@@ -5,30 +5,46 @@
 .builds-panel {
   margin-top: 20px;
 }
+:host .builds-panel {
+  padding: 20px;
+}
+.builds-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.builds-heading > div {
+  flex: 1 1 300px;
+  min-width: 0;
+}
+.builds-panel .builds-heading h2 {
+  margin: 0 0 8px;
+  font-size: 1.25rem;
+}
+.builds-panel .builds-heading p {
+  max-width: 75ch;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+}
 :host-context(.app-workbench) .builds-panel:not(.builds-intro) {
   margin-top: 0;
   border-bottom: 0;
 }
 .builds-panel > * {
-  max-width: 56rem;
+  min-width: 0;
 }
 .builds-panel p {
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
-/* Before the explicit load, the tab is a short, centred introduction. */
+/* Loading controls never imply that preparation is available or successful. */
 .builds-panel.builds-intro {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  max-width: 34rem;
-  margin: 32px auto;
-  padding: 20px 24px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-subtle-2);
-  text-align: center;
+  max-width: none;
+  margin: 0;
 }
 .builds-intro p {
   color: var(--text-muted);
@@ -39,11 +55,31 @@
 }
 .builds-runtime {
   color: var(--text-muted-5);
+  margin-bottom: 16px;
 }
-.builds-section {
-  border-top: 1px solid var(--border-2);
+.builds-section,
+.builds-load-controls {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
   margin-top: 20px;
-  padding-top: 16px;
+}
+.builds-panel .builds-section > h3,
+.builds-panel .builds-load-controls > h3 {
+  margin: 0 0 14px;
+  color: var(--text);
+  font-size: 0.9375rem;
+}
+.builds-setup {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 20px;
+}
+.builds-setup > .builds-section {
+  margin-top: 0;
 }
 .builds-actions {
   display: flex;
@@ -80,9 +116,14 @@
 .builds-error {
   background: var(--wb-failure-tint);
   color: var(--wb-failure-text);
-  padding: 8px 12px;
+  padding: 14px 16px;
   border-left: 3px solid var(--wb-failure-text);
   border-radius: 4px;
+  margin-bottom: 16px;
+}
+.builds-panel .builds-error p {
+  color: inherit;
+  margin: 6px 0 0;
 }
 .builds-uncertain,
 .builds-recovery[data-tone="uncertain"] {
@@ -108,10 +149,12 @@ select {
   width: 100%;
   max-width: 32rem;
   min-width: 0;
-  padding: 6px 8px;
+  padding: 9px 10px;
   border: 1px solid var(--wb-control-border);
-  border-radius: 4px;
+  border-radius: 6px;
   font: inherit;
+  background: var(--surface);
+  color: var(--text);
 }
 code {
   overflow-wrap: anywhere;
@@ -126,11 +169,12 @@ code {
   border-collapse: collapse;
   width: 100%;
   font-size: 0.8125rem;
+  min-width: 680px;
 }
 .wb-build-table th,
 .wb-build-table td {
   text-align: left;
-  padding: 3px 6px;
+  padding: 12px 14px;
   height: var(--wb-row-height, 28px);
   border-bottom: 1px solid var(--border);
 }
@@ -138,5 +182,42 @@ code {
   font-size: 0.75rem;
   background: var(--surface-muted-5);
   color: var(--text-muted-6);
-  font-weight: 500;
+  font-weight: 600;
+}
+.builds-table-region {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-top: 12px;
+}
+.wb-build-table tr.selected td {
+  background: var(--wb-selection-tint);
+}
+.wb-build-table tr.selected td:first-child {
+  box-shadow: inset 3px 0 var(--wb-selection-text);
+}
+.wb-build-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.builds-panel .catalog-button,
+.builds-panel select {
+  min-height: 36px;
+}
+@media (max-width: 900px) {
+  .builds-setup {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 679px) {
+  :host .builds-panel {
+    padding: 16px;
+  }
+  .builds-section,
+  .builds-load-controls {
+    padding: 16px;
+  }
+  .builds-panel .catalog-button,
+  .builds-panel select {
+    min-height: 44px;
+  }
 }

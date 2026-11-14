@@ -1,5 +1,5 @@
 <section
-  class="catalog-page"
+  class="catalog-page catalog-projects"
   aria-labelledby="catalog-page-title"
   [attr.aria-busy]="refreshing() ? 'true' : null"
 >
@@ -10,7 +10,7 @@
   </nav>
   <header class="catalog-heading">
     <div>
-      <p class="catalog-eyebrow">Catalog</p>
+      <p class="catalog-eyebrow">Mapping catalog</p>
       <h1 id="catalog-page-title" data-catalog-page-title tabindex="-1">
         Projects
       </h1>
@@ -18,7 +18,7 @@
     </div>
     <div class="catalog-actions">
       <button
-        class="catalog-icon-button"
+        class="catalog-button"
         type="button"
         aria-label="Refresh catalog"
         title="Refresh catalog"
@@ -28,6 +28,7 @@
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" />
         </svg>
+        Refresh
       </button>
       @if (context(); as context) {
         @if (
@@ -55,41 +56,60 @@
         <p>No projects are available on this page for your workspace.</p>
       </section>
     } @else {
-      <ul class="catalog-list catalog-rows" aria-label="Projects">
-        @for (project of page.projects; track project.scope.projectId) {
-          <li class="catalog-list-item">
-            <div class="catalog-row-main">
-              <h2 class="catalog-row-title">
-                <a [routerLink]="routes.project(project.scope)">{{
-                  project.name
-                }}</a>
-              </h2>
-              @if (project.description) {
-                <p class="catalog-row-description">
-                  {{ project.description }}
-                </p>
-              } @else {
-                <p class="catalog-row-description catalog-description-empty">
-                  No description.
-                </p>
-              }
-            </div>
-            <div class="catalog-row-meta">
-              <time
-                [attr.datetime]="project.updatedAtUtc"
-                [title]="project.updatedAtUtc"
-                >Updated
-                {{ project.updatedAtUtc | date: "MMM d, y" : "UTC" }}</time
-              >
-              @if (project.access.role !== "administrator") {
-                <span class="catalog-badge">{{
+      <div class="catalog-project-card">
+        <div class="catalog-project-card-heading">
+          <h2>
+            Projects
+            <span class="catalog-badge">{{ page.projects.length }}</span>
+          </h2>
+          <p>Your access is shown for each project</p>
+        </div>
+        <ul class="catalog-list catalog-rows" aria-label="Projects">
+          @for (project of page.projects; track project.scope.projectId) {
+            <li class="catalog-list-item">
+              <span class="catalog-project-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="M4 4h16v16H4zM8 8h8M8 12h8M8 16h5" />
+                </svg>
+              </span>
+              <div class="catalog-row-main">
+                <h2 class="catalog-row-title">
+                  <a [routerLink]="routes.project(project.scope)">{{
+                    project.name
+                  }}</a>
+                </h2>
+                @if (project.description) {
+                  <p class="catalog-row-description">
+                    {{ project.description }}
+                  </p>
+                } @else {
+                  <p class="catalog-row-description catalog-description-empty">
+                    No description.
+                  </p>
+                }
+              </div>
+              <div class="catalog-row-meta">
+                <time
+                  [attr.datetime]="project.updatedAtUtc"
+                  [title]="project.updatedAtUtc"
+                  >Updated
+                  {{ project.updatedAtUtc | date: "MMM d, y" : "UTC" }}</time
+                >
+                <span class="catalog-badge" title="Your role">{{
                   roleLabel(project.access.role)
                 }}</span>
-              }
-            </div>
-          </li>
-        }
-      </ul>
+              </div>
+              <svg
+                class="catalog-project-arrow"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path d="M5 12h14M13 6l6 6-6 6" />
+              </svg>
+            </li>
+          }
+        </ul>
+      </div>
     }
     @if (context(); as context) {
       <nav class="catalog-pagination" aria-label="Project pages">

@@ -54,7 +54,7 @@ project, a mapping in this project or a mapping you opened recently.
 | Diff | The expected and actual output of the selected run, side by side. |
 | Activity | What the page has read for this revision. |
 
-**Download exact bytes** saves a document exactly as Weft stored it. Long
+**Download exact bytes** saves a document exactly as braid stored it. Long
 documents are shortened on screen, but the download is always complete.
 
 ## CSV and TSV document display
@@ -110,5 +110,5 @@ close it. Large mappings are shown 100 connections at a time.
 
 The density button in the status bar switches between compact, comfortable and
 dense rows. Panel sizes, column widths and density are remembered in this
-browser. **Reset layout** restores the defaults. Weft never stores your
+browser. **Reset layout** restores the defaults. braid never stores your
 selections, sample data or requests as layout settings.

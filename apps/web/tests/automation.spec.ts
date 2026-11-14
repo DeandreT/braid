@@ -522,6 +522,6 @@ test("same-owner refresh and unavailable reads preserve unsent automation settin
     page.getByLabel("Require passing exact-revision regression"),
   ).not.toBeChecked();
   page.once("dialog", (dialog) => dialog.dismiss());
-  await page.getByRole("link", { name: "Help", exact: true }).click();
+  await page.getByRole("link", { name: "Help & guide", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(path + "$"));
 });

@@ -155,6 +155,7 @@ public sealed class CreationRuntimeHttpTests
             b.Services.AddWeftSessionCatalog(new(org), new(), new(), new(), new());
             b.Services.AddWeftBearerAccess(new(org), h.Identity, h.Identity, h.Identity);
             h.app = b.Build(); h.app.MapWeftCreation();
+            // Trusted issuance accepts database-representable timestamps, not arbitrary host-clock ticks.
             h.app.MapGet("/__issue", async (HttpContext c, ServerSessionBrowser browser) =>
             { await browser.IssueFreshAsync(c, Guid.NewGuid(), 1, h.Identity.Actor, SessionStoreTestHarness.DatabaseNow().AddMinutes(30), c.RequestAborted); return Results.NoContent(); });
             await h.app.StartAsync(); h.Client = h.app.GetTestClient(); h.Client.BaseAddress = new("https://localhost");

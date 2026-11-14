@@ -180,7 +180,7 @@ test.describe("controlled sign-in controls, not provider qualification", () => {
     });
     await page.goto(entry);
     await openControls(page);
-    await expect(summary(page)).toHaveText("Signed in to Weft");
+    await expect(summary(page)).toHaveText("Signed in to braid");
     await controls(page)
       .getByRole("button", { name: "Sign out", exact: true })
       .click();
@@ -220,7 +220,7 @@ test.describe("controlled sign-in controls, not provider qualification", () => {
       });
       await page.goto(entry);
       await openControls(page);
-      await expect(summary(page)).toHaveText("Signed in to Weft");
+      await expect(summary(page)).toHaveText("Signed in to braid");
       await controls(page)
         .getByRole("button", { name: "Sign out", exact: true })
         .click();
@@ -237,7 +237,7 @@ test.describe("controlled sign-in controls, not provider qualification", () => {
       await controls(page)
         .getByRole("button", { name: "Check session", exact: true })
         .click();
-      await expect(summary(page)).toHaveText("Signed in to Weft");
+      await expect(summary(page)).toHaveText("Signed in to braid");
       expect(posts).toBe(1);
       expect(observations).toBe(3);
     });
@@ -264,7 +264,7 @@ test.describe("controlled sign-in controls, not provider qualification", () => {
     });
     await page.goto(entry);
     await openControls(page);
-    await expect(summary(page)).toHaveText("Signed in to Weft");
+    await expect(summary(page)).toHaveText("Signed in to braid");
     await controls(page)
       .getByRole("button", { name: "Sign out", exact: true })
       .click();
@@ -830,7 +830,7 @@ positiveTest.describe(
         await expect(summary(page)).toHaveText("Checking sign-in status…");
         bootstrap.reply({ json: status("authenticated", true) });
         await bootstrap.settled;
-        await expect(summary(page)).toHaveText("Signed in to Weft");
+        await expect(summary(page)).toHaveText("Signed in to braid");
         await expect(
           controls(page).getByRole("button", { name: "Sign out", exact: true }),
         ).not.toHaveAttribute("aria-describedby", "sign-in-navigation-warning");
@@ -889,7 +889,7 @@ positiveTest.describe(
         wire.status("authenticated");
         await page.goto(positiveEntry);
         await openControls(page);
-        await expect(summary(page)).toHaveText("Signed in to Weft");
+        await expect(summary(page)).toHaveText("Signed in to braid");
         wire.respond("authenticated");
         wire.json("GET", "/api/v1/catalog/context", wire.catalogContext());
         wire.json("GET", "/api/v1/catalog/context", wire.catalogContext());
@@ -1008,7 +1008,7 @@ positiveTest.describe(
         );
         wire.status("authenticated", true);
         await check.click();
-        await expect(summary(page)).toHaveText("Signed in to Weft");
+        await expect(summary(page)).toHaveText("Signed in to braid");
         await page.waitForTimeout(200);
         expect(wire.nativeAttempts).toBe(1);
         expect(wire.count("POST", "/api/auth/login")).toBe(1);
@@ -1029,7 +1029,7 @@ positiveTest.describe(
           const original = wire.hold("POST", `/api/auth/${action}`);
           await page.goto(positiveEntry);
           await openControls(page);
-          await expect(summary(page)).toHaveText("Signed in to Weft");
+          await expect(summary(page)).toHaveText("Signed in to braid");
           await controls(page)
             .getByRole("button", {
               name: action === "login" ? "Sign in again" : "Sign out",
@@ -1041,7 +1041,7 @@ positiveTest.describe(
           wire.status("authenticated", true, ownerB);
           await page.reload();
           await openControls(page);
-          await expect(summary(page)).toHaveText("Signed in to Weft");
+          await expect(summary(page)).toHaveText("Signed in to braid");
           // The old HTTP outcome is unknown. Playwright reports no failure for a routed
           // request whose document was replaced, so this fulfillment is only a synthetic
           // late attempt against the replaced document, never evidence of no commit.
@@ -1055,7 +1055,7 @@ positiveTest.describe(
           await controls(page)
             .getByRole("button", { name: "Check session", exact: true })
             .click();
-          await expect(summary(page)).toHaveText("Signed in to Weft");
+          await expect(summary(page)).toHaveText("Signed in to braid");
           await page.waitForTimeout(200);
           await expect(
             controls(page).locator(

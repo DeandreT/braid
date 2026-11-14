@@ -135,7 +135,7 @@ revision in the workbench. Build the restricted worker image as described in
 immutable `sha256:...` image ID. The singleton worker runner serves projection
 and validation requests under the documented Linux/Docker restrictions.
 Alternatively, `WEFT_FERRULE_RUNNER=service` and the
-[service runner settings](ferrule-service.md#weft-service-runner) select a running
+[service runner settings](ferrule-service.md#braid-service-runner) select a running
 Ferrule service. Saved reports remain readable without a worker; deriving new
 reports requires the configured backend. Failed native operations never become
 synthetic mapping data. See [Saved mapping reports](saved-reports.md).
@@ -323,7 +323,7 @@ lives in `deploy/local/demo-data/catalog.mjs`;
 
 ## Updating API contracts
 
-Every HTTP API that Weft serves has an OpenAPI 3.1 document in `contracts/`, which
+Every HTTP API that braid serves has an OpenAPI 3.1 document in `contracts/`, which
 the host's build writes from its own route registrations:
 
 | Document | Host | API |

@@ -11,7 +11,7 @@ export default defineConfig({
     process.env.WEFT_EDIT_SHELL_ALL === "1"
       ? [
           "**/shell.spec.ts",
-          // The mapping viewer needs the packaged reports owner; playwright.reports.config.ts runs it against the packaged host.
+          "**/mapping-viewer.spec.ts",
           "**/browser-auth-controls.spec.ts",
           "**/revision-chat.spec.ts",
           "**/revision-preview.spec.ts",

@@ -242,6 +242,10 @@ public sealed class PostgresChatUpgradeTests(PostgresFixture fixture)
             await using var admittedInterchange = await ingestion.BeginTransactionAsync(Guid.NewGuid());
             await using var display = new PostgresAccountDisplayMetadata(test.AccountDisplayConnectionString);
             Assert.Null(await display.ReadAsync(Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None));
+            await using var owner = await test.Owner.OpenConnectionAsync();
+            await using var creationTransaction = await owner.BeginTransactionAsync();
+            Assert.Equal(CreationSchemaAdmission.ShapeDigest,
+                await CreationSchemaAdmission.ShapeAsync(owner, creationTransaction, CancellationToken.None));
         }
         if (installed) Assert.True(await CatalogSearchUpgradeTestSupport.AdmitAsync(test));
         await using var connection = PostgresChatSecurityTests.Open(test.MigrationConnectionString); await connection.OpenAsync();
@@ -263,10 +267,14 @@ public sealed class PostgresChatUpgradeTests(PostgresFixture fixture)
         schema.Parameters.AddWithValue(PreviewSchemaTestContract.FunctionNames.Concat(RegressionSchemaTestContract.Functions).Concat(InterchangeSchemaTestContract.Functions).Append("index_catalog_report").ToArray());
         schema.Parameters.AddWithValue(PreviewSchemaTestContract.Roles.Concat(RegressionSchemaTestContract.Roles).Append("weft_account_display").ToArray());
         schema.Parameters.AddWithValue(PreviewSchemaTestContract.ParentForeignKeys.Concat(MappingDraftSchemaTestContract.PreviewParentForeignKeys).ToArray());
-        schema.Parameters.AddWithValue(RegressionSchemaTestContract.Tables.Concat(InterchangeSchemaTestContract.Tables).Append("catalog_search_report_index").Append("account_display_metadata").ToArray());
+        schema.Parameters.AddWithValue(RegressionSchemaTestContract.Tables.Concat(InterchangeSchemaTestContract.Tables)
+            .Concat(CreationSchemaAdmission.Tables).Concat(new[] { "spec_bundles", "spec_objects" })
+            .Append("catalog_search_report_index").Append("account_display_metadata").ToArray());
         schema.Parameters.AddWithValue(CatalogSearchSchemaAdmission.IndexNames);
         // 0040 and 0045 each add exactly one named trigger to the old revision_ingestions relation.
-        schema.Parameters.AddWithValue(AutomationSchemaAdmission.AllTriggerNames.Append("chat_mapping_write_commit").Append("revision_ingestions_creation_guard").ToArray());
+        // Both exact triggers are independently admitted above before projection.
+        schema.Parameters.AddWithValue(AutomationSchemaAdmission.AllTriggerNames
+            .Concat(new[] { "chat_mapping_write_commit", "revision_ingestions_creation_guard" }).ToArray());
         var schemaText = Assert.IsType<string>(await schema.ExecuteScalarAsync());
         text.Append(schemaText);
         using var document = JsonDocument.Parse(schemaText);

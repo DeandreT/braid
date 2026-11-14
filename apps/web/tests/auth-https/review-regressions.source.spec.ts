@@ -9,6 +9,8 @@ import { BrowserRootFetch } from "./root-fetch";
 import { requestHeaders } from "./request-headers";
 import { PauseOwner } from "./pause-owner";
 import { CleanupPair } from "./cleanup-pair";
+import { HttpsFixture } from "./fixture";
+import { StageDiagnostics, stageReceipt } from "./stage-diagnostics";
 import {
   zeroBaseline,
   exactBackstops,
@@ -528,5 +530,107 @@ test("review cleanup pair: primary and both failure categories remain", async ()
   );
   requireOwned(
     result.primaryFailed && result.closeFailed && result.drainFailed,
+  );
+});
+
+// Exercise the actual fixture close methods with inert owned originals, without
+// constructing a fixture (which would admit private input and create controls).
+function closeFixture(operations: {
+  seal?: () => Promise<void>;
+  context?: () => Promise<void>;
+  browser?: () => Promise<void>;
+  boundary?: () => Promise<void>;
+  stop?: () => Promise<void>;
+}) {
+  const originals: Promise<void>[] = [],
+    events: string[] = [],
+    diagnostics = new StageDiagnostics("unused");
+  const operation = (name: string, start?: () => Promise<void>) => () => {
+    events.push(name);
+    return start?.() ?? Promise.resolve();
+  };
+  const fixture: HttpsFixture = Object.assign(
+    Object.create(HttpsFixture.prototype),
+    {
+      diagnostics,
+      challenges: [],
+      tasks: [],
+      errors: 0,
+      unexpected: 0,
+      closureOriginals: originals,
+      responseTail: Promise.resolve(),
+      closeOriginal: null,
+      contextClose: null,
+      browserClose: null,
+      caseDrain: null,
+      boundary: {
+        vector: { name: "" },
+        seal: operation("seal", operations.seal),
+        afterBrowserClosed: operation("boundary", operations.boundary),
+        verifyClosedObservation: () => events.push("verified"),
+      },
+      context: { close: operation("context", operations.context) },
+      browser: { close: operation("browser", operations.browser) },
+      control: {
+        call: operation("stop", operations.stop),
+        drain: operation("drain"),
+      },
+    },
+  );
+  return { fixture, diagnostics, originals, events };
+}
+
+for (const stage of [
+  "seal",
+  "context",
+  "browser",
+  "boundary",
+  "finalStop",
+] as const) {
+  test(
+    "review fixture receipt preserves failed original " + stage,
+    async () => {
+      const sentinel = new Error("inert operand never serialized"),
+        original = Promise.reject(sentinel);
+      void Promise.allSettled([original]);
+      const owned = closeFixture({
+        [stage === "finalStop" ? "stop" : stage]: () => original,
+      });
+      const first = owned.fixture.close(),
+        second = owned.fixture.close();
+      requireOwned(first === second);
+      const closed = await Promise.allSettled([first]);
+      requireOwned(closed[0]?.status === "rejected");
+      requireOwned(owned.diagnostics.receipt() === stageReceipt("none", stage));
+      if (stage !== "finalStop") {
+        requireOwned(owned.originals.includes(original));
+        const settled = await Promise.allSettled(owned.originals);
+        requireOwned(
+          settled.some(
+            (result) =>
+              result.status === "rejected" && result.reason === sentinel,
+          ),
+        );
+        requireOwned(!owned.events.includes("stop"));
+      } else {
+        requireOwned(closed[0].reason === sentinel);
+        requireOwned(!owned.events.includes("drain"));
+      }
+    },
+  );
+}
+
+test("review fixture retains first body category when cleanup also fails", async () => {
+  const owned = closeFixture({
+    context: async () => {
+      throw new Error("inert");
+    },
+  });
+  owned.diagnostics.body("navigation");
+  owned.diagnostics.bodyFailed();
+  const result = await Promise.allSettled([owned.fixture.close()]);
+  requireOwned(result[0]?.status === "rejected");
+  requireOwned(
+    owned.diagnostics.receipt() === stageReceipt("navigation", "context"),
   );
 });

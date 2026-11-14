@@ -39,7 +39,7 @@ Protected state is capped at 12288 characters after encryption and encoding;
 the existing 16384-byte authorization URL and callback-query limits, cookie
 bounds and request-header limits remain enforced. The host's 65536-byte request
 line allowance also accommodates the sign-in page's nested `returnTo` encoding.
-- **Sign out** requests local Weft revocation. Only an exact 204 acknowledgement
+- **Sign out** requests local braid revocation. Only an exact 204 acknowledgement
   is presented as acknowledged local sign-out. This does not sign out the provider
   account. An error, timeout, canceled request, malformed response or superseded
   result leaves the outcome unconfirmed, not successful. Check session explicitly

@@ -1,10 +1,16 @@
-# Weft
+# braid
 
 **Understand, test, and deploy your data mappings.**
 
-Weft is a web application for exploring, reviewing, testing, and operating data
+braid is a web application for exploring, reviewing, testing, and operating data
 mappings. Ferrule is its first mapping backend; other engines require explicit
 adapters and their own capability checks.
+
+The product is now called braid. Existing technical names such as the `weft`
+CLI, `@weft/web` workspace, .NET projects, configuration keys, storage paths and
+versioned API identifiers remain unchanged for compatibility. Repository links
+and commands below still use their actual names. This presentation rename does
+not change feature availability or qualification status.
 
 ## What it looks like
 
@@ -26,7 +32,7 @@ _Compare revisions: semantic differences between two saved explanations._
 
 ![Workspace chat panel answering a question with citations](docs/images/chat.png)
 
-_Workspace chat: questions answered with links to their sources, with permission-controlled mapping edits when requested._
+_Workspace chat: questions answered with links to their sources, with permission-controlled mapping edits after exact-proposal approval._
 
 Screenshots use demo data; see [docs/images](docs/images/README.md) for how they are produced.
 
@@ -117,7 +123,7 @@ scoped viewer opens those reports for the exact selected revision.
 
 See [Local development](docs/development.md) to run and verify the application.
 
-- [User guide](docs/user-guide/overview.md): how to use Weft, also shown in the app at `/help`.
+- [User guide](docs/user-guide/overview.md): how to use braid, also shown in the app at `/help`.
 - [In-app help](docs/help.md): writing guide sections, the embedded guide and the help API.
 - [Architecture](docs/architecture.md): boundaries, storage, identity, and hosting.
 - [Mapping backend contract](docs/mapping-backends.md): projections and Ferrule integration.
@@ -148,6 +154,7 @@ See [Local development](docs/development.md) to run and verify the application.
 - [Persisted report API](docs/persisted-report-api.md): current and retained report reads, explicit derivation, and complete-response limits.
 - [Maintenance metadata](docs/private-object-maintenance-metadata.md): permanent retirement, fenced cleanup claims, and positive publication registration.
 - [Workbench presentation](docs/workbench-presentation.md): semantic colors, exact-value details, safe layout preferences and action confirmations.
+- [Workspace layout](docs/ui-ux-refresh.md): the responsive catalog, revision tabs and exact creation-review layout.
 - [Chat UI](docs/chat-ui.md): shared workspace conversations, legacy revision pins and evidence-backed navigation.
 - [Preview runs](docs/preview-runs.md): bounded execution of explicit sample inputs.
 - [CSV and TSV documents](docs/csv-documents.md): explicit native dialects, bounded table display, regression comparison and compiled execution.
@@ -163,7 +170,7 @@ See [Local development](docs/development.md) to run and verify the application.
 - [API contracts](docs/development.md#updating-api-contracts): the OpenAPI 3.1 documents of the [session API](contracts/weft-v1.json), the [mapping endpoint](contracts/weft-endpoint-v1.json) and the [Ferrule service](contracts/ferrule-service-v1.json).
 - [Azure Blob private storage](docs/private-storage-blob.md): the Blob object store and its publication format.
 - [Hosted acceptance](docs/hosted-acceptance.md): the packaged signed-in stack exercised end to end.
-- [Weft CLI](docs/cli.md): the `weft` command line as the signed-in user, its profiles, sign-in, protected token cache and commands.
+- [braid CLI](docs/cli.md): the `weft` command line as the signed-in user, its profiles, sign-in, protected token cache and commands.
 - [Revision comparison](docs/revision-comparison.md) and [compact workbench](docs/compact-workbench.md): semantic differences between revisions and the workbench layout.
 - [AI chat architecture](docs/ai-chat.md): provider independence, context, and tools.
 - [Workspace chat](docs/workspace-chat.md): organization-scoped conversations, the read-only workspace tools and their budgets.

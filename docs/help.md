@@ -1,6 +1,6 @@
 # User guide and in-app help
 
-The [user guide](user-guide/overview.md) is written for people who use Weft. It
+The [user guide](user-guide/overview.md) is written for people who use braid. It
 lives in `docs/user-guide/`, one Markdown file per section, and ships inside the
 server build. The `/help` page in the app and the help API read that embedded
 copy; nothing is fetched from disk or the network at run time.

@@ -1,6 +1,6 @@
 # Azure deployment
 
-`deploy/azure` describes the first hosted Weft environment as Bicep, using the
+`deploy/azure` describes the first hosted braid environment as Bicep, using the
 [runtime images](runtime-packaging.md). The server runs in the Session profile behind its
 same-replica edge, serves the Angular application from the same origin, and reaches every
 dependency privately. Tracking work is [#146](https://github.com/DeandreT/weft/issues/146).
@@ -36,7 +36,7 @@ provisioning job. Every other credential is generated into Key Vault by
 | Name prefix | `name` (2–10 lowercase characters); `uniqueSuffix` defaults to a hash of the resource group. |
 | Entra tenant ID | `entraTenantId`: the organization whose accounts sign in. |
 | Entra app registration | `entraClientId`; see below. |
-| Weft organization ID | `organizationId`: a new canonical lowercase UUID, and the organization's display name for the owner command. |
+| braid organization ID | `organizationId`: a new canonical lowercase UUID, and the organization's display name for the owner command. |
 | PostgreSQL administrator password | `WEFT_POSTGRES_ADMIN_PASSWORD` in the deploying shell; keep it for later deployments. |
 | Operator object ID | `operatorPrincipalId`: user or group granted Key Vault Secrets Officer and Certificates Officer. |
 | Operator IP ranges | Optional `operatorIpRanges` that restrict Key Vault's public endpoint. |

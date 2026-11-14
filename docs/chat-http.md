@@ -88,7 +88,7 @@ The profile document is strict JSON; unknown or duplicate properties are refused
   (Azure Databricks, `2ff814a6-3304-4ab8-85cb-cd0e6f879c1d/.default`). An
   `azureDatabricks` identity serves only `databricksChatCompletionsSse` profiles,
   and those profiles accept no other managed identity.
-- The identity's `source` names the endpoint that issues its tokens; Weft never
+- The identity's `source` names the endpoint that issues its tokens; braid never
   detects or falls back between them:
   - `containerApps` (the default): the Azure Container Apps managed-identity
     endpoint, which the host admits at startup only as plain HTTP on loopback

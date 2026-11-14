@@ -454,6 +454,7 @@ export class MappingEditorComponent {
       () => this.core.apply(operation),
       operationNames[operation.op],
       "apply",
+      operation.op === "bind",
     );
   }
   undo(): Promise<void> {
@@ -466,6 +467,7 @@ export class MappingEditorComponent {
     run: () => Promise<EditView>,
     label: string,
     history: "apply" | "undo" | "redo",
+    returnToMapping = false,
   ): Promise<void> {
     if (this.busy() || this.savePending() || this.conflict() || !this.view())
       return;
@@ -497,6 +499,19 @@ export class MappingEditorComponent {
       );
       ++this.editsSinceSave;
       this.retain();
+      if (
+        returnToMapping &&
+        this.frame()?.focusedTray() &&
+        !this.workbench.layout().dockCollapsed &&
+        this.workbench.selection().dock === "inspector"
+      ) {
+        // The editor focuses the refreshed row after rendering, without queuing
+        // the frame's fallback focus to its inspector toggle.
+        this.workbench.updateLayout({
+          dockCollapsed: true,
+          inspectorCollapsed: true,
+        });
+      }
       this.schedule();
       this.focusAfterRender('button[data-row-key][aria-pressed="true"]');
     } catch (error) {

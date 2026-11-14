@@ -59,7 +59,7 @@ match every interchange.
 
 ## Read the result
 
-When the preview finishes, Weft shows its status, how many records it wrote and
+When the preview finishes, braid shows its status, how many records it wrote and
 a table of output documents. For each output, choose **Show** to read it on the
 page (long outputs show only their beginning) or **Download** to save the exact
 bytes.
@@ -72,12 +72,12 @@ extension.
 CSV/TSV outputs open as a **Table** when their recorded native dialect is valid
 and the document fits the browser's display limits. Choose **Raw text** to see
 the original text instead. If the dialect is unavailable, the bytes are invalid
-or a display limit is exceeded, Weft explains why the table is unavailable and
+or a display limit is exceeded, braid explains why the table is unavailable and
 keeps a bounded raw text or hex view. Downloads always keep the full original
 bytes, recorded media type and `.csv` or `.tsv` extension. See
 [document display limits](workbench.md#csv-and-tsv-document-display).
 
-If the preview failed, Weft shows the reason, a message from the mapping
+If the preview failed, braid shows the reason, a message from the mapping
 engine and, where known, the input or field it concerns.
 
 A successful preview only shows that the mapping ran. It isn't compared with an
@@ -113,8 +113,8 @@ Neither saving a case nor a preview success approves or qualifies a build.
 
 ## If you reload the page
 
-This tab remembers your last preview of the revision, so after a reload Weft
-shows it again. If an earlier preview was sent but never confirmed, Weft says
+This tab remembers your last preview of the revision, so after a reload braid
+shows it again. If an earlier preview was sent but never confirmed, braid says
 so: submitting the same inputs again returns that preview instead of starting a
 second one. Choose **Discard earlier submission** to run different inputs
 instead.

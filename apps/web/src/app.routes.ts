@@ -80,7 +80,7 @@ export const routes: Routes = [
       import("./chat/chat-resource-page.component").then(
         (module) => module.ChatResourcePageComponent,
       ),
-    title: "Workspace reference · Weft",
+    title: "Workspace reference · braid",
   },
   {
     path: "chat",
@@ -90,7 +90,7 @@ export const routes: Routes = [
         (module) => module.ChatPageComponent,
       ),
     canDeactivate: [leaveChat],
-    title: "Chat · Weft",
+    title: "Chat · braid",
   },
   {
     path: "notifications",
@@ -99,7 +99,7 @@ export const routes: Routes = [
       import("./catalog/automation/notification-centre.component").then(
         (m) => m.NotificationCentreComponent,
       ),
-    title: "Notifications · Weft",
+    title: "Notifications · braid",
   },
   {
     path: "administration",
@@ -108,7 +108,7 @@ export const routes: Routes = [
       import("./administration/administration-page.component").then(
         (m) => m.AdministrationPageComponent,
       ),
-    title: "Administration · Weft",
+    title: "Administration · braid",
   },
   {
     path: "invitations",
@@ -117,14 +117,14 @@ export const routes: Routes = [
       import("./administration/invitation-page.component").then(
         (m) => m.InvitationPageComponent,
       ),
-    title: "Organization invitation · Weft",
+    title: "Organization invitation · braid",
   },
   { path: "", pathMatch: "full", redirectTo: "catalog" },
   {
     path: "sign-in",
     component: SignInPageComponent,
     canActivate: [signInEntry, leaveWorkspaceEntry],
-    title: "Sign in · Weft",
+    title: "Sign in · braid",
   },
   {
     path: "catalog",
@@ -137,7 +137,7 @@ export const routes: Routes = [
           import("./catalog/creation/creation-library.component").then(
             (m) => m.CreationLibraryComponent,
           ),
-        title: "Your new mapping proposals · Weft",
+        title: "Your new mapping proposals · braid",
       },
       {
         path: "organizations/:organizationId/projects/:projectId/creation/:proposalId",
@@ -151,7 +151,7 @@ export const routes: Routes = [
         ],
         canActivate: [leaveWorkspaceEntry],
         runGuardsAndResolvers: "paramsOrQueryParamsChange",
-        title: "Review new mapping · Weft",
+        title: "Review new mapping · braid",
       },
       ...[
         "organizations/:organizationId/projects/:projectId/specs",
@@ -167,7 +167,7 @@ export const routes: Routes = [
         ],
         canActivate: [leaveWorkspaceEntry],
         runGuardsAndResolvers: "paramsOrQueryParamsChange" as const,
-        title: "Specification intake · Weft",
+        title: "Specification intake · braid",
       })),
       {
         path: "organizations/:organizationId/projects/:projectId/mappings/:mappingId/operations",
@@ -176,7 +176,7 @@ export const routes: Routes = [
             (module) => module.OperationsPageComponent,
           ),
         canDeactivate: [leaveOperations],
-        title: "Operations · Weft",
+        title: "Operations · braid",
       },
       {
         path: "organizations/:organizationId/projects/:projectId/mappings/:mappingId/sandbox",
@@ -185,7 +185,7 @@ export const routes: Routes = [
             (module) => module.SandboxPageComponent,
           ),
         canDeactivate: [leaveSandbox],
-        title: "Local sandbox · Weft",
+        title: "Local sandbox · braid",
       },
       {
         path: "organizations/:organizationId/projects/:projectId/automation",
@@ -194,7 +194,7 @@ export const routes: Routes = [
           import("./catalog/automation/automation-page.component").then(
             (module) => module.AutomationPageComponent,
           ),
-        title: "Automation and notifications · Weft",
+        title: "Automation and notifications · braid",
       },
       {
         path: "search",
@@ -202,7 +202,7 @@ export const routes: Routes = [
           import("./catalog/search/search-page.component").then(
             (module) => module.SearchPageComponent,
           ),
-        title: "Search · Weft",
+        title: "Search · braid",
       },
       {
         path: "organizations/:organizationId/projects/:projectId/mappings/new",
@@ -212,7 +212,7 @@ export const routes: Routes = [
           ),
         canDeactivate: [leaveMappingUpload],
         runGuardsAndResolvers: "paramsOrQueryParamsChange",
-        title: "Upload mapping · Weft",
+        title: "Upload mapping · braid",
       },
       {
         path: "organizations/:organizationId/projects/:projectId/mappings/:mappingId/edit",
@@ -222,7 +222,7 @@ export const routes: Routes = [
           ),
         canDeactivate: [leaveMappingEditor],
         runGuardsAndResolvers: "paramsOrQueryParamsChange",
-        title: "Edit mapping metadata · Weft",
+        title: "Edit mapping metadata · braid",
       },
       {
         path: "organizations/:organizationId/projects/:projectId/mappings/:mappingId/revisions/new",
@@ -232,7 +232,7 @@ export const routes: Routes = [
           ),
         canDeactivate: [leaveRevisionAppend],
         runGuardsAndResolvers: "paramsOrQueryParamsChange",
-        title: "Upload revision · Weft",
+        title: "Upload revision · braid",
       },
       {
         path: "organizations/:organizationId/projects/:projectId/mappings/:mappingId/comparisons",
@@ -240,7 +240,7 @@ export const routes: Routes = [
           import("./catalog/comparison/revision-comparison-page.component").then(
             (module) => module.RevisionComparisonPageComponent,
           ),
-        title: "Compare revisions · Weft",
+        title: "Compare revisions · braid",
       },
       {
         path: "organizations/:organizationId/projects/:projectId/mappings/:mappingId/revisions/:revisionId",
@@ -248,7 +248,7 @@ export const routes: Routes = [
           import("./catalog/revision-page.component").then(
             (module) => module.RevisionPageComponent,
           ),
-        title: "Revision · Weft",
+        title: "Revision · braid",
         canDeactivate: [leaveRevisionChat],
       },
       {
@@ -257,12 +257,12 @@ export const routes: Routes = [
           import("./catalog/mapping-page.component").then(
             (module) => module.MappingPageComponent,
           ),
-        title: "Mapping · Weft",
+        title: "Mapping · braid",
       },
       {
         path: "organizations/:organizationId/projects/new",
         component: CreateProjectPageComponent,
-        title: "Create project · Weft",
+        title: "Create project · braid",
       },
       {
         path: "organizations/:organizationId/projects/:projectId",
@@ -270,7 +270,7 @@ export const routes: Routes = [
           import("./catalog/project-page.component").then(
             (module) => module.ProjectPageComponent,
           ),
-        title: "Project · Weft",
+        title: "Project · braid",
       },
       {
         path: "organizations/:organizationId/projects",
@@ -278,10 +278,10 @@ export const routes: Routes = [
           import("./catalog/projects-page.component").then(
             (module) => module.ProjectsPageComponent,
           ),
-        title: "Projects · Weft",
+        title: "Projects · braid",
       },
     ],
-    title: "Catalog · Weft",
+    title: "Catalog · braid",
   },
   {
     path: "help",
@@ -290,7 +290,7 @@ export const routes: Routes = [
       import("./help/help-page.component").then(
         (module) => module.HelpPageComponent,
       ),
-    title: "Help · Weft",
+    title: "Help · braid",
   },
   {
     path: "help/:sectionId",
@@ -299,11 +299,11 @@ export const routes: Routes = [
       import("./help/help-page.component").then(
         (module) => module.HelpPageComponent,
       ),
-    title: "Help · Weft",
+    title: "Help · braid",
   },
   {
     path: "**",
     component: NotFoundComponent,
-    title: "Page unavailable · Weft",
+    title: "Page unavailable · braid",
   },
 ];

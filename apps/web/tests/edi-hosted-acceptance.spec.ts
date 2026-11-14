@@ -99,7 +99,7 @@ test("declared EDI preview and saved comparison use real bytes in the authentica
   expect(work).toBeTruthy();
   await page.goto("/");
   await page
-    .getByRole("region", { name: "Sign in to Weft" })
+    .getByRole("region", { name: "Sign in to braid" })
     .getByRole("button", { name: "Sign in with Microsoft", exact: true })
     .click();
   await page

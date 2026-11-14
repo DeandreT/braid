@@ -15,18 +15,18 @@ reports stay exactly as they were.
 2. Change the **Name** or the **Description**.
 3. Choose **Save metadata**.
 
-When Weft confirms the change, it says **Metadata save confirmed**.
+When braid confirms the change, it says **Metadata save confirmed**.
 
 Revision pages show the mapping's *current* name and description, even for old
 revisions.
 
 ## If someone else changed it first
 
-Weft saves your change only if nobody else changed the details since you opened
+braid saves your change only if nobody else changed the details since you opened
 the editor. Otherwise it keeps your draft and asks you to
 **Review before another save**:
 
-1. Choose **Review latest**. Weft shows three versions side by side: **Base**
+1. Choose **Review latest**. braid shows three versions side by side: **Base**
    (what you started from), **Current** (what is saved now) and **Mine** (your
    draft).
 2. Choose **Keep mine** to keep your draft, **Edit mine** to change it further,
@@ -35,9 +35,9 @@ the editor. Otherwise it keeps your draft and asks you to
 
 Reviewing never saves anything by itself.
 
-## If Weft can't confirm a save
+## If braid can't confirm a save
 
-If the reply to a save is lost, Weft says **Save outcome is unknown**. The save
+If the reply to a save is lost, braid says **Save outcome is unknown**. The save
 may have been applied. Choose **Check current metadata** to read the saved
 details and compare them with what you tried to save.
 

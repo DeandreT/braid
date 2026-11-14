@@ -5,6 +5,29 @@
 .regression-panel {
   margin-top: 20px;
 }
+:host .regression-panel {
+  padding: 20px;
+}
+.regression-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.regression-heading > div {
+  min-width: 0;
+}
+.regression-panel .regression-heading h2 {
+  font-size: 1.25rem;
+  margin: 0 0 8px;
+}
+.regression-panel .regression-heading p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+}
 :host-context(.app-workbench) .regression-panel:not(.regression-intro) {
   margin-top: 0;
   border-bottom: 0;
@@ -13,19 +36,10 @@
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
-/* Before the explicit load, the tab is a short, centred introduction. */
+/* Explicit loading and recovery remain available without implying a result. */
 .regression-panel.regression-intro {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  max-width: 34rem;
-  margin: 32px auto;
-  padding: 20px 24px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-subtle-2);
-  text-align: center;
+  margin: 0;
+  max-width: none;
 }
 .regression-intro p {
   color: var(--text-muted);
@@ -38,11 +52,11 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
-  margin: 8px 0 4px;
-  padding: 8px 10px;
+  gap: 10px 14px;
+  margin: 0 0 14px;
+  padding: 14px 16px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--surface-subtle);
 }
 .regression-spacer {
@@ -56,7 +70,7 @@
   margin: 8px 0 12px;
 }
 .regression-actions .catalog-button {
-  padding: 3px 8px;
+  padding: 7px 11px;
   font-size: 0.75rem;
 }
 .regression-policy {
@@ -79,9 +93,11 @@
   overflow-wrap: anywhere;
 }
 .regression-detail {
-  border-top: 1px solid var(--border-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
   margin-top: 20px;
-  padding-top: 16px;
+  padding: 20px;
 }
 h3,
 h4 {
@@ -111,6 +127,8 @@ textarea {
   border: 1px solid var(--wb-control-border);
   border-radius: 8px;
   font: inherit;
+  background: var(--surface);
+  color: var(--text);
 }
 textarea {
   resize: vertical;
@@ -147,6 +165,20 @@ textarea {
 .regression-table {
   overflow-x: auto;
 }
+.regression-saved-table {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.regression-panel .regression-section-title {
+  margin: 22px 0 12px;
+  color: var(--text);
+  font-size: 0.9375rem;
+}
+.regression-panel .regression-history-note {
+  margin: 10px 0 0;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
 table {
   border-collapse: collapse;
   width: 100%;
@@ -182,11 +214,12 @@ pre {
   border-collapse: collapse;
   width: 100%;
   font-size: 0.8125rem;
+  min-width: 640px;
 }
 .wb-case-table th,
 .wb-case-table td {
   text-align: left;
-  padding: 3px 8px;
+  padding: 12px 14px;
   height: var(--wb-row-height, 32px);
   border-bottom: 1px solid var(--border);
 }
@@ -194,7 +227,7 @@ pre {
   text-align: right;
 }
 .wb-case-table td .catalog-button {
-  padding: 2px 8px;
+  padding: 5px 10px;
   font-size: 0.75rem;
 }
 .wb-case-table tbody tr:hover td {
@@ -204,16 +237,24 @@ pre {
   font-size: 0.75rem;
   background: var(--surface-muted-5);
   color: var(--text-muted-6);
-  font-weight: 500;
+  font-weight: 600;
 }
 .wb-case-table th button {
   border: 0;
   background: none;
   font: inherit;
   cursor: pointer;
+  color: inherit;
+  padding: 0;
 }
 .wb-case-table tr.selected td {
-  background: var(--surface-muted-17);
+  background: var(--wb-selection-tint);
+}
+.wb-case-table tr.selected td:first-child {
+  box-shadow: inset 3px 0 var(--wb-selection-text);
+}
+.wb-case-table tbody tr:last-child td {
+  border-bottom: 0;
 }
 .wb-case-filter {
   display: flex;
@@ -225,6 +266,36 @@ pre {
 .wb-case-filter input {
   width: auto;
   min-width: 150px;
-  padding: 3px 6px;
+  padding: 7px 10px;
   font: inherit;
+}
+.regression-panel input[type="checkbox"] {
+  width: auto;
+  min-height: auto;
+  accent-color: var(--accent-3);
+}
+.regression-panel .catalog-button,
+.regression-panel select,
+.regression-panel input:not([type="checkbox"]):not([type="file"]) {
+  min-height: 36px;
+}
+@media (max-width: 679px) {
+  :host .regression-panel {
+    padding: 16px;
+  }
+  .regression-panel .catalog-button,
+  .regression-panel select,
+  .regression-panel input:not([type="checkbox"]):not([type="file"]) {
+    min-height: 44px;
+  }
+  .regression-toolbar {
+    padding: 12px;
+  }
+  .wb-case-filter {
+    flex-basis: 100%;
+    flex-wrap: wrap;
+  }
+  .wb-case-filter input {
+    flex: 1;
+  }
 }

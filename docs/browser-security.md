@@ -17,6 +17,14 @@ workbench. The allowance is confined to styles: inline scripts, event handlers,
 `unsafe-eval` or `wasm-unsafe-eval`, including when a feature uses a worker. Worker
 implementation and worker response policy remain separate boundaries.
 
+The shipped editor assets have a separate response policy confined to the exact
+public origin's `/edit/` path. It admits `wasm-unsafe-eval` only for that worker,
+denies network connections and nested workers, and retains the common security
+headers. Missing editor paths return empty 404 responses under the shell policy.
+The Angular development target excludes these assets from its ordinary asset
+handler and serves the same six-file package through the scoped handler; it does
+not grant Wasm permission to the page or other development assets.
+
 The shell has no `<base>` element because `base-uri 'none'` forbids it. The router
 gets `/` through `APP_BASE_HREF`; the build emits root-relative asset URLs so direct
 navigation to a nested route still loads the same scripts and styles. Production
@@ -59,6 +67,8 @@ instead of the HTML shell.
 - `tools/browser-fixture/security-headers.test.mjs` checks drift between the
   shipped pipelines, the development server, the session-probe server and the
   HTML/build settings.
+- `tools/browser-fixture/editor-dev-server.test.mjs` checks the development
+  worker policy, exact file allowlist, host/origin restrictions and refusals.
 
 Browser suites do not collect CSP violation reports. A collector that can prove
 every violation was delivered needs native browser support that current Chromium

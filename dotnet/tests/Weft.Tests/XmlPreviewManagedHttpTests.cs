@@ -117,6 +117,7 @@ public sealed class XmlPreviewManagedHttpTests(PostgresFixture fixture)
             Assert.Equal(0L, await catalog.Case.ScalarAsync<long>("SELECT count(*) FROM weft.preview_runs"));
             Assert.Equal(0L, await catalog.Case.ScalarAsync<long>("SELECT count(*) FROM weft.preview_documents"));
             Assert.Equal(0L, await catalog.Case.ScalarAsync<long>("SELECT count(*) FROM weft.xml_preview_documents"));
+            Assert.Equal(0L, await catalog.Case.ScalarAsync<long>("SELECT count(*) FROM weft.lifecycle_work_admissions WHERE work_kind='preview'"));
             return;
         }
         var created = await CatalogHttpTestSupport.JsonAsync(submitted, HttpStatusCode.Created);
@@ -303,6 +304,9 @@ public sealed class XmlPreviewManagedHttpTests(PostgresFixture fixture)
                 (SELECT jsonb_agg(to_jsonb(d) ORDER BY run_id,direction,ordinal) FROM weft.preview_documents d),
                 (SELECT jsonb_agg(to_jsonb(i) ORDER BY to_jsonb(i)::text) FROM weft.revision_ingestions i),
                 (SELECT jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text) FROM weft.mapping_revisions r),
+                (SELECT jsonb_agg(to_jsonb(l) ORDER BY to_jsonb(l)::text) FROM weft.lifecycle_work_admissions l),
+                (SELECT jsonb_agg(to_jsonb(l) ORDER BY to_jsonb(l)::text) FROM weft.lifecycle_work_scopes l),
+                (SELECT jsonb_agg(to_jsonb(l) ORDER BY to_jsonb(l)::text) FROM weft.lifecycle_operations l),
                 (SELECT jsonb_agg(to_jsonb(m) ORDER BY version) FROM weft.schema_migrations m))::text
             """);
 

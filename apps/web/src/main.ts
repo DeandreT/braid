@@ -17,5 +17,5 @@ bootstrapApplication(AppComponent, {
     ),
   ],
 }).catch((error: unknown) => {
-  console.error("Weft could not start", error);
+  console.error("braid could not start", error);
 });

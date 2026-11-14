@@ -18,65 +18,101 @@
       (paletteOpened)="loadSwitcher()"
     >
       <div workbench-context class="wb-context-path">
-        <a [routerLink]="routes.project(view.project.scope)">{{
-          view.project.name
-        }}</a
-        ><span>/</span>
-        <a [routerLink]="routes.mapping(view.mapping.scope)">{{
-          view.mapping.name
-        }}</a
-        ><span>/</span>
-        <h1 id="catalog-page-title" data-catalog-page-title tabindex="-1">
-          Version {{ view.revision.sequence }}
-        </h1>
-        @if (context(); as admission) {
-          <weft-regression-status
-            [scope]="view.mapping.scope"
-            [context]="admission"
-            [revisionId]="view.revision.scope.revisionId"
-            [manage]="true"
-            [admin]="view.mapping.access.role === 'administrator'"
-            [canRun]="view.mapping.access.actions.preview"
-          />
-        }
-        <span
-          class="wb-badge"
-          [class.wb-badge-newer]="
-            view.mapping.head.scope.revisionId !==
-            view.revision.scope.revisionId
-          "
-          title="Checked when this view loaded"
-          >{{
-            view.mapping.head.scope.revisionId ===
-            view.revision.scope.revisionId
-              ? "Latest version"
-              : "Newer version available"
-          }}</span
-        >
-        <span class="wb-context-end">
-          <span class="wb-role"
-            >{{
-              context()?.mode === "development" ? "Development" : "Workspace"
-            }}
-            · {{ roleLabel(view.mapping.access.role) }}</span
+        <nav class="wb-breadcrumb" aria-label="Mapping location">
+          <a [routerLink]="routes.project(view.project.scope)">{{
+            view.project.name
+          }}</a
+          ><span aria-hidden="true">/</span>
+          <a [routerLink]="routes.mapping(view.mapping.scope)">{{
+            view.mapping.name
+          }}</a
+          ><span aria-hidden="true">/</span
+          ><span>Version {{ view.revision.sequence }}</span>
+        </nav>
+        <div class="wb-version-heading">
+          <div class="wb-version-identity">
+            <p class="wb-workspace-role">
+              Data mapping ·
+              {{
+                context()?.mode === "development" ? "Development" : "Workspace"
+              }}
+              · {{ roleLabel(view.mapping.access.role) }}
+            </p>
+            <h1 id="catalog-page-title" data-catalog-page-title tabindex="-1">
+              {{ view.mapping.name }}
+            </h1>
+            <div class="wb-version-facts">
+              <span class="wb-version-number"
+                >Version {{ view.revision.sequence }}</span
+              >
+              @if (context(); as admission) {
+                <weft-regression-status
+                  [scope]="view.mapping.scope"
+                  [context]="admission"
+                  [revisionId]="view.revision.scope.revisionId"
+                  [manage]="true"
+                  [admin]="view.mapping.access.role === 'administrator'"
+                  [canRun]="view.mapping.access.actions.preview"
+                />
+              }
+              <span
+                class="wb-badge"
+                [class.wb-badge-newer]="
+                  view.mapping.head.scope.revisionId !==
+                  view.revision.scope.revisionId
+                "
+                title="Checked when this view loaded"
+                >{{
+                  view.mapping.head.scope.revisionId ===
+                  view.revision.scope.revisionId
+                    ? "Latest version"
+                    : "Newer version available"
+                }}</span
+              >
+            </div>
+          </div>
+          <span
+            class="wb-context-end"
+            [class.wb-context-end-compact]="
+              workbench.selection().view === 'preview' &&
+              !(context()?.features?.edit && view.mapping.access.actions.edit)
+            "
           >
-          <button
-            class="wb-icon-button"
-            type="button"
-            aria-label="Refresh catalog"
-            (click)="retry()"
-            title="Refresh current catalog access and metadata"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" />
-            </svg>
-          </button>
-          @if (context()?.features?.edit && view.mapping.access.actions.edit) {
-            <button type="button" (click)="editMode.set(true)">
-              Edit mapping
+            <button
+              class="wb-icon-button"
+              type="button"
+              aria-label="Refresh catalog"
+              (click)="retry()"
+              title="Refresh current catalog access and metadata"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" />
+              </svg>
             </button>
-          }
-        </span>
+            @if (
+              context()?.features?.edit && view.mapping.access.actions.edit
+            ) {
+              <button type="button" (click)="editMode.set(true)">
+                Edit mapping
+              </button>
+            }
+            @if (
+              context()?.features?.preview &&
+              view.mapping.access.actions.preview
+            ) {
+              <button
+                class="wb-primary"
+                type="button"
+                [hidden]="workbench.selection().view === 'preview'"
+                (click)="
+                  frame()?.closeTray(); frame()?.selectView('preview', true)
+                "
+              >
+                Try sample <span aria-hidden="true">→</span>
+              </button>
+            }
+          </span>
+        </div>
       </div>
       <div workbench-content class="wb-workflows">
         @if (investigation(); as trail) {
@@ -160,7 +196,7 @@
           </div>
         }
         <section
-          class="wb-workflow wb-history"
+          class="wb-workflow wb-panel-workflow wb-history"
           [hidden]="workbench.selection().view !== 'revisions'"
           aria-label="Version history"
         >
@@ -183,50 +219,61 @@
             </button>
           </div>
           @if (historyError()) {
-            <p role="alert">{{ historyError() }}</p>
+            <p class="wb-error" role="alert">{{ historyError() }}</p>
           }
-          <table class="wb-data-table">
-            <thead>
-              <tr>
-                <th>Version</th>
-                <th>File status</th>
-                <th>Source file</th>
-                <th>Committed (UTC)</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (
-                item of revisionHistory()?.revisions ?? [view.revision];
-                track item.scope.revisionId
-              ) {
+          <div
+            class="wb-table-region"
+            role="region"
+            aria-label="Saved versions"
+            tabindex="0"
+          >
+            <table class="wb-data-table">
+              <thead>
                 <tr>
-                  <td>
-                    {{ item.sequence
-                    }}{{
-                      item.scope.revisionId === view.revision.scope.revisionId
-                        ? " · viewing"
-                        : ""
-                    }}
-                  </td>
-                  <td>{{ admissionLabel(item.admission) }}</td>
-                  <td>{{ item.originalFilename }}</td>
-                  <td>
-                    <weft-metadata-value
-                      kind="time"
-                      label="Saved time"
-                      [value]="item.committedAtUtc"
-                    />
-                  </td>
-                  <td>
-                    <a [routerLink]="routes.revision(item.scope)"
-                      >Open version</a
-                    >
-                  </td>
+                  <th>Version</th>
+                  <th>File status</th>
+                  <th>Source file</th>
+                  <th>Committed (UTC)</th>
+                  <th></th>
                 </tr>
-              }
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                @for (
+                  item of revisionHistory()?.revisions ?? [view.revision];
+                  track item.scope.revisionId
+                ) {
+                  <tr
+                    [class.wb-current-version]="
+                      item.scope.revisionId === view.revision.scope.revisionId
+                    "
+                  >
+                    <td>
+                      {{ item.sequence
+                      }}{{
+                        item.scope.revisionId === view.revision.scope.revisionId
+                          ? " · viewing"
+                          : ""
+                      }}
+                    </td>
+                    <td>{{ admissionLabel(item.admission) }}</td>
+                    <td>{{ item.originalFilename }}</td>
+                    <td>
+                      <weft-metadata-value
+                        kind="time"
+                        label="Saved time"
+                        [value]="item.committedAtUtc"
+                      />
+                    </td>
+                    <td>
+                      <a [routerLink]="routes.revision(item.scope)"
+                        >Open version</a
+                      >
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
           @if (revisionHistory()?.nextCursor) {
             <button
               type="button"
@@ -261,7 +308,7 @@
           </details>
         </section>
         <section
-          class="wb-workflow"
+          class="wb-workflow wb-panel-workflow"
           [hidden]="workbench.selection().view !== 'compare'"
           aria-label="Version comparison"
         >
@@ -270,24 +317,30 @@
             Compare saved mapping details and checks for two versions. Results
             stay tied to the exact versions you select.
           </p>
-          @if (
-            context()?.features?.readReports &&
-            view.mapping.access.actions.readReports
-          ) {
-            <a
-              class="wb-action"
-              [routerLink]="routes.mapping(view.mapping.scope) + '/comparisons'"
-              [queryParams]="{ right: view.revision.scope.revisionId }"
-              >Compare with another version</a
-            >
-          } @else {
-            <p class="wb-empty">
-              Saved report reading is unavailable for this mapping.
-            </p>
-          }
+          <div class="wb-entry-card">
+            <h3>Choose the versions to compare</h3>
+            <p>Comparisons remain tied to the exact saved versions.</p>
+            @if (
+              context()?.features?.readReports &&
+              view.mapping.access.actions.readReports
+            ) {
+              <a
+                class="wb-action wb-primary"
+                [routerLink]="
+                  routes.mapping(view.mapping.scope) + '/comparisons'
+                "
+                [queryParams]="{ right: view.revision.scope.revisionId }"
+                >Compare with another version</a
+              >
+            } @else {
+              <p class="wb-empty">
+                Saved report reading is unavailable for this mapping.
+              </p>
+            }
+          </div>
         </section>
         <section
-          class="wb-workflow"
+          class="wb-workflow wb-panel-workflow"
           [hidden]="workbench.selection().view !== 'releases'"
           aria-label="Version in use"
         >
@@ -327,10 +380,15 @@
               </p>
             </li>
           </ul>
-          <p class="wb-empty wb-tile-note">
+          <p class="wb-unavailable wb-tile-note">
             <strong>Change the version in use:</strong> not available in this
             workspace. It requires permission and current verification. Nothing
             is put in use from this screen.
+          </p>
+          <p class="wb-access-note">
+            Current access: {{ roleLabel(view.mapping.access.role) }}. Current
+            verification and permission are required to change the version in
+            use.
           </p>
           <details class="wb-empty">
             <summary>Why this is unavailable</summary>
@@ -340,13 +398,17 @@
           </details>
         </section>
         <section
-          class="wb-workflow"
+          class="wb-workflow wb-panel-workflow"
           [hidden]="workbench.selection().view !== 'audit'"
           aria-label="Change history"
         >
           <div class="wb-command-bar"><h2>Change history</h2></div>
-          <p class="wb-empty">
-            This workspace can't show the history of versions put in use.
+          <div class="wb-entry-card">
+            <h3>Change history unavailable</h3>
+            <p>This workspace can't show the history of versions put in use.</p>
+          </div>
+          <p class="wb-access-note">
+            <strong>Activity is not deployment history.</strong>
             Activity only shows information read on this page; it isn't a record
             of changes to the version in use.
           </p>
@@ -563,12 +625,17 @@
         }
         @default {
           @if (projection(); as projection) {
-            <weft-workbench-entity-inspector
-              [view]="projection"
-              [reference]="workbench.selection().entity"
-              [tab]="workbench.selection().inspectorTab"
-              (navigate)="inspect($event)"
-            />
+            <div
+              class="wb-field-inspector"
+              [attr.data-inspector-tab]="workbench.selection().inspectorTab"
+            >
+              <weft-workbench-entity-inspector
+                [view]="projection"
+                [reference]="workbench.selection().entity"
+                [tab]="workbench.selection().inspectorTab"
+                (navigate)="inspect($event)"
+              />
+            </div>
           } @else {
             <p>
               A verified saved explanation is needed before inspecting fields
@@ -581,43 +648,45 @@
     <ng-template #dock>
       @switch (workbench.selection().dock) {
         @case ("diagnostics") {
-          @for (group of diagnostics(); track group.kind) {
-            <section class="wb-diagnostic-group">
-              <h3>{{ group.label }}</h3>
-              <p class="wb-muted">
-                {{ group.items.length }} of {{ group.total }} issues shown{{
-                  group.truncated ? " · Truncated report" : ""
-                }}.
-              </p>
-              @for (item of group.items; track $index) {
-                <article
-                  tabindex="-1"
-                  [id]="'wb-diagnostic-' + group.kind + '-' + $index"
-                  [attr.data-chat-projection-diagnostic]="
-                    group.kind === 'projection' ? $index : null
-                  "
-                  [attr.data-chat-validation-diagnostic]="
-                    group.kind === 'validation' ? $index : null
-                  "
-                >
-                  <strong [attr.data-severity]="item.severity">{{
-                    item.severity
-                  }}</strong>
-                  {{ item.message
-                  }}<weft-native-evidence [locator]="item.nativeLocator" />
-                  @if (item.reference; as reference) {
-                    <button type="button" (click)="inspect(reference)">
-                      Inspect linked {{ reference.kind }}
-                    </button>
-                  }
-                </article>
-              } @empty {
-                <p>No diagnostics in this verified report.</p>
-              }
-            </section>
-          } @empty {
-            <p>No verified diagnostics are loaded.</p>
-          }
+          <div class="wb-diagnostic-grid">
+            @for (group of diagnostics(); track group.kind) {
+              <section class="wb-diagnostic-group">
+                <h3>{{ group.label }}</h3>
+                <p class="wb-muted">
+                  {{ group.items.length }} of {{ group.total }} issues shown{{
+                    group.truncated ? " · Truncated report" : ""
+                  }}.
+                </p>
+                @for (item of group.items; track $index) {
+                  <article
+                    tabindex="-1"
+                    [id]="'wb-diagnostic-' + group.kind + '-' + $index"
+                    [attr.data-chat-projection-diagnostic]="
+                      group.kind === 'projection' ? $index : null
+                    "
+                    [attr.data-chat-validation-diagnostic]="
+                      group.kind === 'validation' ? $index : null
+                    "
+                  >
+                    <strong [attr.data-severity]="item.severity">{{
+                      item.severity
+                    }}</strong>
+                    {{ item.message
+                    }}<weft-native-evidence [locator]="item.nativeLocator" />
+                    @if (item.reference; as reference) {
+                      <button type="button" (click)="inspect(reference)">
+                        Inspect linked {{ reference.kind }}
+                      </button>
+                    }
+                  </article>
+                } @empty {
+                  <p>No diagnostics in this verified report.</p>
+                }
+              </section>
+            } @empty {
+              <p>No verified diagnostics are loaded.</p>
+            }
+          </div>
         }
         @case ("input") {
           @if (displayedInput(); as item) {
@@ -644,10 +713,21 @@
             </div>
             <weft-document-view [data]="item" />
           } @else {
-            <p>
-              Select an authorized saved case for this pinned revision in Tests.
-              Draft inputs are not treated as saved evidence.
-            </p>
+            <div class="wb-dock-empty">
+              <h3>Select saved input evidence</h3>
+              <p>
+                Select an authorized saved case for this pinned revision in
+                Tests. Draft inputs are not treated as saved evidence.
+              </p>
+              <button
+                type="button"
+                (click)="
+                  frame()?.closeTray(); frame()?.selectView('tests', true)
+                "
+              >
+                Go to Tests <span aria-hidden="true">→</span>
+              </button>
+            </div>
           }
         }
         @case ("output") {
@@ -670,10 +750,26 @@
               </div>
               <weft-document-view [data]="item.display" />
             } @else {
-              <p>
-                Choose Show beside an output in Try sample. Preview evidence
-                stays tied to its own run.
-              </p>
+              <div class="wb-dock-empty">
+                <h3>Choose a preview output</h3>
+                <p>
+                  Choose Show beside an output in Try sample. Preview evidence
+                  stays tied to its own run.
+                </p>
+                @if (
+                  context()?.features?.preview &&
+                  view.mapping.access.actions.preview
+                ) {
+                  <button
+                    type="button"
+                    (click)="
+                      frame()?.closeTray(); frame()?.selectView('preview', true)
+                    "
+                  >
+                    Back to Try sample <span aria-hidden="true">→</span>
+                  </button>
+                }
+              </div>
             }
           } @else {
             <div class="wb-command-bar">
@@ -718,10 +814,27 @@
             @if (displayedOutput(); as item) {
               <weft-document-view [data]="item" />
             } @else {
-              <p>
-                No {{ regressionDocumentKind() }} regression output is available
-                for this selection. Use Try sample for preview evidence.
-              </p>
+              <div class="wb-dock-empty">
+                <h3>No {{ regressionDocumentKind() }} regression output</h3>
+                <p>
+                  No {{ regressionDocumentKind() }} regression output is
+                  available for this selection. Use Try sample for preview
+                  evidence.
+                </p>
+                @if (
+                  context()?.features?.preview &&
+                  view.mapping.access.actions.preview
+                ) {
+                  <button
+                    type="button"
+                    (click)="
+                      frame()?.closeTray(); frame()?.selectView('preview', true)
+                    "
+                  >
+                    Try sample <span aria-hidden="true">→</span>
+                  </button>
+                }
+              </div>
             }
           }
         }
@@ -788,10 +901,21 @@
               </p>
             }
           } @else {
-            <p>
-              Select a completed run and its saved case for this pinned
-              revision. No baseline is accepted automatically.
-            </p>
+            <div class="wb-dock-empty">
+              <h3>Select a run and saved case</h3>
+              <p>
+                Select a completed run and its saved case for this pinned
+                revision. No baseline is accepted automatically.
+              </p>
+              <button
+                type="button"
+                (click)="
+                  frame()?.closeTray(); frame()?.selectView('tests', true)
+                "
+              >
+                Go to Tests <span aria-hidden="true">→</span>
+              </button>
+            </div>
           }
           @if (affectedFields().length) {
             <nav class="wb-command-bar" aria-label="Affected mapping fields">
@@ -805,42 +929,55 @@
           }
         }
         @case ("activity") {
-          <table class="wb-data-table">
-            <thead>
-              <tr>
-                <th>Evidence in this view</th>
-                <th>State</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Revision {{ view.revision.sequence }}</td>
-                <td>Pinned · {{ admissionLabel(view.revision.admission) }}</td>
-              </tr>
-              <tr>
-                <td>Explanation / validation</td>
-                <td>
-                  {{ reports.projection().phase }} /
-                  {{ reports.validation().phase }}
-                </td>
-              </tr>
-              @if (selectedRun(); as run) {
+          <div
+            class="wb-table-region"
+            role="region"
+            aria-label="Evidence read in this view"
+            tabindex="0"
+          >
+            <table class="wb-data-table">
+              <thead>
                 <tr>
-                  <td>Selected regression run</td>
+                  <th>Evidence in this view</th>
+                  <th>State</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Revision {{ view.revision.sequence }}</td>
                   <td>
-                    {{ run.run.state }} ·
-                    {{ run.comparison?.outcome ?? run.executionOutcome }}
+                    Pinned · {{ admissionLabel(view.revision.admission) }}
                   </td>
                 </tr>
-              }
-              @if (buildView()?.selectedRun(); as build) {
                 <tr>
-                  <td>Selected build</td>
-                  <td>{{ build.state }} · {{ build.outcome }}</td>
+                  <td>Explanation / validation</td>
+                  <td>
+                    {{ reports.projection().phase }} /
+                    {{ reports.validation().phase }}
+                  </td>
                 </tr>
-              }
-            </tbody>
-          </table>
+                @if (selectedRun(); as run) {
+                  <tr>
+                    <td>Selected regression run</td>
+                    <td>
+                      {{ run.run.state }} ·
+                      {{ run.comparison?.outcome ?? run.executionOutcome }}
+                    </td>
+                  </tr>
+                }
+                @if (buildView()?.selectedRun(); as build) {
+                  <tr>
+                    <td>Selected build</td>
+                    <td>{{ build.state }} · {{ build.outcome }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <p class="wb-access-note">
+            Activity describes evidence read in this view, not changes to the
+            version in use.
+          </p>
         }
       }
     </ng-template>

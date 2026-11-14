@@ -685,12 +685,23 @@ test("columns, density and both resize handles work together on the dense layout
     ["Resize investigation dock", "ArrowUp"],
   ]) {
     const separator = page.getByRole("separator", { name: name!, exact: true });
-    const value = Number(await separator.getAttribute("aria-valuenow"));
     await separator.focus();
+    await page.keyboard.press("Home");
+    const minimum = Number(await separator.getAttribute("aria-valuemin"));
+    const maximum = Number(await separator.getAttribute("aria-valuemax"));
+    expect(maximum).toBeGreaterThan(minimum);
+    await expect(separator).toHaveAttribute("aria-valuenow", String(minimum));
     await page.keyboard.press(key!);
     await expect(separator).toHaveAttribute(
       "aria-valuenow",
-      String(value + 10),
+      String(Math.min(minimum + 10, maximum)),
+    );
+    await page.keyboard.press("End");
+    await expect(separator).toHaveAttribute("aria-valuenow", String(maximum));
+    await page.keyboard.press(key === "ArrowRight" ? "ArrowLeft" : "ArrowDown");
+    await expect(separator).toHaveAttribute(
+      "aria-valuenow",
+      String(Math.max(minimum, maximum - 10)),
     );
   }
   await page
@@ -723,7 +734,7 @@ test("narrow scaled text keeps role, controls and overflow inside the workbench"
   expect(catalog).not.toBeNull();
   expect(context).not.toBeNull();
   expect(context!.y).toBeGreaterThanOrEqual(catalog!.y + catalog!.height);
-  await expect(page.locator(".wb-role")).toBeVisible();
+  await expect(page.locator(".wb-workspace-role")).toBeVisible();
   await page
     .getByRole("button", { name: "Show inspector", exact: true })
     .click();

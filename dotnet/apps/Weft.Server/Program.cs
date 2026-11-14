@@ -28,12 +28,13 @@ builder.Services.SuppressRequestDiagnostics();
 CatalogHostConfiguration.Configure(builder, address);
 SpecHostConfiguration.Configure(builder.Services, Environment.GetEnvironmentVariable, session: false);
 CreationHostConfiguration.Configure(builder.Services, Environment.GetEnvironmentVariable, session: false);
-builder.Services.AddWeftAuthenticationHttp(new(hostOptions.Mode, hostOptions.Origin), builder.Environment);
+var authenticationOptions = new AuthenticationHttpOptions(hostOptions.Mode, hostOptions.Origin);
+builder.Services.AddWeftAuthenticationHttp(authenticationOptions, builder.Environment);
 if (builder.Environment.IsDevelopment())
     DevelopmentFerruleRunner.Configure(builder.Services, Environment.GetEnvironmentVariable);
 var app = builder.Build();
 app.UseWeftBrowserSecurityHeaders();
-BrowserContentPolicy.Use(app, hostOptions.Origin);
+BrowserContentPolicy.Use(app, authenticationOptions);
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.MapWeftHealth();

@@ -1,7 +1,7 @@
 # Project-creation browser fixture
 
 This fixture proves the actual project-creation UI against ordinary published
-Weft APIs and a new PostgreSQL database. It never uploads native data, creates a
+braid APIs and a new PostgreSQL database. It never uploads native data, creates a
 private storage root, enables ingestion/reports or starts native workers. Its
 separate read-only observer requires **zero native worker events**. Existing
 catalog/report fixtures and their positive-worker observer remain unchanged.

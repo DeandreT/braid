@@ -620,3 +620,198 @@ footer {
     line-height: 1.5;
   }
 }
+
+/* Shared application chrome. Route layouts and workbench density stay local. */
+.workspace-shell.app-workbench {
+  background: var(--page);
+}
+.workspace-shell.app-workbench .app-header {
+  min-height: 64px;
+  padding: 10px 24px;
+  gap: 10px 20px;
+  background: var(--surface);
+}
+.workspace-shell.app-workbench .brand {
+  flex: none;
+  font-size: 27px;
+  gap: 9px;
+}
+.workspace-shell.app-workbench .brand-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  font-size: 25px;
+  letter-spacing: 0;
+  padding: 0;
+}
+.workspace-shell .workspace-organization {
+  max-width: min(24vw, 18rem);
+  padding-left: 20px;
+  border-left: 1px solid var(--border);
+  line-height: 1.45;
+}
+.workspace-shell .workspace-organization strong {
+  font-weight: 600;
+}
+.workspace-shell.app-workbench .app-header .search-trigger {
+  min-height: 40px;
+  border-radius: 7px;
+  background: var(--surface-subtle);
+}
+.workspace-shell.app-workbench .app-header #workspace-chat-toggle,
+.workspace-shell.app-workbench .header-icon-button {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  border-radius: 7px;
+}
+.workspace-shell.app-workbench .workspace-nav {
+  width: 192px;
+  min-width: 0;
+  padding: 20px 12px;
+  gap: 6px;
+  overflow-y: auto;
+  background: var(--accent-5);
+}
+.workspace-nav-caption {
+  margin: 0 12px 8px;
+  color: var(--text-on-accent-4);
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.workspace-shell.app-workbench .workspace-nav a {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 7px;
+  color: var(--text-on-accent-2);
+}
+.workspace-shell.app-workbench .workspace-nav a:hover {
+  background: var(--accent-6);
+}
+.workspace-shell.app-workbench .workspace-nav a.active {
+  background: var(--accent-8);
+  font-weight: 700;
+}
+.workspace-shell.app-workbench .workspace-nav .rail-icon {
+  display: block;
+  flex: 0 0 20px;
+}
+.workspace-shell.app-workbench .workspace-nav .rail-label {
+  display: block;
+  position: static;
+  padding: 0;
+  background: none;
+  color: inherit;
+  font-size: 0.8125rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.workspace-shell.app-workbench .workspace-nav a:focus-visible {
+  outline-offset: -3px;
+}
+.workspace-shell .workspace-content {
+  min-width: 0;
+}
+@media (min-width: 680px) and (max-width: 1023px) {
+  .workspace-shell.app-workbench .workspace-nav {
+    width: 44px;
+    padding-inline: 0;
+  }
+  .workspace-shell.app-workbench .workspace-nav-caption {
+    display: none;
+  }
+  .workspace-shell.app-workbench .workspace-nav a {
+    flex-shrink: 0;
+    justify-content: center;
+    gap: 0;
+    padding-inline: 0;
+  }
+  .workspace-shell.app-workbench .workspace-nav .rail-label,
+  .workspace-shell.app-workbench
+    .workspace-nav
+    a:is(:hover, :focus-visible)
+    .rail-label {
+    /* Links retain accessible names and native title tooltips in the scrollport. */
+    display: none;
+  }
+  .workspace-shell.app-workbench .app-header {
+    padding-inline: 16px;
+    gap: 8px 12px;
+  }
+  .workspace-shell .workspace-organization {
+    max-width: 12rem;
+    padding-left: 12px;
+  }
+}
+@media (max-width: 679px) {
+  .workspace-shell.app-workbench .app-header {
+    min-height: 64px;
+    padding: 8px 12px;
+    gap: 8px;
+  }
+  .workspace-shell.app-workbench .brand {
+    font-size: 23px;
+  }
+  .workspace-shell.app-workbench .brand-name {
+    display: inline;
+  }
+  .workspace-shell .workspace-organization {
+    order: 5;
+    flex-basis: 100%;
+    max-width: none;
+    padding: 0;
+    border: 0;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    align-items: baseline;
+  }
+  .workspace-shell.app-workbench .workspace-menu,
+  .workspace-shell.app-workbench .app-header #workspace-chat-toggle,
+  .workspace-shell.app-workbench .header-icon-button {
+    min-height: 44px;
+  }
+  .workspace-shell.app-workbench .app-header #workspace-chat-toggle,
+  .workspace-shell.app-workbench .header-icon-button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+  }
+  .workspace-shell.app-workbench .workspace-nav {
+    display: none;
+  }
+  .workspace-shell.app-workbench .workspace-nav.workspace-nav-open {
+    display: flex;
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 6px 12px;
+    gap: 4px;
+  }
+  .workspace-shell .workspace-nav-caption {
+    display: none;
+  }
+  .workspace-shell.app-workbench .workspace-nav a {
+    flex: none;
+    padding: 10px;
+    gap: 7px;
+  }
+  .workspace-shell.app-workbench .workspace-nav .rail-label {
+    white-space: nowrap;
+    font-size: 0.75rem;
+  }
+  .workspace-shell.app-workbench .workspace-nav .rail-icon {
+    width: 18px;
+    height: 18px;
+    flex-basis: 18px;
+  }
+}

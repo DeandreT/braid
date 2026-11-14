@@ -1,6 +1,6 @@
 # Flat CSV documents
 
-`weft.csv.flat-document.v1` identifies Weft's primary flat CSV document capability.
+`weft.csv.flat-document.v1` identifies braid's primary flat CSV document capability.
 The direct Ferrule preview protocol is `weft.ferrule-csv-preview.v1`; its C# adapter
 uses `PreviewExecutionProfile.CsvDocument` and the separate
 `weft.ferrule-csv-preview-adapter.v1` identity. Source generation uses
@@ -40,11 +40,11 @@ explicit zero-byte output frame with the digest of the empty byte string.
 Only the CSV preview profile selects `PayloadRunOptions::with_bounded_documents`.
 Legacy JSON/EDI execution retains its established route, including JSON schema
 provenance acceptance. No C ABI or secondary mapping implementation is involved.
-CSV parsing and serialization use the pinned native codecs; Weft also validates
+CSV parsing and serialization use the pinned native codecs; braid also validates
 output against the bounded CSV reader before publication.
 
 Native ceilings are 8 MiB per document, 1 MiB per cell, 100,000 physical records
-(including a skipped header), 256 columns and 1,000,000 materialized nodes. Weft's
+(including a skipped header), 256 columns and 1,000,000 materialized nodes. braid's
 requested aggregate input/output, artifact and diagnostic ceilings remain in force
 and may be smaller. The worker process still owns CPU, memory and deadline limits.
 Failures publish no partial output and do not trigger mutation retries.

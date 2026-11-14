@@ -61,13 +61,7 @@ internal sealed class ChatHttpTestSupport : IAsyncDisposable
             provider.Endpoint("/v1/chat/completions"), true, AiAuthentication.Bearer, "fixture-credential",
             AiCapability.Text | AiCapability.FunctionTools, "mapping-metadata", 1, metadataAllowed, false);
 
-    // Every chat transaction re-admits the complete schema, so a turn's ledger writes cost hundreds of milliseconds each on a
-    // loaded host. Fixture turns get the longest configurable deadline, and streams outlive it so an overrun is reported by
-    // the turn's own terminal event rather than a client cancellation.
-    internal const int TurnSeconds = 180;
-    private static readonly TimeSpan StreamBound = TimeSpan.FromSeconds(TurnSeconds + 30);
-
-    internal static ChatApiOptions Options(AiHttpFixture provider, int turnSeconds = TurnSeconds) =>
+    internal static ChatApiOptions Options(AiHttpFixture provider, int turnSeconds = 60) =>
         new([new ChatModelProfile("Fixture model", "fixture", Profile(provider))], TimeSpan.FromDays(1),
             TimeSpan.FromSeconds(turnSeconds), 128);
 
@@ -220,7 +214,7 @@ internal sealed class ChatHttpTestSupport : IAsyncDisposable
         using var request = new HttpRequestMessage(HttpMethod.Get, (path ?? TurnPath(conversation, turn)) + "/events" + (after is { } n ? $"?after={n}" : ""));
         request.Headers.Accept.ParseAdd("text/event-stream");
         using var bound = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        bound.CancelAfter(StreamBound);
+        bound.CancelAfter(TimeSpan.FromSeconds(60));
         using var response = await Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, bound.Token);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("text/event-stream", response.Content.Headers.ContentType?.MediaType);
