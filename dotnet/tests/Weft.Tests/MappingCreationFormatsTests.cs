@@ -553,7 +553,7 @@ public sealed class MappingCreationFormatsTests
         var response = await Preview([.. Frame(header), .. Frame(native), .. Frame(sampleBytes)]);
         using var stream = new MemoryStream(response);
         using var reply = JsonDocument.Parse(ReadFrame(stream));
-        Assert.Equal("dddc4dce6c93f4137fb2aa2a011360d089e0a51b", reply.RootElement.GetProperty("engineRevision").GetString());
+        Assert.Equal("238369bf0071ee8ea097d8c54fa5061f433807fb", reply.RootElement.GetProperty("engineRevision").GetString());
         if (expectedFailure is not null)
         {
             Assert.Equal(expectedFailure, reply.RootElement.GetProperty("failure").GetProperty("code").GetString());

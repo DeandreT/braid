@@ -230,7 +230,7 @@ dependencies = [
 [[package]]
 name = "format-pdf"
 version = "0.1.0"
-source = "git+https://github.com/DeandreT/ferrule?rev=dddc4dce6c93f4137fb2aa2a011360d089e0a51b#dddc4dce6c93f4137fb2aa2a011360d089e0a51b"
+source = "git+https://github.com/DeandreT/ferrule?rev=238369bf0071ee8ea097d8c54fa5061f433807fb#238369bf0071ee8ea097d8c54fa5061f433807fb"
 dependencies = [
  "ir",
  "mapping",
@@ -291,7 +291,7 @@ dependencies = [
 [[package]]
 name = "ir"
 version = "0.1.0"
-source = "git+https://github.com/DeandreT/ferrule?rev=dddc4dce6c93f4137fb2aa2a011360d089e0a51b#dddc4dce6c93f4137fb2aa2a011360d089e0a51b"
+source = "git+https://github.com/DeandreT/ferrule?rev=238369bf0071ee8ea097d8c54fa5061f433807fb#238369bf0071ee8ea097d8c54fa5061f433807fb"
 dependencies = [
  "json-pattern",
  "serde",
@@ -316,7 +316,7 @@ dependencies = [
 [[package]]
 name = "json-pattern"
 version = "0.1.0"
-source = "git+https://github.com/DeandreT/ferrule?rev=dddc4dce6c93f4137fb2aa2a011360d089e0a51b#dddc4dce6c93f4137fb2aa2a011360d089e0a51b"
+source = "git+https://github.com/DeandreT/ferrule?rev=238369bf0071ee8ea097d8c54fa5061f433807fb#238369bf0071ee8ea097d8c54fa5061f433807fb"
 
 [[package]]
 name = "libc"
@@ -366,7 +366,7 @@ dependencies = [
 [[package]]
 name = "mapping"
 version = "0.1.0"
-source = "git+https://github.com/DeandreT/ferrule?rev=dddc4dce6c93f4137fb2aa2a011360d089e0a51b#dddc4dce6c93f4137fb2aa2a011360d089e0a51b"
+source = "git+https://github.com/DeandreT/ferrule?rev=238369bf0071ee8ea097d8c54fa5061f433807fb#238369bf0071ee8ea097d8c54fa5061f433807fb"
 dependencies = [
  "ir",
  "regex",

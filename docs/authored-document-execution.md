@@ -7,7 +7,7 @@ the pinned engine revision, and SHA-256 digests of the native, sample and output
 There is no revision identity or requirement to save the proposal first.
 
 Implementation: `engines/ferrule-host/core/src/authored_document/`.
-Ferrule revision: `dddc4dce6c93f4137fb2aa2a011360d089e0a51b`. The four direct format
+Ferrule revision: `238369bf0071ee8ea097d8c54fa5061f433807fb`. The four direct format
 dependencies reuse packages already in the host lockfile; no dependency was upgraded.
 
 ## Executable boundaries
@@ -170,7 +170,7 @@ Response header:
 {
   "protocolVersion": "weft.ferrule-authored-preview.v1",
   "request": "exact parsed request object, or null if unavailable",
-  "engineRevision": "dddc4dce6c93f4137fb2aa2a011360d089e0a51b",
+  "engineRevision": "238369bf0071ee8ea097d8c54fa5061f433807fb",
   "result": "null or {outputDigest, outputByteCount, format, mediaType}",
   "failure": "null or {code}"
 }
