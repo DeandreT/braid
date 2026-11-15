@@ -5,14 +5,14 @@ edition = "2024"
 publish = false
 
 [dependencies]
-ferrule-format-json = { package = "format-json", git = "https://github.com/DeandreT/ferrule", rev = "dddc4dce6c93f4137fb2aa2a011360d089e0a51b" }
-ferrule-format-xml = { package = "format-xml", git = "https://github.com/DeandreT/ferrule", rev = "dddc4dce6c93f4137fb2aa2a011360d089e0a51b" }
-ferrule-format-csv = { package = "format-csv", git = "https://github.com/DeandreT/ferrule", rev = "dddc4dce6c93f4137fb2aa2a011360d089e0a51b" }
-ferrule-format-edi = { package = "format-edi", git = "https://github.com/DeandreT/ferrule", rev = "dddc4dce6c93f4137fb2aa2a011360d089e0a51b" }
-ferrule-mapping = { package = "mapping", git = "https://github.com/DeandreT/ferrule", rev = "dddc4dce6c93f4137fb2aa2a011360d089e0a51b" }
-ferrule-engine = { package = "engine", git = "https://github.com/DeandreT/ferrule", rev = "dddc4dce6c93f4137fb2aa2a011360d089e0a51b" }
-ferrule-ir = { package = "ir", git = "https://github.com/DeandreT/ferrule", rev = "dddc4dce6c93f4137fb2aa2a011360d089e0a51b" }
-ferrule-edit-ops = { package = "edit-ops", git = "https://github.com/DeandreT/ferrule", rev = "dddc4dce6c93f4137fb2aa2a011360d089e0a51b" }
+ferrule-format-json = { package = "format-json", git = "https://github.com/DeandreT/ferrule", rev = "238369bf0071ee8ea097d8c54fa5061f433807fb" }
+ferrule-format-xml = { package = "format-xml", git = "https://github.com/DeandreT/ferrule", rev = "238369bf0071ee8ea097d8c54fa5061f433807fb" }
+ferrule-format-csv = { package = "format-csv", git = "https://github.com/DeandreT/ferrule", rev = "238369bf0071ee8ea097d8c54fa5061f433807fb" }
+ferrule-format-edi = { package = "format-edi", git = "https://github.com/DeandreT/ferrule", rev = "238369bf0071ee8ea097d8c54fa5061f433807fb" }
+ferrule-mapping = { package = "mapping", git = "https://github.com/DeandreT/ferrule", rev = "238369bf0071ee8ea097d8c54fa5061f433807fb" }
+ferrule-engine = { package = "engine", git = "https://github.com/DeandreT/ferrule", rev = "238369bf0071ee8ea097d8c54fa5061f433807fb" }
+ferrule-ir = { package = "ir", git = "https://github.com/DeandreT/ferrule", rev = "238369bf0071ee8ea097d8c54fa5061f433807fb" }
+ferrule-edit-ops = { package = "edit-ops", git = "https://github.com/DeandreT/ferrule", rev = "238369bf0071ee8ea097d8c54fa5061f433807fb" }
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = { version = "=1.0.150", features = ["float_roundtrip"] }
 sha2 = "=0.10.9"

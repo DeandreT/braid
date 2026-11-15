@@ -263,7 +263,7 @@ public sealed class FerruleRevisionReportWorkerTests
     private static RevisionReportBackendProfile Profile(IInspectionWorkerRunner runner)
     {
         var profile = FerruleRevisionReportBackendFactory.CreateProfile(runner.BuildIdentity);
-        Assert.Equal("dddc4dce6c93f4137fb2aa2a011360d089e0a51b", profile.BackendRevision);
+        Assert.Equal("238369bf0071ee8ea097d8c54fa5061f433807fb", profile.BackendRevision);
         Assert.Equal(runner.BuildIdentity, profile.BackendBuild);
         return profile;
     }

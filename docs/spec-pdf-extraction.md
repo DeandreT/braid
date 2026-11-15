@@ -2,7 +2,7 @@
 
 The separately scoped native host/evidence unit is described in [spec-pdf-native-runner.md](spec-pdf-native-runner.md); its current changes await independent review and Linux qualification.
 
-`engines/spec-pdf-worker` uses Ferrule's exact `dddc4dce` public PDF layout API.
+`engines/spec-pdf-worker` uses Ferrule's exact `238369bf` public PDF layout API.
 The fixed layout captures visual text once per page, including empty pages. No
 caller-supplied path, URL, layout, password or executable expression is accepted.
 The standalone protocol accepts a PDF on stdin and returns one bounded JSON

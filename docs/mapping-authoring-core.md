@@ -3,7 +3,7 @@
 `weft_ferrule_core::authoring::compile(&[u8])` creates a fresh Ferrule project,
 applies `ferrule.edit.v1` operations and returns an authoritative `edit::Checkpoint`.
 It performs no I/O and accepts no template, native project, URL or resource path.
-Ferrule remains pinned to `dddc4dce6c93f4137fb2aa2a011360d089e0a51b`.
+Ferrule remains pinned to `238369bf0071ee8ea097d8c54fa5061f433807fb`.
 
 ## Closed request
 

@@ -610,7 +610,7 @@ await runBrowserFixture({
           ingestion.admission_policy_id === "weft.native-admission.v1" &&
           String(ingestion.effective_native_byte_limit) === "4194304" &&
           ingestion.engine_revision ===
-            "dddc4dce6c93f4137fb2aa2a011360d089e0a51b" &&
+            "238369bf0071ee8ea097d8c54fa5061f433807fb" &&
           ingestion.backend_build === cfg.workerImage &&
           ingestion.adapter_build === "weft.ferrule-adapter.v3" &&
           String(ingestion.claim_count) === "1" &&

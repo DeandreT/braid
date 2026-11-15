@@ -50,7 +50,7 @@ const succeeded = run("completed", {
   recordsWritten: "1",
   provenance: {
     confirmed: true,
-    engineRevision: "dddc4dce6c93f4137fb2aa2a011360d089e0a51b",
+    engineRevision: "238369bf0071ee8ea097d8c54fa5061f433807fb",
     backendBuild: "sha256:" + "c".repeat(64),
     adapterBuild: "weft.ferrule-preview-adapter.v1",
     profile: "weft.ferrule-json-preview.v1",
