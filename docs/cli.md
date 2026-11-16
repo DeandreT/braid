@@ -1,42 +1,17 @@
 # braid CLI
 
-## Administration
+`weft` works with the braid API as the signed-in user. It uses a Microsoft Entra
+public-client registration and delegated access tokens, with the same project
+roles and server feature settings as the browser. Source: `dotnet/apps/Weft.Cli`.
+The command, package names, profiles, token-cache paths and scope identifiers
+retain their existing technical names.
 
-`weft administration show` reads organization members, invitation states and recent
-changes. Add `--project ID` for project members, payload-read permission and machine
-invocation grants. Normal output includes the strong ETag; every edit requires its
-complete quoted value in `--if-match`. JSON output retains the exact response body.
-
-```sh
-weft administration show
-weft administration member --principal ID --role member --active true --if-match '"admin-ORG-7"'
-weft administration member --project ID --principal ID --role runner --active true --if-match '"admin-ORG-8"'
-weft administration payload --project ID --principal ID --active true --if-match '"admin-ORG-9"'
-weft administration disable-principal ID --if-match '"admin-ORG-10"'
-weft administration disable-binding ID --if-match '"admin-ORG-10"'
-weft administration invitations create --file invitation.json --if-match '"admin-ORG-10"'
-weft administration invitations revoke ID --if-match '"admin-ORG-11"'
-weft administration invocation-grants grant GRANT_ID --project ID --target ID --tenant ID --object ID --if-match '"admin-ORG-12"'
-weft administration invocation-grants revoke GRANT_ID --project ID --if-match '"admin-ORG-13"'
-```
-
-Replace the example ETags with freshly observed values and use canonical UUIDs.
-The invitation JSON has `invitationId`, `tenantId`, `expectedObjectId` (or null),
-`projectRoles` (an array of `{ "projectId": "…", "role": "viewer" }`) and an ISO
-`expiresAt` no more than seven days away. Its private redemption link is deliberate
-output, shown once; never put it in a diagnostic log. `--file -` accepts stdin.
-
-Administrative edits are not retried after uncertain transport results. Read the
-current state before sending another edit. Role boundaries, last-administrator
-protection and soft deactivation are described in [Administration](administration.md).
-
-`weft` works with the braid API as the signed-in user. It signs in to Microsoft Entra ID as a
-public client application and sends the user's delegated access token, so every command has
-exactly the user's own project roles and the server's feature settings, as in the browser.
-Source: `dotnet/apps/Weft.Cli`.
-
-The command remains `weft`, and package names, profiles, token-cache paths and
-scope identifiers retain their existing technical names.
+For a task-focused introduction, read [Using the command line](user-guide/cli.md).
+This page covers installation, connection settings and the command reference.
+Start with [Install](#install), [Entra registration and server settings](#entra-registration-and-server-settings),
+[Profiles](#profiles) and [Sign-in](#sign-in). Use [Commands](#commands) to find
+an operation, and [Requests and recovery](#requests-and-recovery) before retrying
+an uncertain result.
 
 ## Install
 
@@ -74,6 +49,9 @@ The CLI needs its own app registration in the braid tenant:
 The server accepts the CLI's tokens only when bearer access is enabled for this client ID; see
 [API authentication](api-authentication.md). The signed-in user must be bound and admitted,
 exactly as for the browser.
+
+The loopback Development host does not accept this bearer sign-in. A browser
+session alone does not supply the CLI registration, consent or server admission.
 
 ## Profiles
 
@@ -158,11 +136,19 @@ shaped like a token.
 | `weft previews create/get/cancel/download` | Sample previews and verified output downloads |
 | `weft regression capabilities`, `cases list/get/create`, `runs list/create/get/cancel` | Saved cases and their runs |
 | `weft builds capabilities`, `environment-capabilities`, `environments list/get/create`, `approvals list/get/create/revoke`, `runs list/create/get/cancel` | Build environments, approvals and runs |
+| `weft administration show/member/payload/disable-principal/disable-binding/invitations/invocation-grants` | [Administration](#administration), conditional on current access and the exact state ETag |
 | `weft operations targets/releases/history/actions/invocations/summary/callers`, `activate/rollback/disable/enable` | [Release operations](release-operations.md), monitoring and version-conditional target changes |
 | `weft chat availability`, `conversations list/get/create`, `ask`, `follow`, `cancel` | Grounded chat about a revision |
 | `weft chat workspace availability`, `conversations list/get/create`, `ask`, `follow`, `cancel` | Organization-wide read-only chat, with optional mapping or exact revision focus |
 
 `weft <command> --help` lists every option.
+
+Specification intake, creation proposal review/approval/recovery and exact
+chat-edit proposal approval/recovery are browser-only workflows. The CLI has no
+commands for those routes. Follow [the creation guide](user-guide/creation.md)
+or [chat review](user-guide/chat.md#ask-for-a-mapping-change); an answer from
+`weft chat` is not approval to save. Availability reads do not enable a disabled
+feature or prove worker installation/containment qualification.
 
 - Identifiers are UUIDs. They are canonicalized to lowercase before they are sent.
 - Search text is literal, not a query language. Search cursors bind the exact trimmed query and organization; incomplete retained-report indexing fails explicitly and can be retried.
@@ -284,6 +270,36 @@ its build environment. CSV builds use `weft.ferrule-csharp-csv.v1`. Build eviden
 and compiled qualification require exact-byte comparison with all declared
 outputs selected and present in the baseline. A CSV row-comparison pass is not
 build proof.
+
+## Administration
+
+`weft administration show` reads organization members, invitation states and recent
+changes. Add `--project ID` for project members, payload-read permission and machine
+invocation grants. Normal output includes the strong ETag; every edit requires its
+complete quoted value in `--if-match`. JSON output retains the exact response body.
+
+```sh
+weft administration show
+weft administration member --principal ID --role member --active true --if-match '"admin-ORG-7"'
+weft administration member --project ID --principal ID --role runner --active true --if-match '"admin-ORG-8"'
+weft administration payload --project ID --principal ID --active true --if-match '"admin-ORG-9"'
+weft administration disable-principal ID --if-match '"admin-ORG-10"'
+weft administration disable-binding ID --if-match '"admin-ORG-10"'
+weft administration invitations create --file invitation.json --if-match '"admin-ORG-10"'
+weft administration invitations revoke ID --if-match '"admin-ORG-11"'
+weft administration invocation-grants grant GRANT_ID --project ID --target ID --tenant ID --object ID --if-match '"admin-ORG-12"'
+weft administration invocation-grants revoke GRANT_ID --project ID --if-match '"admin-ORG-13"'
+```
+
+Replace the example ETags with freshly observed values and use canonical UUIDs.
+The invitation JSON has `invitationId`, `tenantId`, `expectedObjectId` (or null),
+`projectRoles` (an array of `{ "projectId": "…", "role": "viewer" }`) and an ISO
+`expiresAt` no more than seven days away. Its private redemption link is deliberate
+output, shown once; never put it in a diagnostic log. `--file -` accepts stdin.
+
+Administrative edits are not retried after uncertain transport results. Read the
+current state before sending another edit. Role boundaries, last-administrator
+protection and soft deactivation are described in [Administration](administration.md).
 
 ## Exit codes
 

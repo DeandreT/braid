@@ -1,5 +1,12 @@
 # Combined browser qualification
 
+**Historical browser-boundary qualification record.** The source identities,
+correction, trace sequence and results below describe one retained run, not
+current setup or proof of live-provider behavior. Use [chat proposal review](chat-proposal-review-ui.md)
+for current approval/recovery behavior, [creation review](creation-review-ui.md)
+for new mappings and [development](development.md) for checks. [ROADMAP](../ROADMAP.md)
+owns remaining acceptance; provider and Azure gates are not activated by this record.
+
 Production baseline: `85c483e0f473f407d1a1dc071daeef3126c84621`.
 Combined merge: `e03f3fc9165c4f4930b122784c662d950768491d`, incorporating
 reviewed chat test corrections `8c41a730b261cd6272854c4377b253d7e7b36c75`.

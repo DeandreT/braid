@@ -1,5 +1,16 @@
 # Queue and schedule triggers with output destinations
 
+**Design only; prerequisite reconciliation required before implementation.**
+The audit/AI-usage/quota baseline assumed below is not the current migration
+inventory. Actual slots 0037–0039 are `0037_mapping_drafts.sql`,
+`0038_mapping_draft_previews.sql` and `0039_chat_mapping_writes.sql`, not
+`0037_audit_log.sql`, `0038_ai_usage.sql` and `0039_ai_quotas.sql`. Reconcile the
+intended contracts, schema guards and acceptance fixtures against the actual
+integrated baseline and qualified prerequisites. Keep proposed extensions as
+design, not deployed SQL; preserve all applied migration bytes and choose any
+future suffix only after that reconciliation. [Project ownership](project-ownership.md#migrations-and-local-setup)
+owns migration integrity; [ROADMAP](../ROADMAP.md) owns future priorities.
+
 ## Scope and implementation boundaries
 
 This is the design specification for [#337](https://github.com/DeandreT/weft/issues/337), not a statement of implemented or qualified behavior. It covers Service Bus queue/subscription inputs, cron-driven Blob/SFTP inputs, Blob/SFTP/HTTPS/Service Bus topic outputs, per-target configuration, Operations/API/CLI, offline templates and emulator acceptance. It introduces no new mapping engine or catalog-writing runtime path. Implementation must not create CI pipelines or provision live Azure resources without separate authorization.
@@ -10,7 +21,7 @@ All triggers and destinations remain disabled until their required settings, aut
 
 ## Existing components to reuse, with their actual limits
 
-.NET source paths below are under `dotnet/src` or `dotnet/apps` as applicable. Audit, AI usage and quota baseline integration must preserve the contracts in `0037_audit_log.sql`, `0038_ai_usage.sql` and `0039_ai_quotas.sql`; source presence is not qualification evidence.
+.NET source paths below are under `dotnet/src` or `dotnet/apps` as applicable. The audit, AI usage and quota entries are assumed prerequisite contracts requiring reconciliation, not evidence that those migrations or features are installed. Source presence is not qualification evidence.
 
 | Existing source | Reuse and required extension |
 | --- | --- |

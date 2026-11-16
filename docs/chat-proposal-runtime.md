@@ -1,8 +1,10 @@
 # Exact chat edit approval runtime
 
-Runtime cutover for #437. This slice does not supply the PostgreSQL proposal
-implementation, migration, or Angular review UI. It is not a complete production
-rollout by itself.
+This document owns the runtime approval and recovery contract for #437. Read it
+with [PostgreSQL and host composition](chat-edit-approval-composition.md) and
+[browser proposal review](chat-proposal-review-ui.md). Those are separate
+implementation boundaries, not missing pieces of the integrated source. Source
+presence alone does not establish a complete production rollout.
 
 ## Model boundary
 
@@ -67,10 +69,11 @@ Task<IReadOnlyList<ChatMappingEditState>> ListAsync(
     CancellationToken ct);
 ```
 
-That signature is mirrored in this slice to compile against the same contract;
-merge it once with the persistence slice. No store implementation is registered
-here. Compose `IChatMappingEditProposalStore`, `IProjectReader`, and
-`IRevisionIngestionService` before enabling proposals. Missing ports disable the
+`ChatProposalHostConfiguration` registers `PostgresChatEditProposalStore` and
+`ChatMappingEditApprovalService` in the integrated host. It requires separate
+reader, writer and approver credentials. Compose `IChatMappingEditProposalStore`,
+`IProjectReader`, and `IRevisionIngestionService` before enabling proposals.
+Missing ports disable the
 default tool and make proposal HTTP operations unavailable; there is no direct
 save fallback. `CatalogMappingEditOptions.Enabled` must also allow approval and
 recovery writes.

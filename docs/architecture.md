@@ -1,8 +1,14 @@
 # braid architecture
 
-Status: initial draft, 2026-10-12. This document records proposed decisions and
-acceptance boundaries. The local Angular/ASP.NET Core shell is implemented;
-remaining feature boundaries below are proposed.
+This document describes the application's source boundaries and design contracts.
+The catalog, workbench, chat, editing, creation and execution paths exist in source;
+they are not all enabled on every host. Each capability still needs its own
+permissions, configuration and runtime admission. Verification applies only to
+the environment and operations actually checked.
+
+The [delivery plan](../ROADMAP.md) owns current priorities and acceptance gates.
+The real-provider creation demonstration and Azure acceptance remain user-deferred;
+source, local verification and deployment templates do not establish hosted readiness.
 
 ## Product purpose
 
@@ -15,10 +21,14 @@ Ferrule is the first mapping backend. braid has its own repository, release
 process, product model, and deployment. Ferrule remains responsible for its
 native format and transformation semantics.
 
-The first release includes catalog browsing, immutable revisions, a simplified
-viewer, field lineage, grounded mapping chat, bounded sample preview, and Entra
-sign-in. Full visual authoring, automatic production changes, billing, and
-arbitrary connector execution are later work.
+The product includes catalog browsing, immutable revisions, a field mapping
+workbench, grounded chat, bounded samples, regression cases, build/release paths
+and Entra sign-in. Opt-in editing uses private drafts and a separate **Save**.
+Creation from specifications uses retained proposals, sample review and explicit
+**Approve and save this mapping**. Chat edits likewise require approval of the
+exact reviewed proposal; a model cannot approve or save its own proposal.
+Full visual authoring, automatic production changes, billing and arbitrary
+connector execution are not implied by these capabilities.
 
 ## Architectural decisions
 
@@ -149,29 +159,29 @@ changing the contracts of the others.
 
 ## Proposed source ownership
 
-These paths define source ownership. The shell implements the web application,
-API endpoint module, and server host; other modules are created by their focused
-implementation PRs.
+These existing paths define source ownership. The heading is retained for older
+links; this is not a list of modules still waiting to be created.
 
 | Path | Owns | Must not own |
 | --- | --- | --- |
 | `apps/web/` | Catalog, viewer, chat window, preview forms, generated API client | Ferrule semantics, provider credentials, authorization decisions |
 | `dotnet/src/Weft.Domain/` | IDs, revisions, memberships, runs, conversations, capabilities | Framework types and third-party engine/provider types |
-| `dotnet/src/Weft.Api/` | HTTP, OIDC session boundary, policy enforcement, persistence orchestration, chat event streams | Mapping execution and model-specific wire formats |
+| `dotnet/src/Weft.Api/` | HTTP admission, authenticated request boundaries, application composition and chat event streams | Mapping execution and model-specific wire formats |
 | `dotnet/src/Weft.MappingBackends/` | Mapping adapter contract and Ferrule implementation | User sessions, deployment credentials, universal mapping execution |
-| `dotnet/src/Weft.Ai/` | Conversation orchestration, provider contract, read tools, context budgets | Bypassing API permissions or executing arbitrary model-supplied code |
-| `dotnet/apps/Weft.Worker/` | Bounded mapping inspection, validation, preview, cancellation | Public authentication and unrestricted host I/O |
-| `dotnet/src/Weft.Deployment/` | Later build/deploy contract and target adapters | Reimplementing a mapping engine |
-| `deploy/azure/` | Later reproducible Azure infrastructure | Cloud types in domain contracts |
+| `dotnet/src/Weft.Ai/` | Provider adapters, tool contracts, model profiles and bounded conversation processing | Bypassing API permissions or executing arbitrary model-supplied code |
+| `dotnet/apps/Weft.Worker/` | Durable preview, regression and build job hosting | Public authentication and unrestricted host I/O |
+| `dotnet/src/Weft.Deployment/` | Build, qualification, release and runtime contracts/adapters | Reimplementing a mapping engine |
+| `deploy/azure/` | Azure infrastructure templates and operator procedures; actual Azure acceptance is separate | Cloud types in domain contracts |
 
 Keep Ferrule dependency declarations confined to its adapter and worker wiring.
 braid's public API and database schema must not expose Ferrule's Rust types.
 `dotnet/src/Weft.Contracts/` owns public wire models;
 `dotnet/src/Weft.Application/` owns commands and policies, and
 `dotnet/src/Weft.Persistence.Postgres/` owns scoped transactions and migrations.
-`dotnet/apps/Weft.Server/` is the executable host. A later
-`engines/ferrule-host/` process may use Ferrule's Rust libraries behind a versioned
-request/result protocol; it is an engine adapter, not the application backend.
+`dotnet/apps/Weft.Server/` is the executable host. Identity adapters live in
+`dotnet/src/Weft.Identity/`; durable job handlers live in `dotnet/src/Weft.Jobs/`.
+`engines/ferrule-host/` uses Ferrule's Rust libraries behind a versioned
+request/result protocol. It is an engine adapter, not the application backend.
 
 ## Domain and persistence
 
@@ -190,7 +200,7 @@ increment. Multi-organization onboarding is a separate milestone.
 | Run | Exact revision, runtime identity, parameter snapshot, input/output references, status and timestamps |
 | Conversation / turn | Owner and project, pinned revision, selected model profile, messages and validated citations |
 | Model profile | Provider/model identifier, endpoint reference, capability policy, credential reference, data policy |
-| Deployment | Later environment, approved revision, build artifact identity, target, trigger, connection references |
+| Deployment | Approved revision, immutable build/artifact, qualification, registered target and retained release history; new triggers need separate contracts |
 
 Native mapping bytes are authoritative. Uploading a revision never rewrites
 them through JavaScript JSON parsing. This also preserves engine-specific
@@ -210,14 +220,15 @@ rebuilt without changing a revision's artifact bytes.
 
 ## HTTP and browser boundary
 
-Use versioned `/api/v1` routes and publish an OpenAPI contract once the service
-exists. Generate browser types from that contract rather than copying C#
+Use versioned `/api/v1` routes and the published [OpenAPI contract](../contracts/weft-v1.json).
+Generate browser types from that contract rather than copying C#
 models by hand. Resource IDs and backend node locators use strings in the public
 API to avoid JavaScript integer precision loss.
 
-Initial route families are projects, mappings/revisions, projections/lineage,
-validation, previews/runs, conversations/chat turns, and model-profile discovery.
-Deployment routes follow their own later contract. Responses distinguish invalid
+Route families include projects, mappings/revisions, projections/lineage,
+validation, previews/runs, conversations/chat turns, specification intake,
+creation proposals and model-profile discovery. Build and release operations have
+their own contracts. Responses distinguish invalid
 mapping, unsupported capability, authorization failure, resource limit, backend
 failure, and cancellation without leaking raw provider responses or credentials.
 
@@ -237,8 +248,10 @@ infer trusted membership from an email suffix or client-supplied organization ID
 The browser receives a secure, HttpOnly, SameSite session cookie. Sessions are
 stored server-side, rotate on login, have bounded lifetimes, and can be revoked.
 State-changing requests require CSRF/origin protection. The SPA and API use one
-origin in production; development origins are explicitly configured. A future
-machine API will validate API access tokens separately from browser sessions.
+origin in production; development origins are explicitly configured. Signed-in
+CLI bearer access and app-only mapping endpoint tokens are validated separately
+from browser sessions; see [API authentication](api-authentication.md) and
+[machine authorization](machine-authorization.md).
 
 An identity adapter maps verified issuer/subject information to an internal
 principal. Entra app roles can constrain application admission and role grants;
@@ -252,7 +265,7 @@ fresh server-side checks, including each AI tool call.
 | Ask read-only mapping questions, when the configured model profile is allowed | Yes | Yes | Yes | Yes |
 | Submit sample preview | No | Yes | Yes | Yes |
 | Upload revisions and maintain tests | No | No | Yes | Yes |
-| Publish approved deployments, later | No | No | Yes | Yes |
+| Request permitted build/release actions | No | No | Yes | Yes |
 | Manage membership, connections, and model profiles | No | No | No | Yes |
 
 Production payload access is a separate grant (`run.payload.read`), not inherited
@@ -276,10 +289,14 @@ citations, cancellation, and budgets. A model-provider adapter owns provider
 authentication, request translation, capability reporting, and stream decoding.
 The frontend never speaks directly to a model vendor.
 
-The first chat milestone has read-only mapping tools. It does not edit native
-artifacts or run/deploy mappings. Later action tools need their own typed API,
-permission checks, and a concrete proposed change for review. See
-[AI chat architecture](ai-chat.md) for the complete boundary and acceptance gate.
+Read-only tools and action tools have separate admission. Opt-in edit and creation
+tools prepare retained proposals; only an authenticated, proposal-specific user
+action can approve them. Approval rechecks current authority and the exact
+proposal/base. Reconnects and natural-language claims of consent cannot approve.
+Uncertain results retain the original operation for explicit recovery rather than
+starting a replacement save. See [AI chat architecture](ai-chat.md),
+[exact edit review](chat-proposal-review-ui.md) and
+[creation runtime](mapping-creation-runtime.md).
 
 ## Execution and resource policy
 
@@ -294,10 +311,12 @@ update-existing files, and unapproved outbound connections before execution.
 Capabilities are checked for the exact revision, target, format, and requested
 operation. A backend's maximum sizes are ceilings; braid can impose smaller limits.
 
-Proposed initial interactive defaults are 8 MiB per artifact/input document,
+Historical sizing proposals were 8 MiB per artifact/input document,
 32 MiB combined inputs and combined outputs independently, 128 output artifacts,
 30 seconds per preview, and 512 MiB per worker. These are tuning proposals,
-not measured throughput claims. The implementation must also limit projection
+not current defaults or measured throughput claims. Use the admitted limits in
+[preview runs](preview-runs.md), [Ferrule worker](ferrule-worker.md) and the exact
+operation's contract. The implementation must also limit projection
 nodes, JSON depth, diagnostics, chat tool results, and trace bytes. Exceeding a
 viewer limit yields an explicit incomplete-view status.
 
@@ -309,9 +328,8 @@ fixtures are explicit objects with independent retention and access rules.
 
 ## Durable internal jobs
 
-Use Wolverine when preview work becomes asynchronous. Typed internal commands
-such as `InspectRevision`, `RunPreview`, `RunRegressionCase`, `BuildArtifact`,
-and `DeployRevision` carry scoped identifiers and artifact references, not raw
+Wolverine-backed preview, regression and build jobs carry scoped identifiers and
+artifact references, not raw
 payloads or model credentials. A worker reloads the owning run/revision and
 validates its authority before executing a command.
 
@@ -336,7 +354,7 @@ session advisory locks, independently of application connection pooling.
 Local development uses a static frontend, one API process, an isolated worker,
 PostgreSQL, and local private object storage. A local-only development identity
 mode must be explicit, bind to loopback, and fail startup in hosted configuration.
-No hosted release is admitted before real authentication and authorization pass.
+No hosted release is admitted before its real authentication and authorization pass.
 
 Initial Azure candidate: static frontend hosting, containerized API/workers on
 Container Apps, PostgreSQL, private Blob storage, and managed identities. HTTP
@@ -344,9 +362,9 @@ instances can scale to zero where latency requirements allow; stored jobs,
 sessions, and conversation state must survive instance loss. Queued work has
 leases, recovery, and bounded attempts rather than relying on one HTTP request.
 
-The first Azure environment, in [Azure deployment](azure-deployment.md), runs the
-API container on Container Apps and serves the built frontend from the same origin,
-with private PostgreSQL Flexible Server, Key Vault and a managed identity. It runs one
+The Azure templates, in [Azure deployment](azure-deployment.md), describe the
+API container on Container Apps serving the built frontend from the same origin,
+with private PostgreSQL Flexible Server, Key Vault and a managed identity. The API uses one
 instance; scale-out needs the session key ring and private storage qualified for it.
 With native work enabled, a separate worker app executes previews, regression runs and
 builds through the Ferrule service below, with its own identity and database logins.
@@ -372,7 +390,8 @@ Azure Functions isolated .NET workers are another candidate for HTTP or event
 workloads. Cloud selection is a deployment decision, not part of the mapping
 model. Generated mappings are supported only when their backend accepts the
 exact graph and physical format; interpreter support does not imply generator
-support. No Azure resources are created by this planning increment.
+support. These templates do not establish an accepted Azure deployment or authorize
+resource creation. Provider/cloud acceptance remains deferred.
 
 ## Decisions still open
 

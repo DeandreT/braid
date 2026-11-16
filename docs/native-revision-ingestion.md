@@ -2,8 +2,11 @@
 
 `IRevisionIngestionService` composes the qualified metadata, private storage, and
 native validation adapters. It accepts trusted server actor/project identities
-and a readable stream. HTTP upload, identity extraction, and catalog screens are
-subsequent increments; this service has no browser-facing route yet.
+and a readable stream. [Revision uploads](catalog-revision-uploads.md) owns its
+HTTP adapter; [catalog reads](catalog-reads.md) and [catalog browser](catalog-browser.md)
+own discovery and navigation. This page owns service admission and recovery,
+not host activation or provider/cloud acceptance. Original P3 requirements are
+indexed by the [contract-owner map](catalog-persistence-plan.md#current-contract-owners).
 
 ## Submission and ownership
 
@@ -19,6 +22,14 @@ it. It preserves the exact bytes and computes their SHA-256 digest without parsi
 or reserializing JSON. New admission uses the lowest application, storage, and
 backend native limit, bounded by 4 MiB. The reader requests at most the remaining
 budget plus one byte; it does not drain an oversized source.
+
+Create names are trimmed, nonempty and bounded to 200 Unicode scalars/800 UTF-8
+bytes; descriptions preserve at most 4,000 scalars/16,000 UTF-8 bytes. Invalid
+Unicode and NUL are refused. Backend IDs are at most 128 UTF-8 bytes. Display
+filenames are safe basenames of at most 255 UTF-8 bytes, defaulting to
+`entry.native.json`; they never select object paths. Append preserves the mapping's
+backend and cannot edit its name, description or owner. The 16 MiB derived-object
+budget does not enlarge the 4 MiB native ceiling.
 
 An existing actor-owned idempotency key is looked up before current configuration
 admission. Its original backend profile and policy remain authoritative. Body
@@ -79,7 +90,45 @@ The public application result contains a categorical outcome and, where
 authorized, a safe operation receipt: scoped identities, phase, claim count,
 display filename, times, and committed sequence/admission. Private paths,
 references, lease tokens, worker configuration, and raw evidence are omitted.
-The later report/API increments provide authorized findings and projections.
+[Saved reports](saved-reports.md) provide authorized findings and projections
+through their separate read and derivation boundaries.
+
+## Persisted admission contract
+
+[Ingestion metadata](ingestion-metadata.md) owns the four-table persistence
+boundary. Full organization/project/mapping/revision ancestry, native digest/count,
+logical entry/dependency identity, selected backend, creator and committed sequence
+remain immutable. The original [table/column specification](catalog-ingestion-plan.md#four-tables-and-immutable-ancestry)
+and [exact grants](catalog-ingestion-plan.md#exact-roles-and-transaction-boundaries)
+are retained for traceability; applied migrations and current schema guards define
+the installed contract. Metadata editing is a separate [conditional write](catalog-reads.md#conditional-mapping-metadata),
+not permission to mutate committed native facts.
+
+Reservations freeze the trusted engine, worker build, adapter, policy
+`weft.native-admission.v1` and effective limits. Engine/adapter identity text is
+bounded to 256 UTF-8 bytes each and worker build to 2,048. The server registration,
+not the client, chooses these values. Retained evidence keeps its original profile
+when the configured Ferrule pin changes. The logical native entry is
+`entry.native.json` with the admitted dependency identity.
+
+Idempotency binds actor, organization, project, operation kind, append target and
+key to accepted metadata, head condition and exact bytes. Generated identities,
+timestamps and the currently deployed image are not replacement intent. Keys are
+not expired or recycled by this workflow. AnyHead allocates the next committed
+sequence while locking the mapping; EqualHead compares the exact expected revision
+under that lock. First creation publishes mapping, sequence-one revision and
+receipt atomically. Conflicts do not change the head or create placeholder mappings.
+
+Confirmed matching valid and decoded-invalid results may commit; decode refusal
+does not. Unsupported artifacts and enforced resource rejection remain rejections;
+unavailability, timeout, isolation, cancellation or provenance/protocol faults do
+not become semantic invalidity. Typed evidence preserves native owners/locators,
+nullable validity, actual/emitted counts and truncation. Its 8 MiB serialized and
+database-normalized bounds do not permit silent truncation or invented success.
+Admission does not fabricate projection links or execution capability. Orphan
+retirement belongs to [maintenance](private-object-maintenance-metadata.md), not
+ingestion recovery. Neither cross-store atomicity nor power-loss durability follows
+from process-restart recovery.
 
 ## Verification boundary
 

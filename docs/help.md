@@ -1,5 +1,10 @@
 # User guide and in-app help
 
+This is the help-authoring and API reference, not the user starting page. Readers
+using braid should start with [Getting started](user-guide/overview.md),
+[Create a mapping from specifications](user-guide/creation.md) or the
+[documentation index](README.md).
+
 The [user guide](user-guide/overview.md) is written for people who use braid. It
 lives in `docs/user-guide/`, one Markdown file per section, and ships inside the
 server build. The `/help` page in the app and the help API read that embedded
@@ -25,13 +30,20 @@ summary: One sentence shown in the contents.
   are allowed.
 - `title` is at most 120 characters and `summary` at most 300.
 
+New files are embedded automatically and appear in the contents in their `order`;
+there is no separate server section registry. The frontend's `helpSectionIds`
+contains only the sections linked directly by typed application controls, not
+an exhaustive contents list. Add to it when a new application control needs a
+typed help link, not just when adding a guide file.
+
 The body uses a closed Markdown subset, which also renders correctly on
 GitHub:
 
 - `##` and `###` headings in plain ASCII words. Each heading's anchor is its
   GitHub slug and must be unique within the section.
-- Paragraphs, single-level `- ` and `1. ` lists (continuation lines indented by
-  at least two spaces), pipe tables and fenced code blocks.
+- Paragraphs, single-level `- ` and `1. ` lists, pipe tables and fenced code
+  blocks. Indent continuation lines by exactly the item marker's width: two spaces
+  for `- `, three for `1. `. Number ordered lists consecutively from 1.
 - `**strong**`, `*emphasis*`, `` `code` `` and links to guide sections:
   `[text](catalog.md)`, `[text](catalog.md#projects-and-roles)` or
   `[text](#anchor)` within the same section.
@@ -39,6 +51,10 @@ GitHub:
 Raw HTML, images, block quotes, nested lists, external links and links to other
 repository files are refused. Describe only behavior the product has; the guide
 changes in the same pull request as the behavior it describes.
+
+Keep old section IDs and heading anchors when revising a page. Link to another
+guide section for a related task; do not substitute an HTML or external-link
+redirect page. Even a repository-relative link outside this guide is refused.
 
 ## Build and validation
 
@@ -78,13 +94,13 @@ line client and chat tools all receive the same validated content.
 `/help` shows the contents and `/help/<section-id>` one section, with its
 level 2 headings listed under **On this page**. Heading anchors appear in the
 address as `#<anchor>` and are rendered with the element ID `help-<anchor>`.
-The Help link in the header opens the contents. Pages link to their guide
+The **Help & guide** navigation link opens the contents. Pages link to their guide
 section with `<weft-help-link [section]="'reports'">`, whose IDs come from
 `apps/web/src/help/help-sections.ts`.
 
-![User guide contents listing every section with its summary](images/help.png)
+![User guide contents with section summaries](images/help.png)
 
-*The `/help` contents, built from each section's front matter.*
+*Example of the `/help` contents, built from each shipped section's front matter.*
 
 ## Checks
 

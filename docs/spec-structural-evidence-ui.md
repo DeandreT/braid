@@ -1,5 +1,10 @@
 # Structural evidence display (activation pending)
 
+The display supports retained text/JSON, Office and PDF evidence. “Activation
+pending” in this retained heading refers to each installation's admission, not
+missing browser format support. Upload choices come from current server
+capabilities; see [intake](spec-intake-ui.md) and [document admission](spec-document-intake.md).
+
 The specification reader dispatches `weft.spec-evidence.v1` and
 `weft.spec-evidence.v2`. V1 byte/line/JSON-pointer citations retain their meaning.
 V2 accepts the exact closed tuples written by `SpecEvidenceLocatorJson` in the
@@ -15,6 +20,11 @@ Office extraction unit:
 ["pdf-page", oneBasedPage]
 ```
 
+Office chunks use the four-field tuple above. Canonical PDF chunks add a fifth
+field: `[ordinal,text,["pdf-page",oneBasedPage],null,missingText]`. The boolean is
+part of intake evidence, not a browser guess about OCR. It must agree with the
+trusted decoder's Unicode whitespace definition.
+
 DOCX indices describe one-based XML structure, including direct body paragraphs
 and table/row/cell paragraphs. XLSX values remain stored lexical text. Literal
 formulas, absent caches, present empty-string caches and blank stored cells are
@@ -29,27 +39,36 @@ after the browser HTTP client has buffered the response; it is not streaming
 network/memory isolation. Existing current-scope/generation checks still fence
 presentation after the asynchronous digest check.
 
-Local display unions use the reviewed Domain values: `Unsupported`, `Text`,
-`Json`, `OpenApiJson`, `Docx`, `Xlsx`; outcomes add `Partial` to the existing four.
-The API upload options and receipt validation remain text/JSON/OpenAPI JSON.
+Local display unions use the Domain values `Unsupported`, `Text`, `Json`,
+`OpenApiJson`, `Docx`, `Xlsx` and `Pdf`. Outcomes are `Complete`, `Partial`,
+`Unsupported`, `Malformed` and `LimitExceeded`. Structural success is always
+`Partial`; structural `Complete` and legacy text/JSON `Partial` receipts are
+rejected. A successful extraction is not mapping validation or generation.
 
 ## Exact activation gaps
 
-- Office publication requires the ordered database constraint/admission changes,
-  backend orchestration, and a qualified isolated worker. Current upload admission
-  and migration 0044 do not support Office. Browser Office fixtures simulate
-  future retained evidence, not successful Office uploads.
-- The shared PDF page tuple is parsed and has a presentation branch, but the
-  Domain has no PDF source-format value or intake OCR/encryption outcomes. The
-  inventory reader therefore rejects `Pdf` and worker-only statuses. Current
-  source-format binding prevents PDF tuples from being presented as another
-  source format. PDF activation needs a canonical intake envelope and durable
-  format/status contract in addition to the qualified runner.
-- `missingText` exists only in the separate Rust worker transport. It is not a
-  field of a v2 locator/chunk, and extra fields are rejected. The page template
-  can describe an empty/whitespace text chunk without inferring scanned content,
-  OCR success, missing pages, or complete coverage. The worker JSON is not intake
-  evidence and is rejected by this reader.
+- Ordered migrations 0046/0047 and current schema admission supply the durable
+  structural contract. They exist in source; the target database still needs
+  the admitted schema and restricted roles. Browser fixtures are not proof that
+  a deployment has them.
+- Office/PDF uploads need optional trusted host composition, independently pinned
+  installations and profiles, successful worker probes and owned shutdown.
+  Capability discovery reports current admission, not a promise of future worker
+  availability. The public PDF convenience factory remains closed; no request or
+  configuration boolean asserts installation qualification.
+- PDF evidence is bound to `Pdf`, v2 and page locators. The reader checks ascending
+  one-based pages, at most 256 pages, at most 1 MiB extracted text and at most
+  8 MiB serialized PDF evidence. `pdf-page-text-only` is Partial with some text;
+  `pdf-needs-ocr` is Unsupported with retained missing-text pages;
+  `pdf-encrypted` is Unsupported with no chunks. Malformed/limit refusals retain
+  their exact categorical codes. Blank pages stay visible, without claiming
+  scanned content, OCR success or complete document coverage.
+- Extra fields and worker transport JSON are rejected. The intake envelope, not
+  raw worker output, is the reader contract. Locators must match the inventory's
+  source format and outcome, so PDF facts cannot be presented as Office evidence.
+- Local installed-worker evidence has a bounded scope. Filesystem specification
+  publication refusal, production-environment acceptance and the deferred
+  provider/Azure gates are not lifted by this display support.
 
 ## Verification
 
@@ -59,8 +78,16 @@ Use pinned Node 22.23.3 / npm 12.1.0 and locked dependencies. Run `npm run check
 The focused lane includes parser tests and actual Chromium tests with synthetic
 API responses: both evidence versions, hostile locators/fields, integer overflow,
 exact multibyte UTF-8/digest/count checks, literal formulas and cache distinctions,
-inert markup, mobile accessibility, and revoked-scope late responses. PDF tuple
-coverage is parser-level until its intake source contract is available.
+inert markup, mobile accessibility, and revoked-scope late responses. PDF coverage
+includes the canonical intake envelope and capability/refusal behavior; see
+[document intake verification](spec-document-intake.md#verification). These
+fixture checks do not establish installed-worker or hosted acceptance.
+
+### Historical structural-display checkpoint
+
+The following is the original focused display verification record, before
+capability-controlled document intake was integrated. It is not current activation
+guidance; later evidence and its limits are in [v1 integration](v1-integration.md).
 
 Focused verification on pinned Node/npm with installed Chromium 1254: 48 tests
 passed, zero skipped (32 parser cases and 16 actual browser cases). Dependencies

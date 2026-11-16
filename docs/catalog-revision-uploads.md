@@ -3,8 +3,13 @@
 The P3d3 native revision API implements
 [#30](https://github.com/DeandreT/weft/issues/30), following qualified and merged
 [PR #38](https://github.com/DeandreT/weft/pull/38). This document describes its
-upload and recovery boundary. Angular uploads, project creation, hosted
-authentication and cloud deployment follow in separate increments.
+upload and recovery HTTP boundary. [Native revision ingestion](native-revision-ingestion.md)
+owns byte admission, frozen profiles and fenced publication;
+[catalog reads](catalog-reads.md) owns metadata and the Development request boundary.
+[Project creation](project-creation-http.md), [catalog browser](catalog-browser.md)
+and [Session host](session-host.md) own their separate workflows and host activation.
+The [contract-owner map](catalog-persistence-plan.md#current-contract-owners)
+links the original requirements. No local API contract establishes cloud acceptance.
 
 Let `P=/api/v1/organizations/{organizationId}/projects/{projectId}` and
 `M=P/mappings/{mappingId}`. Every identifier is a canonical nonzero lowercase
@@ -102,9 +107,11 @@ bookkeeping; it does not fabricate a validator result.
 
 ## Explicit local host setup
 
-Catalog and ingestion remain independently disabled by default. Enabled ingestion
-requires the admitted Development catalog configuration described in
-[Catalog reads](catalog-reads.md), plus:
+Catalog and ingestion remain independently disabled by default. For the local
+Development profile, use the identity/request setup in
+[catalog reads](catalog-reads.md#explicit-local-setup), plus the settings below.
+Protected Session hosts use [their own composition](session-host.md), not the
+Development identity adapter or plain credential delivery.
 
 - `WEFT_REVISION_INGESTION_ENABLED=true`.
 - A dedicated `WEFT_POSTGRES_INGESTION_CONNECTION_STRING`; reader, editor and owner
@@ -141,4 +148,4 @@ logs. These local settings do not qualify Azure proxy or HTTP/2 URL limits.
 No metadata transaction spans request, private storage or worker waits. Immutable
 revision admission and diagnostics remain distinct: a decoded-invalid revision
 is committed history, without preview or deployment permission. Reports and
-Angular catalog integration follow in their focused increments.
+[catalog integration](catalog-browser.md) have their own focused contracts.

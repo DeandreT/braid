@@ -34,6 +34,10 @@ Use `--profile work` to choose a profile for one command. `weft logout` removes
 that profile's local account and tokens; it does not sign out your browser or
 other Microsoft applications.
 
+Your administrator must enable delegated bearer access for the CLI registration
+and admit your identity. Signing in to the browser does not configure CLI access;
+the loopback Development identity is not a CLI bearer sign-in.
+
 `weft health` checks whether the configured server is alive. `weft health --ready`
 checks whether it can accept work. These public checks do not need a sign-in or
 access the token store. Readiness can be unavailable while the server safely
@@ -63,6 +67,12 @@ Other command groups cover [uploads](uploads.md), [sample previews](previews.md)
 [regression tests](regression-tests.md), [builds and approvals](builds.md), and
 [workspace chat](chat.md). Commands that change saved data still require the
 appropriate project role.
+
+Specification intake, new-mapping proposal review and exact chat-edit approval
+are browser workflows, not CLI commands. Use
+[Create a mapping from specifications](creation.md) or the
+[chat proposal controls](chat.md#ask-for-a-mapping-change) for their separate
+review and save steps. A successful chat command does not approve a proposal.
 
 For a mapping with explicit X12 or EDIFACT formats, use `weft previews create
 --document` with the usual project, mapping, revision and input options. The
@@ -117,6 +127,10 @@ and the same inputs when retrying an unconfirmed change; a new ID is a new reque
 An interrupted upload can be checked with `weft ingestions status` and continued
 with `weft ingestions resume`. Do not send a second upload merely because the
 first command stopped waiting.
+
+Administrative edits are different: they are not automatically retried after an
+uncertain transport result. Read the current administration state before sending
+another edit.
 
 Use `weft --help` and `weft COMMAND --help` for command options. You can also read
 this guide in the terminal with `weft guide list` and `weft guide get cli`.

@@ -1,12 +1,28 @@
 # Archive, deletion and retention design
 
+**Design only; prerequisite reconciliation required before implementation.**
+The audit/AI-usage/quota baseline assumed below does not match this repository's
+applied migration names: `0037_mapping_drafts.sql`,
+`0038_mapping_draft_previews.sql` and `0039_chat_mapping_writes.sql` occupy those
+slots. References below to `0037_audit_log.sql`, `0038_ai_usage.sql`,
+`0039_ai_quotas.sql` and their associated guards are retained design assumptions,
+not installed schema or migration instructions. Reconcile their intended contracts
+with the actual integrated baseline and separately qualified prerequisites before
+writing implementation SQL or choosing a new suffix. Never rename, overwrite or
+repair old hypothetical SQL into deployed migrations. [Project ownership](project-ownership.md#migrations-and-local-setup)
+owns migration integrity; [ROADMAP](../ROADMAP.md) owns future priorities.
+
 ## 1. Scope and implementation gates
 
 This is the design specification for [#332](https://github.com/DeandreT/weft/issues/332), not a statement of implemented or qualified behavior. It covers reversible project/mapping archive, permanent deletion, individual resource deletion and organization retention. Read it alongside [organization switching](organization-switching-design.md) for request-local organization admission.
 
-Implementation must wait for the qualified audit, AI usage and quota baseline, including migrations `0037_audit_log.sql`, `0038_ai_usage.sql` and `0039_ai_quotas.sql`, to be integrated. Append migrations after the actual integrated head; do not reserve or overwrite an existing number. Verify the CLI prerequisite in [#317](https://github.com/DeandreT/weft/issues/317) before exposing commands. Baseline source presence is not qualification evidence.
+Implementation must wait for reconciliation and qualification of the intended audit, AI usage and quota prerequisites. The assumed migration identities below are not the installed baseline. Append migrations after the actual integrated head; do not reserve or overwrite an existing number. Verify the CLI prerequisite in [#317](https://github.com/DeandreT/weft/issues/317) before exposing commands. Baseline source presence is not qualification evidence.
 
 ### Baseline contracts to preserve
+
+The first three entries describe the proposal's assumed prerequisites. Later
+references to that “baseline”, prefix 0039 or its upgrade matrix carry the same
+reconciliation gate; they are not executable setup or verified schema claims.
 
 * `0037_audit_log.sql` defines an append-only journal with identifiers independent of project/mapping/principal foreign keys and only an organization FK. Source capture and source writes share a transaction. Reads require current organization or exact-project administration authority. Several source-specific audit families still have live-resource FKs.
 * `0038_ai_usage.sql` retains usage and fixed failure categories independently of chat, with only organization and internal usage-child FKs. Coverage is immutable; erased historical turns cannot be reconstructed. Preserve independently known input/output/total counts, unknown-round counts and admission time. Deletion must not re-derive historical usage.

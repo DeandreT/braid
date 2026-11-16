@@ -1,5 +1,16 @@
 # P3c: immutable native revision ingestion
 
+This is the historical ingestion design and delivery record. For the current
+service boundary, use [native revision ingestion](native-revision-ingestion.md);
+[ingestion metadata](ingestion-metadata.md) owns PostgreSQL persistence and
+[revision uploads](catalog-revision-uploads.md) owns HTTP. The
+[contract-owner map](catalog-persistence-plan.md#current-contract-owners) covers
+the remaining P3 requirements. Original schema, limits, gates and anchors remain
+below for traceability, not as instructions to recreate an old migration sequence.
+Profile history describes admission evidence, not permission to relabel old work.
+
+## Historical delivery checkpoint
+
 Status: P3c1 metadata and P3c2 native workflow are qualified and merged in
 [PR #26](https://github.com/DeandreT/weft/pull/26) and
 [PR #27](https://github.com/DeandreT/weft/pull/27).

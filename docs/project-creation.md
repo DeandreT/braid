@@ -1,12 +1,12 @@
 # Explicit-capability project creation
 
-P3d4a / [#39](https://github.com/DeandreT/weft/issues/39) implements the persistence
-prerequisite for project creation. Its implementation and actual PostgreSQL
-qualification follow the merged upload API in
-[PR #40](https://github.com/DeandreT/weft/pull/40). The HTTP route, organization
-actions and server composition are a separate dependent increment,
-[P3d4b #31](https://github.com/DeandreT/weft/issues/31). Its request and host
-contract is documented in [Project creation HTTP](project-creation-http.md).
+This page owns project-creation authority, atomic persistence and durable retries.
+The original P3d4a requirement is [#39](https://github.com/DeandreT/weft/issues/39).
+[Project creation HTTP](project-creation-http.md) owns requests and responses;
+[project ownership](project-ownership.md) owns shared access and migration rules.
+The [catalog contract-owner map](catalog-persistence-plan.md#current-contract-owners)
+links the retained design. Creating an empty project is not mapping generation or
+approval; those are separate [creation runtime](mapping-creation-runtime.md) operations.
 
 ## Creation authority
 
@@ -138,3 +138,16 @@ exercise explicit grant/revoke and bounded credential-free output.
 The source and qualification records belong to the focused #39 PR. A usable HTTP
 creation feature is qualified separately in #31, including actual creation,
 ordinary catalog reads and native revision upload in the new project.
+
+## Historical delivery checkpoint
+
+This original sequencing note records the persistence/HTTP split, not a current
+implementation queue:
+
+P3d4a / [#39](https://github.com/DeandreT/weft/issues/39) implements the persistence
+prerequisite for project creation. Its implementation and actual PostgreSQL
+qualification follow the merged upload API in
+[PR #40](https://github.com/DeandreT/weft/pull/40). The HTTP route, organization
+actions and server composition are a separate dependent increment,
+[P3d4b #31](https://github.com/DeandreT/weft/issues/31). Its request and host
+contract is documented in [Project creation HTTP](project-creation-http.md).

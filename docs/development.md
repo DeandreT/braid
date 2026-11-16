@@ -1,159 +1,59 @@
 # Local development
 
-The PostgreSQL ownership library and its separate local setup are described in
-[Project ownership](project-ownership.md). Explicit local identity, persistent
-catalog reads and owner provisioning are described in [Catalog reads](catalog-reads.md).
-Current database setup also requires the separate maintenance login before
-migration 0007; its explicit upgrade and metadata-only scope are described in
-[Maintenance metadata](private-object-maintenance-metadata.md).
-The [project payload permission](project-payload-permissions.md) has a separate
-reader credential and explicit migration-owner command. Preparing a grant does
-not activate an HTTP route, authentication or a preview worker.
-Catalog storage uses an explicitly selected filesystem or Azure Blob store.
-For the filesystem profile, provision new roots or activate existing v1 roots
-using the [offline storage procedure](private-storage-activation.md); the server
-does neither during startup or requests. Blob setup has its own
-[initialization and host settings](private-storage-blob.md).
+Use `deploy/local/dev-up.sh` for the full Linux development environment.
+It builds software, prepares images and local models, provisions data and starts
+services; it is not a lightweight frontend launcher. For packaged Session
+evaluation instead, see [Runtime packaging](runtime-packaging.md). A local
+Development instance does not establish provider or cloud acceptance.
 
-The Angular/ASP.NET Core workspace supplies a compact mapping workbench, generated
-API contracts and explicit Disabled, Development and Session host profiles.
-A separate Ferrule adapter supplies native inspection, validation and projection.
-The [catalog browser](catalog-browser.md) reads saved metadata and immutable
-history. [Saved reports](saved-reports.md) connect the revision page to explanations
-and validation, with explicit generation and repair controls. The catalog API
-supports project creation, metadata edits and immutable native uploads through
-their separately configured write capabilities. [Session host operations](session-host.md)
-describes hosted authentication and private configuration; a local test does not
-establish a working cloud deployment.
-
-Revision-pinned chat is off unless configured; its server-owned model profiles,
-credentials and routes are described in [Chat turn HTTP API](chat-http.md). A
-local OpenAI-compatible or Ollama endpoint can be configured as a profile.
-Sample previews, saved regression runs and build execution use their own worker
-and persistence settings; see [Preview runs](preview-runs.md),
-[Regression runs](regression-runs.md) and [Build workflow](build-workflow.md).
-
-The [native mapping upload page](native-mapping-upload-ui.md) creates a mapping
-and its first immutable revision from the original file. Its separate
-[browser fixture](../tools/native-mapping-upload-browser/README.md) exercises
-explicit replay, source-free recovery and permission changes with private fixture
-bindings. Run `npm run test:native-mapping-upload-browser` through the alternate
-display; controlled frontend checks and actual packaged-host results retain their
-separate qualification scopes. The [revision append page](native-revision-append-ui.md)
-checks the reviewed head before sending and retains the original request for
-explicit recovery.
-
-The packaged container images, their private configuration delivery and a local
-stack in the hosted shape are described in [Runtime packaging](runtime-packaging.md).
+Already running? Use `deploy/local/dev-status.sh` to inspect it and
+`deploy/local/dev-down.sh` to stop it without deleting its data.
+For code checks, go to [Verification](#verification); for frontend-only work,
+see [Manual hosting and frontend development](#manual-hosting-and-frontend-development).
 
 ## Prerequisites
 
-- .NET SDK 10.0.112, pinned in the root `global.json`.
-- Node 22.23.3 and npm 12.1.0, pinned in `.node-version` and `package.json`.
-- For Linux browser tests: Xvfb, curl, unzip, and the pinned Chrome for Testing
-  build described below.
-- For Ferrule worker checks: Rust `1.98.1` (stable, Ferrule's pinned toolchain) with rustfmt/clippy,
-  Linux Docker with cgroup v2, and BuildKit. See [Ferrule worker](ferrule-worker.md)
-  for the image build and live-test configuration.
+- Linux with a working user systemd manager and user bus (`systemd-run`,
+  `systemctl`, `busctl`). The launcher starts persistent user services.
+- A usable Docker daemon with cgroup v2 and BuildKit/buildx. It does not install
+  Docker or repair its daemon. `WEFT_DEV_BUILD_DOCKER_CONFIG` can select a private
+  Docker configuration containing buildx.
+- .NET SDK 10.0.112 (`global.json`), including ASP.NET Core 10, on `PATH` or selected
+  by `DOTNET_ROOT`; Node 22.23.3 and npm 12.1.0 (`.node-version`, `package.json`).
+- Git, curl, Python 3.11 or later and standard Linux tools, including `ss`,
+  `findmnt` and `sha256sum`. The compiler helper uses `hashlib.file_digest`.
+- Free loopback ports 4100, 55432 and 11434 by default, writable build/state
+  storage, and network access for dependency/image downloads and missing models.
+  First startup builds native/compiler images and can download large model files;
+  allow disk space, memory and time for that work.
 
-From the repository root:
+Compiler-image preparation enforces the platform's storage policy in
+[`tools/build-worker/build_image.py`](../tools/build-worker/build_image.py).
+Before the first build, set `WEFT_DEV_HOME` so its `tmp` directory is on an
+admitted storage volume. Native Linux currently requires writable Btrfs at
+`/mnt/example-build`, backed by `/dev/disk/by-label/example-build`. The original WSL route retains its separate
+volume-identity, compression and Windows free-space checks. The default under
+your home directory is not guaranteed to qualify. A rejected work root stops
+preparation; the launcher does not move it or fall back to another disk.
 
-```sh
-npm ci
-npm ci --prefix tools/contracts-generator
-npm run build
-dotnet restore dotnet/Weft.slnx --locked-mode
-dotnet build dotnet/Weft.slnx --configuration Release --no-restore
-npm run contracts:check
-```
-
-### Generated OpenAPI and incremental builds
-
-Building `Weft.Server`, `Weft.MachineEndpoint` or `Weft.FerruleService` exports its
-OpenAPI document into `contracts/` from the built implementation. The shared
-`dotnet/Directory.Build.targets` includes resolved copy-local implementation assemblies
-in the export's incremental dependencies. A referenced implementation can change
-without changing its public reference assembly or recompiling the host; that still
-invalidates the SDK's document cache. An unchanged build leaves the export cached.
-Generation disabled explicitly with `OpenApiGenerateDocuments=false` stays disabled.
-
-After an API change, build the affected host and run `npm run contracts:generate`
-when the application contract changed. Check `npm run contracts:check` and
-`git diff --exit-code -- contracts apps/web/src/api/generated.ts` against the
-committed generated files, as the existing CI job does. A successful incremental
-compile alone does not establish that generated files have been committed.
-
-The build regression runs in the existing CI test step and can be enabled locally
-with the same opt-in flag. It exercises all three actual hosts in a disposable source
-copy, with two build jobs and no listeners, databases, workers or browsers:
-
-```sh
-WEFT_OPENAPI_INCREMENTAL_TESTS=1 dotnet test dotnet/tests/Weft.Tests/Weft.Tests.csproj \
-  --configuration Release --filter FullyQualifiedName~OpenApiIncrementalBuildTests
-```
-
-It demonstrates the pinned SDK's stale-cache behavior without the shared target,
-then checks reference-implementation-only invalidation without host recompilation,
-stale-contract diff failure, unchanged-build reuse and clean-build parity. The
-test changes only its private copy and removes it afterward. Choose a disk-backed
-temporary directory for this build-heavy check on hosts with RAM-backed `/tmp`.
-
-Start the server in one terminal:
-
-```sh
-dotnet run --no-build --configuration Release --project dotnet/apps/Weft.Server
-```
-
-Open http://127.0.0.1:4100 for the built application. The server packages the
-Angular assets with its build. For frontend development, run `npm run dev` in
-another terminal and open http://127.0.0.1:5173; Angular forwards `/api` requests
-to the local service. `WEFT_DEV_LISTEN_ADDR` changes the API's loopback address.
-The unauthenticated shell rejects public interfaces.
-
-The application root opens `/catalog`. Use the packaged API origin for
-configured catalog reads. Its strict Development Host
-boundary is preserved; the separate Angular development proxy is not the
-catalog qualification origin.
-
-The [project creation form](project-creation-ui.md) uses the separate organization
-creation capability. Its [browser fixture](../tools/project-creation-browser/README.md)
-uses only catalog and restricted creator credentials, without native workers or
-private-object storage. Run its browser checks through
-`npm run test:project-creation-browser`; it requires the explicit private bindings
-documented there and uses an alternate display.
-
-The separate [mapping metadata editor](mapping-metadata-ui.md) changes a saved
-mapping's name and description using its actual metadata ETag. Its
-[browser fixture](../tools/mapping-metadata-browser/README.md) exercises restricted
-metadata writes independently of native ingestion and report generation. Run
-`npm run test:mapping-metadata-browser` with the explicit private fixture bindings;
-its qualification remains separate from project creation and read-only viewing.
-
-To inspect mappings, upload them into a configured catalog and open a saved
-revision in the workbench. Build the restricted worker image as described in
-[Ferrule worker](ferrule-worker.md) and set `WEFT_FERRULE_WORKER_IMAGE` to its
-immutable `sha256:...` image ID. The singleton worker runner serves projection
-and validation requests under the documented Linux/Docker restrictions.
-Alternatively, `WEFT_FERRULE_RUNNER=service` and the
-[service runner settings](ferrule-service.md#braid-service-runner) select a running
-Ferrule service. Saved reports remain readable without a worker; deriving new
-reports requires the configured backend. Failed native operations never become
-synthetic mapping data. See [Saved mapping reports](saved-reports.md).
-
-To inspect the self-authored fixture contract, start with
-`DOTNET_ENVIRONMENT=Development` and request
-`/api/v1/fixtures/projections/rich` or `/openapi/v1.json`. Fixtures return 404 in
-other environments. See [Projection v1](projection-contract.md) for their scope.
+The Docker builds supply their own native toolchains. Direct native or edit-WASM
+development additionally needs Rust 1.98.1 with rustfmt/clippy and the matching
+WASM setup; see [Mapping editing](mapping-editing.md) and
+[Ferrule worker](ferrule-worker.md). Browser tests need their own prerequisites
+under [Verification](#verification), not just a running development instance.
 
 ## Run a complete local instance
 
-`deploy/local/dev-up.sh` starts every feature of the Development profile on
-loopback in one command: catalog reads, metadata edits and project creation,
+`deploy/local/dev-up.sh` starts its configured Development features on
+loopback: catalog reads, metadata edits and project creation,
 native upload and report derivation, retained reports and revision comparison,
 chat through a local Ollama model, previews, regression cases and runs, builds, and
 the local deployment sandbox.
-It needs Linux with user systemd, Docker with BuildKit, Node and the pinned .NET
-SDK on `PATH` (or `DOTNET_ROOT`) with its ASP.NET Core runtime.
+It does not enable every optional capability. Session authentication, specification
+intake/document workers and specification-driven creation have separate host
+admission; this loopback setup does not qualify or activate them.
+
+From the repository root:
 
 ```sh
 deploy/local/dev-up.sh
@@ -192,13 +92,22 @@ It then:
    completed build to a sandbox target and sends sample messages to its active release,
    using the combined compiler image as the Docker compiled runtime.
 
-Open `http://127.0.0.1:4100/catalog`. `~/.local/share/weft-dev/status.sh` reports
+Open `http://127.0.0.1:4100/catalog` after startup succeeds:
+
+```sh
+deploy/local/dev-status.sh
+deploy/local/dev-down.sh
+```
+
+`~/.local/share/weft-dev/status.sh` reports
 the units, containers and endpoints, and `~/.local/share/weft-dev/stop.sh` stops
 the units and the PostgreSQL and Ollama containers, keeping all data. Both work
 without the checkout; the repository's `deploy/local/dev-status.sh` and
 `dev-down.sh` are the same commands. `dev-down.sh --keep-ollama` leaves Ollama
-running; `dev-down.sh --purge` also removes the instance's database container and
-volume, image tags, state and settings, but never the Ollama container or models.
+running. **Destructive reset:** `dev-down.sh --purge` also removes the instance's
+database container and volume, image tags, private store, state and settings.
+It never removes the Ollama container or models. Do not purge an instance whose
+data or private settings you need to retain.
 
 A rerun keeps the secrets, database, store, identity and project. It rebuilds only
 for a new commit (or on every run from a modified checkout), and restarts a unit
@@ -321,6 +230,63 @@ the runner has reopened ([Busy Docker hosts](#busy-docker-hosts)). The catalog
 lives in `deploy/local/demo-data/catalog.mjs`;
 `node --test deploy/local/demo-data/seed.test.mjs` checks it without an instance.
 
+## Manual hosting and frontend development
+
+Use this advanced route when you need to control host settings yourself, not as
+a second full setup recipe. `Disabled`, `Development` and `Session` are explicit
+host profiles; a bare server start does not provision a catalog, identity,
+credentials, storage or workers. See [Catalog reads](catalog-reads.md) and
+[Session host operations](session-host.md) for those settings.
+
+To build the shell and hosts from the repository root:
+
+```sh
+npm ci
+npm ci --prefix tools/contracts-generator
+npm run build
+dotnet restore dotnet/Weft.slnx --locked-mode
+dotnet build dotnet/Weft.slnx --configuration Release --no-restore
+dotnet run --no-build --configuration Release --project dotnet/apps/Weft.Server
+```
+
+The built application opens on `http://127.0.0.1:4100`, starting at `/catalog`.
+`WEFT_DEV_LISTEN_ADDR` changes the API's loopback address. The unauthenticated
+shell rejects public interfaces.
+
+For frontend-only development, run `npm run dev` and open
+`http://127.0.0.1:5173`. This starts Angular, not the API, database or workers.
+Angular forwards `/api` requests to the local service; it does not relax that
+service's origin or permission checks. Use the packaged API origin for configured
+catalog reads and qualification; the separate frontend proxy is not that origin.
+
+### Configure only the capabilities you need
+
+- [Project ownership](project-ownership.md) and [catalog reads](catalog-reads.md)
+  own database/identity provisioning. The [maintenance login](private-object-maintenance-metadata.md)
+  must exist before migration 0007; existing databases need explicit role upgrades.
+- [Payload permission](project-payload-permissions.md) uses a separate reader
+  credential and migration-owner command. Preparing a grant activates neither a
+  route, authentication nor a preview worker.
+- Filesystem storage needs [offline initialization or v1 activation](private-storage-activation.md);
+  server startup does neither. Azure Blob has its own [initialization and settings](private-storage-blob.md).
+- [Project creation](project-creation-ui.md), [metadata edits](mapping-metadata-ui.md),
+  [native uploads](native-mapping-upload-ui.md) and [revision append](native-revision-append-ui.md)
+  have separate write capabilities. Uploads retain original bytes; append checks
+  the reviewed head, and metadata edits use the actual metadata ETag.
+- [Saved reports](saved-reports.md) remain readable without a worker; deriving
+  new reports requires one. For the Docker runner, use the immutable worker image
+  ID in `WEFT_FERRULE_WORKER_IMAGE`. `WEFT_FERRULE_RUNNER=service` instead selects
+  the [Ferrule service runner](ferrule-service.md#braid-service-runner). Native
+  failures never become synthetic mapping data.
+- [Chat](chat-http.md) is off unless configured, with server-owned profiles and
+  credentials. Local OpenAI-compatible and Ollama endpoints are options, not
+  proof of a real-provider deployment. [Previews](preview-runs.md),
+  [regressions](regression-runs.md) and [builds](build-workflow.md) each have their
+  own worker and persistence settings.
+- Development-only projection fixtures are at `/api/v1/fixtures/projections/rich`
+  with `DOTNET_ENVIRONMENT=Development`; they return 404 elsewhere. `/openapi/v1.json`
+  describes the API. See [Projection v1](projection-contract.md) for fixture limits.
+
 ## Updating API contracts
 
 Every HTTP API that braid serves has an OpenAPI 3.1 document in `contracts/`, which
@@ -360,29 +326,106 @@ statuses, and no other route. After a build, a route change without its committe
 document fails `git diff --exit-code -- contracts`; with generation off, it fails
 these tests.
 
+### Generated OpenAPI and incremental builds
+
+Building `Weft.Server`, `Weft.MachineEndpoint` or `Weft.FerruleService` exports its
+OpenAPI document from the implementation. `dotnet/Directory.Build.targets` tracks
+resolved copy-local implementation assemblies as export dependencies. A referenced
+implementation change invalidates the SDK's document cache even if its public
+reference assembly and host compilation are unchanged. An unchanged build keeps
+the export cached. `OpenApiGenerateDocuments=false` still disables generation.
+
+After an API change, build the affected host, generate the application types when
+needed, and check the committed output as described above. A successful incremental
+compile alone does not establish that generated files have been committed.
+
+The existing opt-in regression exercises all three hosts in a disposable source
+copy with two build jobs, without listeners, databases, workers or browsers:
+
+```sh
+WEFT_OPENAPI_INCREMENTAL_TESTS=1 dotnet test dotnet/tests/Weft.Tests/Weft.Tests.csproj \
+  --configuration Release --filter FullyQualifiedName~OpenApiIncrementalBuildTests
+```
+
+It checks the pinned SDK's stale-cache behavior without the shared target,
+reference-implementation-only invalidation without host recompilation, stale-contract
+diff failure, unchanged-build reuse and clean-build parity. It changes only its
+private copy and removes it afterward. Choose disk-backed temporary storage for
+this build-heavy check on hosts with RAM-backed `/tmp`.
+
 ## Verification
+
+Run commands from the repository root. Install the locked root and
+`tools/contracts-generator` npm dependencies first. Web checks also need the
+pinned edit-WASM assets described in [Mapping editing](mapping-editing.md).
+Backend tests need a restored Release build; the runner does not build it.
+
+| Task | Command | Scope |
+| --- | --- | --- |
+| Web and static checks | `npm run check` | Formatting, dependency/security and pure fixture checks, docs images, generated contracts and frontend/type builds; not the backend suite. |
+| Web build | `npm run build` | Build Angular assets before publishing the server. |
+| Linux tooling checks | `npm run check:tooling` | Python 3.11+ mock suites for the backend test selector, browser launcher and compiler-image helper; no application startup, Docker access or browser execution. |
+| Small managed backend selection | `npm test` | The explicit `fast` group after a current full Release build; prints omitted groups and is not full backend or CI acceptance. |
+| Backend suite | `python3 tools/ci/run_tests.py` | Run the built solution tests; external prerequisites and opt-in lanes still apply. |
+| .NET formatting | `dotnet format dotnet/Weft.slnx --verify-no-changes --no-restore` | Check source formatting after restore. |
+| Generated contracts | `npm run contracts:check` | Check committed contract/type consistency; also compare generated files after host builds. |
+| Targeted backend troubleshooting | `dotnet test dotnet/tests/Weft.Tests/Weft.Tests.csproj --configuration Release --no-build --no-restore --filter FullyQualifiedName~UserGuideTests` | Select an existing class explicitly; not a replacement for full acceptance. |
+| Browser scenarios | `npm run test:browser` | Use the isolated browser and prerequisite setup below. |
+
+`check:tooling` is a separate Linux/Python route. It is not part of `npm run check`,
+which remains the web/static route for other platforms too.
+
+For an explicit backend selection, use `python3 tools/ci/run_tests.py --group NAME`;
+repeat `--group` to combine groups. The [test-group reference](../tools/ci/test-groups.md)
+lists their exact prerequisites and limits. Missing prerequisites, unknown or
+stale class assignments, and an inexact discovered selection stop the run rather
+than silently dropping tests. Source changes require a classification review.
+The unflagged full suite and CI shards keep their existing coverage. Selecting a
+group does not approve native, browser, installed-worker or live-provider work.
+
+### Backend test prerequisites
+
+Restore and build before testing:
 
 ```sh
 export DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=false
-npm run check
-npm run build
 dotnet restore dotnet/Weft.slnx --locked-mode
-dotnet format dotnet/Weft.slnx --verify-no-changes --no-restore
 dotnet build dotnet/Weft.slnx --configuration Release --no-restore
-npm run contracts:check
 git diff --exit-code -- contracts apps/web/src/api/generated.ts
+```
+
+Host process tests require explicit absolute paths to fresh publications of the
+same Release build:
+
+```sh
 weft_host_qualification="$(mktemp -d "${TMPDIR:-/tmp}/weft-host-qualification.XXXXXXXX")"
 dotnet publish dotnet/apps/Weft.Server/Weft.Server.csproj --configuration Release --no-build --no-restore --output "$weft_host_qualification/server"
 dotnet publish dotnet/tools/Weft.HostPrivacyProbe/Weft.HostPrivacyProbe.csproj --configuration Release --no-build --no-restore --output "$weft_host_qualification/probe"
 export WEFT_HOST_TEST_SERVER_PATH="$weft_host_qualification/server/Weft.Server.dll"
 export WEFT_HOST_PRIVACY_PROBE_PATH="$weft_host_qualification/probe/Weft.HostPrivacyProbe.dll"
-dotnet test dotnet/Weft.slnx --configuration Release --no-build --no-restore
-npm run test:browser
+python3 tools/ci/run_tests.py
 ```
 
-Host process tests require these explicit absolute paths to fresh publications of
-the same Release build. The privacy probe is a qualification tool, not a deployed
-Server dependency; keep its publication separate from the shipped host.
+The privacy probe is a qualification tool, not a deployed Server dependency;
+keep its publication separate from the shipped host. Use task-owned disk-backed
+temporary/build storage and remove disposable publications after all tests finish.
+
+There is no promise that an unconfigured suite exercises every runtime path.
+Tests with missing opt-ins can skip; an ordinary passing run does not qualify
+database, worker, installed-document, browser, provider or cloud environments.
+`.github/workflows/ci.yml` lists the exhaustive CI preparation and shard selection.
+Use the focused prerequisite owners: [Ferrule worker](ferrule-worker.md),
+[native PostgreSQL](native-postgres-tests.md), [document worker host](spec-document-host.md),
+[authored creation qualification](creation-sandbox-qualification.md),
+[regression browser](regression-browser.md) and [hosted acceptance](hosted-acceptance.md).
+They are separate qualification routes, not automatic steps of `npm run check`.
+
+The existing `npm run test:project-creation-browser`,
+`npm run test:mapping-metadata-browser`, `npm run test:native-mapping-upload-browser`
+and `npm run test:native-revision-append-browser` aliases keep their specific
+permission and recovery scopes. Their fixture READMEs under `tools/` describe
+the required private bindings; a synthetic HTTP fixture does not qualify the
+packaged server or PostgreSQL persistence.
 
 ### Documentation screenshots
 
@@ -468,9 +511,16 @@ virtual display unless `WEFT_XVFB_SERVER_NUM` selects one.
 
 The browser harness owns API and Angular development processes on ports 4101
 and 5174, fails on occupied ports, and stops them when it exits. Build the Release
-server before invoking it. The root browser-test command always uses a fresh
-alternate virtual display and unsets Wayland. Never run headed Playwright on an
-active user display.
+server before invoking it. The root browser-test command uses an alternate virtual
+display. Keep `WAYLAND_DISPLAY`, `XDG_RUNTIME_DIR`, `XDG_SESSION_TYPE` and
+`DBUS_SESSION_BUS_ADDRESS` out of browser children so they cannot attach to the
+active desktop. Never run headed Playwright on an active user display.
+
+The Linux aliases that use `tools/browser-fixture/launch.py` require Python 3,
+`xvfb-run`, `Xvfb` and `xauth`. That shared launcher removes all four desktop
+variables, preserves the scenario arguments and returns the child's exit status.
+Scenario-specific limits, display selection and authentication core-dump policy
+remain with their existing aliases and fixtures.
 
 After `npm ci`, use Chrome for Testing **157.0.8090.0** for Linux browser checks.
 The Chromium bundled with the locked Playwright package lacks the

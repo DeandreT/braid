@@ -2,8 +2,10 @@
 
 `/chat` is the conversation library in the same shell as the catalog and workbench.
 One persistent right panel shares private workspace conversations through the
-[chat HTTP API](chat-http.md). When asked, chat can save exact-base mapping edits
-through the creator's edit permission. It never activates versions, derives reports or
+[chat HTTP API](chat-http.md). Chat can propose exact-base mapping edits, but saving
+requires [review and approval of the exact proposal](chat-proposal-review-ui.md)
+under the creator's current edit permission. The model cannot approve its own edit.
+It never activates versions, derives reports or
 starts runs. Citations outside the open report are links to their own views;
 they never retarget the workbench panel.
 

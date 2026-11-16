@@ -5,6 +5,12 @@ and permission checks. It changes how the catalog, revision workbench and exact
 creation review are presented; it does not replace them with the static design
 prototype.
 
+This page owns layout and navigation behavior, not another implementation backlog.
+[Creation review](creation-review-ui.md) owns approval/recovery semantics and
+[catalog browser](catalog-browser.md) owns catalog workflows. Use [ROADMAP](../ROADMAP.md)
+for future priorities; static captures and historical run records do not establish
+provider, native execution or hosted acceptance.
+
 ## Shared shell and catalog
 
 Desktop navigation shows names beside the existing icons. From 680–1023px, a
@@ -54,6 +60,11 @@ application behavior. Qualification of the implemented layout uses the built
 Angular application, authored API fixtures, existing behavioral suites and the
 focused `apps/web/tests/ux-layout.spec.ts` regression selection. These checks are
 separate from real-provider, native execution and deployed-environment acceptance.
+
+## Historical layout qualification checkpoint
+
+The following records the integrated-07 run. Counts and environment observations
+are historical evidence, not current setup instructions or a rolling readiness claim.
 
 The refreshed layout is implemented in Angular. Integrated-07 passed 667 fixtures
 with four approved optional captures skipped, all 88 UX executions, 17 production

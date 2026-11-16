@@ -1,5 +1,14 @@
 # Selective v1 XML port
 
+**Historical port record, not current setup instructions.** Worktree paths,
+uncommitted status, migration inventory and runtime gaps below belong to this
+checkpoint. The original evidence and anchors are retained. For current native
+preview/regression behavior use [XML previews](xml-previews.md); for authoring use
+[typed creation formats](mapping-creation-formats.md). [XML design](xml-document-design.md)
+remains a proposal where it describes future compiled XML support, not deployed
+capability. Later combined evidence is in [v1 integration](v1-integration.md);
+[ROADMAP](../ROADMAP.md) owns future work and deferred acceptance.
+
 Worktree: `C:/example/checkout`, branch `feat/v1-xml-documents`.
 Integration base: `59ec1f014c7aad1949935ba4c13bc71a15837223`.
 

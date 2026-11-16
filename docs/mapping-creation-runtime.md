@@ -1,6 +1,21 @@
 # Authenticated creation runtime
 
-Implementation worktree: `C:/example/checkout`, branch `feat/v1-creation-runtime`. Reviewed codec/dependencies through `0d318905` are integrated in a pending uncommitted merge; runtime changes remain uncommitted for review.
+This is the authenticated runtime contract for creating a new mapping from
+retained specifications. Concrete server composition, discovery and ordered
+migrations through 0047 exist in source. They do not enable creation on an
+unconfigured host or establish real-provider/cloud acceptance.
+
+`WEFT_CREATION_ENABLED` defaults false. See [server composition](creation-host-composition.md)
+for activation requirements and the [delivery plan](../ROADMAP.md#remaining-acceptance-gates)
+for the user-deferred provider and Azure gates. Branch-era implementation and
+verification checkpoints remain in [the integration record](v1-integration.md)
+and the [original runtime record](https://github.com/DeandreT/braid/blob/25e7a6c9924291081960494fa9eed707be1aa58b/docs/mapping-creation-runtime.md).
+
+Users review exact evidence and assumptions, choose **Run sample**, and explicitly
+choose **Approve and save this mapping**. Approval is proposal-specific; generation
+and feedback never imply consent. The private mapping editor has a separate
+**Save** action. After an unconfirmed creation save, **Check save status** recovers
+the original approved operation rather than creating a replacement proposal/save.
 
 ## Renewed review integration
 
@@ -10,17 +25,26 @@ The loader now uses the common internal `CreationEvidenceDocument.RestoreRetaine
 
 Creation-enabled payload workspace policies use policy version 8 with four tool iterations. Production turn admission derives five provider rounds from this policy; other workspace/mapping policies still receive three tool iterations/four rounds. Duration, request/wire/text bytes, output tokens, eight tool calls and event budgets are unchanged. Independent evidence reads can share one tool batch; extra dependent pages and recovery discovery still consume the bounded turn budget and may require another turn. The full actual-provider-wire regression resolves an unfocused project, discovers a selection, reads its exact snapshot/evidence, proposes, then returns final text, asserting retained identity and a trusted citation.
 
-Five-round support also requires the 0046 owner to change `chat_turns_max_rounds_check` and `chat_rounds_ordinal_check` from 4 to 5 and update exact chat schema admission. Runtime Domain/AI/application ordinal ceilings are 5; production configuration assigns this only to creation-enabled workspace policies. Durable activation remains gated until these database dependencies are qualified.
+Migration `0046_document_evidence.sql` supplies five-round support through
+`chat_turns_max_rounds_check` and `chat_rounds_ordinal_check`, together with exact
+chat schema admission. Runtime Domain/AI/application ordinal ceilings are 5;
+production configuration assigns this only to creation-enabled workspace policies.
+The target database must pass current contract admission; a source migration is
+not proof that an installation has applied it.
 
-The 0046 owner's current source now declares both discovery signatures and restricted spec-reader grants below; `SpecSchemaAdmission` names both functions. This is source-level alignment, not committed integration or durable qualification.
+Migration 0046 declares both discovery signatures and restricted spec-reader
+grants below; `SpecSchemaAdmission` checks both functions. Later ordered migration
+0047 restores the exact document JSON helper contract. Keep all applied migrations
+intact; the [integration record](v1-integration.md#migration-0046-integration-verification)
+describes the bounded database verification rather than a pending owner handoff.
 
 ## Activation and integration ports
 
 `WEFT_CREATION_ENABLED` defaults false. `CreationRuntime.Configured` requires the specification factory, compiler, preview, current authority, proposal store, approval store, ingestion service/reader, `ICreationDiscovery` and `ICreationRuntimeAdmission`. Concrete server wiring is described in [Creation server composition](creation-host-composition.md). Shared admission verifies durable contracts; compiler/preview runners separately verify their actual service profile on every execution channel before sending frames, preserving authorized retained review during worker/source-store unavailability.
 
-Compiler registration is `IMappingCreationCompiler` -> `FerruleMappingCreationCompiler` with its authoring backend. Preview registration is `IMappingCreationPreview` -> `FerruleMappingCreationPreview` with a separate backend using `DockerWorkerProfile.AuthoredPreview` or `FerruleServiceProtocol.AuthoredPreviewProfile`. The normal preview profile is incompatible. Durable store/authority implementations remain the persistence owner's integration.
+Compiler registration is `IMappingCreationCompiler` -> `FerruleMappingCreationCompiler` with its authoring backend. Preview registration is `IMappingCreationPreview` -> `FerruleMappingCreationPreview` with a separate backend using `DockerWorkerProfile.AuthoredPreview` or `FerruleServiceProtocol.AuthoredPreviewProfile`. The normal preview profile is incompatible. Production `CreationHostConfiguration` registers separate Ferrule service authoring/authored-preview runners, `PostgresMappingCreationStore` for proposal/approval/authority ports, `PostgresCreationDiscovery` and `CreationHostAdmission`. Protected reader, writer and approver connections have distinct restricted roles and passwords and share the admitted database placement with chat/specification dependencies. Every execution channel verifies its exact worker capability before sending frames.
 
-Required persistence coordination: `ChatPayloadSource.Specification = 5`, with immutable extraction object ID as subject and null version, requires `chat_payload_audit` to accept source kind 5 and matching schema admission. The new workspace citation is kind 12 (`CreationProposal`), carried through the existing workspace citation event, with an additional canonical `proposalFingerprint` property only for that kind. Existing citation canonical encodings remain unchanged.
+The persistence contract includes `ChatPayloadSource.Specification = 5`, with immutable extraction object ID as subject and null version; `chat_payload_audit` and matching schema admission accept source kind 5. Workspace citation kind 12 (`CreationProposal`) uses the existing workspace citation event, with an additional canonical `proposalFingerprint` property only for that kind. Existing citation canonical encodings remain unchanged.
 
 ## Workspace tools
 
@@ -50,6 +74,10 @@ The result includes `projectId`, `proposalId`, `fingerprint`, `snapshotDigest`, 
 
 ## 0046 SQL owner handoff
 
+This retained heading names the original handoff. The functions are now part of
+the ordered schema and exact admission contract, not instructions to invent a
+new successor migration.
+
 The implemented PostgreSQL adapter uses the restricted `PostgresSpecBundleDatabase` Reader profile and exact schema admission. Selection discovery validates physical store admission. Proposal discovery relies on current actor/project content authorization and creator filtering in the owner function, so retained review remains discoverable after source-store deactivation or relocation. It requires these owner functions:
 
 ```sql
@@ -63,7 +91,13 @@ weft.creation_proposals_discover_v1(actor uuid, org uuid, project uuid,
 
 Both require current actor/project content authority, bounded limits 1–20, nonzero UUIDs, and exclusive ascending PostgreSQL UUID keyset ordering. Selection cursors are both null or both populated; selections must reference published extractions and published originals in the bound store with live source/bundle. Proposal rows must belong to the authenticated creator in the exact organization/project, include terminal proposals and survive source retirement/staleness. Retention must commit before its identity becomes discoverable; discovery must not depend on a chat event, acknowledged response or surviving turn. Return at most the requested limit with canonical lowercase SHA-256 fingerprints. The adapter rejects duplicates, malformed rows and nonprogressing cursors.
 
-0046 owner must grant only the required reader execution permissions, retain owner-function current-access fencing, and update exact `SpecSchemaAdmission` definitions/signatures/permissions. Missing functions or stale admission fail closed. Specification audit kind 5, Partial-format durability and five-round chat checks remain owner 0046 dependencies. This worktree includes qualified 0045 and the common evidence codec through the pending merge.
+Migration 0046 grants only the required reader execution permissions and retains
+owner-function current-access fencing. `SpecSchemaAdmission` verifies exact
+definitions, signatures and permissions; missing functions or stale admission
+fail closed. Specification audit kind 5, Partial-format durability and five-round
+chat checks are integrated schema requirements. Actual host activation still
+requires the target database, content store and execution profiles to pass their
+own admission checks.
 
 ## HTTP contracts
 
@@ -73,6 +107,7 @@ DTOs: `dotnet/src/Weft.Contracts/Creation/MappingCreationV1.cs`. Base:
 
 - `GET ?expectedFingerprint=<lowercase SHA256>` returns `CreationProposalV1`.
 - Collection `GET /api/v1/organizations/{organizationId}/projects/{projectId}/creation-proposals?afterProposal=<UUID>&limit=20` returns `CreationProposalPageV1`: `{proposals:[{proposalId,fingerprint,reviewPath}],afterProposal}`. Both query parameters are optional; the cursor is null after a short page.
+- `GET /api/v1/organizations/{organizationId}/projects/{projectId}/creation-capabilities` reports current project creation capability; it does not approve a proposal or replace checks on subsequent actions.
 - `POST /approve` takes `{fingerprint,acceptedCriticalAssumptions}`. All exact critical assumption IDs are required; critical questions block ingestion.
 - `POST /recover` takes `{fingerprint}`. The application resumes only an existing approved ingestion operation.
 - `POST /preview` takes `{fingerprint,sampleBase64,sampleDigest}`; sample bytes are at most 1 MiB and must match their digest. `CreationPreviewV1` binds proposal/native/sample and verified output format/media/digest; failed output fields are null.
@@ -80,6 +115,23 @@ DTOs: `dotnet/src/Weft.Contracts/Creation/MappingCreationV1.cs`. Base:
 Session/bearer admission uses the existing `CatalogRequestBoundary`, including session CSRF protection. Development identity is refused. Creator, project, fingerprint and current content authority are checked before and after operations. Reads and terminal receipt discovery survive selected-source staleness when content access remains authorized; preview and nonterminal approval/recovery still require a current exact snapshot. Responses are no-store, categorical failures contain no private exception text, and native bytes are never exposed by these DTOs.
 
 ## Verification
+
+Current source includes portable contract tests, actual-adapter PostgreSQL
+discovery tests, authenticated session HTTP tests and native compiler/preview
+checks. Their prerequisites and evidence are separate: synthetic ports do not
+qualify durable storage, controlled browser responses do not qualify a provider,
+and local worker checks do not qualify another installation. The later
+[integration verification](v1-integration.md#migration-0046-integration-verification),
+[server-composition record](creation-host-composition.md) and
+[sandbox qualification](creation-sandbox-qualification.md) document their actual
+scope. Real-provider and Azure acceptance remain deferred.
+
+### Historical pre-0046 runtime checkpoint
+
+The paragraphs below retain the original focused runtime verification record.
+Its “pending”, “skipped” and “still need qualification” statements describe that
+earlier branch checkpoint, not the current migration inventory. Do not turn
+these overlapping selections into a whole-project result or deployment claim.
 
 `PostgresCreationDiscoveryTests` adds two actual-adapter cases (inactive and relocated source store): retained proposals remain discoverable/readable, selections refuse, and subsequent content-grant revocation blocks discovery/readback. The theory explicitly skips until reviewed 0046 is embedded, then requires the real PostgreSQL fixture. It uses real restricted connections and owner functions, with synthetic source/native fixtures and registry publication callbacks. The focused follow-up run passed two portable discovery tests and skipped this pending-0046 theory; it does not qualify the new database cases.
 
