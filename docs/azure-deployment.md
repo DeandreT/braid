@@ -1,9 +1,47 @@
 # Azure deployment
 
-`deploy/azure` describes the first hosted braid environment as Bicep, using the
-[runtime images](runtime-packaging.md). The server runs in the Session profile behind its
-same-replica edge, serves the Angular application from the same origin, and reaches every
-dependency privately. Tracking work is [#146](https://github.com/DeandreT/weft/issues/146).
+## Decide whether to use the cloud lane
+
+Start packaged evaluation with the [Compose Session stack and Ferrule service](runtime-packaging.md#start-with-the-compose-session-stack).
+Azure is an optional deployment lane. Its live-provider and platform acceptance
+remain deferred; the templates and qualification procedure below are not evidence
+of a verified deployment. They remain the reference for that optional work.
+
+If Azure is selected, prefer the Container Apps Ferrule **service** mode as the
+candidate first cloud target: `ferruleRunner = service`. It avoids a Docker socket
+inside hosted containers. Dynamic sessions and a separately hosted Docker
+inspection worker remain advanced alternatives under [Ferrule service](#ferrule-service).
+This recommendation does not change the template or example defaults:
+`deployApplication = false`, `ferruleRunner = worker`, and native work, chat and
+bearer access off; no mapping endpoints are selected.
+
+Before provisioning, review [Open questions and limits](#open-questions-and-limits),
+especially the current credential-wiring gap, database administrator privileges,
+Landlock support and key-ring filesystem requirements. Resolve those requirements
+before treating the procedure as executable end to end. Even with
+`deployApplication = false`, the platform deployment creates billable resources.
+Reading this guide is not approval to provision or run live qualification.
+
+Use this order when the environment and execution are approved:
+
+1. Prepare the [operator inputs](#operator-inputs) and [Entra registration](#entra-app-registration).
+2. Follow [Deployment](#deployment), then [Verification](#verification) and
+   [First administrator](#first-administrator). Fresh role provisioning is not an
+   existing-database upgrade.
+3. Add only the capabilities you need: [native work](#native-work-previews-regression-runs-and-builds),
+   [chat](#chat), [bearer access](api-authentication.md#app-registrations) or
+   [mapping endpoints](#mapping-endpoints).
+4. Use [Operations](#operations) for upgrades, rotation and recovery. Use the
+   [live qualification](#live-qualification) harness only for a separately approved
+   live run; its [receipt and teardown](#receipt-and-teardown) preserve ownership
+   checks and cleanup evidence.
+
+## Platform reference
+
+`deploy/azure` describes a hosted braid environment as Bicep, using the
+[runtime images](runtime-packaging.md). The intended layout has the Session server
+behind its same-replica edge, serving Angular from the same origin and reaching
+dependencies privately. Tracking work is [#146](https://github.com/DeandreT/weft/issues/146).
 
 | Resource | Configuration |
 | --- | --- |
@@ -71,7 +109,9 @@ Register a single-tenant web application in the sign-in tenant:
 
 All commands run from the repository root with an authenticated Azure CLI that includes
 Bicep. Copy `deploy/azure/main.example.bicepparam` to a private parameter file and replace
-its placeholders.
+its placeholders. Keep `deployApplication = false` for the platform step; enabling
+the application is a later explicit choice, not a new default. Complete the
+[prerequisite review](#open-questions-and-limits) before running these commands.
 
 1. **Platform.** With `deployApplication = false`:
 
@@ -109,6 +149,8 @@ its placeholders.
    With `WEFT_AZURE_SUBSCRIPTION=<id>` set, every Azure CLI call it makes names that subscription
    instead of the CLI's default.
    The script keeps existing passwords, certificates and placeholders, so it can be rerun.
+   It refreshes the connection-string secrets from the retained passwords and supplied
+   database host; this is not password rotation or database-role provisioning.
    It writes each certificate pin to `<certificate>.sha256` in the output directory. Upload the
    Entra client certificate as described above.
 
@@ -122,7 +164,8 @@ its placeholders.
    az containerapp job start --resource-group <group> --name <name>-migrate
    ```
 
-   Follow each execution with `az containerapp job execution list` and its console logs in
+   Start migrations only after the provisioning execution succeeds, not merely
+   after its start command returns. Follow each execution with `az containerapp job execution list` and its console logs in
    Log Analytics. Provisioning creates the `weft` database, every restricted login,
    the migrator's ownership and its parameter grant in one transaction and refuses to run
    again once roles exist. PostgreSQL 16 makes a non-superuser creator an admin member of
@@ -193,10 +236,19 @@ deployments so the binding is kept. Add the new redirect URI to the app registra
 
 ## Operations
 
-- **Updates.** Build a new tag, redeploy with it, then run the migrate job before or after the
-  revision change as the release requires; migrations are forward-only.
-- **Restart and recovery.** A replica restart reopens the key ring from the share and all
-  other state from PostgreSQL; nothing depends on the previous replica. The app is fixed at one replica:
+- **Updates.** Review the [ordered database and role upgrade index](runtime-packaging.md#database-upgrade-index)
+  against the installed database first. Have the DBA add only missing restricted
+  roles before the migration that requires them; the first-time `database-roles`
+  job refuses existing roles and is not an upgrade tool. Build a new tag and
+  coordinate the revision change and migrate job as the release requires.
+  Migrations are forward-only and checksum-bound. An image rollback does not undo
+  schema changes or change a mapping's active release pointer.
+- **Restart and recovery.** A replica restart reopens the key ring from the share,
+  durable metadata from PostgreSQL and private objects from Blob storage. Retain
+  those stores and the protecting/decrypt certificates; do not rerun fresh
+  initialization to recover them. Treat an unconfirmed shutdown as unconfirmed
+  cleanup, not permission to discard resources or replace the original operation.
+  The app is fixed at one replica:
   the session key ring and host profile support one API instance, so do not enable scale-out
   or scale-to-zero.
 - **Certificate rotation.** Neither certificate renews automatically. A new session key
@@ -293,9 +345,12 @@ role. `nativeWorkEnabled` does not use this runner, so these settings stay dorma
 
 ## Chat
 
-`chatEnabled = true` enables [chat](chat-http.md) in the Session host. It requires
+`chatEnabled = true` requests [chat](chat-http.md) in the Session host. It requires
 `nativeWorkEnabled`, because conversations pin the revision reports that derivation produces. The
-deployment adds `WEFT_CHAT_ENABLED=true` and four private files:
+template adds `WEFT_CHAT_ENABLED=true` and the files below, but does not yet
+deliver the required chat-approver credential. Resolve the
+[credential-wiring gap](#open-questions-and-limits) before enabling it; these
+deliveries alone are not a complete current chat configuration:
 
 - the `pg-chat-reader-connection` and `pg-chat-writer-connection` logins, delivered with
   `WEFT_DELIVER_FILE_CHAT_READER_CONNECTION` and `WEFT_DELIVER_FILE_CHAT_WRITER_CONNECTION` and
@@ -307,6 +362,10 @@ deployment adds `WEFT_CHAT_ENABLED=true` and four private files:
 - the model-provider credential from the `weft-model-provider-credential` secret, delivered with
   `WEFT_DELIVER_FILE_MODEL_PROVIDER_CREDENTIAL` to `/run/weft/secrets/model-provider-credential`,
   which a profile's `file` credential names.
+
+The template also delivers the separate payload-permission reader as
+`WEFT_CHAT_PAYLOAD_PERMISSION_CONNECTION_STRING_FILE`; that credential does not
+itself grant a user permission to share payloads.
 
 `initialize-secrets.sh` creates both secrets as placeholders, and the placeholder document refuses
 chat startup. Replace them before enabling chat, for example with
@@ -381,8 +440,9 @@ only: environment overrides replace each job's list.
 
 ## Live qualification
 
-`deploy/azure/qualify.sh` runs this procedure end to end in a new resource group and qualifies the
-hosted Session stack and the mapping endpoint there: the platform, signed-in viewing, chat and
+`deploy/azure/qualify.sh` is the live harness for running this procedure end to end
+in a new resource group. A successful run would qualify the hosted Session stack
+and mapping endpoint within that run's stated scope: the platform, signed-in viewing, chat and
 previews, restart and scale recovery, and authorized, idempotent and recoverable endpoint invocation
 ([#159](https://github.com/DeandreT/weft/issues/159)). It runs on Linux from a clean checkout, with
 bash, an authenticated Azure CLI with Bicep, Docker with BuildKit, git, curl, jq and openssl. Part of
@@ -511,6 +571,18 @@ regenerate it after an intended change, set `WEFT_QUALIFY_UPDATE_EXPECTED=1`, th
 
 ## Open questions and limits
 
+- **Current credential wiring.** `provision-database.sh` requires
+  `WEFT_CHAT_APPROVER_PASSWORD`, `WEFT_DRAFT_READER_PASSWORD` and
+  `WEFT_DRAFT_WRITER_PASSWORD`. The login inventory in `initialize-secrets.sh` and
+  the `roles` array used by the `database-roles` job in `modules/application.bicep`
+  do not supply them. The job therefore cannot complete fresh provisioning as
+  currently wired. The application's `chatFiles` also omits
+  `WEFT_CHAT_APPROVER_CONNECTION_STRING_FILE`, which enabled Session chat requires.
+  Reconcile the secret, provisioning and runtime deliveries in a separately
+  reviewed change before a deployment or live qualification run. Do not work
+  around this by sharing another role's password, skipping migrations or giving
+  the app the migrator credential. The optional creation/specification host
+  features also need their own composition; these templates do not enable them.
 - **Private search extension.** Provisioning requires `pg_trgm` to be allowed by
   the server's extension policy. The role transaction installs it in
   `weft_search_extensions` and removes PUBLIC schema and function privileges.
@@ -524,8 +596,9 @@ regenerate it after an intended change, set `WEFT_QUALIFY_UPDATE_EXPECTED=1`, th
   PostgreSQL lets only a superuser or a holder of the grant option grant `SET` on a
   placeholder parameter. Verify with the database-roles job: success prints the provisioned
   line; refusal prints `permission denied for parameter weft.organization_id` and rolls back
-  every role (only the empty `weft` database remains). Run it right after the platform
-  deployment, before the rest of the procedure. If it is refused, either host PostgreSQL 16
+   every role (only the empty `weft` database remains). Check this before starting
+   migrations: the application deployment must first create the `database-roles`
+   job. If it is refused, either host PostgreSQL 16
   with a superuser-capable administrator in the same virtual network, or replace the chat
   routines' function-level `SET` clauses through a new reviewed migration (0011 itself is
   checksum-bound and must not be edited).

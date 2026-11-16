@@ -1,5 +1,21 @@
 # Combined v1 integration — 2026-11-12
 
+**Historical integration and qualification record, not current setup instructions.**
+All checkpoints below, including headings containing “current” or “final”, refer
+to the recorded source and environment. Pending, reserved or uncommitted language
+describes that checkpoint; it does not override later migrations or current
+contracts. Evidence and original anchors remain in place. Counts overlap and
+must not be added into a new acceptance total.
+
+For current work, use [ROADMAP](../ROADMAP.md) for priorities,
+[development](development.md) or [Session host](session-host.md) for setup,
+[creation runtime](mapping-creation-runtime.md) for authenticated operations,
+[creation host composition](creation-host-composition.md) for activation and
+[typed formats](mapping-creation-formats.md) for authoring contracts. The
+[catalog owner map](catalog-persistence-plan.md#current-contract-owners) covers
+persistence and recovery. Local evidence here is not live-provider or Azure
+acceptance and grants no permission to run those deferred gates.
+
 Local implementation, portable verification and the subsequently reviewed bounded
 Linux/PostgreSQL/Azurite qualification are complete. Live-provider acceptance and
 actual Azure deployment remain explicitly deferred by the user. Historical
@@ -351,6 +367,9 @@ qualification documentation changed afterward. The Release/native and frontend
 production qualifications therefore retain their exact source correspondence.
 
 ### Current local follow-up
+
+“Current” in this preserved heading means the later checkpoint in this record,
+not a rolling setup or release-status page.
 
 The later local Linux lane closes the previously pending XML filesystem-prefix,
 protected session, installed document-worker and matching-image sandbox checks

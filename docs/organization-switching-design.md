@@ -1,12 +1,27 @@
 # Organization membership and request-local switching
 
+**Design only; prerequisite reconciliation required before implementation.**
+The audit/AI-usage/quota migration and guard names below are assumptions from this
+proposal, not the integrated schema. Actual slots 0037–0039 are
+`0037_mapping_drafts.sql`, `0038_mapping_draft_previews.sql` and
+`0039_chat_mapping_writes.sql`. Reconcile intended accounting/audit behavior,
+schema admission and upgrade fixtures against the actual baseline and qualified
+prerequisites before changing identity/session code. Do not translate assumed SQL
+into deployed migrations or change applied files. [Project ownership](project-ownership.md#migrations-and-local-setup)
+owns migration integrity; [ROADMAP](../ROADMAP.md) owns future work. This design's
+presence does not establish that organization switching is implemented or verified.
+
 ## Scope and implementation gates
 
-This is the design specification for [#341](https://github.com/DeandreT/weft/issues/341), not a statement of implemented or qualified behavior. Integrate the qualified audit, AI usage and quota baseline, including `0037_audit_log.sql`, `0038_ai_usage.sql` and `0039_ai_quotas.sql`, before changing session or identity code. Source presence is not qualification evidence. [Archive/deletion](archive-deletion-design.md) must preserve this request-local admission boundary.
+This is the design specification for [#341](https://github.com/DeandreT/weft/issues/341), not a statement of implemented or qualified behavior. Reconcile and qualify the intended audit, AI usage and quota prerequisites before changing session or identity code; the assumed 0037–0039 identities are not the installed baseline. Source presence is not qualification evidence. [Archive/deletion](archive-deletion-design.md) must preserve this request-local admission boundary.
 
 Reuse global principals and organization memberships. This work does not create organizations, provision tenants, change identity providers, introduce cross-organization business queries or change machine-endpoint authorization. Live Azure qualification requires separate operator authorization.
 
 ## Baseline contracts and required changes
+
+The audit/usage/quota row and later accounting/upgrade sections retain assumed
+contracts. Their migration numbers and guard names require the reconciliation
+above; the table is not a verified inventory of deployed accounting features.
 
 | Baseline boundary | Relevant source | Design requirement |
 | --- | --- | --- |

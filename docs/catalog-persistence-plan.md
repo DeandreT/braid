@@ -1,5 +1,36 @@
 # P3: persistent mapping catalog and ownership
 
+This is the retained P3 design and delivery record, not a current setup guide or
+backlog. [ROADMAP](../ROADMAP.md) owns future priorities. Use the focused owners
+below for current contracts and their stated activation and verification limits.
+The original requirements, issue links and heading anchors remain below.
+
+## Current contract owners
+
+| Retained requirement | Current owner | Original detail |
+| --- | --- | --- |
+| Server-issued actor, explicit project roles, full ancestry, organization RLS, fresh authority and scoped pools | [Project ownership](project-ownership.md#ownership-and-application-reads) | [Ownership and immutable history](#ownership-and-immutable-history), [smallest P3a](#smallest-p3a) |
+| Applied checksums, separate migration/runtime roles and explicit provisioning | [Project ownership setup](project-ownership.md#migrations-and-local-setup) | [Accepted direction](#accepted-direction), [P3a scope](#smallest-p3a) |
+| Exact private bytes, generated keys, create-only writes and verified bounded reads | [Private storage](private-storage.md), [current store activation](private-storage-activation.md) | [Immutable history](#ownership-and-immutable-history), [P3b increment](#ordered-increments) |
+| Immutable mappings/revisions/reservations/attempts, exact restricted grants, evidence and one-statement publication | [Ingestion metadata](ingestion-metadata.md#authority-and-immutable-publication); [service contract details](native-revision-ingestion.md#persisted-admission-contract) | [Four-table specification](catalog-ingestion-plan.md#four-tables-and-immutable-ancestry), [role specification](catalog-ingestion-plan.md#exact-roles-and-transaction-boundaries) |
+| Native admission, server limits/profile, nullable validity, idempotency, head ordering, leases, fencing and original-actor recovery | [Native revision ingestion](native-revision-ingestion.md) | [Admission defaults](catalog-ingestion-plan.md#application-boundary-and-admission-defaults), [publication/recovery specification](catalog-ingestion-plan.md#idempotency-claims-and-one-statement-publication) |
+| Read DTOs, precision, cursors, privacy, request identity/protection and conditional metadata edits | [Catalog reads](catalog-reads.md); [Session host](session-host.md) for hosted activation | [API routes](catalog-api-plan.md#routes-and-wire-contract), [read authority](catalog-api-plan.md#read-authority-grants-and-pagination), [local identity](catalog-api-plan.md#explicit-local-identity-and-request-protection), [metadata](catalog-api-plan.md#metadata-maintenance) |
+| Raw-byte HTTP upload, status categories, original receipt and explicit resume | [Revision uploads](catalog-revision-uploads.md) | [Upload HTTP specification](catalog-api-plan.md#raw-uploads-and-recovery-http) |
+| Separate organization creation capability, atomic first Administrator, immutable intent and same-key replay | [Project creation](project-creation.md), [HTTP boundary](project-creation-http.md) | [Creation specification](catalog-api-plan.md#project-creation) |
+| Versioned report/cache identity, retryable attempts, validity versus coverage and provenance-safe viewer links | [Report metadata](revision-report-metadata.md), [derivation](revision-report-workflow.md), [native reports](ferrule-revision-reports.md#observations-and-links) | [Viewer/report boundary](#reusing-the-viewerreport-boundary) |
+| Orphan eligibility, grace, protected originals/results and interrupted cleanup | [Maintenance metadata](private-object-maintenance-metadata.md), [maintenance command](maintenance-command.md) | [P3f increment](#ordered-increments), [later decisions](#decisions-at-the-relevant-increment) |
+| Browser catalog, immutable revision navigation and report workflows | [Catalog browser](catalog-browser.md), [saved reports](saved-reports.md) | [P3g increment](#ordered-increments) |
+| Separate synthetic, database/storage/native, browser and hosted qualification | Each focused owner's verification section; [v1 integration record](v1-integration.md) for historical combined evidence | [Delivery evidence](#delivery-evidence), [ingestion gates](catalog-ingestion-plan.md#qualification-gates-and-exclusions), [API gates](catalog-api-plan.md#qualification-and-scope) |
+
+This map assigns contracts, not blanket completion. The detailed table/column and
+qualification requirements in the original plans are retained design evidence;
+installed SQL and exact schema admission remain authoritative for an installation.
+Do not apply a plan's hypothetical schema or treat a merged/local checkpoint as
+provider or cloud acceptance. The early four-increment API shorthand below was
+refined into the five delivery rows retained in the [API record](catalog-api-plan.md).
+
+## Historical delivery checkpoint
+
 Status: accepted implementation sequence. P2c is qualified and merged in
 [PR #12](https://github.com/DeandreT/weft/pull/12). P3a is qualified and merged in
 [PR #21](https://github.com/DeandreT/weft/pull/21). P3b storage is qualified and

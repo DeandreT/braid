@@ -20,7 +20,7 @@ build_log=$dev_logs/build.log
 step() { printf '==> %s\n' "$*"; }
 fail() { printf 'dev-up: %s\n' "$*" >&2; exit 1; }
 
-for tool in docker git node npm curl systemd-run systemctl busctl ss sha256sum; do
+for tool in docker git node npm python3 curl systemd-run systemctl busctl ss sha256sum; do
   command -v "$tool" >/dev/null || fail "$tool is required."
 done
 dotnet=$(command -v dotnet) || fail 'The pinned .NET SDK (global.json) must be on PATH.'
@@ -111,23 +111,16 @@ if [[ -z $(image_id "$compiler_tag") || $build_key == *-dirty ]]; then
     fail "The native image build failed; see $build_log."
   native_id=$(image_id "$native_tag")
   [[ $native_id =~ ^sha256:[a-f0-9]{64}$ ]] || fail 'The native image has no immutable ID.'
-  # BuildKit resolves FROM by name, so bind a unique local reference to the verified ID and check the
-  # copied binary's digest in the build, as tools/build-worker/build_image.py does.
+  # The canonical helper admits this existing work root only on an approved storage volume,
+  # binds the exact native image and binary digest, and owns extraction/reference cleanup.
   step "Building the compiler image $compiler_tag; log: $build_log"
-  reference=$dev_name-compiler-source:${native_id#sha256:}-$$
-  work=$(mktemp -d "$dev_home/tmp/native-source.XXXXXX")
-  docker tag "$native_id" "$reference"
-  source_container=$(docker container create --label "$dev_label=$dev_name" --network none --entrypoint /ferrule-host "$native_id")
-  docker cp "$source_container:/ferrule-host" "$work/ferrule-host" >/dev/null
-  docker container rm "$source_container" >/dev/null
-  native_digest=$(sha256sum "$work/ferrule-host" | cut -d' ' -f1)
-  rm -rf "$work"
-  build_status=0
-  build_docker build --progress=plain --tag "$compiler_tag" --build-arg "WEFT_NATIVE_IMAGE=$reference" \
-    --build-arg "WEFT_NATIVE_BINARY_SHA256=$native_digest" --file "$source_root/engines/build-worker/Dockerfile" \
-    "$source_root" >>"$build_log" 2>&1 || build_status=$?
-  docker image rm "$reference" >/dev/null
-  ((build_status == 0)) || fail "The compiler image build failed; see $build_log."
+  compiler_build_options=()
+  if [[ -n ${WEFT_DEV_BUILD_DOCKER_CONFIG:-} ]]; then
+    compiler_build_options+=(--build-docker-config "$WEFT_DEV_BUILD_DOCKER_CONFIG")
+  fi
+  DOCKER_BUILDKIT=1 python3 "$source_root/tools/build-worker/build_image.py" \
+    --native-image "$native_id" --tag "$compiler_tag" --work-root "$dev_home/tmp" \
+    "${compiler_build_options[@]}" >>"$build_log" 2>&1 || fail "The compiler image build failed; see $build_log."
 fi
 worker_image=$(image_id "$compiler_tag")
 [[ $worker_image =~ ^sha256:[a-f0-9]{64}$ ]] || fail 'The compiler image has no immutable ID.'

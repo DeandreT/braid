@@ -58,8 +58,9 @@ no access to any other project.
 | Publisher     | Everything a runner can do, plus upload mappings and revisions, edit mapping names and descriptions, save regression tests, and approve and prepare builds. |
 | Administrator | Everything a publisher can do, plus manage build environments.                                                                                              |
 
-Your braid administrator adds members and changes their roles; the app has no
-screen for this. Some features can also be turned off for your workspace. When
+Project administrators manage members and roles through
+[Administration](administration.md#project-access) when that feature is enabled.
+Some features can also be turned off for your workspace. When
 a feature is off, or your role doesn't allow an action, its controls are hidden
 or shown as unavailable.
 
@@ -82,3 +83,7 @@ If braid can't confirm whether the project was created, it says **Creation
 outcome is unknown**. Choose **Recover creation** to send the same request again;
 it can't create a second project. See
 [When a result isn't confirmed](unconfirmed-results.md).
+
+To turn specifications into a new mapping rather than upload an existing file,
+see [Create a mapping from specifications](creation.md). This requires the
+workspace's creation capabilities and your current project permissions.

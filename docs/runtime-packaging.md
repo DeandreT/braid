@@ -1,5 +1,64 @@
 # Runtime packaging
 
+## Start with the Compose Session stack
+
+Use the existing Compose Session stack with the Ferrule service as the primary
+packaged evaluation recipe. It keeps one API instance behind its edge, PostgreSQL,
+private objects and the session key ring separate. Ferrule runs without giving
+any container the Docker socket. Add the separate runs worker only when you opt
+into previews, regression runs and builds.
+
+This is a recipe to evaluate and qualify, not a claim that a deployment is verified.
+For full Linux development instead, use [Development](development.md). Azure is an
+[optional, deferred cloud lane](azure-deployment.md), not a prerequisite.
+
+1. **Prepare images and private inputs.** Build the `weft` and `edge` targets below
+   and the [Ferrule service image](ferrule-service.md#image). Supply the passwords,
+   certificates, image identities and pins listed under
+   [Hosted-shape local stack](#hosted-shape-local-stack). Keep these inputs private;
+   do not print the expanded Compose configuration. The host must support the
+   service's [sandbox requirements](ferrule-service.md#request-isolation).
+2. **Prepare sign-in and ingress.** Configure the Entra web registration, its
+   certificate and exact callback URI (see [Entra app registration](azure-deployment.md#entra-app-registration)).
+   Provide HTTPS ingress to the loopback-published edge as described under
+    [Edge](#edge); the Compose edge alone does not terminate public TLS.
+3. **Start the service-backed stack** from the repository root after supplying
+   those inputs. A fresh volume runs role initialization, migrations, private
+   storage initialization and key bootstrap before the server starts. For an
+   existing database, first follow the [upgrade index](#database-upgrade-index).
+
+   ```sh
+   docker compose -f deploy/compose/compose.yml -f deploy/compose/compose.ferrule-service.yml up -d
+   ```
+
+4. **Provision workspace access before the first sign-in.** After database
+   initialization and migrations finish successfully, use the separate database
+   owner tool to provision the organization, principal, admission and
+   [external identity binding](external-identity-bindings.md). These commands need
+   the migrated database; sign-in does not create those facts.
+5. **Choose optional capabilities.** Add `compose.features.yml` for chat, previews,
+   regression runs, builds and release operations; it also adds the separate
+   `runs` worker and requires the `weft-worker` image, chat profile and its own
+   service-client certificate and compile-toolchain pin. Bearer access and mapping
+   endpoints require their own overlays and inputs below. These overlays do not
+   enable specification intake, mapping creation or every optional feature; use
+   each feature's host-composition instructions.
+6. **Check the result.** Use the [smoke check](#packaging-checks) for packaging and
+   [hosted-shape acceptance](hosted-acceptance.md) for signed-in workflows and
+   recovery. The acceptance-only issuer, relays and fixtures are not deployment
+   configuration. Neither local check establishes live-provider or Azure acceptance.
+
+Stop the same stack without deleting its database, objects or key-ring volumes:
+
+```sh
+docker compose -f deploy/compose/compose.yml -f deploy/compose/compose.ferrule-service.yml down
+```
+
+If you added overlays, use the same file list when stopping it. Do not remove
+retained volumes as an upgrade or recovery shortcut.
+
+## Image reference
+
 `deploy/container/Dockerfile` builds the hosted runtime from the repository root.
 Every base image is pinned by digest, and the .NET SDK is the `global.json` version
 installed from its checksum-verified official archive. The file uses no BuildKit-only
@@ -12,6 +71,9 @@ syntax, so the classic Docker builder also builds it. Tracking work is [#137](ht
 | `weft-worker` | `Weft.Worker`, the same entrypoint and the Docker CLI, for the hosted inspection service. |
 | `weft-mapping-endpoint` | The [mapping endpoint](mapping-endpoint.md) host and the release operator tool (`Weft.ReleaseTool`), with the same entrypoint and no Docker CLI. |
 | `weft-mapping-endpoint-local-docker` | `weft-mapping-endpoint` plus the Docker CLI, for the local Docker compiled runtime only. |
+
+Build only the targets your selected stack needs. The worker and endpoint targets
+in this complete target list are optional:
 
 ```sh
 docker build -f deploy/container/Dockerfile --target weft -t weft:local .
@@ -89,6 +151,7 @@ that can read the container definition can still read them.
 | `WEFT_DELIVER_ENTRA_CLIENT_PEM` | `WEFT_ENTRA_CLIENT_CERTIFICATE_FILE` and `WEFT_ENTRA_CLIENT_PRIVATE_KEY_FILE` |
 | `WEFT_DELIVER_INSPECTION_CLIENT_PEM` | `WEFT_INSPECTION_CLIENT_CERTIFICATE_FILE` and `WEFT_INSPECTION_CLIENT_PRIVATE_KEY_FILE` (server) |
 | `WEFT_DELIVER_INSPECTION_WORKER_PEM` | `WEFT_INSPECTION_SERVER_CERTIFICATE_FILE` and `WEFT_INSPECTION_SERVER_PRIVATE_KEY_FILE` (worker) |
+| `WEFT_DELIVER_FERRULE_SERVICE_CLIENT_PEM` | `WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_FILE` and `WEFT_FERRULE_SERVICE_CLIENT_PRIVATE_KEY_FILE` (service callers) |
 | `WEFT_DELIVER_SESSION_DECRYPT_PEM_1` … `_8` | Retained decryption pairs listed in `WEFT_SESSION_DECRYPT_CERTIFICATES_FILE` |
 | `WEFT_DELIVER_OWNER_INPUT` | Standard input for the `database` command |
 | `WEFT_DELIVER_FILE_<NAME>` | `/run/weft/secrets/<name>` (lowercase, `_` becomes `-`), for settings that take an explicit private file path |
@@ -136,8 +199,8 @@ WEFT_PUBLIC_ORIGIN=https://<WEFT_PUBLIC_HOST>
 
 - `postgres` creates the restricted roles from `deploy/local/postgres-init.sh` in a new volume.
 
-  Existing volumes need the explicit administrator step in
-  `deploy/local/postgres-add-regression-roles.sh` before the regression migrations.
+  Existing volumes need the applicable administrator steps in the
+  [database upgrade index](#database-upgrade-index), not another initialization run.
 - `migrate`, `storage-init` and `session-keys` are one-shot steps. Only `migrate`
   receives the migrator credential; the other two have no network.
 - `server` runs the Session profile with catalog reads, metadata edits, project
@@ -146,12 +209,6 @@ WEFT_PUBLIC_ORIGIN=https://<WEFT_PUBLIC_HOST>
   edge port is published, on loopback. The database network is internal.
 - Profile `operator` adds `maintenance`, which runs the maintenance tool against the
   shared storage volume from its own container.
-- The override file `deploy/compose/compose.worker.yml` adds the hosted inspection
-  worker and enables native upload and report derivation on the server, with the
-  ingestion and derivation logins. Only `worker` mounts the Docker socket, which is
-  equivalent to host root access; it has no database, storage or egress network and
-  no published port. The server reaches `https://worker:8443` over the internal
-  `inspection` network, each side pinning the other's certificate.
 - The override file `deploy/compose/compose.ferrule-service.yml` runs native upload and
   report derivation through the [Ferrule service](ferrule-service.md) instead of the
   worker override: `WEFT_FERRULE_SERVICE_REPLICAS` replicas (default two) of the service
@@ -161,7 +218,7 @@ WEFT_PUBLIC_ORIGIN=https://<WEFT_PUBLIC_HOST>
   `WEFT_FERRULE_SERVICE_IDENTITY`, the PEM bundles `WEFT_FERRULE_SERVICE_PEM` and
   `WEFT_FERRULE_SERVICE_CLIENT_PEM`, and the pins `WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256`
   and `WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256`. Use it instead of the worker
-  override, not beside it.
+  override, not beside it. This is the recommended evaluation route.
 - The override file `deploy/compose/compose.features.yml`, used with the Ferrule service
   override, enables chat, previews, regression cases and runs, and builds on the Session
   server, each through its own login delivered as a protected private file
@@ -217,6 +274,19 @@ WEFT_PUBLIC_ORIGIN=https://<WEFT_PUBLIC_HOST>
   the explicit `postgres-add-*-roles.sh` steps for the qualification, release and invocation
   logins.
 
+### Advanced Docker execution alternatives
+
+`deploy/compose/compose.worker.yml` adds the hosted inspection worker instead of
+the Ferrule service override. It enables native upload and report derivation on
+the server, with the ingestion and derivation logins. Only `worker` mounts the
+Docker socket, which is equivalent to host root access; it has no database,
+storage or egress network and no published port. The server reaches
+`https://worker:8443` over the internal `inspection` network, each side pinning
+the other's certificate. It is not a substitute for the service-backed runs
+worker. The endpoint's separate local compiled-Docker option is
+`compose.endpoint-docker.yml`, described above; do not combine it with
+`compose.endpoint-service.yml`.
+
 All runtime containers use a read-only root filesystem, drop every capability and
 set `no-new-privileges`. The compose file reads every value from the caller's
 environment: the `WEFT_LOCAL_*_PASSWORD` values required by `postgres-init.sh` plus
@@ -232,6 +302,8 @@ Image names default to `weft:local`, `weft-edge:local`, `weft-worker:local` and
 `weft-mapping-endpoint:local` (`WEFT_ENDPOINT_IMAGE`; the Docker runtime override uses
 `weft-mapping-endpoint-local-docker:local`). `WEFT_COMPOSE_PORT` chooses the edge's
 loopback port (`0` selects a free one).
+
+### Packaging checks
 
 The smoke test builds uniquely tagged images, generates throwaway passwords and
 self-signed certificates in a private temporary directory, starts the stack from new
@@ -274,3 +346,97 @@ builds execute in the separate `Weft.Worker` `runs` host through the Ferrule ser
 `compose.features.yml` runs locally, and the [mapping endpoint](mapping-endpoint.md) is its
 own host. The session key ring supports one API instance on a persistent local filesystem;
 private objects use that filesystem or [Azure Blob storage](private-storage-blob.md). [Azure deployment](azure-deployment.md) describes the hosted environment.
+
+## Database upgrade index
+
+Use this order for an existing database. The source of truth is
+[`migrations/postgres`](../migrations/postgres), currently `0001`–`0047`, and the
+role scripts linked below. Keep every applied migration unchanged. The migration
+runner requires the exact consecutive version/checksum history, refuses an
+unversioned schema and applies the pending suffix in one locked transaction.
+Do not run SQL files individually or replace the journal to bypass a refusal.
+
+1. **Identify the installed prefix and missing prerequisites.** Read the existing
+   migration journal and restricted-role inventory through an authorized database
+   connection. Review the pending migrations and backups before the cutover.
+2. **Provision only missing roles as the database administrator.** The local
+   `postgres-add-*.sh` helpers read their named passwords from a private
+   environment and use `POSTGRES_USER` / `POSTGRES_DB` (the database is `weft`).
+   They refuse existing roles rather than adopting them or rotating passwords.
+   Do not run every helper blindly: some create several roles in one transaction.
+   Resolve a partially provisioned group before proceeding; do not widen grants
+   or drop existing roles to make the helper pass.
+3. **Coordinate the stop/migrate/start cutover.** Drain affected hosts and workers
+   and confirm their original shutdown tasks settled. Apply the complete pending
+   suffix with the packaged `migrate` command using only `weft_migrator`, then
+   start the selected images with their own restricted credentials. Validate
+   health, sign-in, retained state and enabled workflows before resuming use.
+
+The table is an ordered prerequisite index, not a list of migrations to run by
+hand. A disabled feature can still require its roles for schema installation.
+Most helpers supply CONNECT-only logins; the migrations install the specific
+schema/function grants. Account display is the optional exception noted below.
+
+| Migration boundary | Existing-database administrator step |
+| --- | --- |
+| `0001` ownership | Requires the separately provisioned `weft_migrator` database owner and restricted `weft_runtime`; this is not a fresh-install reset. |
+| `0002` ingestion | [`postgres-add-ingest.sh`](../deploy/local/postgres-add-ingest.sh) |
+| `0003` catalog reads | [`postgres-add-catalog-reader.sh`](../deploy/local/postgres-add-catalog-reader.sh) |
+| `0004` metadata edits | [`postgres-add-metadata-editor.sh`](../deploy/local/postgres-add-metadata-editor.sh) |
+| `0005` project creation | [`postgres-add-project-creator.sh`](../deploy/local/postgres-add-project-creator.sh) |
+| `0006` reports and derivation | [`postgres-add-report-roles.sh`](../deploy/local/postgres-add-report-roles.sh) |
+| `0007` private-object maintenance | [`postgres-add-maintenance-role.sh`](../deploy/local/postgres-add-maintenance-role.sh) |
+| `0008` external identities | [`postgres-add-identity-role.sh`](../deploy/local/postgres-add-identity-role.sh) |
+| `0009` payload-read grants | [`postgres-add-payload-permission-role.sh`](../deploy/local/postgres-add-payload-permission-role.sh) |
+| `0010` sessions | [`postgres-add-session-roles.sh`](../deploy/local/postgres-add-session-roles.sh) |
+| `0011` chat | [`postgres-add-chat-roles.sh`](../deploy/local/postgres-add-chat-roles.sh) when none of the chat roles exist; also grants the migrator SET on `weft.organization_id` and `weft.chat_principal_id`. It now creates all four chat roles, including the later approver. |
+| `0012`–`0013` previews and dispatch | [`postgres-add-preview-roles.sh`](../deploy/local/postgres-add-preview-roles.sh) |
+| `0014`–`0017` regression cases, runs, dispatch and history | [`postgres-add-regression-roles.sh`](../deploy/local/postgres-add-regression-roles.sh) |
+| `0018` build publication | [`postgres-add-build-roles.sh`](../deploy/local/postgres-add-build-roles.sh) |
+| `0019` build dispatch | [`postgres-add-build-run-roles.sh`](../deploy/local/postgres-add-build-run-roles.sh) |
+| `0020` build metadata | [`postgres-add-build-metadata-role.sh`](../deploy/local/postgres-add-build-metadata-role.sh) |
+| `0021` build qualification | [`postgres-add-qualification-roles.sh`](../deploy/local/postgres-add-qualification-roles.sh) |
+| `0022` local releases | [`postgres-add-release-roles.sh`](../deploy/local/postgres-add-release-roles.sh) |
+| `0023` storage-kind provenance | Uses existing publication roles; no add-role helper. |
+| `0024` machine invocation | [`postgres-add-invocation-roles.sh`](../deploy/local/postgres-add-invocation-roles.sh) |
+| `0025` bearer-request audit | [`postgres-add-api-audit-role.sh`](../deploy/local/postgres-add-api-audit-role.sh), even with bearer access off. |
+| `0026` account display | Optional [`postgres-add-account-display-role.sh`](../deploy/local/postgres-add-account-display-role.sh). May run before or after `0026`; it adds the exact column grants if the table already exists. Neither fresh initializer creates this optional role. |
+| `0027` administration | [`postgres-add-administration-role.sh`](../deploy/local/postgres-add-administration-role.sh) |
+| `0028` interchange provenance | Uses existing ingestion roles; no add-role helper. |
+| `0029` catalog search | DBA provisions private `pg_trgm` and removes PUBLIC schema/function privileges; follow [catalog search](catalog-search.md#indexing-and-existing-reports). Do not adopt an extension from another schema. |
+| `0030`–`0035` automation, release operations, workspace chat, preview reads and document builds | Reuses existing roles; no new add-role helper. Keep the real ordered migration files. |
+| `0036` comparison settlement | [`postgres-add-comparison-role.sh`](../deploy/local/postgres-add-comparison-role.sh) |
+| `0037`–`0038` mapping drafts and draft previews | Separately provision CONNECT-only `weft_draft_reader` and `weft_draft_writer`; see [mapping editing](mapping-editing.md#drafts-and-authority). No add-role helper exists. |
+| `0039`–`0042` chat write journal, CSV and XML | Uses existing chat/preview/build roles; no add-role helper. |
+| `0043` exact chat approval | If reader/writer/lifecycle already exist but approver does not, use [`postgres-add-chat-approver-role.sh`](../deploy/local/postgres-add-chat-approver-role.sh). Do not also run the all-chat-roles helper. See [approval composition](chat-edit-approval-composition.md). |
+| `0044` specification bundles | Separately provision CONNECT-only `weft_spec_reader`, `weft_spec_writer`, `weft_spec_maintenance`; see [specification storage](spec-bundle-registry.md). No add-role helper exists. |
+| `0045` mapping creation | Separately provision CONNECT-only `weft_creation_reader`, `weft_creation_writer`, `weft_creation_approver`; see [creation roles](mapping-creation-persistence.md#roles-and-deployment). No add-role helper exists. |
+| `0046`–`0047` document evidence and JSON contract | Uses the existing specification/creation roles and exact installed prefix; no new role helper. |
+
+For rows without a helper, use a separately reviewed DBA provisioning step that
+matches the restricted definitions in the fresh initializer and the migration's
+role checks. Do not improvise a privileged runtime login or assume those rows
+are optional because their feature flag is off.
+
+### Fresh initialization is not an upgrade
+
+[`postgres-init.sh`](../deploy/local/postgres-init.sh) runs only in a new dedicated
+local PostgreSQL volume. Azure's
+[`provision-database.sh`](../deploy/azure/provision-database.sh) is the separate
+first-time database/role provisioning job. Both create the current schema-required
+role set before migrations, including draft, specification and creation roles;
+absent opt-in specification/creation passwords leave unusable password logins.
+Neither is a substitute for adding only missing roles to an existing database.
+The Azure job must first resolve the documented
+[credential-wiring gap](azure-deployment.md#open-questions-and-limits).
+The Azure provisioner refuses existing roles, while
+[`initialize-secrets.sh`](../deploy/azure/initialize-secrets.sh) deliberately keeps
+existing secrets. Secret initialization is not a database-role upgrade.
+
+Keep administrator provisioning, migration ownership, runtime credentials,
+maintenance, key bootstrap and release/grant tools separate. Reverting an image
+does not undo migrations, restore retired objects or roll back a release pointer.
+Retain the original database, objects, key ring and decrypt certificates during
+recovery; use the [Session host](session-host.md), [Azure operations](azure-deployment.md#operations)
+and [release recovery](release-operations.md#conditional-actions-and-recovery)
+procedures for the affected operation.

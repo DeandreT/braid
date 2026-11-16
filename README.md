@@ -2,15 +2,22 @@
 
 **Understand, test, and deploy your data mappings.**
 
-braid is a web application for exploring, reviewing, testing, and operating data
-mappings. Ferrule is its first mapping backend; other engines require explicit
-adapters and their own capability checks.
+braid is a web application for creating, exploring, reviewing, testing and
+operating data mappings. Ferrule is its first mapping backend. Other engines
+need their own adapters and capability checks.
 
-The product is now called braid. Existing technical names such as the `weft`
-CLI, `@weft/web` workspace, .NET projects, configuration keys, storage paths and
-versioned API identifiers remain unchanged for compatibility. Repository links
-and commands below still use their actual names. This presentation rename does
-not change feature availability or qualification status.
+The selected v1 goal is to turn customer specifications into a new mapping,
+test samples, request corrections and save only the exact reviewed proposal.
+Existing-mapping editing alone does not meet that goal. See the
+[delivery plan](ROADMAP.md) for acceptance and dependencies.
+
+## Start here
+
+- [User guide](docs/user-guide/overview.md): use the catalog, workbench and chat; also available in the app at `/help`.
+- [Local development](docs/development.md): prerequisites, full Linux setup and checks. `npm run dev` starts only the frontend.
+- [Documentation index](docs/README.md): developer contracts, operator procedures and design records.
+- [Architecture](docs/architecture.md): source boundaries, storage, identity and execution.
+- [Delivery plan](ROADMAP.md): the next outcome, deferred acceptance gates and later priorities.
 
 ## What it looks like
 
@@ -35,147 +42,59 @@ _Compare revisions: semantic differences between two saved explanations._
 _Workspace chat: questions answered with links to their sources, with permission-controlled mapping edits after exact-proposal approval._
 
 Screenshots use demo data; see [docs/images](docs/images/README.md) for how they are produced.
+They illustrate the UI, not provider or deployment acceptance.
 
 ## Implemented workflows
 
-- A mapping catalog with immutable revisions, native-file uploads and project ownership.
-- A compact source-to-rule-to-target workbench with a contextual inspector and investigation dock.
-- Revision-pinned AI chat with permission-controlled mapping tools and verified citations.
-- An organization-wide workspace assistant whose every tool call is freshly authorized as the user, with exact-head mapping saves when requested and permitted.
-- Bounded sample previews, revision comparison and saved regression cases.
-- Immutable build preparation, qualification, and local release activation, audit and rollback.
-- A machine-facing mapping endpoint that serves the active qualified release to callers
-  authorized by app-only tokens and per-target invocation grants, with idempotent retries.
-- Hosted execution through the platform-agnostic Ferrule service: inspection, previews,
-  regression runs, builds and compiled mappings run in isolated sandboxes without Docker,
-  and private objects can be kept in Azure Blob storage.
-- Microsoft Entra sign-in, server sessions and project-scoped application permissions.
-- A `weft` command line that works with the API as the signed-in user.
-- Opt-in [mapping editing](docs/mapping-editing.md) with private drafts, typed operations and authoritative conditional saves.
+The source includes these workflows; availability depends on the configured host,
+permissions and each operation's capability checks:
 
-Other mapping engines, identity providers, and AI model providers will integrate
-through separate adapters. Web hosting and publishing a mapping as a runnable
-endpoint are distinct workflows.
+- Browse a catalog with project ownership, immutable revisions and native-file uploads.
+- Inspect field connections, rules, validation and coverage gaps for an exact revision.
+- Ask mapping or workspace questions with verified citations and fresh authorization for every tool call.
+- Review proposed mapping edits before approving a save, or use private editor drafts with a separate **Save** action.
+- Retain specifications, review a proposed new mapping, run samples and prepare feedback for an explicitly sent chat question.
+- Compare revisions and run saved regression cases against exact revisions.
+- Prepare immutable builds, qualify artifacts, activate local releases and roll back to retained qualified artifacts.
+- Invoke a current qualified release through a separate machine-facing endpoint with app-only authorization, per-target grants and idempotent retries.
+- Sign in through Microsoft Entra server sessions and use the `weft` CLI as the signed-in user.
 
 ## Configuration and qualification boundaries
 
-The Angular frontend and C# API provide a mapping catalog, immutable revision
-history, saved projection and validation views, project creation, metadata editing,
-and native-file upload with explicit recovery. A separate upload page appends a
-revision against a reviewed head. Ferrule is the first mapping backend.
+**Implementation is not activation.** Optional business features remain off until
+their settings and dependencies are admitted by the server. Specification intake
+and creation are opt-in. Word, Excel and PDF choices come from current server
+capabilities, not file extensions or a browser flag. Partial extraction is not a
+complete specification; unavailable workers and unsupported documents are reported
+explicitly. See [specification intake](docs/spec-intake-ui.md).
 
-Optional business features remain off until their own settings and dependencies are configured.
-The repository includes a local hosted-shape stack and Azure deployment templates;
-source code, local qualification and actual hosted/provider qualification are
-separate gates. Templates do not establish a working Azure deployment or mapping
-endpoint. See [Delivery plan](ROADMAP.md) for the acceptance requirements.
+**A proposal is not a saved mapping.** Chat cannot approve its own work or infer
+approval from natural language. Review and approve the exact retained proposal.
+Editor changes use a separate **Save** action; creation review uses **Approve and
+save this mapping**. If the response is uncertain, recover the original operation
+rather than creating a replacement. Successful operations retain their outcome
+so retrying does not repeat the save.
+
+**Local verification is not hosted acceptance.** The repository includes a packaged
+Session stack, a sandboxed Ferrule service and Azure templates. Retained local
+verification covers only its stated fixtures, installations and environments.
+The real-provider creation demonstration and actual Azure acceptance remain
+user-deferred. Templates and screenshots do not establish either result.
 
 Preparing a build does not publish it. The [local release adapter](docs/local-releases.md)
-changes a retained release pointer to an already qualified artifact, and the separate
-[mapping endpoint](docs/mapping-endpoint.md) host invokes the current release through the
-restricted runtime for callers admitted by [machine authorization](docs/machine-authorization.md).
+activates an already qualified artifact. The separate [mapping endpoint](docs/mapping-endpoint.md)
+invokes that release under its own [machine authorization](docs/machine-authorization.md).
+Host startup does not provision identities, database grants, keys or Entra registrations;
+see [Session host operations](docs/session-host.md).
 
-Conditional revision append is implemented in
-[PR #96](https://github.com/DeandreT/weft/pull/96), completing
-[#19](https://github.com/DeandreT/weft/issues/19). Upload recovery preserves the
-original request and does not guess whether an unconfirmed operation succeeded.
+## Technical names and stack
 
-Provider-neutral external identity bindings and explicit owner commands are
-implemented in [PR #98](https://github.com/DeandreT/weft/pull/98).
-Preparing a binding does not itself enable sign-in, create a browser session or
-grant payload access; see [External identity bindings](docs/external-identity-bindings.md).
+The product is called braid. Compatibility names remain unchanged: the `weft`
+CLI, `@weft/web` workspace, .NET projects, configuration keys, storage paths and
+versioned API identifiers. Commands must use those actual names.
 
-Explicit project payload-read permissions are implemented in
-[PR #105](https://github.com/DeandreT/weft/pull/105), with a separate grant from
-project membership. The owner contract is described in
-[Payload permissions](docs/project-payload-permissions.md).
-
-Provider-neutral [session contracts](docs/server-sessions.md) separate lifetime
-policy and restricted PostgreSQL ports from the
-[protected ticket/key profile](docs/protected-server-sessions.md) and
-[browser cookie/epoch-CSRF boundary](docs/browser-server-sessions.md).
-The fixed organizational-tenant [Entra adapter](docs/entra-browser-client.md)
-supplies verified identity facts to the opt-in
-[authentication HTTP protocol](docs/browser-authentication-http.md).
-
-The Server explicitly selects disabled, local Development, or Session mode.
-[Session host operations](docs/session-host.md) describes private credential
-delivery, the admitted durable ring, direct HTTPS or one-hop proxy ingress,
-privacy and shutdown ownership. Host activation does not provision identities,
-keys, database grants or an Entra application, or establish live-provider/cloud
-qualification.
-
-The Angular catalog uses [session-safe browser state](docs/browser-session-state.md)
-to observe the explicit host mode, fence stale identity callbacks, and preserve
-private uncertain requests across same-owner reauthentication. Its sign-in
-controls use the separate [authentication HTTP protocol](docs/browser-authentication-http.md);
-status observation and authentication do not replace fresh catalog authority.
-
-Versioned mapping contracts and development-only synthetic projections provide
-the shared foundation for the viewer. Angular types are generated from
-the C# API schema.
-
-The Ferrule adapter can inspect, validate, and project native artifacts through a
-bounded, isolated worker. Its revision-specific projection contains fields,
-rules, controls, lineage, and located coverage gaps. The catalog retains
-immutable native uploads and their saved projection and validation reports; its
-scoped viewer opens those reports for the exact selected revision.
-
-See [Local development](docs/development.md) to run and verify the application.
-
-- [User guide](docs/user-guide/overview.md): how to use braid, also shown in the app at `/help`.
-- [In-app help](docs/help.md): writing guide sections, the embedded guide and the help API.
-- [Architecture](docs/architecture.md): boundaries, storage, identity, and hosting.
-- [Mapping backend contract](docs/mapping-backends.md): projections and Ferrule integration.
-- [Projection v1](docs/projection-contract.md): public read model and fixture behavior.
-- [Mapping viewer](docs/mapping-viewer.md): navigation, exact values, coverage, and validation.
-- [Revision upload](docs/native-revision-append-ui.md): reviewed heads, immutable history, and explicit recovery.
-- [MFD interchange](docs/mfd-interchange.md): bounded packages, warning review, immutable provenance, and disabled-by-default import/export integration.
-- [Ferrule worker](docs/ferrule-worker.md): native authority, transport, isolation, and qualification.
-- [Ferrule projection](docs/ferrule-projection.md): native explanation coverage and viewer integration.
-- [Catalog persistence plan](docs/catalog-persistence-plan.md): ordered ownership, storage, revision, API, and browser increments.
-- [Project ownership](docs/project-ownership.md): qualified scoped PostgreSQL reads, migrations, and local setup.
-- [Catalog search](docs/catalog-search.md): authorized organization-wide search, retained-report backfill, exact workbench links and PostgreSQL indexes.
-- [External identity bindings](docs/external-identity-bindings.md): explicit owner preparation, exact account bindings, and the restricted reader.
-- [Server sessions](docs/server-sessions.md): pure lifetime and conditional-operation contracts, privacy, and separate store/authentication qualification.
-- [Entra browser client](docs/entra-browser-client.md): dormant fixed-tenant OIDC adapter, certificate and key-profile ownership, and separate HTTP/host activation.
-- [Authentication HTTP](docs/browser-authentication-http.md): session inspection, login/callback, acknowledged local logout and explicit local forgetting.
-- [API authentication](docs/api-authentication.md): the browser session and opt-in Entra bearer tokens for signed-in users' other clients, with rate limits and durable audit.
-- [Session host operations](docs/session-host.md): explicit host modes, private configuration, offline TLS, ingress, privacy and shutdown.
-- [Browser security](docs/browser-security.md): shared CSP and response headers and static asset handling.
-- [Runtime packaging](docs/runtime-packaging.md): container images, private delivery, the same-replica edge and the hosted-shape local stack.
-- [Azure deployment](docs/azure-deployment.md): Bicep templates, operator inputs, the deployment procedure and open hosting questions.
-- [Session-safe browser state](docs/browser-session-state.md): fresh identity observation, protected-view invalidation and private original-operation recovery.
-- [Project creation](docs/project-creation.md): explicit capability, atomic creation, and immutable replay history.
-- [Project creation HTTP](docs/project-creation-http.md): request admission, organization actions, and separate host composition.
-- [Private storage](docs/private-storage.md): exact-byte publication, verified reads, and the local filesystem profile.
-- [Claim-aware storage](docs/private-storage-v2.md) and [offline activation](docs/private-storage-activation.md): tracked publication, permanent gates, and explicit v1 root conversion.
-- [Revision report metadata](docs/revision-report-metadata.md): complete report identity, restricted roles, claims, retained attempts, and repair.
-- [Persisted report API](docs/persisted-report-api.md): current and retained report reads, explicit derivation, and complete-response limits.
-- [Maintenance metadata](docs/private-object-maintenance-metadata.md): permanent retirement, fenced cleanup claims, and positive publication registration.
-- [Workbench presentation](docs/workbench-presentation.md): semantic colors, exact-value details, safe layout preferences and action confirmations.
-- [Workspace layout](docs/ui-ux-refresh.md): the responsive catalog, revision tabs and exact creation-review layout.
-- [Chat UI](docs/chat-ui.md): shared workspace conversations, legacy revision pins and evidence-backed navigation.
-- [Preview runs](docs/preview-runs.md): bounded execution of explicit sample inputs.
-- [CSV and TSV documents](docs/csv-documents.md): explicit native dialects, bounded table display, regression comparison and compiled execution.
-- [Native XML documents](docs/xml-previews.md): explicit saved metadata, bounded physical checks, private run envelopes, exact-byte regressions and explicit generated-build refusal.
-- [Regression cases](docs/regression-cases.md): saved inputs, expected output and immutable case versions.
-- [Automation and notifications](docs/automation-notifications.md): exact-revision checks, project build gates and metadata-only activity delivery.
-- [Build workflow](docs/build-workflow.md) and [compiled runtime](docs/compiled-runtime.md): capability admission, immutable artifacts and restricted execution.
-- [Local releases](docs/local-releases.md): atomic activation, retained audit, explicit rollback and current-release invocation.
-- [Release operations](docs/release-operations.md): conditional release actions, metadata-only invocation monitoring, caller access and CLI commands.
-- [Release qualification](docs/release-qualification.md): exact-baseline qualification evidence for builds.
-- [Mapping endpoint](docs/mapping-endpoint.md) and [machine authorization](docs/machine-authorization.md): the machine-facing HTTP host, app-only tokens, invocation grants and idempotent calls.
-- [Ferrule service](docs/ferrule-service.md), [build compiler](docs/build-compiler.md) and [compiled service runtime](docs/compiled-service-runtime.md): sandboxed hosted inspection, compilation and compiled execution without Docker.
-- [API contracts](docs/development.md#updating-api-contracts): the OpenAPI 3.1 documents of the [session API](contracts/weft-v1.json), the [mapping endpoint](contracts/weft-endpoint-v1.json) and the [Ferrule service](contracts/ferrule-service-v1.json).
-- [Azure Blob private storage](docs/private-storage-blob.md): the Blob object store and its publication format.
-- [Hosted acceptance](docs/hosted-acceptance.md): the packaged signed-in stack exercised end to end.
-- [braid CLI](docs/cli.md): the `weft` command line as the signed-in user, its profiles, sign-in, protected token cache and commands.
-- [Revision comparison](docs/revision-comparison.md) and [compact workbench](docs/compact-workbench.md): semantic differences between revisions and the workbench layout.
-- [AI chat architecture](docs/ai-chat.md): provider independence, context, and tools.
-- [Workspace chat](docs/workspace-chat.md): organization-scoped conversations, the read-only workspace tools and their budgets.
-- [Delivery plan](ROADMAP.md): focused PRs, dependencies, and acceptance checks.
-
-Stack: Angular frontend, C#/.NET 10 modular backend, PostgreSQL metadata,
-private object storage and Wolverine-backed durable execution. Model providers remain behind an independent
-chat adapter; Ferrule remains behind a typed mapping-engine boundary.
+The stack is Angular, C#/.NET 10, PostgreSQL metadata, private object storage and
+Wolverine-backed durable execution. Public API types are generated from the C#
+schema. Model providers and mapping engines have separate adapters; neither can
+bypass application permissions. Native mapping bytes remain authoritative, and
+saved projections are explanations rather than executable replacements.

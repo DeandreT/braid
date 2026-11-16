@@ -1,5 +1,31 @@
 # Project-owned mapping creation foundation
 
+**Historical v1 foundation and compiler-adapter record.** The flat-JSON subset,
+unimplemented ports, pending migrations, local paths and next-unit instructions
+below belong to that checkpoint, not current setup or feature availability.
+The unique contracts and original anchors remain intact.
+
+## Current contract owners
+
+- [Typed creation formats](mapping-creation-formats.md) owns v1/v2 plan grammar,
+  canonical bytes, independent digests and format-specific limits.
+- [Creation evidence](creation-evidence-generation.md) and
+  [evidence storage](creation-evidence-storage.md) own selected Office/PDF evidence
+  and coverage acknowledgement rules; the Complete-only checkpoint below is historical.
+- [Durable creation](mapping-creation-persistence.md) owns retained proposals,
+  separate approval decisions, transactional fences and ingestion-key reconciliation.
+- [Creation runtime](mapping-creation-runtime.md) owns authenticated generation,
+  preview, approval and original-operation recovery. [Host composition](creation-host-composition.md)
+  owns the concrete compiler/preview runners and capability admission.
+- [Exact review](creation-review-ui.md) owns deliberate approval;
+  [proposal library](creation-proposal-library.md) owns discovery and feedback entry.
+
+These are contract owners, not blanket qualification claims. [ROADMAP](../ROADMAP.md)
+owns future work; [v1 integration](v1-integration.md) retains later scoped evidence.
+No checkpoint authorizes production activation or a live-provider/Azure run.
+
+## Historical foundation checkpoint
+
 The format-authoring follow-up is documented in [Typed mapping creation plan v2](mapping-creation-formats.md).
 It preserves the v1 canonical plan and adds a separate closed structured model for all six required formats.
 The flat-JSON restrictions below describe the original v1 foundation.

@@ -3,8 +3,9 @@
 A workspace conversation is an organization-wide assistant. It answers
 questions about the projects, mappings, revisions, retained reports, sample
 previews, regression cases and runs, builds and the user guide that its creator
-can read in one organization. When asked to edit a mapping, it can save an exact-base
-typed edit as the next version through the creator's current edit permission.
+can read in one organization. When asked to edit a mapping, it can retain an
+exact-base typed proposal. Saving requires the creator to review and approve that
+exact proposal under current edit permission; asking the model is not approval.
 It never changes the version in use or starts a preview, run, build or report derivation.
 
 Workspace conversations sit beside the revision-pinned conversations described in
@@ -233,8 +234,10 @@ propagates instead of becoming a result.
 
 The default runtime requires exact proposal approval. See
 [the runtime cutover contract](chat-proposal-runtime.md) for proposal listing,
-complete-operation review, approval/recovery routes and the outstanding production
-persistence/UI integration. The direct-save flow below is compatibility behavior
+complete-operation review and approval/recovery routes. The integrated persistence
+and host requirements are described in [approval composition](chat-edit-approval-composition.md),
+and [proposal review](chat-proposal-review-ui.md) describes the browser workflow.
+The direct-save flow below is compatibility behavior
 behind a default-false server capability, not approval of a proposal or a turn.
 
 `save_mapping_edit` accepts a `ferrule.edit.v1` script, never arbitrary native
@@ -279,9 +282,12 @@ acknowledgement does not prevent other independent saves from being recovered.
 
 The browser reads these receipts when opening or finishing an answer and merges
 confirmed versions with immediate stream cards without changing stream sequence
-numbers. Pending saves offer **Refresh save status** and explicit **Continue pending
-save**. Saved cards provide Undo (another exact-head conditional append), Diff and
-Open version. Saving never activates a version or starts tests automatically.
+numbers. The current proposal UI recovers only the exact identified proposal;
+unidentified legacy pending receipts are read-only. It does not offer turn-wide
+**Continue pending save**. See [proposal review](chat-proposal-review-ui.md#review-and-approval)
+for status refresh, exact recovery and explicit repeat approval. Saved cards provide
+Undo (another exact-head conditional append), Diff and Open version. Saving never
+activates a version or starts tests automatically.
 
 ## Citations
 

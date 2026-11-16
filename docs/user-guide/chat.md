@@ -2,13 +2,15 @@
 id: chat
 title: Chat about your workspace
 order: 12
-summary: Ask about your workspace and save mapping edits when you have edit permission.
+summary: Ask about your workspace, review exact mapping proposals and recover their saves safely.
 ---
 
 Chat answers questions about projects and mappings you can read, saved reports,
-runs and this user guide. When asked, it can save mapping edits as new versions if
-you have edit permission. It never generates reports, starts runs or changes the
-version in use. Chat must be set up for your workspace; if it isn't, the chat
+runs and this user guide. It can propose mapping edits; saving requires your
+review and approval of that exact proposal with current edit permission.
+It does not generate reports, start saved runs or change the version in use.
+Where creation is configured, it can also propose a
+[new mapping from specifications](creation.md). Chat must be set up for your workspace; if it isn't, the chat
 entry is unavailable; the Conversations page explains when chat is not configured.
 
 ## Ask a question
@@ -41,23 +43,33 @@ what it looked up.
 
 ## Ask for a mapping change
 
-Name the mapping, exact base version and change you want. Chat saves a new version
-only while that base is still the newest version and you have edit permission.
-Otherwise it shows a read-only proposal. The saved card shows before/after changes,
-**Diff**, **Open version** and **Undo**. Undo saves the earlier content as another
-version and refuses if a newer edit has already moved the head. Nothing is activated
-or tested automatically.
+Name the mapping, exact base version and change you want. The proposal's change
+summaries are not the complete edit, and may show only some changes.
+Choose **Review complete operations**, read the complete operation script, then
+check **I reviewed these complete operations for this exact proposal.**
+Choose **Approve this exact proposal** only when those operations are correct.
+Approval applies to that proposal and fingerprint, never the whole turn or future edits.
 
-If a newer version caused the proposal, **Update for version** sends a new question
-for that selected mapping and edit. It includes the original question and change
-summaries, then rechecks the current mapping. If the complete context won't fit or
-the summaries are incomplete, nothing is sent; write a new, specific question.
+A new version can be saved only while its base is still the newest version and
+you have current edit permission. A confirmed saved proposal offers **Open saved
+version**; it does not activate, build or test the mapping. If a newer version
+makes a proposal out of date, **Prepare new proposal question** prepares an
+unsent question. Review it before sending. Its replacement needs a new review
+and approval.
 
-A **Save pending** card is not confirmation that a version was saved. Use **Refresh
-save status** before repeating an edit. **Continue pending save** explicitly resumes
-the original accepted save with current permissions; it does not ask the model again.
-Saved status is recoverable after an interrupted answer or a server restart. Cancelling
-an answer does not undo a mapping version that already committed.
+A pending or unconfirmed save is not proof that a version was saved. Use
+**Refresh proposal status** before another action. **Resume pending save**
+recovers only that proposal's existing operation; recovery does not approve it
+or supply missing source. If another approval is needed, review the complete
+operations again before choosing **Approve this exact proposal again**.
+An **Unidentified save receipt** cannot safely be matched to a proposal. Refresh
+its status, but use the exact proposal card for approval or recovery, not a
+turn-wide retry. Cancelling an answer does not undo a version already committed.
+
+Older saved-edit history remains readable. Where a saved history card offers
+**Undo**, it saves the earlier content as another version and refuses if a newer
+edit has moved the head. New-mapping proposals use their separate
+[review and save workflow](creation.md#approve-and-save-the-exact-mapping).
 
 ## Check the answer
 
@@ -92,7 +104,8 @@ question again.
 
 ## Sample data policy
 
-The model profile shows whether its destination permits sample data. This is
+The model profile shows whether its destination permits sample data, including
+specification evidence used for creation or feedback. This is
 not a permission grant: a payload tool also needs your current project
 `run.payload.read` grant. Without both, sample payload tools are not offered.
 The server rechecks each tool call. Turns that actually share sample bytes are

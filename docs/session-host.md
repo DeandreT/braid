@@ -1,5 +1,33 @@
 # Explicit hosted sessions
 
+## Set up a Session host
+
+For packaged evaluation, start with the [Compose Session stack and Ferrule service](runtime-packaging.md#start-with-the-compose-session-stack).
+This page explains the host's settings and safety boundaries; it does not provision
+a deployment. [Azure](azure-deployment.md) is optional and still needs platform
+qualification.
+
+1. Prepare the database and restricted roles using the
+   [database upgrade index](runtime-packaging.md#database-upgrade-index). Use the
+   separate owner tools for the organization, principal, admission, project
+   memberships and [external identity binding](external-identity-bindings.md).
+2. Prepare a persistent private session key ring and its protecting certificate.
+   Use the packaged [key bootstrap command](runtime-packaging.md#entrypoint-commands)
+   only for first initialization. Retain the same realm, ring and decrypt
+   certificates on restart; the server opens an existing ring, never bootstraps it.
+3. Configure HTTPS ingress or direct HTTPS, the Entra web registration and the
+   protected files in the settings table below. Keep owner/migrator credentials
+   out of the web process.
+4. Choose features explicitly under [Feature composition](#feature-composition).
+   Deploy any required Ferrule service and separate `Weft.Worker` yourself; a
+   feature flag does not create services, roles or grants.
+
+Use [Restart, rotation and shutdown](#restart-rotation-and-shutdown) before an
+upgrade or recovery. One API instance is supported; scaling Ferrule replicas does
+not permit API scale-out.
+
+## Choose the authentication mode
+
 The Server selects `disabled`, `development`, or `session` with `WEFT_CATALOG_AUTH_MODE`, composing the browser-session, Entra, authentication HTTP and catalog modules in one host. It does not create database objects, external bindings, principals, organization admission, project memberships, keys, certificates, or an Entra app.
 
 Absent mode preserves the old choice: catalog off means disabled; explicit catalog enablement uses the existing Development profile. An explicit disabled mode requires `WEFT_CATALOG_ENABLED=false`; development and session require `true`. Values and booleans are case-sensitive. Session never falls back to another mode.
@@ -14,6 +42,8 @@ use the separate, path-confined dedicated-worker policy: only that worker may
 compile Wasm, with network access and nested workers denied. Missing editor
 paths return empty 404 responses under the shell policy. The shell never enables
 inline scripts, `unsafe-eval` or `wasm-unsafe-eval`.
+
+## Configure Session mode
 
 Session requires the following explicit configuration. Deliver secrets through protected files, not command-line arguments or logged configuration dumps.
 
@@ -48,7 +78,7 @@ Each business feature stays off until its own flag is `true`. The table lists wh
 | Catalog reads                                 | `WEFT_CATALOG_ENABLED`, `WEFT_CATALOG_CONNECTION_STRING`                                                  | no               | yes                                                                                                               | yes                                                                           |
 | Metadata edits, project creation              | `WEFT_METADATA_EDITS_ENABLED`, `WEFT_PROJECT_CREATION_ENABLED` and their connection strings               | no               | yes                                                                                                               | yes                                                                           |
 | Retained report reads and revision comparison | `WEFT_REVISION_REPORTS_ENABLED`, `WEFT_POSTGRES_REPORT_CONNECTION_STRING`, private storage                | no               | yes                                                                                                               | yes                                                                           |
-| Native upload and report derivation           | `WEFT_REVISION_INGESTION_ENABLED`, `WEFT_REVISION_REPORT_DERIVATION_ENABLED` and their connection strings | no               | yes; native work needs the Development worker runner (`WEFT_FERRULE_WORKER_IMAGE` in the Development environment) | yes, through the hosted inspection worker (below); startup refuses without it |
+| Native upload and report derivation           | `WEFT_REVISION_INGESTION_ENABLED`, `WEFT_REVISION_REPORT_DERIVATION_ENABLED` and their connection strings | no               | yes; native work needs an admitted Development runner and `WEFT_FERRULE_WORKER_IMAGE` | yes, through the Ferrule service, dynamic sessions or the separate inspection worker; startup refuses missing runner settings |
 | MFD import and export                         | `WEFT_MFD_INTERCHANGE_ENABLED`, native ingestion and retained report-read storage                         | no               | separate Docker or Ferrule-service `interchange` profile                                                          | Ferrule service or dynamic sessions; not the inspection-only worker           |
 | Chat                                          | `WEFT_CHAT_ENABLED`, `WEFT_CHAT_PROFILES_FILE`, chat reader/writer                                        | no               | connection strings                                                                                                | Session `_FILE`                                                               |
 | Previews (submission, reads, cancel)          | `WEFT_PREVIEWS_ENABLED`, preview reader/writer                                                            | no               | connection strings                                                                                                | Session `_FILE`                                                               |
@@ -59,7 +89,26 @@ Each business feature stays off until its own flag is `true`. The table lists wh
 
 Preview, regression and build execution always runs in the separate `Weft.Worker` host; the web host only records runs and their durable commands. Revision comparison has no setting of its own: it reads the two retained reports through the same admitted report reader.
 
-Session native upload and report derivation forward each inspection, validation or projection frame to the inspection service of a separate `Weft.Worker` over the [hosted inspection transport](ferrule-worker.md#hosted-inspection-transport); the Session host has no Docker access. When either flag is enabled, Session requires:
+### Choose the native runner
+
+The Session host has no Docker access. For the recommended service route, set
+`WEFT_FERRULE_RUNNER=service`. Session sends inspection, validation and projection
+frames directly to the [Ferrule service](ferrule-service.md#braid-service-runner).
+It requires `WEFT_FERRULE_SERVICE_URL`,
+`WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256`, `WEFT_FERRULE_WORKER_IMAGE` (the service's
+build identity) and the protected `WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_FILE` /
+`WEFT_FERRULE_SERVICE_CLIENT_PRIVATE_KEY_FILE`.
+
+[Azure Container Apps dynamic sessions](ferrule-service.md#azure-container-apps-dynamic-sessions)
+is an advanced alternative selected by
+`WEFT_FERRULE_RUNNER=azureContainerAppsSessions`, with its own pool endpoint and
+managed-identity settings. It is not enabled by choosing Session authentication.
+
+The older inspection-worker route remains available: `WEFT_FERRULE_RUNNER=worker`
+(also the Session default when no runner is selected) forwards frames to a separate
+`Weft.Worker` over the [hosted inspection transport](ferrule-worker.md#hosted-inspection-transport).
+That worker needs a Docker-capable host. When native upload or derivation is
+enabled with this route, Session requires:
 
 | Setting                                                                               | Required value                                                                                                                                    |
 | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -68,7 +117,8 @@ Session native upload and report derivation forward each inspection, validation 
 | `WEFT_FERRULE_WORKER_IMAGE`                                                           | The immutable lowercase `sha256:` image ID the worker runs; recorded in admission and report provenance.                                          |
 | `WEFT_INSPECTION_CLIENT_CERTIFICATE_FILE` / `WEFT_INSPECTION_CLIENT_PRIVATE_KEY_FILE` | The host's current RSA client PEM certificate and key, delivered as protected private files; the worker admits only this certificate's pin.       |
 
-With `WEFT_FERRULE_RUNNER=service`, Session sends the same frames directly to the [Ferrule service](ferrule-service.md#braid-service-runner) instead and requires `WEFT_FERRULE_SERVICE_URL`, `WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256`, `WEFT_FERRULE_WORKER_IMAGE` (the service's build identity) and the protected `WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_FILE` / `WEFT_FERRULE_SERVICE_CLIENT_PRIVATE_KEY_FILE`. The settings of the runner that is not selected must be absent.
+The settings of a runner that is not selected must be absent. Do not combine the
+service and inspection-worker configurations.
 
 `WEFT_FERRULE_COMPILE_TOOLCHAIN` optionally binds the service or dynamic-sessions
 toolchain to the native worker identity for reports and build evidence; hosted
@@ -81,6 +131,8 @@ The scalars are checked with the other feature scalars, before any private deliv
 
 Session snapshots every feature flag before it opens any PEM, ring or credential. Chat additionally requires report reads, and that inconsistency is refused at the same scalar stage. Chat's private profile document is described in [Chat turn HTTP API](chat-http.md); previews in [Preview runs](preview-runs.md).
 
+### Deliver feature credentials separately
+
 | Session credential file                                                                                                             | Login                                                                                                                                                                                                    |
 | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `WEFT_CHAT_READER_CONNECTION_STRING_FILE` / `WEFT_CHAT_WRITER_CONNECTION_STRING_FILE` / `WEFT_CHAT_APPROVER_CONNECTION_STRING_FILE` | Independently credentialed `weft_chat_reader` / `weft_chat_writer` / `weft_chat_approver`; all three required when chat is enabled. See [exact approval composition](chat-edit-approval-composition.md). |
@@ -89,13 +141,17 @@ Session snapshots every feature flag before it opens any PEM, ring or credential
 
 A plain chat or preview connection-string setting refuses Session startup rather than being ignored, and each pair must name two different deliveries. The files use the same admission as the session/identity credentials: private-file checks, explicit username and password, no passfile, client certificate/key or ambient `PG*` credential, and password-only authentication.
 
+## Private files and conflicting configuration
+
 Session rejects a true `WEFT_DEV_IDENTITY_ENABLED` or any supplied Development principal, organization, browser-origin or listener setting. It also rejects conflicting URL/port/Kestrel/automatic-forwarding configuration. Remove ambient `ASPNETCORE_URLS`, `DOTNET_URLS`, HTTP/HTTPS port variables, endpoint/certificate configuration, and automatic forwarding before choosing this explicit profile. Supported host settings prevent hosting-startup loading. Configured startup hooks, profilers and automatic OpenTelemetry instrumentation are outside this closed process profile and are refused before private resources are opened; a process cannot undo privileged code already injected before its entrypoint.
 
 Secret text/overlap JSON is bounded to 16 KiB, each PEM to 64 KiB. Paths must already be canonical absolute Linux paths with nonsymlink protected ancestors. Each file must be owned by the effective user, regular, single-link and exactly 0600. Root-owned sticky temporary ancestors retain the existing filesystem-profile exception. UTF-8 is strict; BOM and NUL are rejected. Connection files remove at most one terminal LF, preserving other text. There is no directory/file creation, permission repair, symlink adoption or descriptor-relative race guarantee. These checks do not isolate the host from another process with the same effective UID. The key profile independently preserves its existing 0700 ring/0600 child, owner, ancestor and every-nonrevoked-key admission checks. The host opens an existing ring; it never calls bootstrap. Keep old decrypt certificates during explicit restart-based rotation. There is no hot certificate/profile reload.
 
 The three identity/session deliveries reject passfiles, PostgreSQL client-certificate/key settings and ambient `PGUSER`, `PGPASSWORD`, `PGPASSFILE`, `PGSSLCERT`, `PGSSLKEY`, `PGREQUIREAUTH` and `PGGSSENCMODE`. TLS connections also refuse an implicit `$HOME/.postgresql/postgresql.crt` identity. GSS encryption is disabled; authentication is restricted to password, MD5 or SCRAM-SHA-256, retaining any explicitly selected narrower subset. Username/password text is not trimmed or normalized. The three files are admitted before any identity/session pool owner is constructed.
 
-The three identity/session pools are separate, lazy and borrowed by the modules. Startup does not open PostgreSQL or call the provider, except that enabled previews start the Wolverine submitter, which verifies its message storage in `weft_messages` with the delivered preview writer login; an unreachable database then fails startup. Session parses and retains its feature flags, report/derivation consistency and enabled native/derived byte limits before opening PEMs, the ring or credentials. Disabled feature limits remain dormant. Existing catalog read/write/ingestion/report flags and their dedicated credentials remain separate and lazy, with the same business ACL checks. Session hosting does not register a Docker runner or map examples, projection fixtures, or Development OpenAPI, even if the environment is Development. Its only inspection runner forwards to the configured hosted worker. Enabling an existing business flag does not create a worker deployment or a grant; unsupported dispatch still fails through the existing service. Run the required `Weft.Worker` services as a separate deployment rather than assuming this host starts them.
+The three identity/session pools are separate, lazy and borrowed by the modules. Startup does not open PostgreSQL or call the provider, except that enabled previews start the Wolverine submitter, which verifies its message storage in `weft_messages` with the delivered preview writer login; an unreachable database then fails startup. Session parses and retains its feature flags, report/derivation consistency and enabled native/derived byte limits before opening PEMs, the ring or credentials. Disabled feature limits remain dormant. Existing catalog read/write/ingestion/report flags and their dedicated credentials remain separate and lazy, with the same business ACL checks. Session hosting does not register a Docker runner or map examples, projection fixtures, or Development OpenAPI, even if the environment is Development. Inspection goes through the selected service, dynamic session or hosted worker. Enabling an existing business flag does not create a worker deployment or a grant; unsupported dispatch still fails through the existing service. Run the required `Weft.Worker` services as a separate deployment rather than assuming this host starts them.
+
+## Transport and privacy boundaries
 
 Direct TLS prebuilds one `SslStreamCertificateContext` with `offline: true` from the admitted leaf/key and supplied PEM chain, then passes that static context through Kestrel's supported TLS handshake callback. Startup and handshakes do not fetch AIA issuers or start background OCSP stapling downloads; supply a usable chain rather than relying on live issuer completion. Clients still validate the server's trust, name and lifetime. HTTP/1, system TLS protocol defaults, Kestrel's handshake timeout and the absence of requested client certificates are preserved. Certificates remain borrowed until the existing shutdown settlement boundary; there is no new TLS trust store, client-certificate bypass or hot reload.
 
@@ -106,6 +162,15 @@ Direct HTTPS admits only the exact configured scheme/authority on its explicit H
 The session pipeline is a supported Generic Host with an explicit application pipeline. It contains no default authentication scheme, blanket authentication/authorization middleware, developer exception page, provider logout, bearer fallback, account provisioning or claims-to-role converter. Opt-in [bearer access](api-authentication.md) is a separate admission path of the catalog boundary, never a fallback for a missing or refused session. The fixed auth mapper and catalog mapper own their individual admission. Successful authentication still needs fresh organization/project authority for each business operation; it grants no native-payload permission. Callback completion/failure remains the fixed #118 protocol.
 
 Privacy is applied before listening or provider work: IdentityModel's logger is replaced with a no-output implementation, its artifact/PII flags stay false and its static EventSource is disposed. The final incoming ASP.NET DiagnosticListener/DiagnosticSource alias and ActivitySource are checked and disposed before start. Session ILogger output is disabled even under provider-specific overrides; only fixed entrypoint status lines are emitted. The Entra backchannel uses a null ActivityHeadersPropagator by default. No HTTP logging, request Activity, raw diagnostic exporter, dump or verbose internal network sink is admitted. Scalar counters/status/timing can be observed through separately admitted collectors; raw path/address/config/exception fields are not approved exports. This constrains configured channels, not arbitrary privileged process-memory observation. Edge privacy is separate.
+
+## Restart, rotation and shutdown
+
+Restart with the same organization/application realm, database, key ring and
+retained decrypt material. For certificate rotation, deliver the old decrypt
+certificates alongside the new protecting certificate before restarting. There
+is no hot reload. See [protected server sessions](protected-server-sessions.md)
+and [Azure operations](azure-deployment.md#operations) for the key-ring and
+certificate procedures; do not bootstrap a replacement ring to recover a host.
 
 Shutdown first closes host request admission. A request is settled only after both its middleware continuation and the host's first-registered, last-run `Response.OnCompleted` callback; downstream browser-session cleanup joins the actual stored tasks before this witness. The host retains the original StopAsync, auth-orchestrator disposal, Entra disposal, provider disposal and resource-disposal tasks. A bounded canceled/timed-out wait is never treated as completion or replaced by a second idempotent call. A settled StopAsync fault retains its failure but does not skip the first provider disposal when request/module drains prove safety; borrowed resources close after successful browser/provider disposal. Browser cleanup failure still permits that safe provider-disposal attempt, but does not admit borrowed-resource release. If host stop is unfinished or request/module settlement is unproven, the provider, browser private services, profile, pools and certificates remain retained and the entrypoint returns a fixed failure. The root's process owner must treat a nonzero shutdown result as unconfirmed cleanup and retain the relevant external resources/evidence rather than silently restarting.
 

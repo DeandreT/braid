@@ -10,6 +10,7 @@ export const helpSectionIds = [
   "regression-tests",
   "builds",
   "uploads",
+  "creation",
   "chat",
   "cli",
 ] as const;

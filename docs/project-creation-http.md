@@ -1,9 +1,12 @@
 # Project creation HTTP
 
 P3d4b / [#31](https://github.com/DeandreT/weft/issues/31) adds the HTTP boundary
-over the qualified [project creation persistence](project-creation.md). This
-increment is in implementation; its source and qualification statuses remain
-separate. It changes no migration, project role, native worker, or Ferrule pin.
+over [project creation persistence](project-creation.md). The route is implemented;
+its verification boundaries are described below, not established by this page's
+presence. Persistence owns capability, atomicity and replay; this page owns HTTP
+admission, status codes and local host options. [Catalog reads](catalog-reads.md)
+owns shared read/request rules. The original requirements are indexed in the
+[catalog contract-owner map](catalog-persistence-plan.md#current-contract-owners).
 
 ## Organization actions
 
@@ -68,9 +71,11 @@ object reference, or provider exception text.
 Creation defaults off. Explicitly enable it with
 `WEFT_PROJECT_CREATION_ENABLED=true` and supply the separate restricted login in
 `WEFT_POSTGRES_PROJECT_CREATION_CONNECTION_STRING`. The enabled flag accepts only
-the exact values `true` and `false`. Enabled creation requires the existing
-enabled catalog and explicit loopback Development identity configuration.
-Hosted identity is a later increment.
+the exact values `true` and `false`. For the Development profile, enabled creation
+requires the existing enabled catalog and explicit loopback Development identity
+configuration. Protected Session hosts use [Session host](session-host.md),
+including its protected credential delivery and identity admission, rather than
+this local recipe.
 
 The creator connection has no fallback to reader, metadata editor, ingestion, or
 owner credentials. Disabled creation does not parse an unused connection or
@@ -83,3 +88,13 @@ The acceptance gate composes actual HTTP creation, ordinary catalog reads, and
 the existing real native upload flow in the project created by that POST.
 Published fresh setup, historical upgrade, replay, and API/database restart are
 qualified separately from pure contract and synthetic boundary tests.
+
+## Historical implementation checkpoint
+
+The original increment-status note below is retained as history; it does not
+override the implemented route or the activation requirements above:
+
+P3d4b / [#31](https://github.com/DeandreT/weft/issues/31) adds the HTTP boundary
+over the qualified [project creation persistence](project-creation.md). This
+increment is in implementation; its source and qualification statuses remain
+separate. It changes no migration, project role, native worker, or Ferrule pin.

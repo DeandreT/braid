@@ -1,5 +1,13 @@
 # V1 CSV/TSV selective port
 
+**Historical port record, not a current migration or qualification checklist.**
+The integration base, reserved suffixes and remaining gaps below describe this
+port's checkpoint. Preserve those migration bytes and evidence; do not reserve,
+renumber or recreate slots from this record. For current behavior use
+[CSV/TSV documents](csv-documents.md), [typed creation formats](mapping-creation-formats.md)
+and [the roadmap](../ROADMAP.md). Later combined evidence is retained in
+[v1 integration](v1-integration.md); it does not imply provider/cloud acceptance.
+
 ## Source and scope
 
 - Integration base: `177b458edc282502b1575ae9a94ed2750554a512` (includes proposal storage contract `7b9e159c90d05f1828f6e6255b1a8e2108e0ae12`).

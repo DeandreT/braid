@@ -4,6 +4,13 @@ PostgreSQL ownership and scoped application reads provide the authorization
 foundation for catalog routes and the workbench. Browser identity is supplied by
 the separate Development or verified Session boundary.
 
+This page owns shared authority, transaction and migration rules. The
+[catalog contract-owner map](catalog-persistence-plan.md#current-contract-owners)
+links the retained P3 requirements to their focused owners. Use
+[development](development.md) for the full local stack and [Session host](session-host.md)
+for protected hosted composition; the PostgreSQL commands below are database
+setup, not application startup or proof of hosted acceptance.
+
 ## Ownership and application reads
 
 The `weft` schema retains organizations, internal principals, organization
@@ -28,7 +35,7 @@ Project pages contain at most 100 records, ordered by PostgreSQL UUID order.
 The next cursor is the last emitted project UUID when another row exists.
 Pagination does not freeze the catalog across later inserts or membership
 changes. IDs remain GUIDs in these internal contracts; public string wire
-records follow in P3d.
+records and their stricter cursor rules are owned by [catalog reads](catalog-reads.md#http-surface).
 
 ## Database boundary
 
@@ -90,22 +97,13 @@ Maintenance metadata adds the separate `weft_maintenance` login before migration
 See [Maintenance metadata](private-object-maintenance-metadata.md) for its scope
 and coordinated upgrade. Older databases must also complete their earlier
 explicit role-provisioning prerequisites before the latest migration command.
-The [project payload permission foundation](project-payload-permissions.md) is in
-progress. Its selected additive schema requires a separately passworded
-`weft_payload_permission_reader` CONNECT-only login and an explicit existing-volume
-upgrade step; it supplies no payload permission from a project role or identity.
-Its document records the pending integration and qualification boundary.
-The [server-session metadata setup](postgres-server-sessions.md) has passed its
-33 focused PostgreSQL checks; complete regression qualification is pending.
-Its local profile also requires separate
-`WEFT_LOCAL_SESSION_READER_PASSWORD` and `WEFT_LOCAL_SESSION_WRITER_PASSWORD`
-values. New-volume initialization creates both CONNECT-only logins. After this
-increment is integrated and released, existing nine-migration volumes require a
-coordinated stop/migrate/start upgrade: run the explicit database-administrator
-`deploy/local/postgres-add-session-roles.sh` step before `migrate`. It creates
-both logins in one transaction and refuses either existing role without adoption
-or password rotation. The session document records the complete procedure and
-pending qualification; this setup does not enable sign-in or a server identity.
+The [project payload permission](project-payload-permissions.md) and
+[server-session metadata setup](postgres-server-sessions.md) references own their
+separate restricted roles and existing-volume upgrade steps. A project role or
+identity alone supplies no payload permission. Session role provisioning alone
+does not enable sign-in. Follow those references and the
+[ordered upgrade guidance](runtime-packaging.md) for the installed baseline,
+not the early setup checkpoint retained below.
 Initialization reads passwords from the environment inside `psql`; they are
 absent from command arguments. Initialization does not run again on an existing
 volume. Updating the environment alone does not rotate an existing role password.
@@ -146,3 +144,26 @@ literal metadata, bounded reads, and restart persistence. Pool-size-one probes
 confirm the same backend is reused without context after commit, rollback,
 cancellation or SQL failure. Qualification evidence is recorded in the scoped
 implementation PR before merge.
+
+## Historical setup checkpoint
+
+The following records the payload/session foundation checkpoint. Its pending
+integration language and test count are historical, not current setup status or
+an instruction to stop at that migration prefix:
+
+The [project payload permission foundation](project-payload-permissions.md) is in
+progress. Its selected additive schema requires a separately passworded
+`weft_payload_permission_reader` CONNECT-only login and an explicit existing-volume
+upgrade step; it supplies no payload permission from a project role or identity.
+Its document records the pending integration and qualification boundary.
+The [server-session metadata setup](postgres-server-sessions.md) has passed its
+33 focused PostgreSQL checks; complete regression qualification is pending.
+Its local profile also requires separate
+`WEFT_LOCAL_SESSION_READER_PASSWORD` and `WEFT_LOCAL_SESSION_WRITER_PASSWORD`
+values. New-volume initialization creates both CONNECT-only logins. After this
+increment is integrated and released, existing nine-migration volumes require a
+coordinated stop/migrate/start upgrade: run the explicit database-administrator
+`deploy/local/postgres-add-session-roles.sh` step before `migrate`. It creates
+both logins in one transaction and refuses either existing role without adoption
+or password rotation. The session document records the complete procedure and
+pending qualification; this setup does not enable sign-in or a server identity.

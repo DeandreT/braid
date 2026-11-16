@@ -1,27 +1,19 @@
 # Persistent catalog reads
 
-Status: P3d1 is qualified and merged in [PR #33](https://github.com/DeandreT/weft/pull/33)
-at `e5915598d608b4df4b19c113d53a8bbda326cf9f`, closing
-[#28](https://github.com/DeandreT/weft/issues/28). Local and independent fresh-build
-runs each passed 1,162 tests with no skips; the independent run included 138 actual
-PostgreSQL cases, fresh/0002-upgrade owner CLI and published API checks, and 22
-browser cases. All 105 workers created by that run were automatically removed.
-The PR records the frozen evidence and its limits. P3d2 metadata editing is
-qualified and merged in [PR #38](https://github.com/DeandreT/weft/pull/38) at
-`2a0557e554eafcd72bf7d0f71b34d9b23d2de398`, closing
-[#29](https://github.com/DeandreT/weft/issues/29). Local and independent runs each
-passed 1,246 C# cases with zero skips, including 193 PostgreSQL-gated cases. The
-independent run also passed 22 browser cases without retries and fresh/upgrade
-published CLI/API checks. All 110 actual workers were automatically removed.
-These checks do not qualify the following raw-upload increment or a metadata
-editing frontend.
-The accepted sequence is in [Catalog API plan](catalog-api-plan.md).
+This page owns catalog reads, conditional mapping metadata and the explicit
+Development request boundary. [Revision uploads](catalog-revision-uploads.md),
+[project creation HTTP](project-creation-http.md) and [saved reports](saved-reports.md)
+own their separate actions. [Session host](session-host.md) owns protected Session
+configuration; do not reuse the local HTTP identity recipe for hosted sign-in.
+The original requirements are indexed in the
+[catalog contract-owner map](catalog-persistence-plan.md#current-contract-owners).
 
 The API reads saved projects, mapping metadata and immutable revision history.
 It does not need private storage or a running mapping worker. A committed
-decoded-invalid revision remains visible history; its admission is not permission
-to preview, edit or deploy it. Projection and validation reports follow in P3e,
-and the Angular catalog follows in P3g.
+decoded-invalid revision remains visible history; admission is not permission to
+preview, edit or deploy it. The [catalog browser](catalog-browser.md) and
+[saved reports](saved-reports.md) describe their own workflow and verification
+boundaries.
 
 ## HTTP surface
 
@@ -60,11 +52,12 @@ foreign and inaccessible project resources share the same 404 response. Database
 or schema failures return a closed failure category and never an invented empty
 catalog. No caller actor, role, proxy header or digest establishes access.
 
-Viewing remains the default capability. Explicitly enabled metadata editing is
+Read availability does not enable writes. Explicitly enabled metadata editing is
 available on mappings to current Publishers and Administrators. Creation, uploads,
-reports, chat, preview and membership actions remain unavailable. Project metadata
-editing is unavailable because this increment edits mappings only. Submitted edits
-recheck fresh authority rather than trusting advisory action flags.
+reports, chat, preview and administration have their own feature and authority
+gates; a read-only deployment must not advertise them as usable. This metadata
+endpoint edits mappings, not projects. Submitted edits recheck fresh authority
+rather than trusting advisory action flags.
 
 ## Conditional mapping metadata
 
@@ -75,6 +68,10 @@ fresh read authority, optional `If-Match` uses strong comparison and returns 412
 on failure; then `If-None-Match` uses weak comparison and can return 304 with no
 body. Combined conditions are bounded to 4096 characters and each header to 16
 tags. Ordinary mapping responses do not carry this metadata-only ETag.
+
+The quoted tag's opaque value is
+`metadata-v1:<org>:<project>:<mapping>:<decimalVersion>`. EqualHead upload conditions
+select a revision, not this independent metadata version.
 
 When editing is enabled, `PATCH M/metadata` requires the custom media type
 `application/vnd.weft.mapping-metadata-edit.v1+json`, a cookie-bound request token,
@@ -104,7 +101,7 @@ Authorized enabled metadata replies advertise the custom type through Accept-Pat
 
 ## Explicit local setup
 
-The catalog and local identity are disabled by default. This increment accepts
+The catalog and local identity are disabled by default. This local profile accepts
 the local provider only in Development, on a concrete loopback listener. Hosted
 configuration rejects an explicitly enabled local provider even when catalog
 routes are disabled. All routes remain in the generated OpenAPI contract when
@@ -183,9 +180,10 @@ is omitted from diagnostic record text.
 The reusable unsafe-request boundary requires one exact canonical Origin and one
 `X-XSRF-TOKEN`, validates the cookie/request-token pair bound to configured organization
 and principal, then permits a handler to proceed. A required header prevents form-body
-fallback. Metadata PATCH uses this boundary before media or body handling;
-d3 and d4 will qualify their additional real mutations separately. Hosted
-sessions and secure cookie/key lifecycle remain P4.
+fallback. Metadata PATCH uses this boundary before media or body handling.
+[Uploads](catalog-revision-uploads.md) and [project creation](project-creation-http.md)
+use the same request boundary and retain their own body and mutation checks.
+Hosted sessions and secure cookie/key lifecycle belong to [Session host](session-host.md).
 
 `weft_catalog_reader` receives seven full-table SELECT grants: the five ownership
 tables, mappings and mapping revisions. Its reservation access is column-only SELECT
@@ -211,5 +209,33 @@ rights and the current guard, then locks the admitted mapping and checks the
 expected version. Concurrent metadata edits and head appends preserve both facts.
 
 Qualification must distinguish synthetic contracts/setup from actual PostgreSQL and
-Kestrel transport. Entra, native upload HTTP, preview, hosting and the eventual
-catalog browser are separate later increments.
+Kestrel transport. Native upload HTTP, preview, identity, hosting and catalog-browser
+qualification are separate boundaries, not implied by read or metadata checks.
+
+## Historical implementation checkpoint
+
+The following records P3d1/P3d2 evidence only. Counts and statements about later
+increments are not current availability or setup instructions.
+
+Status: P3d1 is qualified and merged in [PR #33](https://github.com/DeandreT/weft/pull/33)
+at `e5915598d608b4df4b19c113d53a8bbda326cf9f`, closing
+[#28](https://github.com/DeandreT/weft/issues/28). Local and independent fresh-build
+runs each passed 1,162 tests with no skips; the independent run included 138 actual
+PostgreSQL cases, fresh/0002-upgrade owner CLI and published API checks, and 22
+browser cases. All 105 workers created by that run were automatically removed.
+The PR records the frozen evidence and its limits. P3d2 metadata editing is
+qualified and merged in [PR #38](https://github.com/DeandreT/weft/pull/38) at
+`2a0557e554eafcd72bf7d0f71b34d9b23d2de398`, closing
+[#29](https://github.com/DeandreT/weft/issues/29). Local and independent runs each
+passed 1,246 C# cases with zero skips, including 193 PostgreSQL-gated cases. The
+independent run also passed 22 browser cases without retries and fresh/upgrade
+published CLI/API checks. All 110 actual workers were automatically removed.
+These checks do not qualify the following raw-upload increment or a metadata
+editing frontend.
+The accepted sequence is in [Catalog API plan](catalog-api-plan.md).
+
+The API reads saved projects, mapping metadata and immutable revision history.
+It does not need private storage or a running mapping worker. A committed
+decoded-invalid revision remains visible history; its admission is not permission
+to preview, edit or deploy it. Projection and validation reports follow in P3e,
+and the Angular catalog follows in P3g.

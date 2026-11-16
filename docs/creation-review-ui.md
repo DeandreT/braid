@@ -1,5 +1,10 @@
 # Exact creation review
 
+This page owns the exact-proposal review UI contract. [Creation runtime](mapping-creation-runtime.md)
+owns authenticated operations, [proposal library](creation-proposal-library.md)
+owns discovery and [creation host composition](creation-host-composition.md) owns
+activation. Their boundaries are separate from the historical UI checkpoint below.
+
 The lazy-loaded review route is
 `/catalog/organizations/{organization}/projects/{project}/creation/{proposal}?fingerprint={fingerprint}`.
 It reads the authenticated creation endpoint using the expected fingerprint.
@@ -38,6 +43,12 @@ Chromium fixtures for exact approval, recovery, preview substitution, access
 revocation, owner replacement, inert rendering and accessibility. These HTTP
 fixtures validate the UI boundary; PostgreSQL, provider-backed generation and
 production worker containment are qualified separately.
+
+## Historical UI qualification checkpoint
+
+The following is the original focused UI record, including its then-pending chat
+discovery integration. It is not current setup or a new execution claim. Later
+combined evidence is retained in [v1 integration](v1-integration.md).
 
 The focused suite passes 28 tests with zero skips, including 11 actual Chromium
 cases. Full `npm run check`, browser TypeScript checks and production build pass

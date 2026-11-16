@@ -1,5 +1,32 @@
 # Release operations
 
+## Activate or recover a mapping release
+
+This page is for a mapping's release target, not an application-image or database
+upgrade. For those, use [runtime packaging](runtime-packaging.md#database-upgrade-index)
+or [Azure operations](azure-deployment.md#operations).
+
+1. Have an operator qualify the completed build and register its release target
+   through [Local releases](local-releases.md#operator-commands). A completed
+   build alone is not an active release. Use the same runtime for qualification
+   and endpoint execution; the packaged service route needs no Docker socket.
+2. Enable the separate host feature and restricted credentials under
+   [Host configuration](#host-configuration). In the packaged stack this is part
+   of the opt-in `compose.features.yml`, not the base Session stack.
+3. Open the mapping's **Operations** page, review the target and current version,
+   and choose the intended action. Publisher or Administrator can activate or
+   roll back; only Administrator can disable or enable a target.
+4. If the result is uncertain, keep the original operation ID, selection and
+   version condition. Follow [Conditional actions and recovery](#conditional-actions-and-recovery);
+   do not submit a new action to find out whether the first succeeded.
+
+An endpoint deployment and machine-caller grants are separate operator tasks; see
+[mapping endpoints](runtime-packaging.md#hosted-shape-local-stack) and
+[Machine authorization](machine-authorization.md). Reading Operations, enabling
+a target or rolling back never grants a caller new authority.
+
+## Operations page
+
 The mapping's **Operations** page reads endpoint targets, active release identities,
 release and target history, invocation metadata, and machine grants. The HTTP routes
 are below `/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/operations`.

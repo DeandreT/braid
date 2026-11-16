@@ -1,5 +1,16 @@
 # P3d: persistent catalog and revision HTTP API
 
+This is the historical API delivery contract, not the current backlog or host
+setup. The [contract-owner map](catalog-persistence-plan.md#current-contract-owners)
+routes each retained requirement to its focused reference. For current API work,
+use [catalog reads and metadata](catalog-reads.md), [uploads and recovery](catalog-revision-uploads.md)
+and [project creation HTTP](project-creation-http.md). [Session host](session-host.md)
+owns hosted identity configuration; the Development boundary here is not that setup.
+The detailed original contract and anchors remain intact below. Its future-tense
+sequence and checkpoint results do not describe current feature availability.
+
+## Historical delivery checkpoint
+
 Status: accepted delivery contract; implementation and qualification follow in
 five focused increments. Native ingestion is qualified and merged in
 [PR #27](https://github.com/DeandreT/weft/pull/27). Parent

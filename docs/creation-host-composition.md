@@ -1,5 +1,11 @@
 # Creation server composition
 
+This page owns concrete creation activation and runtime admission. [Session host](session-host.md)
+owns protected host setup; [creation runtime](mapping-creation-runtime.md) owns
+authenticated operations; [exact review](creation-review-ui.md) owns approval UX.
+The [foundation record](mapping-creation-application.md) retains the original
+application contracts, not instructions to use its old unimplemented ports.
+
 `CreationHostConfiguration` wires the authenticated server to the concrete creation store, discovery adapter, authoring compiler and authored-preview adapter. `WEFT_CREATION_ENABLED` defaults false; disabled composition reads only that flag and registers the disabled option. It opens no connection, credential file or service channel.
 
 ## Required composition
@@ -33,6 +39,13 @@ There is no environment qualification bit. Successful capability admission prove
 `CreationHostConfigurationTests` covers default-off resource isolation, enabled non-session refusal, role/password/database/reset refusal, localhost pinned-mTLS capability admission, and actual native authoring/preview through the registered adapters. The native executable tests use synthetic input and do not establish Linux containment.
 
 The real PostgreSQL 16.15 composition tests admit installed 0046, preserve durable admission with an inactive source store and stopped workers, then refuse after tampering with five-round, audit or citation contracts. Their physical-source/ingestion placeholders are unused: these tests qualify concrete database admission, while the separate native transport test qualifies compiler/preview composition.
+
+### Historical composition checkpoint
+
+The following Windows result and remaining gaps describe the original composition
+run, not current setup status. Later bounded environment evidence is retained in
+[v1 integration](v1-integration.md). Neither record establishes provider/cloud
+acceptance or removes production activation gates.
 
 Final pre-commit qualification on Windows with .NET SDK 10.0.112: the combined creation-host, Ferrule runner/recovery/compile, document-evidence and creation-discovery selection passed **85 tests, with 15 skips and zero failures** (100 total). Actual PostgreSQL 16.15 and native authoring, authored-preview and PDF executables were configured. The PostgreSQL work root was unique to this run, and reviewed source hashes were unchanged throughout execution.
 
