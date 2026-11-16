@@ -1,15 +1,16 @@
 using Braid.Application;
+using Braid.Deployment;
 using Braid.Domain;
 
-namespace Braid.Deployment;
+namespace Braid.Tests;
 
-public enum FixtureDeploymentOutcome { Created, Replayed, Refused, Conflict, IntegrityFailure }
-public sealed record FixtureDeploymentReceipt(Guid DeploymentId, PrincipalId Actor, BuildEnvironmentReference Environment,
+internal enum FixtureDeploymentOutcome { Created, Replayed, Refused, Conflict, IntegrityFailure }
+internal sealed record FixtureDeploymentReceipt(Guid DeploymentId, PrincipalId Actor, BuildEnvironmentReference Environment,
     Sha256Digest IntentFingerprint, Sha256Digest ArtifactDigest);
-public sealed record FixtureDeploymentResult(FixtureDeploymentOutcome Outcome, FixtureDeploymentReceipt? Receipt = null);
+internal sealed record FixtureDeploymentResult(FixtureDeploymentOutcome Outcome, FixtureDeploymentReceipt? Receipt = null);
 
 /// <summary>In-memory target for exercising publication/retry contracts; never registered as a production target.</summary>
-public sealed class FixtureBuildTarget(IBuildAdmissionReader admissions, IPrivateObjectStore objects)
+internal sealed class FixtureBuildTarget(IBuildAdmissionReader admissions, IPrivateObjectStore objects)
 {
     private readonly object gate = new();
     private readonly Dictionary<(Guid, Guid), FixtureDeploymentReceipt> records = [];

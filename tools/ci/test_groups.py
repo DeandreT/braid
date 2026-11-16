@@ -13,7 +13,7 @@ from pathlib import Path
 # Includes test/helper/attribute initializers, linked probe sources, production
 # dependencies and build inputs. A changed source needs a classification audit,
 # not an automatic fingerprint refresh. See test-groups.md.
-AUDITED_SOURCE_SHA256 = "4259ab49dbdcc29534119005eb999ccfc623243ba7dd05ea6ea0a9cbf63e07fd"
+AUDITED_SOURCE_SHA256 = "2f92cba0f9e9c3f2cb873c465aa3f6f9fe89b0a6e777ed08d711d47d199b19ff"
 
 GROUP_CLASSES = {
     "fast": """
@@ -179,7 +179,7 @@ ServerSessionTicketCodecTests ServerSessionTicketStoreTests SessionFeatureHostCo
 ShellTests SpecBlobPersistenceTests SpecBundleLifecycleTests SpecDocumentHostPostgresTests SpecDocumentHostTests
 SpecDocumentIntakeHttpTests SpecDocumentWorkerTests SpecHttpTests SpecIntakeTests SpecObjectStorageTests
 SpecOfficeExtractionTests SpecPdfProcessTests SpecPdfWorkerResponseTests TestNetworkSubnetsTests
-TriggerContractPolicyTests UserGuideTests UserTokenValidationTests WorkerCredentialSettingsTests
+UserGuideTests UserTokenValidationTests WorkerCredentialSettingsTests
 WorkerDiagnosticTests WorkerShutdownProbeGuardTests WorkerShutdownProcessTests WorkspaceCaseMetadataTests
 WorkspaceChatOpenApiTests WorkspaceChatOrchestrationTests WorkspaceHistoryPolicyTests WorkspaceMetadataPrivacyTests
 WorkspacePayloadReauthorizationTests WorkspacePayloadToolTests WorkspaceRegressionMetadataTests
