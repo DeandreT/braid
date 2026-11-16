@@ -26,7 +26,7 @@ import { WorkspaceConversation } from "./workbench/workspace-conversation";
 import { ThemePreference } from "./theme-preference";
 
 @Component({
-  selector: "weft-root",
+  selector: "braid-root",
   imports: [
     RouterLink,
     RouterLinkActive,

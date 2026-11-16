@@ -7,8 +7,8 @@ projects and native revision history through product HTTP, then serves the
 packaged Angular app with only catalog-reader credentials. There is no product
 test-control endpoint.
 
-Run the source checks first with `npm run check`. Build Angular and publish
-`Weft.Server`, `Weft.DatabaseTool` and `Weft.StorageTool` from the same exact
+Run the source checks with `npm run check`. Build Angular and publish
+`Braid.Server`, `Braid.DatabaseTool` and `Braid.StorageTool` from the same exact
 committed source. Include every published file and Angular asset in each
 publication's SHA-256 map. The source manifest is a flat array of
 `{ "path": "relative/path", "mode": "100644", "sha256": "..." }` entries
@@ -34,19 +34,17 @@ After the browser fixture has settled its cleanup, send the observer one line,
 and returns nonzero if reconciliation fails. Run this in an exclusive native
 worker window; it attributes worker events to that window, not a runtime client.
 
-Record its real admission and the reviewed source/publication admissions as
-hash-bound files. Those records document verification; they are not a product
-authorization mechanism. Choose two distinct available loopback origins. The
-operator fails if their fixed ports are occupied and does not retarget them.
+Record the observer and source/publication admissions as hash-bound files.
+Choose two distinct available loopback origins. The operator fails if their fixed
+ports are occupied and does not retarget them.
 PostgreSQL gets one explicitly pinned loopback-only port on its owned bridge.
 
-Copy the following _unbound_ example into the private directory. Fill every null
-from the actual source, publications and observer records. Keep the immutable
-image pins. Set `runtimeReleased` only after the inputs have been reviewed.
+Copy this configuration into the private directory. Fill every null from the
+source, publications and observer records. Keep the immutable image pins.
 
 ```json
 {
-  "schemaVersion": "weft.catalog-browser-operator-config.v1",
+  "schemaVersion": "braid.catalog-browser-operator-config.v1",
   "runtimeReleased": false,
   "fixtureId": null,
   "privateDirectory": null,
@@ -76,13 +74,13 @@ image pins. Set `runtimeReleased` only after the inputs have been reviewed.
 }
 ```
 
-The separate release record binds the exact configuration bytes and reviewed
-operator bytes with SHA-256. Set its booleans only after the corresponding
-checks succeed. This example is deliberately unable to start a fixture.
+Set `runtimeReleased` in the configuration after verifying its inputs. The
+separate release record binds the final configuration and operator bytes with
+SHA-256. Fill its hashes and set its booleans after the corresponding checks succeed.
 
 ```json
 {
-  "schemaVersion": "weft.catalog-browser-release.v1",
+  "schemaVersion": "braid.catalog-browser-release.v1",
   "released": false,
   "configurationSha256": null,
   "operatorSha256": null,
@@ -98,24 +96,23 @@ commands and the browser run:
 
 ```sh
 node node_modules/playwright/cli.js install chromium --no-shell
-WEFT_CHROMIUM_EXECUTABLE="$(node --input-type=module -e 'import { chromium } from "playwright"; console.log(chromium.executablePath())')"
-export WEFT_CHROMIUM_EXECUTABLE
+BRAID_CHROMIUM_EXECUTABLE="$(node --input-type=module -e 'import { chromium } from "playwright"; console.log(chromium.executablePath())')"
+export BRAID_CHROMIUM_EXECUTABLE
 ```
 
-Each Playwright version expects its corresponding browser build; repeat this
-installation after a dependency update. The executable override remains available
-for a deliberately chosen compatible browser. Linux browser libraries and Xvfb
-are still prerequisites; see [local browser setup](../../docs/development.md#verification).
+Repeat the browser installation after a Playwright dependency update. Linux
+browser libraries and Xvfb are prerequisites; see
+[local browser setup](../../docs/development.md#verification).
 
 Set these Node-only environment values and run the browser command:
 
 ```sh
-WEFT_CATALOG_BROWSER_OPERATOR=/absolute/checkout/tools/catalog-browser/operator.mjs
-WEFT_CATALOG_BROWSER_OPERATOR_CONFIG=/absolute/private/configuration.json
-WEFT_CATALOG_BROWSER_MANIFEST=/absolute/private/manifest.json
-WEFT_CATALOG_BASE_URL=http://127.0.0.1:45921
-export WEFT_CATALOG_BROWSER_OPERATOR WEFT_CATALOG_BROWSER_OPERATOR_CONFIG
-export WEFT_CATALOG_BROWSER_MANIFEST WEFT_CATALOG_BASE_URL WEFT_CHROMIUM_EXECUTABLE
+BRAID_CATALOG_BROWSER_OPERATOR=/absolute/checkout/tools/catalog-browser/operator.mjs
+BRAID_CATALOG_BROWSER_OPERATOR_CONFIG=/absolute/private/configuration.json
+BRAID_CATALOG_BROWSER_MANIFEST=/absolute/private/manifest.json
+BRAID_CATALOG_BASE_URL=http://127.0.0.1:45921
+export BRAID_CATALOG_BROWSER_OPERATOR BRAID_CATALOG_BROWSER_OPERATOR_CONFIG
+export BRAID_CATALOG_BROWSER_MANIFEST BRAID_CATALOG_BASE_URL BRAID_CHROMIUM_EXECUTABLE
 npm run test:catalog-browser
 ```
 
@@ -127,10 +124,9 @@ immutable manifest before any browser test runs. Controls use the Node child's
 private pipes; they are never exposed to Page JavaScript or browser storage.
 Raw network traces and video are disabled to avoid retaining context tokens.
 
-One real scenario covers roles, actual pagination, saved history, append,
-application/database restart, outages and one-way revocations. Separately named
-controlled cases check rendering and stale-response defenses; they do not prove
-persistence. The existing examples remain in `npm run test:browser`.
+The scenario covers roles, pagination, saved history, append,
+application/database restart, outages and one-way revocations. Controlled cases
+check rendering and stale-response defenses in `npm run test:browser`.
 
 The fixture stops and reaps its own API children, verifies worker removal,
 then removes only its exact nonce-labelled PostgreSQL, network and volume.

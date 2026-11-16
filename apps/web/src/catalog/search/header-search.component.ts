@@ -14,7 +14,7 @@ import { WorkspaceCommands } from "../../workbench/workspace-commands";
 import type { WorkbenchCommand } from "../../workbench/workbench-frame.component";
 
 @Component({
-  selector: "weft-header-search",
+  selector: "braid-header-search",
   template: `
     <button
       class="search-trigger"

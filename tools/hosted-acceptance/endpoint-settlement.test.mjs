@@ -20,13 +20,13 @@ const windows = process.platform === "win32";
 // Bare `bash` on Windows can resolve to the WSL alias, which cannot use the
 // native fixture's files or environment. These tests need only Git Bash.
 const bash =
-  process.env.WEFT_TEST_BASH ??
+  process.env.BRAID_TEST_BASH ??
   (windows
     ? join(process.env.ProgramFiles ?? "C:\\Program Files", "Git/bin/bash.exe")
     : "bash");
 assert.ok(
   !windows || existsSync(bash),
-  "Install Git for Windows or set WEFT_TEST_BASH to its native bash.exe.",
+  "Install Git for Windows or set BRAID_TEST_BASH to its native bash.exe.",
 );
 const bashPath = (path) =>
   windows
@@ -41,15 +41,15 @@ const fakeDocker = `#!/usr/bin/env bash
 state=$FAKE_DOCKER_STATE
 printf '%s\\n' "$*" >>"$state.calls"
 case $1 in
-  ps) [[ "$*" == "ps --all --quiet --filter label=io.weft.acceptance.run=$FAKE_RUN" ]] || exit 9; cat "$state" ;;
-  inspect) printf '/weft-inspect-%s exited created=c started=s finished=f\\n' "\${@: -1}" ;;
+  ps) [[ "$*" == "ps --all --quiet --filter label=io.braid.acceptance.run=$FAKE_RUN" ]] || exit 9; cat "$state" ;;
+  inspect) printf '/braid-inspect-%s exited created=c started=s finished=f\\n' "\${@: -1}" ;;
   rm) id=\${@: -1}; [[ $id != stuck ]] || exit 1; grep -v -x -- "$id" "$state" >"$state.next" || true; mv "$state.next" "$state" ;;
   *) exit 8 ;;
 esac
 `;
 
 function settle(containers, commands) {
-  const directory = mkdtempSync(join(tmpdir(), "weft-settlement-"));
+  const directory = mkdtempSync(join(tmpdir(), "braid-settlement-"));
   try {
     const docker = join(directory, "docker");
     writeFileSync(docker, fakeDocker);
@@ -74,7 +74,7 @@ function settle(containers, commands) {
             : `${directory}:${process.env.PATH}`,
           ...(windows ? { SystemRoot: process.env.SystemRoot } : {}),
           FAKE_DOCKER_STATE: bashPath(state),
-          FAKE_RUN: "weft-accept-run",
+          FAKE_RUN: "braid-accept-run",
         },
       },
     );
@@ -97,15 +97,15 @@ function settle(containers, commands) {
 test("settled runtime containers are removed with evidence and fail the run", () => {
   const result = settle(
     ["a1", "b2"],
-    'settle weft-accept-run "after the endpoint stopped"; settlement_status',
+    'settle braid-accept-run "after the endpoint stopped"; settlement_status',
   );
   assert.equal(result.status, 1);
   assert.equal(result.remaining, "");
   assert.match(
     result.stderr,
-    /Settled runtime container \(after the endpoint stopped\): \/weft-inspect-a1 exited created=c started=s finished=f\n/,
+    /Settled runtime container \(after the endpoint stopped\): \/braid-inspect-a1 exited created=c started=s finished=f\n/,
   );
-  assert.match(result.stderr, /\/weft-inspect-b2 exited/);
+  assert.match(result.stderr, /\/braid-inspect-b2 exited/);
   assert.match(
     result.stderr,
     /Manual settlement removed 2 runtime container\(s\); this run cannot pass, and a clean result needs a new run\./,
@@ -116,7 +116,7 @@ test("settled runtime containers are removed with evidence and fail the run", ()
 test("settlement keeps failing the run after a later clean settle", () => {
   const result = settle(
     ["a1"],
-    "settle weft-accept-run qualification; settle weft-accept-run cleanup; settlement_status",
+    "settle braid-accept-run qualification; settle braid-accept-run cleanup; settlement_status",
   );
   assert.equal(result.status, 1);
   assert.match(result.stderr, /removed 1 runtime container/);
@@ -125,7 +125,7 @@ test("settlement keeps failing the run after a later clean settle", () => {
 test("a run with nothing to settle passes and removes nothing", () => {
   const result = settle(
     [],
-    "settle weft-accept-run cleanup && settlement_status",
+    "settle braid-accept-run cleanup && settlement_status",
   );
   assert.equal(result.status, 0);
   assert.equal(result.stderr, "");
@@ -133,7 +133,7 @@ test("a run with nothing to settle passes and removes nothing", () => {
 });
 
 test("a container that cannot be removed fails the settlement step", () => {
-  const result = settle(["stuck"], "settle weft-accept-run cleanup");
+  const result = settle(["stuck"], "settle braid-accept-run cleanup");
   assert.equal(result.status, 1);
   assert.equal(result.remaining, "stuck\n");
 });

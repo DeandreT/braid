@@ -18,7 +18,7 @@ const helper = fileURLToPath(
 );
 const windows = process.platform === "win32";
 const bash =
-  process.env.WEFT_TEST_BASH ??
+  process.env.BRAID_TEST_BASH ??
   (windows
     ? join(process.env.ProgramFiles ?? "C:\\Program Files", "Git/bin/bash.exe")
     : "bash");
@@ -32,7 +32,7 @@ const bashPath = (path) =>
 
 // Runs write_test_subnets against a stub docker that reports the given existing subnets.
 function write(networks, { existing = [], range } = {}) {
-  const root = mkdtempSync(join(tmpdir(), "weft-test-subnets-"));
+  const root = mkdtempSync(join(tmpdir(), "braid-test-subnets-"));
   try {
     const docker = join(root, "docker");
     writeFileSync(
@@ -69,7 +69,7 @@ write_test_subnets "$override" "$@"`,
         encoding: "utf8",
         env: {
           ...process.env,
-          WEFT_TEST_SUBNET_RANGE: range ?? "",
+          BRAID_TEST_SUBNET_RANGE: range ?? "",
         },
       },
     );
@@ -130,7 +130,7 @@ test("a range without a free candidate fails with an exhaustion error", () => {
     result.stderr,
     /No free \/27 subnet for the storage test network in 10\.250\.0\.0\/26 after 2 candidates/,
   );
-  assert.match(result.stderr, /WEFT_TEST_SUBNET_RANGE/);
+  assert.match(result.stderr, /BRAID_TEST_SUBNET_RANGE/);
 });
 
 test("invalid ranges are refused", () => {
@@ -146,14 +146,14 @@ test("invalid ranges are refused", () => {
     assert.notEqual(result.status, 0, range);
     assert.match(
       result.stderr,
-      /WEFT_TEST_SUBNET_RANGE must be an IPv4 network/,
+      /BRAID_TEST_SUBNET_RANGE must be an IPv4 network/,
       range,
     );
   }
 });
 
 test("only Docker pool overlap failures restart the stack on new subnets", () => {
-  const root = mkdtempSync(join(tmpdir(), "weft-test-subnets-"));
+  const root = mkdtempSync(join(tmpdir(), "braid-test-subnets-"));
   try {
     const log = join(root, "up.log");
     const overlapped = (text) => {

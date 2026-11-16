@@ -30,7 +30,7 @@
             : phase(validation(), "validation")
         }}
       </h3>
-      <weft-help-link [section]="'reports'">About reports</weft-help-link>
+      <braid-help-link [section]="'reports'">About reports</braid-help-link>
       <details>
         <summary>Report controls and evidence</summary>
         <div class="wb-report-controls">
@@ -221,7 +221,7 @@
       </p>
     }
     @if (workbenchView(); as current) {
-      <weft-workbench-mapping-table
+      <braid-workbench-mapping-table
         [view]="current"
         [selected]="selectedEntity()"
         [sample]="sample()"
@@ -250,7 +250,7 @@
           may generate it opens this revision. Explanation and validation are
           independent, and each belongs to this exact revision.
         </p>
-        <weft-help-link [section]="'reports'">About reports</weft-help-link>
+        <braid-help-link [section]="'reports'">About reports</braid-help-link>
       </div>
       @if (needsCurrentLink()) {
         <a
@@ -818,7 +818,7 @@
                     diagnostic.messageTruncated ? " (message shortened)" : ""
                   }}
                 </p>
-                <weft-native-evidence [locator]="diagnostic.nativeLocator" />
+                <braid-native-evidence [locator]="diagnostic.nativeLocator" />
               </li>
             }
           </ul>
@@ -831,7 +831,7 @@
         class="saved-mapping-view"
         aria-label="Saved mapping explanation"
       >
-        <weft-mapping-projection
+        <braid-mapping-projection
           [document]="document"
           [validation]="linkedValidation()"
         />
@@ -865,7 +865,7 @@
                       diagnostic.messageTruncated ? " (message shortened)" : ""
                     }}
                   </p>
-                  <weft-native-evidence
+                  <braid-native-evidence
                     [locator]="diagnostic.nativeLocator"
                     [owner]="diagnostic.owner"
                   />

@@ -24,7 +24,7 @@ async function capture<T>(
   action: () => Promise<unknown>,
   query: Readonly<Record<string, string>> = {},
 ): Promise<T> {
-  const origin = process.env.WEFT_CATALOG_BASE_URL;
+  const origin = process.env.BRAID_CATALOG_BASE_URL;
   if (!origin) throw new Error("Expected explicit packaged catalog origin");
   const expected = new URL(path, origin);
   const requests = new Set<Request>();

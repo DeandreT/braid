@@ -16,9 +16,9 @@ import xml.etree.ElementTree as ET
 import test_groups
 
 
-SOLUTION = Path("dotnet/Weft.slnx")
-TEST_PROJECT = "tests/Weft.Tests/Weft.Tests.csproj"
-TEST_ASSEMBLY = Path("dotnet/tests/Weft.Tests/bin/Release/net10.0/Weft.Tests.dll")
+SOLUTION = Path("dotnet/Braid.slnx")
+TEST_PROJECT = "tests/Braid.Tests/Braid.Tests.csproj"
+TEST_ASSEMBLY = Path("dotnet/tests/Braid.Tests/bin/Release/net10.0/Braid.Tests.dll")
 METHOD_NAME = re.compile(r"[A-Za-z_][A-Za-z_0-9]*(?:[.+][A-Za-z_][A-Za-z_0-9]*)+")
 
 
@@ -32,7 +32,7 @@ def run(command: Sequence[str]) -> int:
 
 def test_command() -> list[str]:
     return [
-        "dotnet", "test", "dotnet/Weft.slnx", "--configuration", "Release", "--no-build", "--no-restore",
+        "dotnet", "test", "dotnet/Braid.slnx", "--configuration", "Release", "--no-build", "--no-restore",
         "--logger", "console;verbosity=normal",
     ]
 
@@ -96,7 +96,7 @@ def discover(assembly: Path, target: Path, settings: Path | None = None) -> int:
 def run_shard(assembly: Path, index: int, count: int) -> int:
     if not 0 <= index < count:
         raise ValueError("Shard index must be within the positive shard count.")
-    with tempfile.TemporaryDirectory(prefix="weft-ci-tests-") as directory:
+    with tempfile.TemporaryDirectory(prefix="braid-ci-tests-") as directory:
         temporary = Path(directory)
         methods_file = temporary / "all-tests.txt"
         code = discover(assembly, methods_file)
@@ -180,26 +180,26 @@ def require_prerequisites(groups: Sequence[str], assembly: Path) -> None:
     def postgres() -> None:
         # The local Linux groups deliberately use the pinned Docker fixture. Native
         # Windows fixtures remain a separate opt-in, not a launcher composition.
-        value("WEFT_POSTGRES_IMAGE", "docker.io/library/postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc")
-        require(not os.environ.get("WEFT_POSTGRES_BIN") and not os.environ.get("WEFT_TEST_CLIENT_CONTAINER"),
+        value("BRAID_POSTGRES_IMAGE", "docker.io/library/postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc")
+        require(not os.environ.get("BRAID_POSTGRES_BIN") and not os.environ.get("BRAID_TEST_CLIENT_CONTAINER"),
                 "remove native/client-container PostgreSQL settings for this local Docker group")
-        tool(os.environ.get("WEFT_DOCKER_EXECUTABLE", "docker"))
+        tool(os.environ.get("BRAID_DOCKER_EXECUTABLE", "docker"))
 
     def installed_documents() -> None:
-        value("WEFT_TEST_DOCUMENT_HOST_LINUX", "1")
-        value("WEFT_SPEC_DOCUMENT_WORKERS", "optional")
+        value("BRAID_TEST_DOCUMENT_HOST_LINUX", "1")
+        value("BRAID_SPEC_DOCUMENT_WORKERS", "optional")
         for suffix in ("OFFICE_ASSEMBLY", "OFFICE_LAUNCHER", "PDF_EXECUTABLE"):
-            file("WEFT_SPEC_DOCUMENT_" + suffix, executable=suffix != "OFFICE_ASSEMBLY")
+            file("BRAID_SPEC_DOCUMENT_" + suffix, executable=suffix != "OFFICE_ASSEMBLY")
         for suffix in ("DOTNET_ROOT", "OFFICE_WORK_ROOT", "PDF_WORK_ROOT"):
-            directory("WEFT_SPEC_DOCUMENT_" + suffix)
+            directory("BRAID_SPEC_DOCUMENT_" + suffix)
         for suffix in ("OFFICE_PROFILE_SHA256", "OFFICE_BUILD_SHA256", "OFFICE_RUNTIME_SHA256",
                        "PDF_BUILD_SHA256", "PDF_PROFILE_SHA256"):
-            require(re.fullmatch(r"[0-9a-f]{64}", value("WEFT_SPEC_DOCUMENT_" + suffix)) is not None,
-                    "WEFT_SPEC_DOCUMENT_" + suffix + " must be a canonical SHA-256 digest")
-        file("WEFT_TEST_PDF_EXECUTABLE", executable=True)
-        file("WEFT_TEST_DOCUMENT_PID_NAMESPACE_RECORD")
-        require(re.fullmatch(r"[0-9a-f]{64}", value("WEFT_TEST_DOCUMENT_PID_NAMESPACE_RECORD_SHA256")) is not None,
-                "WEFT_TEST_DOCUMENT_PID_NAMESPACE_RECORD_SHA256 must be a canonical SHA-256 digest")
+            require(re.fullmatch(r"[0-9a-f]{64}", value("BRAID_SPEC_DOCUMENT_" + suffix)) is not None,
+                    "BRAID_SPEC_DOCUMENT_" + suffix + " must be a canonical SHA-256 digest")
+        file("BRAID_TEST_PDF_EXECUTABLE", executable=True)
+        file("BRAID_TEST_DOCUMENT_PID_NAMESPACE_RECORD")
+        require(re.fullmatch(r"[0-9a-f]{64}", value("BRAID_TEST_DOCUMENT_PID_NAMESPACE_RECORD_SHA256")) is not None,
+                "BRAID_TEST_DOCUMENT_PID_NAMESPACE_RECORD_SHA256 must be a canonical SHA-256 digest")
 
     require(assembly.is_file(), "build the current solution in Release first: missing test assembly")
     # Whole-assembly discovery evaluates BrowserReturnPathTests.MemberData, even
@@ -214,19 +214,19 @@ def require_prerequisites(groups: Sequence[str], assembly: Path) -> None:
         postgres()
     if "integration" in requested:
         tool("bash")
-        value("WEFT_AZURITE_IMAGE", "mcr.microsoft.com/azure-storage/azurite@sha256:830430c1da1a2d537e08f3e6764dd1f5ae00cf0346bcaf625b968ec3f0971fd5")
-        require(not os.environ.get("WEFT_AZURITE_LOOPBACK_ENDPOINT"),
-                "remove WEFT_AZURITE_LOOPBACK_ENDPOINT when selecting the pinned Azurite image")
-        for name in ("WEFT_FERRULE_WORKER_IMAGE", "WEFT_BUILD_WORKER_IMAGE", "WEFT_COMPILED_RUNTIME_IMAGE",
-                     "WEFT_FERRULE_SERVICE_IMAGE"):
+        value("BRAID_AZURITE_IMAGE", "mcr.microsoft.com/azure-storage/azurite@sha256:830430c1da1a2d537e08f3e6764dd1f5ae00cf0346bcaf625b968ec3f0971fd5")
+        require(not os.environ.get("BRAID_AZURITE_LOOPBACK_ENDPOINT"),
+                "remove BRAID_AZURITE_LOOPBACK_ENDPOINT when selecting the pinned Azurite image")
+        for name in ("BRAID_FERRULE_WORKER_IMAGE", "BRAID_BUILD_WORKER_IMAGE", "BRAID_COMPILED_RUNTIME_IMAGE",
+                     "BRAID_FERRULE_SERVICE_IMAGE"):
             value(name)
-        require(os.environ.get("WEFT_BUILD_WORKER_IMAGE") == os.environ.get("WEFT_FERRULE_WORKER_IMAGE"),
-                "WEFT_BUILD_WORKER_IMAGE and WEFT_FERRULE_WORKER_IMAGE must name the same combined worker build")
-        value("WEFT_AUTOMATION_DOCKER_TESTS", "true")
-        for name in ("WEFT_FERRULE_HOST_EXECUTABLE", "WEFT_COMPILE_SANDBOX_EXECUTABLE", "WEFT_TEST_PDF_EXECUTABLE",
-                     "WEFT_AUTHORING_TEST_EXECUTABLE", "WEFT_AUTHORED_PREVIEW_TEST_EXECUTABLE", "WEFT_EDIT_TEST_EXECUTABLE"):
+        require(os.environ.get("BRAID_BUILD_WORKER_IMAGE") == os.environ.get("BRAID_FERRULE_WORKER_IMAGE"),
+                "BRAID_BUILD_WORKER_IMAGE and BRAID_FERRULE_WORKER_IMAGE must name the same combined worker build")
+        value("BRAID_AUTOMATION_DOCKER_TESTS", "true")
+        for name in ("BRAID_FERRULE_HOST_EXECUTABLE", "BRAID_COMPILE_SANDBOX_EXECUTABLE", "BRAID_TEST_PDF_EXECUTABLE",
+                     "BRAID_AUTHORING_TEST_EXECUTABLE", "BRAID_AUTHORED_PREVIEW_TEST_EXECUTABLE", "BRAID_EDIT_TEST_EXECUTABLE"):
             file(name, executable=True)
-        for name in ("WEFT_HOST_TEST_SERVER_PATH", "WEFT_HOST_PRIVACY_PROBE_PATH"):
+        for name in ("BRAID_HOST_TEST_SERVER_PATH", "BRAID_HOST_PRIVACY_PROBE_PATH"):
             file(name)
         directory("DOTNET_ROOT")
         root = Path(os.environ.get("DOTNET_ROOT", ""))
@@ -234,33 +234,33 @@ def require_prerequisites(groups: Sequence[str], assembly: Path) -> None:
         require((root / "packs/Microsoft.NETCore.App.Ref/10.0.12/ref/net10.0").is_dir(),
                 "DOTNET_ROOT needs the pinned 10.0.12 reference pack")
     if "packaged-browser" in requested:
-        directory("WEFT_AUTH_BROWSER_ADMISSION_ROOT")
-        file("WEFT_AUTH_BROWSER_ADMISSION_FILE")
-        value("WEFT_WORKSPACE_CHAT_BROWSER", "true")
+        directory("BRAID_AUTH_BROWSER_ADMISSION_ROOT")
+        file("BRAID_AUTH_BROWSER_ADMISSION_FILE")
+        value("BRAID_WORKSPACE_CHAT_BROWSER", "true")
         require(bool(os.environ.get("DISPLAY")), "use the existing isolated browser owner with an assigned display")
         # The existing admission owner validates the exact published host, probe,
         # node/npm/browser bytes and network custody. Never run admit.mjs here.
     if requested & {"installed-documents", "installed-document-probes"}:
         installed_documents()
     if "installed-document-probes" in requested:
-        for prefix in ("WEFT_TEST_DOCUMENT_PROFILE_PROBE_", "WEFT_TEST_DOCUMENT_RESOURCE_PROBE_"):
+        for prefix in ("BRAID_TEST_DOCUMENT_PROFILE_PROBE_", "BRAID_TEST_DOCUMENT_RESOURCE_PROBE_"):
             file(prefix + "ASSEMBLY")
             for suffix in ("BUILD_SHA256", "RUNTIME_SHA256"):
                 require(re.fullmatch(r"[0-9a-f]{64}", value(prefix + suffix)) is not None,
                         prefix + suffix + " must be a canonical SHA-256 digest")
     if "live-provider" in requested:
-        value("WEFT_LIVE_OLLAMA_ENDPOINT")
-        value("WEFT_LIVE_OLLAMA_MODEL")
+        value("BRAID_LIVE_OLLAMA_ENDPOINT")
+        value("BRAID_LIVE_OLLAMA_MODEL")
     if "native-windows" in requested:
         require(sys.platform == "win32", "native-windows requires Windows")
-        directory("WEFT_POSTGRES_BIN")
-        root = Path(os.environ.get("WEFT_POSTGRES_BIN", ""))
+        directory("BRAID_POSTGRES_BIN")
+        root = Path(os.environ.get("BRAID_POSTGRES_BIN", ""))
         for name in ("initdb.exe", "pg_ctl.exe", "postgres.exe", "psql.exe"):
-            require((root / name).is_file(), "WEFT_POSTGRES_BIN needs " + name)
-        require(not any(os.environ.get(name) for name in ("WEFT_POSTGRES_IMAGE", "WEFT_TEST_CLIENT_CONTAINER", "WEFT_DOCKER_EXECUTABLE")),
+            require((root / name).is_file(), "BRAID_POSTGRES_BIN needs " + name)
+        require(not any(os.environ.get(name) for name in ("BRAID_POSTGRES_IMAGE", "BRAID_TEST_CLIENT_CONTAINER", "BRAID_DOCKER_EXECUTABLE")),
                 "remove Docker PostgreSQL settings for native-windows")
     if "incremental-build" in requested:
-        value("WEFT_OPENAPI_INCREMENTAL_TESTS", "1")
+        value("BRAID_OPENAPI_INCREMENTAL_TESTS", "1")
     if failures:
         raise ValueError("Missing/refused local test prerequisites:\n- " + "\n- ".join(dict.fromkeys(failures)))
 
@@ -271,7 +271,7 @@ def run_groups(assembly: Path, requested: Sequence[str]) -> int:
         raise ValueError("Select at least one known local test group.")
     test_groups.verify_sources(Path.cwd())
     require_prerequisites(requested, assembly)
-    with tempfile.TemporaryDirectory(prefix="weft-local-tests-") as directory:
+    with tempfile.TemporaryDirectory(prefix="braid-local-tests-") as directory:
         temporary = Path(directory)
         all_methods = temporary / "all-tests.txt"
         code = discover(assembly, all_methods)

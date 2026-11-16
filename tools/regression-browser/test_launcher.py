@@ -18,13 +18,13 @@ ensure_docker = launcher['ensure_docker']
 
 class DockerAdmissionTests(unittest.TestCase):
     def test_running_guarded_daemon_is_not_restarted(self):
-        with patch('subprocess.run', return_value=subprocess.CompletedProcess([], 0, '/srv/example-build/cache/weft-docker overlay2 2\n')) as run:
+        with patch('subprocess.run', return_value=subprocess.CompletedProcess([], 0, '/srv/example-build/cache/braid-docker overlay2 2\n')) as run:
             ensure_docker()
         self.assertEqual(run.call_count, 1)
 
     def test_absent_daemon_starts_existing_service_and_rechecks(self):
         results = [subprocess.CompletedProcess([], 1, ''), subprocess.CompletedProcess([], 0, ''),
-                   subprocess.CompletedProcess([], 0, '/srv/example-build/cache/weft-docker overlay2 2\n')]
+                   subprocess.CompletedProcess([], 0, '/srv/example-build/cache/braid-docker overlay2 2\n')]
         with patch('subprocess.run', side_effect=results) as run:
             ensure_docker()
         self.assertEqual(run.call_args_list[1].args[0], ['systemctl', 'start', 'docker.service'])
@@ -55,7 +55,7 @@ class LauncherTests(unittest.TestCase):
         self.assertIn('compress=zstd:3', mount['options'])
         host = os.statvfs('/mnt/example-host')
         self.assertGreaterEqual(host.f_bavail * host.f_frsize, 25 * 2**30)
-        with tempfile.TemporaryDirectory(prefix='weft-launcher-', dir=root) as folder:
+        with tempfile.TemporaryDirectory(prefix='braid-launcher-', dir=root) as folder:
             ready, received, closed = [Path(folder) / name for name in ('ready', 'received', 'closed')]
             worker = (
                 'import pathlib,signal,sys,time\n'

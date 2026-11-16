@@ -2,14 +2,13 @@
 
 `deploy/compose/acceptance-test.sh` is the local acceptance of the packaged Session
 stack: real sign-in, the main workflows through the Angular application, and recovery
-across a server restart and Ferrule service scaling. It qualifies the hosted shape on
-one machine; it does not provision Azure or use a live Entra tenant. Its live counterpart
-in Azure is the [live qualification](azure-deployment.md#live-qualification) harness.
-Tracking work is [#243](https://github.com/DeandreT/weft/issues/243).
+across a server restart and Ferrule service scaling. It runs on one machine with a
+test-owned identity provider. For Azure, use the
+[live qualification](azure-deployment.md#live-qualification) harness.
 
 ## What runs
 
-The script builds the `weft`, `edge` and `weft-worker` targets of
+The script builds the `braid`, `edge` and `braid-worker` targets of
 `deploy/container/Dockerfile`, the native worker from `engines/ferrule-host` and the
 [Ferrule service](ferrule-service.md) image, each with a unique tag, then starts these
 compose files from new volumes:
@@ -18,14 +17,14 @@ compose files from new volumes:
 | --- | --- |
 | `compose.yml` | PostgreSQL, the migration, storage and key-ring steps, and the Session server behind its edge. |
 | `compose.ferrule-service.yml` | Native upload and report derivation through two or more service replicas. |
-| `compose.features.yml` | Chat, previews, regression cases and runs, and build approval and submission on the server, plus the `runs` Weft.Worker that executes previews, regression runs and builds (see [runtime packaging](runtime-packaging.md)). |
+| `compose.features.yml` | Chat, previews, regression cases and runs, and build approval and submission on the server, plus the `runs` Braid.Worker that executes previews, regression runs and builds (see [runtime packaging](runtime-packaging.md)). |
 | `compose.acceptance.yml` | Test-only plumbing, described below. Never part of a deployment. |
-| `compose.model-fixture.yml` | Only with `WEFT_ACCEPTANCE_MODEL_FIXTURE=true`: the test-only provider emulator in place of the Ollama model (see [Running it](#running-it)). |
+| `compose.model-fixture.yml` | Only with `BRAID_ACCEPTANCE_MODEL_FIXTURE=true`: the test-only provider emulator in place of the Ollama model (see [Running it](#running-it)). |
 
 Before starting the stack, the script runs the service image's `identity` command with no
 network, mounts or capabilities. It requires the measured native identity to equal the
 image's recorded build identity, pins the measured toolchain identity as
-`WEFT_FERRULE_COMPILE_TOOLCHAIN` on the server and the `runs` worker, and keeps the
+`BRAID_FERRULE_COMPILE_TOOLCHAIN` on the server and the `runs` worker, and keeps the
 combined identity for the build checks below. No container receives the Docker socket; the
 script checks every container's mounts.
 
@@ -48,14 +47,14 @@ script checks every container's mounts.
   `login.microsoftonline.com` to the issuer through a network alias and trusts only the
   run's test certificate authority, delivered as `SSL_CERT_FILE`. The Session host's
   endpoint, metadata, key, token and binding checks run unchanged.
-- **Ingress.** A TLS relay terminates HTTPS for the public host `weft.example.test`
+- **Ingress.** A TLS relay terminates HTTPS for the public host `braid.example.test`
   in front of the edge, as the platform ingress does.
 - **Chat model.** An Ollama container on an internal network serves the chat model from an
   existing model cache volume, reached through the server's loopback relay by an
   `ollamaChatNdjson` profile marked `loopbackFixture`.
 
 The harness then binds one external identity through the owner commands of
-`Weft.DatabaseTool`: it creates the organization and an admitted principal
+`Braid.DatabaseTool`: it creates the organization and an admitted principal
 (`provision-development-identity`), binds the signed-in user's tenant and object ID
 (`bind-entra-user`) and grants project creation
 (`set-project-creation-capability`). No project role is granted; creating the project
@@ -126,26 +125,25 @@ a new conversation.
 
 ## Running it
 
-For explicit provider emulation, set `WEFT_ACCEPTANCE_MODEL_FIXTURE=true`. The
+For explicit provider emulation, set `BRAID_ACCEPTANCE_MODEL_FIXTURE=true`. The
 test-only Node service implements the Ollama wire protocol and requests the real
-workspace catalog or payload tool (and `search_mapping` for legacy revision
+workspace catalog or payload tool (and `search_mapping` for revision
 chat); the application still retrieves and verifies its own
 evidence and citations. No model cache or Ollama image is used in this mode.
-The receipt records `modelFixture: true`. This qualifies application orchestration
-and recovery against an emulated provider, not live-model behavior. The default
-remains the real cached Ollama model described below.
+The receipt records `modelFixture: true`. The default is the cached Ollama model
+described below.
 
 Prerequisites:
 
 - Docker with BuildKit (`docker buildx`), which `engines/ferrule-host` requires.
-- `npm ci` in the repository and `WEFT_CHROMIUM_EXECUTABLE` naming a Chromium build.
+- `npm ci` in the repository and `BRAID_CHROMIUM_EXECUTABLE` naming a Chromium build.
 - A Docker volume holding an Ollama model cache with a chat model that supports tool calls,
-  by default `weft-ollama-models` with `qwen2.5:1.5b`:
+  by default `braid-ollama-models` with `qwen2.5:1.5b`:
 
   ```sh
-  docker run -d --name weft-ollama -v weft-ollama-models:/root/.ollama docker.io/ollama/ollama
-  docker exec weft-ollama ollama pull qwen2.5:1.5b
-  docker rm -f weft-ollama
+  docker run -d --name braid-ollama -v braid-ollama-models:/root/.ollama docker.io/ollama/ollama
+  docker exec braid-ollama ollama pull qwen2.5:1.5b
+  docker rm -f braid-ollama
   ```
 
 ```sh
@@ -154,16 +152,16 @@ deploy/compose/acceptance-test.sh
 
 | Setting | Effect |
 | --- | --- |
-| `WEFT_ACCEPTANCE_BROWSER_WRAPPER` | Command prefix for the browser run, for example `xvfb-run -a`. |
-| `WEFT_ACCEPTANCE_MODEL_FIXTURE` | Explicit `true` selects the deterministic provider emulator; the default is `false`. |
-| `WEFT_ACCEPTANCE_OLLAMA_VOLUME`, `WEFT_ACCEPTANCE_CHAT_MODEL` | The model cache volume and model name. |
-| `WEFT_ACCEPTANCE_NODE_IMAGE` | The Node image for the issuer, the relays and the model fixture (pinned by digest by default). |
-| `WEFT_FERRULE_NATIVE_IMAGE` | A tag or registry digest of an `engines/ferrule-host` build to use instead of building it. |
-| `WEFT_IMAGE`, `WEFT_EDGE_IMAGE`, `WEFT_WORKER_IMAGE`, `WEFT_FERRULE_SERVICE_IMAGE` | Prebuilt images to use instead of building them; they are not removed. |
-| `WEFT_ACCEPTANCE_LOG_DIRECTORY` | On failure, keep the service logs and the browser failure context there. |
-| `WEFT_ACCEPTANCE_HOLD` | Debugging aid: stop after provisioning, write the run's environment to a private file and wait for a release file before cleaning up. |
-| `WEFT_ACCEPTANCE_STAGE` | An executable to run after the hosted checks pass and before cleanup, with the run's environment; its failure fails the run. The [mapping endpoint stage](#mapping-endpoint-stage) and the [CLI stage](#cli-stage) use it. |
-| `WEFT_TEST_SUBNET_RANGE` | The IPv4 range the run's networks take their explicit subnets from; see [Docker test networks](development.md#docker-test-networks). |
+| `BRAID_ACCEPTANCE_BROWSER_WRAPPER` | Command prefix for the browser run, for example `xvfb-run -a`. |
+| `BRAID_ACCEPTANCE_MODEL_FIXTURE` | Explicit `true` selects the deterministic provider emulator; the default is `false`. |
+| `BRAID_ACCEPTANCE_OLLAMA_VOLUME`, `BRAID_ACCEPTANCE_CHAT_MODEL` | The model cache volume and model name. |
+| `BRAID_ACCEPTANCE_NODE_IMAGE` | The Node image for the issuer, the relays and the model fixture (pinned by digest by default). |
+| `BRAID_FERRULE_NATIVE_IMAGE` | A tag or registry digest of an `engines/ferrule-host` build to use instead of building it. |
+| `BRAID_IMAGE`, `BRAID_EDGE_IMAGE`, `BRAID_WORKER_IMAGE`, `BRAID_FERRULE_SERVICE_IMAGE` | Prebuilt images to use instead of building them; they are not removed. |
+| `BRAID_ACCEPTANCE_LOG_DIRECTORY` | On failure, keep the service logs and the browser failure context there. |
+| `BRAID_ACCEPTANCE_HOLD` | Debugging aid: stop after provisioning, write the run's environment to a private file and wait for a release file before cleaning up. |
+| `BRAID_ACCEPTANCE_STAGE` | An executable to run after the hosted checks pass and before cleanup, with the run's environment; its failure fails the run. The [mapping endpoint stage](#mapping-endpoint-stage) uses it. |
+| `BRAID_TEST_SUBNET_RANGE` | The IPv4 range the run's networks take their explicit subnets from; see [Docker test networks](development.md#docker-test-networks). |
 
 Generated passwords, keys and certificates stay in a private temporary directory and are
 never printed. The script removes every container, network, volume and image tag it
@@ -175,18 +173,18 @@ and pulled base images are left in place.
 
 `deploy/compose/endpoint-acceptance-test.sh` runs this acceptance with a follow-on stage for
 the packaged [mapping endpoint](mapping-endpoint.md). It takes the same settings, plus
-`WEFT_ENDPOINT_ACCEPTANCE_RUNTIME`: `service` (the default) executes through the run's Ferrule
+`BRAID_ENDPOINT_ACCEPTANCE_RUNTIME`: `service` (the default) executes through the run's Ferrule
 service in the hosted shape, and `docker` uses the local Docker compiled runtime.
-`WEFT_ENDPOINT_IMAGE` and, for `docker`, `WEFT_COMPILED_RUNTIME_IMAGE` (an image ID) select
+`BRAID_ENDPOINT_IMAGE` and, for `docker`, `BRAID_COMPILED_RUNTIME_IMAGE` (an image ID) select
 prebuilt images instead of building them. Before the stack starts, it registers two machine
 clients with the run's issuer, which then issues app-only v2 access tokens through a
 client-credentials grant; one client's tokens expire after two seconds. Once the hosted checks
 pass, the stage:
 
-1. Prepares the compiled runtime. With `service`, it builds `weft-mapping-endpoint`, reads the
+1. Prepares the compiled runtime. With `service`, it builds `braid-mapping-endpoint`, reads the
    execution identity from the service image's `runtime-identity` command, creates the
    endpoint's client certificate, and restarts the service replicas with the execute profile and
-   that certificate admitted. With `docker`, it builds `weft-mapping-endpoint-local-docker`, and
+   that certificate admitted. With `docker`, it builds `braid-mapping-endpoint-local-docker`, and
    the compiled runtime from `engines/build-worker` with the run's native image. A reproducible
    build can share its image ID with other users of the same sources, so the stage registers a
    run-unique child image that differs only by a label. Its runtime containers inherit that
@@ -200,7 +198,7 @@ pass, the stage:
    test-only `compose.endpoint-acceptance.yml`, which gives it the issuer's network alias and the run's
    certificate authority, as `compose.acceptance.yml` does for the server. The container must be
    healthy, run as UID 1654 with a read-only root filesystem, no capabilities and
-   `no-new-privileges`, and print `WeftMappingEndpointReady`. With `service`, no container of the
+   `no-new-privileges`, and print `BraidMappingEndpointReady`. With `service`, no container of the
    stack may mount the Docker socket.
 5. Calls it with the regression case's inputs and parameters. Each completed call must name its
    release, build and artifact, and both outputs must equal independently authored bytes at the
@@ -219,60 +217,3 @@ cleanup, is printed with its state and times, and the run fails: a clean result 
 (`deploy/compose/endpoint-settlement.sh`). Only with `docker` do the endpoint and
 `endpoint-release` receive the Docker socket. The stage removes its containers and images, and
 the hosted cleanup then requires that no owned object remains.
-
-## CLI stage
-
-Use `deploy/compose/cli-acceptance-test.sh --cli-only` to run the complete CLI workflows on a
-fresh packaged stack without a browser. This still checks issuer evidence, Ferrule health,
-Blob maintenance and cleanup, but does not qualify browser workflows. With no argument, both
-the browser acceptance and the CLI stage run.
-
-`deploy/compose/cli-acceptance-test.sh` runs this acceptance with a follow-on stage for the
-[`weft` CLI](cli.md). It takes the same settings. Before the stack starts, it registers the CLI
-as a public client with the run's issuer, for the run's Weft application and the `weft.api`
-scope. The issuer's public-client flows are in `tools/hosted-acceptance/public-client.mjs`:
-
-- device authorization;
-- authorization code with PKCE on a loopback redirect;
-- refresh-token redemption;
-- a test-only `deviceapprove` request that stands in for the user entering the code.
-
-Each grant issues a delegated v2 access token for the signed-in user's tenant and object ID.
-The fixture also answers MSAL instance discovery for the run's tenant at the fixed Microsoft
-authority; foreign authorities and ambiguous discovery parameters are refused.
-
-Once the hosted checks pass, the stage publishes the linux-x64 single-file CLI. It runs the CLI
-in a container built from a pinned Ubuntu image with OpenSSL and GNOME Keyring:
-
-- The container joins the issuer's network, so `login.microsoftonline.com` resolves to the
-  issuer. It also joins the ingress network, and relays the public host's port 443 to the
-  ingress, so the CLI uses the public origin unchanged.
-- It trusts only the run's certificate authority (`SSL_CERT_FILE`). The CLI's authority and
-  instance discovery are unchanged.
-- It runs as a non-root user with a read-only root filesystem, no capabilities and
-  `no-new-privileges`.
-- A private D-Bus session with an unlocked keyring holds MSAL's token cache, as the Secret
-  Service does for a user.
-
-There, the CLI:
-
-1. Saves a profile, which must be owner-only, and signs in with a device code. The stage
-   approves the code at the issuer, and no token may appear in the CLI's directory.
-2. Checks with `whoami` that the server admits the bound principal, then creates a project and
-   finds it in the project list.
-3. Creates a mapping from the `preview-orders` fixture with JSON document boundaries, then
-   appends the browser flows' second revision against the reviewed head.
-4. Ensures both revisions' projection reports and the first revision's validation, which must
-   be valid, and compares the two revisions.
-5. Runs a preview with the browser flows' sample inputs and parameters, and downloads each
-   output with digest verification.
-6. Saves a regression case whose baseline is the preview's outputs, then runs it; the
-   comparison must pass.
-7. Registers a build environment from the advertised profile, approves the exact revision with
-   the passing regression evidence, and runs the compiled build. Its artifact metadata and
-   retained read must agree; the approval is then revoked.
-8. Asks chat about the revision. The local model may take up to three turns to complete one.
-9. Signs out. A later command must then exit 3.
-
-Finally the issuer's log must show the device authorization and the token grants with no
-refusal. The stage removes its container and runner image before the hosted cleanup.

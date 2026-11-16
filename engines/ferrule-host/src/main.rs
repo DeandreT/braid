@@ -1,7 +1,7 @@
 use std::io::{self, Write};
 use std::process::ExitCode;
 
-use weft_ferrule_host::sandbox;
+use braid_ferrule_host::sandbox;
 
 fn main() -> ExitCode {
     let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
@@ -26,7 +26,7 @@ fn main() -> ExitCode {
         }
         Err(error) => return ExitCode::from(error.exit_code()),
     }
-    match weft_ferrule_host::handle_stream(&mut input.lock(), &mut output) {
+    match braid_ferrule_host::handle_stream(&mut input.lock(), &mut output) {
         Ok(()) => ExitCode::SUCCESS,
         Err(_) => ExitCode::FAILURE,
     }

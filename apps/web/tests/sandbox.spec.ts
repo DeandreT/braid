@@ -90,7 +90,7 @@ async function fixture(page: Page) {
     const path = url.pathname;
     if (path === "/api/v1/health")
       return route.fulfill({
-        json: { status: "ok", service: "weft-api", apiVersion: "v1" },
+        json: { status: "ok", service: "braid-api", apiVersion: "v1" },
       });
     if (path === mapping.split("/mappings/")[0])
       return route.fulfill({
@@ -358,7 +358,9 @@ test("disable goes through the operations API and a disabled instance says so", 
 test("uploaded bytes survive the inbox and the page uses dark theme tokens", async ({
   page,
 }, testInfo) => {
-  await page.addInitScript(() => localStorage.setItem("weft.theme.v1", "dark"));
+  await page.addInitScript(() =>
+    localStorage.setItem("braid.theme.v1", "dark"),
+  );
   const state = await fixture(page);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.getByRole("combobox", { name: "Sample" }).selectOption("inline");

@@ -2,11 +2,11 @@
 mod support;
 
 use serde_json::{Value, json};
-use weft_ferrule_host::preview::protocol::{
+use braid_ferrule_host::preview::protocol::{
     CSV_PREVIEW_PROTOCOL_VERSION, DOCUMENT_PREVIEW_PROTOCOL_VERSION, MAX_PREVIEW_INPUT_BYTES,
     MAX_PREVIEW_OUTPUT_BYTES, PreviewInput, PreviewLimits, PreviewRequestHeader, PreviewTarget,
 };
-use weft_ferrule_host::preview::{PreviewOutcome, process_preview};
+use braid_ferrule_host::preview::{PreviewOutcome, process_preview};
 
 const NATIVE: &[u8] = include_bytes!("fixtures/csv-flat.native.json");
 
@@ -122,7 +122,7 @@ fn csv_does_not_expand_legacy_document_admission() {
 #[test]
 fn absent_trailing_cell_and_present_empty_cell_keep_distinct_native_values() {
     use ferrule_ir::{Instance, Value as NativeValue};
-    let project = weft_ferrule_host::decode::decode_native(NATIVE)
+    let project = braid_ferrule_host::decode::decode_native(NATIVE)
         .unwrap()
         .project;
     let options = ferrule_format_csv::CsvReadOptions {
@@ -227,16 +227,16 @@ fn named_mixed_repeating_and_conflicting_plans_refuse_before_input_parsing() {
 #[test]
 fn generated_csv_uses_real_pinned_companions_and_host_context_overload() {
     let context = support::request("inspect", NATIVE);
-    let request = weft_ferrule_host::build::Request {
-        protocol_version: weft_ferrule_host::build::PROTOCOL.into(),
+    let request = braid_ferrule_host::build::Request {
+        protocol_version: braid_ferrule_host::build::PROTOCOL.into(),
         request_id: context.request_id,
         revision: context.revision,
         native_digest: support::digest(NATIVE),
         intent_digest: "a".repeat(64),
         operation: "compile".into(),
-        profile: weft_ferrule_host::build::CSV_PROFILE.into(),
+        profile: braid_ferrule_host::build::CSV_PROFILE.into(),
     };
-    let (boundaries, files) = weft_ferrule_host::build::generate(&request, NATIVE).unwrap();
+    let (boundaries, files) = braid_ferrule_host::build::generate(&request, NATIVE).unwrap();
     assert!(boundaries.iter().all(|boundary| boundary.format == "csv"));
     for name in [
         "GeneratedMapping.Csv.cs",

@@ -1,4 +1,4 @@
-"""Opt-in, bounded user-systemd migration fixture. No Docker or Weft host is run.
+"""Opt-in, bounded user-systemd migration fixture. No Docker or Braid host is run.
 
 Linux only; requires explicit opt-in, an existing current-user manager and an
 owned work root on the explicitly identified, writable Btrfs data filesystem.
@@ -20,7 +20,7 @@ import uuid
 
 @contextmanager
 def fixture_directory(work_root):
-    root = Path(tempfile.mkdtemp(prefix="weft-unit-migration-", dir=work_root))
+    root = Path(tempfile.mkdtemp(prefix="braid-unit-migration-", dir=work_root))
     try:
         yield root
     except BaseException:
@@ -49,7 +49,7 @@ def main():
     env = dict(os.environ, XDG_RUNTIME_DIR=str(runtime), DBUS_SESSION_BUS_ADDRESS="unix:path=" + str(runtime / "bus"))
     helper = Path(__file__).resolve().with_name("dev-units.sh")
     token = uuid.uuid4().hex
-    prefix = "weft-grace-fixture-" + token
+    prefix = "braid-grace-fixture-" + token
     units = []
     secret = "fixture-private-" + uuid.uuid4().hex
     report = {"systemdVersion": "", "runtimePropertyChangeSupported": None, "checks": {}}
@@ -91,7 +91,7 @@ def stop(signum, frame):
     if stopping: return
     stopping=True
     event('signal')
-    time.sleep(float(os.environ.get('WEFT_FIXTURE_DRAIN_SECONDS','0.15')))
+    time.sleep(float(os.environ.get('BRAID_FIXTURE_DRAIN_SECONDS','0.15')))
     event('drained')
     raise SystemExit(0)
 signal.signal(signal.SIGTERM,stop)
@@ -99,7 +99,7 @@ event('ready')
 while True: signal.pause()
 """, encoding="utf-8")
         environment = root / "private/fixture.env"
-        environment.write_text("WEFT_UNIT_FIXTURE_SECRET=" + secret + "\nWEFT_FIXTURE_DRAIN_SECONDS=1.5\n", encoding="utf-8")
+        environment.write_text("BRAID_UNIT_FIXTURE_SECRET=" + secret + "\nBRAID_FIXTURE_DRAIN_SECONDS=1.5\n", encoding="utf-8")
         environment.chmod(0o600)
         launcher = root / "invoke-helper.sh"
         launcher.write_text("\n".join([
@@ -122,7 +122,7 @@ while True: signal.pause()
             unit = prefix + "-" + suffix + ".service"
             units.append(unit)
             run(["systemd-run", "--user", "--quiet", "--unit", unit,
-                 "--description", "Weft owned stop-grace fixture " + token,
+                 "--description", "Braid owned stop-grace fixture " + token,
                  "--property", "Type=exec", "--property", "KillMode=mixed",
                  "--property", "TimeoutStopSec=" + str(grace),
                  "--property", "EnvironmentFile=" + str(environment),

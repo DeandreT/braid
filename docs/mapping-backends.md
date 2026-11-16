@@ -1,12 +1,5 @@
 # Mapping backend contract
 
-The v1 read-model contract is implemented in
-[PR #6](https://github.com/DeandreT/weft/pull/6). Ferrule's restricted native
-inspection/validation adapter is qualified in
-[PR #10](https://github.com/DeandreT/weft/pull/10). Native projection follows in
-[#8](https://github.com/DeandreT/weft/issues/8); preview and build remain separate
-capability gates. This contract does not introduce an executable mapping language.
-
 ## Responsibilities
 
 braid owns discovery, ownership, revisions, presentation, authorization, and
@@ -26,7 +19,7 @@ mappings are an optional runtime with a separate capability gate.
 | `validate` | Structured issues with native and projected locators | Backend validation supported |
 | `edit` | Exact encoded checkpoint, validation and projection | Bounded typed operations replayed on a verified immutable base |
 | `preview` | Ordered output artifacts, counts, bounded trace/diagnostics | Exact formats, inputs, target, limits, and host policy accepted |
-| `build`, later | Immutable runtime artifact and provenance manifest | Exact generator/runtime capability accepted |
+| `build` | Immutable runtime artifact and provenance manifest | Exact generator/runtime capability accepted |
 
 braid provides field-lineage and rule-detail tools over the projection. It must
 not compute output values using a second implementation of mapping semantics.
@@ -112,9 +105,7 @@ It consumes `mapping`, `ir`, and `engine` for inspection, validation and
 projection, the `cli` library's in-memory payload API for bounded JSON preview,
 and `codegen` and `codegen-csharp` for in-memory C# source generation in the
 build operation. It never runs the Ferrule command-line program or MFD importer.
-Native codec, validation, JSON preview, C# generation and local Linux/amd64
-process isolation are qualified at that pin. Generated deployment runtimes have a
-separate gate. See [Ferrule worker](ferrule-worker.md#json-sample-preview) and
+See [Ferrule worker](ferrule-worker.md#json-sample-preview) and
 [Restricted Ferrule C# compiler worker](build-compiler.md).
 
 In the engine host, pin every Ferrule Git dependency to the same full commit and commit Cargo.lock
@@ -123,7 +114,7 @@ when adding the workspace. Alias generic upstream package names (`mapping`,
 an unpinned branch or local sibling path in CI/release manifests. Build and
 qualify with the Rust toolchain that Ferrule pins at that revision, stable
 `1.98.1`, and record it in the worker's `rust-toolchain.toml`, image build and
-`io.weft.rust.toolchain` label.
+`io.braid.rust.toolchain` label.
 
 The worker uses these public boundaries:
 
@@ -151,17 +142,14 @@ Do not decode persisted project JSON with ordinary JavaScript number handling
 or bypass Ferrule's exact file codec. Native project envelopes can preserve
 finite floating-point tags and bits beyond a decimal rendering.
 
-Start preview with self-authored JSON-to-JSON fixtures. Add XML/CSV and other
-formats only through explicit capability and qualification increments. Stateful
-SQLite and update-existing XLSX remain outside the initial preview contract.
+Stateful SQLite and update-existing XLSX are outside the preview contract.
 Inherited design-time HTTP paths do not authorize worker network access.
 
 The [flat CSV document core](csv-documents.md) has a separate direct-preview and
 source-emission contract. Its bounded route, dialect metadata and empty-document
 semantics do not expand the existing persisted preview or deployment profiles.
 
-Bound every native document before decoding, including legacy unmarked project
-files. Ferrule's logical path acceptance is broader than braid's storage policy;
+Bound every native document before decoding. Ferrule's logical path acceptance is broader than braid's storage policy;
 the host validates traversal-free input identities and remaps output identities
 before publication. Enforce deadline/memory/CPU limits around the process because
 parsing, builtin evaluation, and serialization cannot all be cooperatively
@@ -170,13 +158,7 @@ inspection input rather than a complete host-resource permission inventory.
 
 If reproducible replay or diagnostic normalization needs an additional public
 Ferrule API, open a focused upstream issue and PR, qualify that increment, and
-pin its resulting commit in the dependent braid PR. Ferrule's selected revision
-includes the payload-clock override merged in [#728](https://github.com/DeandreT/ferrule/pull/728).
-Its presence does not activate or qualify a braid execution profile.
-
-Generation, `.mfd` interoperability, and browser WASM execution are optional
-backend capabilities with separate acceptance gates. Do not infer any of them
-from interpreter validation alone.
+pin its resulting commit in the dependent braid PR.
 
 ## Contract qualification
 

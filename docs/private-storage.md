@@ -1,15 +1,8 @@
 # Private artifact storage
 
-P3b supplies exact-byte local storage behind `IPrivateObjectStore`. Its focused
-implementation and qualification are tracked in
-[#14](https://github.com/DeandreT/weft/issues/14). Catalog ingestion follows in
-P3c; this library adds no HTTP upload route or database revision record.
-
-This document describes the original v1 library adapter. The configured
-application host selects [claim-aware v2 storage](private-storage-v2.md).
-Existing v1 roots require [explicit offline activation](private-storage-activation.md)
-before that host can perform object I/O; the v1 library factories retain their
-original behavior.
+`IPrivateObjectStore` stores and verifies exact artifact bytes. Application hosts
+use [claim-aware storage](private-storage-v2.md); this page describes the local
+filesystem primitives beneath that contract.
 
 ## Reference and authority
 
@@ -41,11 +34,9 @@ two. This bounds adapter work, not deployment-wide storage or tenant quotas.
 
 ## Local profile and initialization
 
-The first adapter supports Linux x86-64 with the required filesystem primitives.
-Windows, other architectures and network storage are separate transport
-qualifications; Azure Blob Storage has its own [Blob profile](private-storage-blob.md). Only ext4, Btrfs, XFS, tmpfs, and overlay filesystem
+The local adapter requires Linux x86-64 filesystem primitives.
+Azure Blob Storage has its own [Blob profile](private-storage-blob.md). Only ext4, Btrfs, XFS, tmpfs, and overlay filesystem
 families are admitted; opening also probes the actual create-only primitive.
-Admission alone does not prove a deployment's durability or capacity.
 
 `FileSystemStorageOptions` requires an explicit canonical absolute `RootPath`
 and `ApplicationContentRoot`, with an optional `RepositoryRoot`. Roots beneath
@@ -56,7 +47,7 @@ created, and existing directories are not silently adopted or chmodded.
 
 `FileSystemPrivateObjectStore.Initialize(options)` creates a new dedicated
 root. `Open(options)` reopens an existing validated store. The marker is
-`.weft-private-storage`, containing ASCII `weft-private-storage-v1`, a newline,
+`.braid-private-storage`, containing ASCII `braid-private-storage-v1`, a newline,
 a nonzero lowercase root UUID in `N` format, and a final newline. An absent,
 malformed, unknown, or unsafe marker fails opening.
 
@@ -101,15 +92,14 @@ Physical paths and native input text do not enter storage error messages.
 
 A killed writer may leave its private incomplete attempt. Reopening performs
 no sweep. The final object remains absent unless publication completed; a
-matching retry can recover a completed publication. P3c supplies durable
-reservations and cross-store publication recovery. P3f supplies retention and
-abandoned-attempt authority. This contract exposes no listing, unverified stream,
+matching retry can recover a completed publication. [Ingestion](native-revision-ingestion.md)
+supplies durable reservations and cross-store publication recovery;
+[maintenance](maintenance-command.md) handles abandoned attempts. This contract exposes no listing, unverified stream,
 or final-object deletion API.
 
-File flushing is requested before publication. Directory-entry syncing and
-power-loss recovery are not claimed. Qualification checks restart on the same
-backing store, which does not prove that an ephemeral host volume survives host
-replacement. Effective-service-user compromise and privileged administration
+File flushing is requested before publication; directory entries are not synced.
+Use persistent storage when objects must survive host replacement.
+Effective-service-user compromise and privileged administration
 are outside the local private-root boundary.
 
 ## Verification
@@ -117,12 +107,9 @@ are outside the local private-root boundary.
 Real-filesystem tests run with the normal locked C# suite on the admitted Linux
 profile; they fail when required primitives are unavailable. Test roots are
 uniquely owned directories outside the repository/application, and cleanup
-removes only those roots. `Weft.StorageProbe` is test tooling, copied alongside
+removes only those roots. `Braid.StorageProbe` is test tooling, copied alongside
 the test assembly, for independent-process writes, reads, races, and process
 loss. It is not packaged into the web server or an execution worker.
 
-Qualification records the actual runtime/kernel/filesystem, exact source and
-locks, private modes/ownership, and a separate unprivileged reader check. It
-also executes the existing PostgreSQL and isolated Ferrule C# integration
-cases. Local and independent clean-container evidence is linked in the scoped
-PR before merge; GitHub-hosted CI remains unavailable because of account billing.
+Check private modes and ownership with a separate unprivileged reader, and run
+PostgreSQL and isolated Ferrule integration cases on the target filesystem.

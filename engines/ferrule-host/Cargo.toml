@@ -1,5 +1,5 @@
 [package]
-name = "weft-ferrule-host"
+name = "braid-ferrule-host"
 version = "0.1.0"
 edition = "2024"
 publish = false
@@ -8,7 +8,7 @@ publish = false
 members = ["core"]
 
 [dependencies]
-weft-ferrule-core = { path = "core" }
+braid-ferrule-core = { path = "core" }
 ferrule-mapping = { package = "mapping", git = "https://github.com/DeandreT/ferrule", rev = "238369bf0071ee8ea097d8c54fa5061f433807fb" }
 ferrule-engine = { package = "engine", git = "https://github.com/DeandreT/ferrule", rev = "238369bf0071ee8ea097d8c54fa5061f433807fb" }
 ferrule-ir = { package = "ir", git = "https://github.com/DeandreT/ferrule", rev = "238369bf0071ee8ea097d8c54fa5061f433807fb" }

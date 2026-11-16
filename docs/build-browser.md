@@ -27,7 +27,7 @@ backend controls still independently enforce current permission and precondition
 
 A completed regression run is not treated as passing evidence. Selection reloads
 its authorized exact-revision result and requires succeeded execution and a passed
-`weft.regression.exact-bytes.v1` comparison. The build panel retains identifiers
+`braid.regression.exact-bytes.v1` comparison. The build panel retains identifiers
 only, not the fixture output bytes returned by that existing regression reader.
 Missing or incompatible stored reports fail the server precondition; the browser
 does not silently derive a report or invoke inspection.
@@ -77,8 +77,7 @@ stored recovery fields.
 
 Active build results use read-only two-second polling. A pending mutation,
 terminal state, access change or destroyed panel stops polling. Epoch and
-operation checks discard late callbacks. Current profile/capability presentation
-is not a compiler capability proof or a cached permission grant.
+operation checks discard late callbacks.
 
 See [Build control HTTP API](build-http.md) for media types, durable metadata
 semantics and the default-off server configuration.
@@ -89,5 +88,4 @@ administrator membership and the independent build capability response; the
 server remains authoritative. Builds can be enabled while native upload is off.
 
 The real browser fixture and its setup/cleanup requirements are documented in
-`tools/build-browser/README.md`. Controlled browser responses qualify UI boundary
-behavior only; they are separate from actual database/worker acceptance.
+`tools/build-browser/README.md`.

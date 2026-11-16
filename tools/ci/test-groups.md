@@ -11,14 +11,13 @@ python3 tools/ci/run_tests.py --group fast --group live-provider
 
 `npm test` is a convenience alias for `--group fast`, not the full solution.
 
-`--group` is an explicit local selection, not a replacement for CI. With no
-selection flags, the existing command still runs the full solution. CI's
-`--shard-index` and `--shard-count` still partition every discovered method by
+With no selection flags, the command runs the full solution. CI's
+`--shard-index` and `--shard-count` partition every discovered method by
 class, with the same filters and checks. Group and shard flags cannot be mixed.
 
 ## What each group selects
 
-- `fast`: four audited classes covering account display-name validation,
+- `fast`: four classes covering account display-name validation,
   external identity keys, project payload permission contracts and the fake
   maintenance clock. These use only managed contracts and an in-memory timer
   helper, not services, native workers, browsers or real providers. The full
@@ -35,8 +34,8 @@ class, with the same filters and checks. Group and shard flags cannot be mixed.
   and Linux host classes. Requires an independently protected installation and
   the external dedicated PID namespace record; it does not create either.
 - `installed-document-probes`: the separate shared-profile and resource probe
-  classes. Requires the document installation plus separately approved and
-  pinned probe assemblies. This is not included by `installed-documents`.
+  classes. Requires the document installation plus pinned probe assemblies.
+  This is not included by `installed-documents`.
 - `live-provider`: actual local Ollama tests. The whole partial `AiProviderTests`
   class stays here, including its fake-provider cases; it is not split by file.
 - `native-windows`: native PostgreSQL fixture and deployment provisioning tests
@@ -46,62 +45,60 @@ class, with the same filters and checks. Group and shard flags cannot be mixed.
 
 There is no live-cloud group: the Azure solution tests exercise fake tools or
 local transports, not a deployed cloud environment. Native, browser and cloud
-qualification launchers remain separate. Selecting a group grants no execution
-approval and does not establish provider/cloud acceptance.
+launchers run separately.
 
 ## Prerequisites and refusals
 
 Every group requires `dotnet` on `PATH` and the built test assembly at
-`dotnet/tests/Weft.Tests/bin/Release/net10.0/Weft.Tests.dll`, including its normal
+`dotnet/tests/Braid.Tests/bin/Release/net10.0/Braid.Tests.dll`, including its normal
 build-copied dependencies and fixtures. The runner keeps `--no-build` and
 `--no-restore`; the caller is responsible for building the current source.
 
 For `integration`, provide Linux, `bash`, Docker (or the existing
-`WEFT_DOCKER_EXECUTABLE`), the exact `WEFT_POSTGRES_IMAGE` and
-`WEFT_AZURITE_IMAGE` digests used in CI, and no native/client-container PostgreSQL
+`BRAID_DOCKER_EXECUTABLE`), the exact `BRAID_POSTGRES_IMAGE` and
+`BRAID_AZURITE_IMAGE` digests used in CI, and no native/client-container PostgreSQL
 or loopback Azurite settings. Also provide:
 
-- `WEFT_FERRULE_WORKER_IMAGE` and `WEFT_BUILD_WORKER_IMAGE`, naming the same
-  combined native/compiler build, plus `WEFT_COMPILED_RUNTIME_IMAGE` and
-  `WEFT_FERRULE_SERVICE_IMAGE`.
-- `WEFT_AUTOMATION_DOCKER_TESTS=true`.
-- Existing absolute executable paths in `WEFT_FERRULE_HOST_EXECUTABLE`,
-  `WEFT_COMPILE_SANDBOX_EXECUTABLE`, `WEFT_TEST_PDF_EXECUTABLE`,
-  `WEFT_AUTHORING_TEST_EXECUTABLE`, `WEFT_AUTHORED_PREVIEW_TEST_EXECUTABLE` and
-  `WEFT_EDIT_TEST_EXECUTABLE`.
-- Existing absolute files in `WEFT_HOST_TEST_SERVER_PATH` and
-  `WEFT_HOST_PRIVACY_PROBE_PATH`, published through the existing host procedure.
+- `BRAID_FERRULE_WORKER_IMAGE` and `BRAID_BUILD_WORKER_IMAGE`, naming the same
+  combined native/compiler build, plus `BRAID_COMPILED_RUNTIME_IMAGE` and
+  `BRAID_FERRULE_SERVICE_IMAGE`.
+- `BRAID_AUTOMATION_DOCKER_TESTS=true`.
+- Existing absolute executable paths in `BRAID_FERRULE_HOST_EXECUTABLE`,
+  `BRAID_COMPILE_SANDBOX_EXECUTABLE`, `BRAID_TEST_PDF_EXECUTABLE`,
+  `BRAID_AUTHORING_TEST_EXECUTABLE`, `BRAID_AUTHORED_PREVIEW_TEST_EXECUTABLE` and
+  `BRAID_EDIT_TEST_EXECUTABLE`.
+- Existing absolute files in `BRAID_HOST_TEST_SERVER_PATH` and
+  `BRAID_HOST_PRIVACY_PROBE_PATH`, published through the existing host procedure.
 - `DOTNET_ROOT` with the pinned compiler and reference pack.
 
 For `packaged-browser`, provide Linux, the pinned Docker PostgreSQL fixture,
-`WEFT_AUTH_BROWSER_ADMISSION_ROOT`, `WEFT_AUTH_BROWSER_ADMISSION_FILE`,
-`WEFT_WORKSPACE_CHAT_BROWSER=true` and the display assigned by the existing
+`BRAID_AUTH_BROWSER_ADMISSION_ROOT`, `BRAID_AUTH_BROWSER_ADMISSION_FILE`,
+`BRAID_WORKSPACE_CHAT_BROWSER=true` and the display assigned by the existing
 isolated browser owner. The tests validate the admission record's exact
-node/npm/browser/server bytes, assets and custody; this runner does not run
-`admit.mjs`, assign a display or create an approval record.
+node/npm/browser/server bytes, assets and custody. Prepare the admission record
+with `admit.mjs` and use the assigned isolated display.
 
 For both installed-document groups, provide Linux,
-`WEFT_TEST_DOCUMENT_HOST_LINUX=1`, `WEFT_SPEC_DOCUMENT_WORKERS=optional`, the
-existing `WEFT_SPEC_DOCUMENT_*` installation paths and profile/build/runtime
-digests required by `SpecDocumentHostSettings`, `WEFT_TEST_PDF_EXECUTABLE`, and
-`WEFT_TEST_DOCUMENT_PID_NAMESPACE_RECORD` with its `_SHA256` digest. The probe
-group additionally requires `WEFT_TEST_DOCUMENT_PROFILE_PROBE_ASSEMBLY` and
-`WEFT_TEST_DOCUMENT_RESOURCE_PROBE_ASSEMBLY`, each with its matching
+`BRAID_TEST_DOCUMENT_HOST_LINUX=1`, `BRAID_SPEC_DOCUMENT_WORKERS=optional`, the
+existing `BRAID_SPEC_DOCUMENT_*` installation paths and profile/build/runtime
+digests required by `SpecDocumentHostSettings`, `BRAID_TEST_PDF_EXECUTABLE`, and
+`BRAID_TEST_DOCUMENT_PID_NAMESPACE_RECORD` with its `_SHA256` digest. The probe
+group additionally requires `BRAID_TEST_DOCUMENT_PROFILE_PROBE_ASSEMBLY` and
+`BRAID_TEST_DOCUMENT_RESOURCE_PROBE_ASSEMBLY`, each with its matching
 `_BUILD_SHA256` and `_RUNTIME_SHA256` settings (replace `_ASSEMBLY`, do not append
-to it). The original tests still enforce protection, source pins, containment
+to it). The tests enforce protection, source pins, containment
 and settlement.
 
-For `live-provider`, set `WEFT_LIVE_OLLAMA_ENDPOINT` and
-`WEFT_LIVE_OLLAMA_MODEL` for an actual local Ollama service. For
-`native-windows`, provide Windows and `WEFT_POSTGRES_BIN` containing `initdb.exe`,
+For `live-provider`, set `BRAID_LIVE_OLLAMA_ENDPOINT` and
+`BRAID_LIVE_OLLAMA_MODEL` for an actual local Ollama service. For
+`native-windows`, provide Windows and `BRAID_POSTGRES_BIN` containing `initdb.exe`,
 `pg_ctl.exe`, `postgres.exe` and `psql.exe`, without Docker PostgreSQL settings.
-For `incremental-build`, set `WEFT_OPENAPI_INCREMENTAL_TESTS=1`.
+For `incremental-build`, set `BRAID_OPENAPI_INCREMENTAL_TESTS=1`.
 
 Absent or refused prerequisites return exit code 2 before discovery, with the
-missing setting names. These checks inspect files/configuration only; they do
-not probe daemons, pull images, install tools or certify an installation. The
-tests retain their own stronger runtime checks. Child exit codes and unrelated
-environment settings are preserved; `DOTNET_ADD_GLOBAL_TOOLS_TO_PATH` remains
+missing setting names. These checks inspect files and configuration; the tests
+perform runtime checks. Child exit codes and unrelated environment settings are
+preserved; `DOTNET_ADD_GLOBAL_TOOLS_TO_PATH` remains
 explicitly `false` in child processes.
 
 ## Maintaining the classification
@@ -124,9 +121,8 @@ attributes have different admission requirements; ordinary attributes elsewhere
 also contain real process/native cases.
 
 Update the roster and prerequisites after that review, then update
-`AUDITED_SOURCE_SHA256` to `source_fingerprint(Path.cwd())`. Never describe a
-source census as test execution. At runtime the runner separately discovers real
-fully qualified method names, rejects unknown or stale classes, proves a
+`AUDITED_SOURCE_SHA256` to `source_fingerprint(Path.cwd())`. At runtime the runner
+discovers fully qualified method names, rejects unknown or stale classes, proves a
 nonempty disjoint/exhaustive partition, prints every selected and omitted group,
 and checks filtered discovery exactly before running the solution. Exact method
 filters keep all theory rows together, including runtime-discovered rows.
@@ -136,7 +132,3 @@ Run the launcher fixtures without .NET execution:
 ```sh
 python3 -m unittest discover -s tools/ci -p 'test_*.py'
 ```
-
-These mock/source checks do not qualify actual VSTest discovery or any runtime
-group. Those require separately authorized execution with the stated
-prerequisites.

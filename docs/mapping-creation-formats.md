@@ -2,27 +2,21 @@
 
 `MappingCreationPlan(CreationPlanV2)` extends the application authoring boundary to
 JSON, XML, CSV, TSV, X12 and EDIFACT, independently on either side. It lowers a
-closed typed plan to `weft.authoring.v1` plus `ferrule.edit.v1` operations. The
+closed typed plan to `braid.authoring.v1` plus `ferrule.edit.v1` operations. The
 Ferrule dependency stays pinned to `238369bf0071ee8ea097d8c54fa5061f433807fb`.
 
-## Compatibility and storage
-
-The existing constructor, `weft.creation-plan.v1` parser, ordered
-`Source`/`Target`/`Bindings` properties, application bytes, compiler bytes and both
-fingerprints retain their original v1 behavior. V2 adds `Version == 2` and
-`TypedPlan`; its legacy flat lists are empty. `Version == 1` has a null `TypedPlan`.
+## Storage
 
 Store the canonical `CopyBytes()` and restore with `MappingCreationPlan.Parse`.
 The strict version-dispatch parser rebuilds the typed model and computes both
-digests. Do not reconstruct v2 through the v1 flat lists, use reflection-based
-serialization of the public model, or substitute application bytes for
+digests. Do not use reflection-based serialization of the public model or substitute application bytes for
 `CopyCompilerPlanBytes()`. The existing 65,536-byte ceiling applies independently
 to application and compiler documents, including v2. The compiler adapter uses
-the existing copy/digest surface without a separate v2 transport.
+the copy/digest surface.
 
 ## Closed application document
 
-The root has exactly `schema: "weft.creation-plan.v2"`, `source`, `target`, and
+The root has exactly `schema: "braid.creation-plan.v2"`, `source`, `target`, and
 `scope`. A boundary has exactly `schema` and `options`. All canonical schema
 properties are explicit:
 
@@ -64,8 +58,7 @@ begin with an ISA group or an UNB/UNH group, respectively. Envelope segments,
 composites, controls, unused positional slots and trailers must be explicitly
 declared and bound; element names are identities, while order determines wire
 positions. Explicit constants can fill known envelope values. Native execution
-checks envelope counts and references on actual output. A typed plan or compiler
-checkpoint is not proof of customer implementation-guide completeness.
+checks envelope counts and references on actual output.
 
 ## XML roles
 
@@ -78,10 +71,6 @@ the compiler's ASCII NCName subset.
 Text uses the reserved `#text` schema name with `text:true` and canonical
 `namespace:null`. It has no XML name/namespace of its own. It must be a singular
 scalar and may coexist only with attributes (simple content), not child elements.
-This representation depends on the compiler XML-text compatibility correction;
-the original authoring compiler forced a namespace onto every text node and
-rejected `#text`, which could never satisfy pinned structured-preview admission.
-
 Optional singular elements are supported with `optional:true`; optional repeating
 nodes, optional roots, optional text/attribute role flags, namespace-declaration
 attributes, reserved xsi:nil/xsi:type attributes, mixed content, and nillable
@@ -115,7 +104,7 @@ Bindings name a unique declared target scalar and a closed value:
 
 Source paths stay absolute and correlate to the active iteration. Repeating
 source ancestors must match that iteration exactly. Collection-owned reads lower
-to an explicit legacy Source `frame` and a frame-relative compiler path, including
+to an explicit Source `frame` and a frame-relative compiler path, including
 reads in descendant target scopes. Root reads outside a nonempty collection
 prefix are refused when the collection schema can shadow that path (including
 an empty repeated prefix or any declared terminal node). A schema group can
@@ -131,7 +120,7 @@ Every required JSON target child, every ordinary singular XML element/text, and
 every declared EDI/tabular positional child requires an explicit binding or
 group scope. Optional JSON/XML children can remain absent.
 
-Lowering emits `add_scope`, `set_iteration` with a legacy primary-source
+Lowering emits `add_scope`, `set_iteration` with a primary-source
 collection (the native `Source` iteration variant), and `bind`. Each binding gets
 its own monotonically increasing invariant-decimal graph ID, even when two
 bindings read the same source. Scope indices follow explicit child order. IDs
@@ -156,49 +145,25 @@ constraints and extension-data objects are rejected.
 - Collections are bounded defensive copies exposed read-only; schema/value/scope
   objects have no mutable setters. Output byte copies are defensive.
 
-## Qualification
+## Verification
 
 `MappingCreationFormatsTests` uses `FerruleInspectionBackend.AuthorAsync` against
 the real portable compiler, then sends the exact resulting native bytes and
 sample through the real authored-preview framing. It checks native determinism,
-compiler validation, output digest/count, and actual mapped values. The test-only
-preview seam does not add a production API or manufacture revision identities.
+compiler validation, output digest/count, and actual mapped values.
 
-Set `WEFT_AUTHORING_TEST_EXECUTABLE` and
-`WEFT_AUTHORED_PREVIEW_TEST_EXECUTABLE` to the qualified portable examples, then
+Set `BRAID_AUTHORING_TEST_EXECUTABLE` and
+`BRAID_AUTHORED_PREVIEW_TEST_EXECUTABLE` to the qualified portable examples, then
 run with SDK 10.0.112:
 
 ```text
-dotnet test dotnet/tests/Weft.Tests/Weft.Tests.csproj --no-restore -m:1 --filter "FullyQualifiedName~MappingCreation|FullyQualifiedName~MappingAuthoringBackendTests"
+dotnet test dotnet/tests/Braid.Tests/Braid.Tests.csproj --no-restore -m:1 --filter "FullyQualifiedName~MappingCreation|FullyQualifiedName~MappingAuthoringBackendTests"
 ```
 
 The fixtures cover all 36 source/target pairs, two changed fields on every pair,
 complete JSON-to-X12/EDIFACT envelopes, composite constants, real EDI escaping and
 bad count/control refusal, CSV/TSV quotes/BOM/options, JSON typed constants/nulls,
 nested source iteration, tabular row iteration, and strict admission/budgets.
-XML text/namespace/attribute/optional-element qualification uses the corrected
-compiler described above. These portable process checks qualify format and wire
-interoperability; production worker isolation remains a separate qualification.
-
-Verified locally with SDK 10.0.112 and locked restore: **80 tests passed, zero
-failures/skips** in the `MappingCreation`/`MappingAuthoringBackendTests` selection.
-Compiler executable:
-`C:/example/checkout/engines/ferrule-host/target/debug/examples/authoring_protocol.exe`.
-Preview executable:
-`C:/example/checkout/engines/ferrule-host/target/debug/examples/authored_preview_protocol.exe`.
-The final run includes the corrected compiler's real XML text execution in both
-directions, all 36 format pairs with changed inputs, and retained v1 workflow and
-compiler tests. Review regressions reproduce the former root/item collision and
-XML repeated-root failure through the real compiler/preview; corrected typed
-admission rejects both. Positive fixtures cover frame-pinned reads in nested
-target scopes and nested collection paths, noncolliding root reads, and repeating
-XML child construction. Shared compiler-server contention was avoided with
-`-p:UseSharedCompilation=false`; `-p:BuildProjectReferences=false` was used for the
-final test-project rebuild after its dependencies had already built successfully.
-
-The subsequent terminal-group shadow correction passed **8 focused regression
-cases, zero failures/skips** after a fresh Domain build. Real compiler/preview
-fixtures reproduce both an explicit-null nullable group and a missing nullable
-group shadowing a root scalar, while safe frame-owned reads still execute. The
-constructor and strict parser refuse the ambiguous plan. Additional schema cases
-apply the conservative terminal-group rule to JSON, XML, X12 and EDIFACT.
+Fixtures also cover XML text, namespaces, attributes and optional elements,
+frame-pinned reads in nested target scopes, noncolliding root reads, repeating
+XML children and terminal-group shadow refusal across JSON, XML, X12 and EDIFACT.

@@ -1,4 +1,4 @@
-// PostgreSQL Flexible Server with private (VNet-integrated) access only. The `weft` database
+// PostgreSQL Flexible Server with private (VNet-integrated) access only. The `braid` database
 // and its restricted roles are created by the provisioning job, not by this template.
 param location string
 param name string
@@ -21,7 +21,7 @@ resource server 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
     tier: skuTier
   }
   properties: {
-    // Weft migrations are qualified against PostgreSQL 16.
+    // Braid migrations are qualified against PostgreSQL 16.
     version: '16'
     administratorLogin: administratorLogin
     administratorLoginPassword: administratorPassword

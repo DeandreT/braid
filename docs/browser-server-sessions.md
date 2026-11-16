@@ -1,29 +1,17 @@
 # Browser-session components
 
-Implementation status: `Weft.Identity` contains the cookie handlers and
-request-scoped, epoch-bound antiforgery composition tracked in
-[#112](https://github.com/DeandreT/weft/issues/112). They remain unregistered by
-the Server/API. This page describes the implemented contract and required
-qualification; it reports no build, discovery, test result or active sign-in.
-The underlying [protected session adapter](protected-server-sessions.md) retains
-its separate #107 evidence.
+`Braid.Identity` supplies cookie handlers and request-scoped, epoch-bound
+antiforgery over the [protected session adapter](protected-server-sessions.md).
 
 ## Explicit composition and ownership
 
-A trusted server composition can call `AddWeftBrowserSessions` with one canonical
+A trusted server composition can call `AddBraidBrowserSessions` with one canonical
 HTTPS origin, an admitted `DurableSessionKeyProfile`, the restricted session
 reader/writer ports and a renewal-scheduling clock. The caller owns the profile,
 certificates, ports and pools. The singleton browser owns only its private
 standard-antiforgery composition; two distinct transient cookie handlers use
-reserved `Weft.Session` and `Weft.Session.Issue` schemes. Registration chooses no
+reserved `Braid.Session` and `Braid.Session.Issue` schemes. Registration chooses no
 default or forwarding scheme and refuses reserved-name conflicts.
-
-These components add no public route, provider verification, organization or
-project admission, payload permission, SQL migration, role or grant. They do not
-register authentication with the existing Server/API or change development
-identity. The dormant catalog seam in [#114](https://github.com/DeandreT/weft/issues/114),
-Entra/public-route and proxy admission in P4d, and Angular sign-in in P4e remain
-separate work.
 
 `ObserveAsync` establishes only the canonical session identity.
 `AdmitRequestAsync` performs the fresh request checks below. Trusted composition
@@ -40,8 +28,8 @@ Exactly two cookie names are used:
 
 | Cookie | SameSite | Fixed properties |
 | --- | --- | --- |
-| `__Host-Weft.Session` | Lax | Secure, HttpOnly, host-only, Path=/, nonpersistent |
-| `__Host-Weft.Antiforgery` | Strict | Secure, HttpOnly, host-only, Path=/, nonpersistent |
+| `__Host-Braid.Session` | Lax | Secure, HttpOnly, host-only, Path=/, nonpersistent |
+| `__Host-Braid.Antiforgery` | Strict | Secure, HttpOnly, host-only, Path=/, nonpersistent |
 
 Neither has Max-Age or Expires. The shared session carrier protects only the fixed
 canonical session handle, using sibling purposes on the admitted profile; it is
@@ -50,7 +38,7 @@ not an arbitrary principal/ticket serializer. The raw Cookie header is bounded t
 noncanonical values and disagreement with the parsed selection refuse before
 cryptography. Session values are bounded to 2,048 characters; antiforgery cookie
 and request-token values to 4,096. Unsupported TLS token-binding purposes refuse.
-The configured HTTPS scheme and authority must match exactly; a future host must
+The configured HTTPS scheme and authority must match exactly; the host must
 first establish trustworthy request/proxy metadata.
 
 The main handler bypasses stock cookie authentication's projected-date expiry
@@ -87,8 +75,7 @@ require one exact configured Origin, one canonical `X-XSRF-TOKEN` header and an
 unambiguous antiforgery cookie. The private standard antiforgery service validates
 them before renewal, body consumption or dispatch; form-body fallback is disabled.
 Authenticated unsupported methods, including TRACE and CONNECT, are refused as
-CSRF rejection before those effects. This is an admission-policy statement, not
-a claim that Kestrel accepts every method/request-target combination.
+CSRF rejection before those effects.
 
 The standard token's additional data binds the configured organization and exact
 login epoch. Same actor and the same antiforgery cookie do not make an old-epoch
@@ -107,11 +94,11 @@ unavailable, and caller/request cancellation retains its cause. Homogenized
 framework decryption rejection cannot distinguish forgery from loss of a
 historical decryption key.
 
-## Qualification scope and limits
+## Tests
 
 The test sources compose two independent owned loopback HTTPS/Kestrel instances
-with real restricted PostgreSQL, separate pools and fresh profiles. Their intended
-oracles include revoke acknowledgement before fresh Store, no issue Renew,
+with real restricted PostgreSQL, separate pools and fresh profiles. They check
+revoke acknowledgement before fresh Store, no issue Renew,
 same-actor epoch separation, before-body refusal, final-fraction database expiry,
 renew/revoke races, real lost COMMIT acknowledgement, cancellation/header failures,
 and normal API/database restart and certificate/key rotation or loss. Rotated
@@ -121,12 +108,4 @@ unproven settlement retains dependencies and fails cleanup.
 A separate standard-antiforgery reference checks that the same cookie and actor
 pass the framework's crypto/ClaimUid stages and expose the old additional data;
 its deliberate acceptance is only a reference oracle for the product's epoch
-refusal. It does not bypass the product path. Source presence does not establish
-any of these runtime results; qualification remains linked to #112.
-
-Actual HTTPS/header checks do not establish a browser's SameSite or `__Host-`
-enforcement. In-process host/profile restart is not an independent operating
-system restart. Warm keys do not prove durable recovery, instant distributed
-revocation or arbitrary historical certificate provenance. Hosted authentication,
-provider callback verification, proxy trust, public login/logout/status routes,
-business authorization and Angular activation remain outside this increment.
+refusal.

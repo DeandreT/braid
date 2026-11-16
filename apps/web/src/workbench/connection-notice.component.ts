@@ -6,7 +6,7 @@ import { type HealthState, WorkspaceConnection } from "../health";
 
 /** Browser connectivity and the workspace service's health; silent unless one is unavailable. */
 @Component({
-  selector: "weft-connection-notice",
+  selector: "braid-connection-notice",
   template: `@if (offline()) {
       <aside
         class="wb-state"

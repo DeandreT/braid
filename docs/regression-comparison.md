@@ -1,12 +1,10 @@
 # Regression output comparison
 
-`Weft.Application.Regression` provides the pure output-comparison boundary for
-persisted regression cases. It does not read storage, authorize access, execute
-mappings or persist runs. A future case/run service must supply verified bytes
-from the exact authorized case and execution; constructing an observation does
-not establish that execution occurred.
+`Braid.Application.Regression` provides the pure output-comparison boundary for
+persisted regression cases. The case/run service supplies verified bytes from the
+exact authorized case and execution.
 
-The first policy is `weft.regression.exact-bytes.v1`. It matches outputs by exact
+The first policy is `braid.regression.exact-bytes.v1`. It matches outputs by exact
 logical identity: one primary identity and case-sensitive named identities.
 Names are neither paths nor normalization instructions. Incoming list order
 does not affect the result. The deterministic output order is primary first,
@@ -49,7 +47,7 @@ chunks. An independent output limit bounds retained differences to at most 256.
 
 ## Declared document comparison
 
-`weft.regression.edi-segments.v1` requires all three explicit boolean choices:
+`braid.regression.edi-segments.v1` requires all three explicit boolean choices:
 `compareSeparators`, `ignoreControlNumbers`, and `ignoreDates`. JSON outputs
 still use exact byte comparison. X12 and EDIFACT outputs use ordered lexical
 segments, elements, repetitions and components. Output media types must match;

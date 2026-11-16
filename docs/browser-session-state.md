@@ -14,7 +14,7 @@ terminate the edit worker and hide its projection; fresh same-owner admission ca
 restore retained operations, while another owner clears them.
 
 `BrowserSessionApi` sends a fresh bodyless `GET /api/auth/session` with
-`X-Weft-Session: 1`. It accepts only the complete versioned status schema, including
+`X-Braid-Session: 1`. It accepts only the complete versioned status schema, including
 mode and authenticated-token/fingerprint coherence. Invalid responses, timeouts,
 missing endpoints and network errors produce an unavailable state. Only overlapping
 pending observations share a request; a settled positive status is not a reusable
@@ -165,9 +165,7 @@ head still requires review; no request is allocated or sent merely because a
 draft was restored. Leaving the page discards unsent work without changing the
 separate tab-memory protocol for already-sent requests.
 
-There is no durable draft storage, cross-tab registry, account-sharing mechanism,
-provider SDK, automatic mutation retry or sign-in/out control in this state
-increment. Sign-in controls compose this boundary separately.
+Private recovery state lives in tab memory; mutations are never retried automatically.
 
 ## Isolated browser qualification
 
@@ -181,8 +179,7 @@ The controlled owner requires independently admitted, separate immutable app and
 probe roots with complete file byte/hash inventories in a private configuration.
 Its synthetic API refusals never fall back to the development backend. Probe
 controls and source must not enter the ordinary Angular output or Server
-`wwwroot`. These browser fixtures do not qualify real backend authorization,
-Entra, cookie enforcement or deployment.
+`wwwroot`.
 
 The packaged persistence fixtures admit the exact same-origin, bodyless session
 status GET with its observation marker through their existing real GET delivery

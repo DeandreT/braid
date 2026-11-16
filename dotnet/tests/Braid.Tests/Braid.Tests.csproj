@@ -1,0 +1,290 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../tools/Braid.HostPrivacyProbe/BrowserQualificationAdmissionWire.cs" Link="BrowserQualificationAdmissionWire.cs" />
+    <Compile Include="../../tools/Braid.HostPrivacyProbe/BrowserQualificationAdmission.cs" Link="BrowserQualificationAdmission.cs" />
+    <Compile Include="../../tools/Braid.HostPrivacyProbe/BrowserQualificationNetwork.cs" Link="BrowserQualificationNetwork.cs" />
+    <Compile Include="../../tools/Braid.HostPrivacyProbe/BrowserQualificationNetworkWire.cs" Link="BrowserQualificationNetworkWire.cs" />
+    <Compile Include="../../tools/Braid.HostPrivacyProbe/BrowserQualificationSettlement.cs" Link="BrowserQualificationSettlement.cs" />
+    <Compile Include="../../tools/Braid.HostPrivacyProbe/BrowserQualificationSettlementWire.cs" Link="BrowserQualificationSettlementWire.cs" />
+    <Compile Include="../../tools/Braid.HostPrivacyProbe/BrowserQualificationParentSettlementWire.cs" Link="BrowserQualificationParentSettlementWire.cs" />
+    <Compile Include="../../tools/Braid.HostPrivacyProbe/BrowserQualificationControlSettlement.cs" Link="BrowserQualificationControlSettlement.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.12" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <ProjectReference Include="../../src/Braid.Ai/Braid.Ai.csproj" />
+    <ProjectReference Include="../../src/Braid.Api/Braid.Api.csproj" />
+    <ProjectReference Include="../../src/Braid.Application/Braid.Application.csproj" />
+    <ProjectReference Include="../../src/Braid.Domain/Braid.Domain.csproj" />
+    <ProjectReference Include="../../src/Braid.Deployment/Braid.Deployment.csproj" />
+    <ProjectReference Include="../../src/Braid.Identity/Braid.Identity.csproj" />
+    <ProjectReference Include="../../src/Braid.Jobs/Braid.Jobs.csproj" />
+    <ProjectReference Include="../../src/Braid.Contracts/Braid.Contracts.csproj" />
+    <ProjectReference Include="../../src/Braid.MappingBackends/Braid.MappingBackends.csproj" />
+    <ProjectReference Include="../../src/Braid.Persistence.Postgres/Braid.Persistence.Postgres.csproj" />
+    <ProjectReference Include="../../src/Braid.Storage.Blob/Braid.Storage.Blob.csproj" />
+    <ProjectReference Include="../../src/Braid.Storage.FileSystem/Braid.Storage.FileSystem.csproj" />
+    <ProjectReference Include="../../tools/Braid.StorageProbe/Braid.StorageProbe.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../tools/Braid.StorageProtocolProbe/Braid.StorageProtocolProbe.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../tools/Braid.StorageTool/Braid.StorageTool.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../tools/Braid.DatabaseTool/Braid.DatabaseTool.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../tools/Braid.IngestionProbe/Braid.IngestionProbe.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../tools/Braid.MaintenanceProbe/Braid.MaintenanceProbe.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../tools/Braid.MaintenanceTool/Braid.MaintenanceTool.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../tools/Braid.RevisionReportMetadataProbe/Braid.RevisionReportMetadataProbe.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../tools/Braid.RevisionReportWorkflowProbe/Braid.RevisionReportWorkflowProbe.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../tools/Braid.SessionKeyTool/Braid.SessionKeyTool.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../tools/Braid.SessionTicketProcessProbe/Braid.SessionTicketProcessProbe.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../tools/Braid.HostPrivacyProbe/Braid.HostPrivacyProbe.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../tools/Braid.WorkerShutdownProbe/Braid.WorkerShutdownProbe.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../apps/Braid.Server/Braid.Server.csproj" />
+    <ProjectReference Include="../../apps/Braid.Worker/Braid.Worker.csproj" />
+    <ProjectReference Include="../../apps/Braid.CompiledRuntime/Braid.CompiledRuntime.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../apps/Braid.DocumentWorker/Braid.DocumentWorker.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../tools/Braid.CompiledSandboxProbe/Braid.CompiledSandboxProbe.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../apps/Braid.FerruleService/Braid.FerruleService.csproj" />
+    <ProjectReference Include="../../apps/Braid.MachineEndpoint/Braid.MachineEndpoint.csproj" />
+    <ProjectReference Include="../../tools/Braid.ReleaseTool/Braid.ReleaseTool.csproj" />
+    <ProjectReference Include="../../src/Braid.WorkerTransport/Braid.WorkerTransport.csproj" />
+    <ProjectReference Include="../../src/Braid.MappingBackends.AzureSessions/Braid.MappingBackends.AzureSessions.csproj" />
+    <Using Include="Xunit" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../tools/Braid.HostPrivacyProbe/BrowserQualificationWire.cs"
+             Link="AuthBrowserQualification/BrowserQualificationWire.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="../../../contracts/braid-endpoint-v1.json" Link="Contracts/braid-endpoint-v1.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../engines/ferrule-host/tests/fixtures/*.json"
+          Link="FerruleFixtures/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../contracts/browser-return-paths.json"
+          Link="Contracts/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Fixtures/*.json"
+          Link="FerruleFixtures/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Committed OpenAPI documents that the hosts' own routes and generated documents are compared with. -->
+    <None Include="../../../contracts/braid-v1.json;../../../contracts/braid-endpoint-v1.json;../../../contracts/ferrule-service-v1.json"
+          Link="Contracts/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../contracts/braid-v1.json" Link="Contracts/braid-v1.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <Target Name="CopyPreviewWorker" AfterTargets="Build">
+    <MSBuild Projects="../../apps/Braid.Worker/Braid.Worker.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="PreviewWorkerTarget" />
+    </MSBuild>
+    <Error Condition="!Exists('@(PreviewWorkerTarget)')" Text="The built preview worker is missing: @(PreviewWorkerTarget)" />
+    <PropertyGroup><PreviewWorkerDirectory>@(PreviewWorkerTarget->'%(RootDir)%(Directory)')</PreviewWorkerDirectory></PropertyGroup>
+    <ItemGroup>
+      <PreviewWorkerFiles Include="$(PreviewWorkerDirectory)**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(PreviewWorkerFiles)" DestinationFiles="@(PreviewWorkerFiles->'$(OutDir)PreviewWorker/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyFerruleService" AfterTargets="Build">
+    <MSBuild Projects="../../apps/Braid.FerruleService/Braid.FerruleService.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="FerruleServiceTarget" />
+    </MSBuild>
+    <Error Condition="!Exists('@(FerruleServiceTarget)')" Text="The built Ferrule service is missing: @(FerruleServiceTarget)" />
+    <PropertyGroup><FerruleServiceDirectory>@(FerruleServiceTarget->'%(RootDir)%(Directory)')</FerruleServiceDirectory></PropertyGroup>
+    <ItemGroup>
+      <FerruleServiceFiles Include="$(FerruleServiceDirectory)**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(FerruleServiceFiles)" DestinationFiles="@(FerruleServiceFiles->'$(OutDir)FerruleService/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyDocumentWorker" AfterTargets="Build">
+    <MSBuild Projects="../../apps/Braid.DocumentWorker/Braid.DocumentWorker.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="DocumentWorkerTarget" />
+    </MSBuild>
+    <Error Condition="!Exists('@(DocumentWorkerTarget)')" Text="The built document worker is missing." />
+    <PropertyGroup><DocumentWorkerDirectory>@(DocumentWorkerTarget->'%(RootDir)%(Directory)')</DocumentWorkerDirectory></PropertyGroup>
+    <ItemGroup><DocumentWorkerFiles Include="$(DocumentWorkerDirectory)**/*" /></ItemGroup>
+    <Copy SourceFiles="@(DocumentWorkerFiles)" DestinationFiles="@(DocumentWorkerFiles->'$(OutDir)DocumentWorker/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyCompiledRuntime" AfterTargets="Build">
+    <MSBuild Projects="../../apps/Braid.CompiledRuntime/Braid.CompiledRuntime.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="CompiledRuntimeTarget" />
+    </MSBuild>
+    <Error Condition="!Exists('@(CompiledRuntimeTarget)')" Text="The built compiled runtime is missing: @(CompiledRuntimeTarget)" />
+    <PropertyGroup><CompiledRuntimeDirectory>@(CompiledRuntimeTarget->'%(RootDir)%(Directory)')</CompiledRuntimeDirectory></PropertyGroup>
+    <ItemGroup><CompiledRuntimeFiles Include="$(CompiledRuntimeDirectory)**/*" /></ItemGroup>
+    <Copy SourceFiles="@(CompiledRuntimeFiles)" DestinationFiles="@(CompiledRuntimeFiles->'$(OutDir)CompiledRuntime/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyCompiledSandboxProbe" AfterTargets="Build">
+    <MSBuild Projects="../../tools/Braid.CompiledSandboxProbe/Braid.CompiledSandboxProbe.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="CompiledSandboxProbeTarget" />
+    </MSBuild>
+    <Error Condition="!Exists('@(CompiledSandboxProbeTarget)')" Text="The built sandbox probe is missing." />
+    <PropertyGroup><CompiledSandboxProbeDirectory>@(CompiledSandboxProbeTarget->'%(RootDir)%(Directory)')</CompiledSandboxProbeDirectory></PropertyGroup>
+    <ItemGroup><CompiledSandboxProbeFiles Include="$(CompiledSandboxProbeDirectory)**/*" /></ItemGroup>
+    <Copy SourceFiles="@(CompiledSandboxProbeFiles)" DestinationFiles="@(CompiledSandboxProbeFiles->'$(OutDir)CompiledSandboxProbe/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyMappingEndpoint" AfterTargets="Build">
+    <MSBuild Projects="../../apps/Braid.MachineEndpoint/Braid.MachineEndpoint.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="MappingEndpointTarget" />
+    </MSBuild>
+    <Error Condition="!Exists('@(MappingEndpointTarget)')" Text="The built mapping endpoint is missing: @(MappingEndpointTarget)" />
+    <PropertyGroup><MappingEndpointDirectory>@(MappingEndpointTarget->'%(RootDir)%(Directory)')</MappingEndpointDirectory></PropertyGroup>
+    <ItemGroup>
+      <MappingEndpointFiles Include="$(MappingEndpointDirectory)**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(MappingEndpointFiles)" DestinationFiles="@(MappingEndpointFiles->'$(OutDir)MappingEndpoint/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyReleaseTool" AfterTargets="Build">
+    <MSBuild Projects="../../tools/Braid.ReleaseTool/Braid.ReleaseTool.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="ReleaseToolTarget" />
+    </MSBuild>
+    <Error Condition="!Exists('@(ReleaseToolTarget)')" Text="The built release tool is missing: @(ReleaseToolTarget)" />
+    <PropertyGroup><ReleaseToolDirectory>@(ReleaseToolTarget->'%(RootDir)%(Directory)')</ReleaseToolDirectory></PropertyGroup>
+    <ItemGroup>
+      <ReleaseToolFiles Include="$(ReleaseToolDirectory)**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ReleaseToolFiles)" DestinationFiles="@(ReleaseToolFiles->'$(OutDir)ReleaseTool/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyStorageProbe" AfterTargets="Build">
+    <MSBuild Projects="../../tools/Braid.StorageProbe/Braid.StorageProbe.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="StorageProbeTarget" />
+    </MSBuild>
+    <Error Condition="!Exists('@(StorageProbeTarget)')" Text="The built storage probe is missing: @(StorageProbeTarget)" />
+    <PropertyGroup><StorageProbeDirectory>@(StorageProbeTarget->'%(RootDir)%(Directory)')</StorageProbeDirectory></PropertyGroup>
+    <ItemGroup>
+      <StorageProbeFiles Include="$(StorageProbeDirectory)**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(StorageProbeFiles)" DestinationFiles="@(StorageProbeFiles->'$(OutDir)StorageProbe/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyStorageProtocolProbe" AfterTargets="Build">
+    <MSBuild Projects="../../tools/Braid.StorageProtocolProbe/Braid.StorageProtocolProbe.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="StorageProtocolProbeTarget" />
+    </MSBuild>
+    <Error Condition="!Exists('@(StorageProtocolProbeTarget)')" Text="The built storage protocol probe is missing: @(StorageProtocolProbeTarget)" />
+    <PropertyGroup><StorageProtocolProbeDirectory>@(StorageProtocolProbeTarget->'%(RootDir)%(Directory)')</StorageProtocolProbeDirectory></PropertyGroup>
+    <ItemGroup>
+      <StorageProtocolProbeFiles Include="$(StorageProtocolProbeDirectory)**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(StorageProtocolProbeFiles)" DestinationFiles="@(StorageProtocolProbeFiles->'$(OutDir)StorageProtocolProbe/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyIngestionProbe" AfterTargets="Build">
+    <MSBuild Projects="../../tools/Braid.IngestionProbe/Braid.IngestionProbe.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="IngestionProbeTarget" />
+    </MSBuild>
+    <Error Condition="!Exists('@(IngestionProbeTarget)')" Text="The built ingestion probe is missing: @(IngestionProbeTarget)" />
+    <PropertyGroup><IngestionProbeDirectory>@(IngestionProbeTarget->'%(RootDir)%(Directory)')</IngestionProbeDirectory></PropertyGroup>
+    <ItemGroup>
+      <IngestionProbeFiles Include="$(IngestionProbeDirectory)**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(IngestionProbeFiles)" DestinationFiles="@(IngestionProbeFiles->'$(OutDir)IngestionProbe/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyStorageTool" AfterTargets="Build">
+    <MSBuild Projects="../../tools/Braid.StorageTool/Braid.StorageTool.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="StorageToolTarget" />
+    </MSBuild>
+    <Error Condition="!Exists('@(StorageToolTarget)')" Text="The built storage tool is missing: @(StorageToolTarget)" />
+    <PropertyGroup><StorageToolDirectory>@(StorageToolTarget->'%(RootDir)%(Directory)')</StorageToolDirectory></PropertyGroup>
+    <ItemGroup>
+      <StorageToolFiles Include="$(StorageToolDirectory)**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(StorageToolFiles)" DestinationFiles="@(StorageToolFiles->'$(OutDir)StorageTool/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyRevisionReportMetadataProbe" AfterTargets="Build">
+    <MSBuild Projects="../../tools/Braid.RevisionReportMetadataProbe/Braid.RevisionReportMetadataProbe.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="RevisionReportMetadataProbeTarget" />
+    </MSBuild>
+    <Error Condition="!Exists('@(RevisionReportMetadataProbeTarget)')" Text="The built revision report metadata probe is missing: @(RevisionReportMetadataProbeTarget)" />
+    <PropertyGroup><RevisionReportMetadataProbeDirectory>@(RevisionReportMetadataProbeTarget->'%(RootDir)%(Directory)')</RevisionReportMetadataProbeDirectory></PropertyGroup>
+    <ItemGroup>
+      <RevisionReportMetadataProbeFiles Include="$(RevisionReportMetadataProbeDirectory)**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(RevisionReportMetadataProbeFiles)" DestinationFiles="@(RevisionReportMetadataProbeFiles->'$(OutDir)RevisionReportMetadataProbe/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyDatabaseTool" AfterTargets="Build">
+    <MSBuild Projects="../../tools/Braid.DatabaseTool/Braid.DatabaseTool.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="DatabaseToolTarget" />
+    </MSBuild>
+    <Error Condition="!Exists('@(DatabaseToolTarget)')" Text="The built database tool is missing: @(DatabaseToolTarget)" />
+    <PropertyGroup><DatabaseToolDirectory>@(DatabaseToolTarget->'%(RootDir)%(Directory)')</DatabaseToolDirectory></PropertyGroup>
+    <ItemGroup>
+      <DatabaseToolFiles Include="$(DatabaseToolDirectory)**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(DatabaseToolFiles)" DestinationFiles="@(DatabaseToolFiles->'$(OutDir)DatabaseTool/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyRevisionReportWorkflowProbe" AfterTargets="Build">
+    <MSBuild Projects="../../tools/Braid.RevisionReportWorkflowProbe/Braid.RevisionReportWorkflowProbe.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="RevisionReportWorkflowProbeTarget" />
+    </MSBuild>
+    <Error Condition="!Exists('@(RevisionReportWorkflowProbeTarget)')" Text="The built revision report workflow probe is missing: @(RevisionReportWorkflowProbeTarget)" />
+    <PropertyGroup><RevisionReportWorkflowProbeDirectory>@(RevisionReportWorkflowProbeTarget->'%(RootDir)%(Directory)')</RevisionReportWorkflowProbeDirectory></PropertyGroup>
+    <ItemGroup>
+      <RevisionReportWorkflowProbeFiles Include="$(RevisionReportWorkflowProbeDirectory)**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(RevisionReportWorkflowProbeFiles)" DestinationFiles="@(RevisionReportWorkflowProbeFiles->'$(OutDir)RevisionReportWorkflowProbe/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyMaintenanceProbe" AfterTargets="Build">
+    <MSBuild Projects="../../tools/Braid.MaintenanceProbe/Braid.MaintenanceProbe.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="MaintenanceProbeTarget" />
+    </MSBuild>
+    <Error Condition="!Exists('@(MaintenanceProbeTarget)')" Text="The built maintenance probe is missing: @(MaintenanceProbeTarget)" />
+    <PropertyGroup><MaintenanceProbeDirectory>@(MaintenanceProbeTarget->'%(RootDir)%(Directory)')</MaintenanceProbeDirectory></PropertyGroup>
+    <ItemGroup>
+      <MaintenanceProbeFiles Include="$(MaintenanceProbeDirectory)**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(MaintenanceProbeFiles)" DestinationFiles="@(MaintenanceProbeFiles->'$(OutDir)MaintenanceProbe/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyMaintenanceTool" AfterTargets="Build">
+    <MSBuild Projects="../../tools/Braid.MaintenanceTool/Braid.MaintenanceTool.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="MaintenanceToolTarget" />
+    </MSBuild>
+    <Error Condition="!Exists('@(MaintenanceToolTarget)')" Text="The built maintenance tool is missing: @(MaintenanceToolTarget)" />
+    <PropertyGroup><MaintenanceToolDirectory>@(MaintenanceToolTarget->'%(RootDir)%(Directory)')</MaintenanceToolDirectory></PropertyGroup>
+    <ItemGroup>
+      <MaintenanceToolFiles Include="$(MaintenanceToolDirectory)**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(MaintenanceToolFiles)" DestinationFiles="@(MaintenanceToolFiles->'$(OutDir)MaintenanceTool/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopySessionKeyTool" AfterTargets="Build">
+    <MSBuild Projects="../../tools/Braid.SessionKeyTool/Braid.SessionKeyTool.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="SessionKeyToolTarget" />
+    </MSBuild>
+    <Error Condition="!Exists('@(SessionKeyToolTarget)')" Text="The built session key tool is missing: @(SessionKeyToolTarget)" />
+    <PropertyGroup><SessionKeyToolDirectory>@(SessionKeyToolTarget->'%(RootDir)%(Directory)')</SessionKeyToolDirectory></PropertyGroup>
+    <ItemGroup>
+      <SessionKeyToolFiles Include="$(SessionKeyToolDirectory)**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(SessionKeyToolFiles)" DestinationFiles="@(SessionKeyToolFiles->'$(OutDir)SessionKeyTool/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopySessionTicketProcessProbe" AfterTargets="Build">
+    <MSBuild Projects="../../tools/Braid.SessionTicketProcessProbe/Braid.SessionTicketProcessProbe.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="SessionTicketProcessProbeTarget" />
+    </MSBuild>
+    <Error Condition="!Exists('@(SessionTicketProcessProbeTarget)')" Text="The built session ticket process probe is missing: @(SessionTicketProcessProbeTarget)" />
+    <PropertyGroup><SessionTicketProcessProbeDirectory>@(SessionTicketProcessProbeTarget->'%(RootDir)%(Directory)')</SessionTicketProcessProbeDirectory></PropertyGroup>
+    <ItemGroup>
+      <SessionTicketProcessProbeFiles Include="$(SessionTicketProcessProbeDirectory)**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(SessionTicketProcessProbeFiles)" DestinationFiles="@(SessionTicketProcessProbeFiles->'$(OutDir)SessionTicketProcessProbe/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyHostPrivacyProbe" AfterTargets="Build">
+    <MSBuild Projects="../../tools/Braid.HostPrivacyProbe/Braid.HostPrivacyProbe.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="HostPrivacyProbeTarget" />
+    </MSBuild>
+    <Error Condition="!Exists('@(HostPrivacyProbeTarget)')" Text="The built host privacy probe is missing: @(HostPrivacyProbeTarget)" />
+    <PropertyGroup><HostPrivacyProbeDirectory>@(HostPrivacyProbeTarget->'%(RootDir)%(Directory)')</HostPrivacyProbeDirectory></PropertyGroup>
+    <ItemGroup>
+      <HostPrivacyProbeFiles Include="$(HostPrivacyProbeDirectory)**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(HostPrivacyProbeFiles)" DestinationFiles="@(HostPrivacyProbeFiles->'$(OutDir)HostPrivacyProbe/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyWorkerShutdownProbe" AfterTargets="Build">
+    <MSBuild Projects="../../tools/Braid.WorkerShutdownProbe/Braid.WorkerShutdownProbe.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="WorkerShutdownProbeTarget" />
+    </MSBuild>
+    <Error Condition="!Exists('@(WorkerShutdownProbeTarget)')" Text="The built worker shutdown probe is missing: @(WorkerShutdownProbeTarget)" />
+    <PropertyGroup><WorkerShutdownProbeDirectory>@(WorkerShutdownProbeTarget->'%(RootDir)%(Directory)')</WorkerShutdownProbeDirectory></PropertyGroup>
+    <ItemGroup>
+      <WorkerShutdownProbeFiles Include="$(WorkerShutdownProbeDirectory)**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(WorkerShutdownProbeFiles)" DestinationFiles="@(WorkerShutdownProbeFiles->'$(OutDir)WorkerShutdownProbe/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

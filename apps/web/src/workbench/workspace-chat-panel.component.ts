@@ -19,7 +19,7 @@ import { WorkspaceConversation } from "./workspace-conversation";
 import { ResizeHandleComponent } from "./resize-handle.component";
 
 @Component({
-  selector: "weft-workspace-chat-panel",
+  selector: "braid-workspace-chat-panel",
   imports: [RevisionChatComponent, ResizeHandleComponent],
   providers: [ChatViewRecovery],
   host: {
@@ -39,7 +39,7 @@ import { ResizeHandleComponent } from "./resize-handle.component";
           class="chat-splitter"
           [hidden]="!chat.opened() || narrow() || maximum() <= 300"
         >
-          <weft-resize-handle
+          <braid-resize-handle
             label="Resize chat"
             controls="workspace-chat"
             orientation="vertical"
@@ -61,7 +61,7 @@ import { ResizeHandleComponent } from "./resize-handle.component";
           <h2 id="workspace-chat-heading" class="chat-sr-only" tabindex="-1">
             Ask braid
           </h2>
-          <weft-revision-chat
+          <braid-revision-chat
             [context]="context"
             [requestedConversation]="chat.requested()"
             [requestedVersion]="chat.requestVersion()"
@@ -85,7 +85,7 @@ import { ResizeHandleComponent } from "./resize-handle.component";
             >
               ×
             </button>
-          </weft-revision-chat>
+          </braid-revision-chat>
         </aside>
       }
     }
@@ -150,7 +150,7 @@ import { ResizeHandleComponent } from "./resize-handle.component";
       clip-path: inset(50%);
       margin: -1px;
     }
-    weft-revision-chat {
+    braid-revision-chat {
       flex: 1;
       min-height: 0;
       overflow: auto;
@@ -218,7 +218,7 @@ export class WorkspaceChatPanelComponent {
           this.chat.legacyScope.set(null);
         }
         this.owner = owner;
-        this.storageKey = `weft.chat-width.v1:${context.mode}:${context.actorPrincipalId}:${context.allowedOrganizationId}`;
+        this.storageKey = `braid.chat-width.v1:${context.mode}:${context.actorPrincipalId}:${context.allowedOrganizationId}`;
         let value = 360;
         try {
           const saved = Number(
@@ -296,7 +296,7 @@ export class WorkspaceChatPanelComponent {
   }
   private readonly destroy = inject(DestroyRef);
   private key(): string {
-    return this.storageKey ?? "weft.chat-width.v1";
+    return this.storageKey ?? "braid.chat-width.v1";
   }
   resetWidth(event: KeyboardEvent): void {
     if (event.key !== "Enter") return;

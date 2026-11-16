@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../apps/Braid.MachineEndpoint/Braid.MachineEndpoint.csproj" />
+    <ProjectReference Include="../../src/Braid.Deployment/Braid.Deployment.csproj" />
+    <ProjectReference Include="../../src/Braid.MappingBackends/Braid.MappingBackends.csproj" />
+    <ProjectReference Include="../../src/Braid.Persistence.Postgres/Braid.Persistence.Postgres.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Braid.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

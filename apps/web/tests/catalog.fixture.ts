@@ -17,7 +17,7 @@ export type ReadProfile =
   | "noProjects"
   | "readerUnavailable";
 export interface CatalogBrowserManifest {
-  readonly schemaVersion: "weft.catalog-browser-fixture.v1";
+  readonly schemaVersion: "braid.catalog-browser-fixture.v1";
   readonly fixtureId: string;
   readonly source: { readonly commit: string; readonly tree: string };
   readonly readOrigin: string;
@@ -61,7 +61,7 @@ type Action =
   | "pg-normal-restart"
   | "shutdown";
 type Ack = {
-  schemaVersion: "weft.catalog-browser-control.v1";
+  schemaVersion: "braid.catalog-browser-control.v1";
   requestNonce: string;
   fixtureId: string;
   action: Action;
@@ -195,7 +195,7 @@ function manifest(
     "history",
   ]);
   requireFixture(
-    row.schemaVersion === "weft.catalog-browser-fixture.v1" &&
+    row.schemaVersion === "braid.catalog-browser-fixture.v1" &&
       uuid(row.fixtureId) &&
       uuid(row.organizationId) &&
       row.initialReadProfile === "viewer" &&
@@ -378,7 +378,7 @@ export class CatalogOwner {
       "profile",
     ]);
     requireFixture(
-      ready.schemaVersion === "weft.catalog-browser-ready.v1" &&
+      ready.schemaVersion === "braid.catalog-browser-ready.v1" &&
         ready.profile === "viewer",
       "incompatible ready response",
     );
@@ -439,7 +439,7 @@ export class CatalogOwner {
       );
       const ack = value as Ack;
       requireFixture(
-        ack.schemaVersion === "weft.catalog-browser-control.v1" &&
+        ack.schemaVersion === "braid.catalog-browser-control.v1" &&
           ack.fixtureId === command.fixtureId &&
           ack.requestNonce === command.requestNonce &&
           ack.action === action,
@@ -531,10 +531,10 @@ export class CatalogOwner {
 export const test = base.extend<{}, { catalogOwner: CatalogOwner }>({
   catalogOwner: [
     async ({}, use) => {
-      const operator = process.env.WEFT_CATALOG_BROWSER_OPERATOR;
-      const config = process.env.WEFT_CATALOG_BROWSER_OPERATOR_CONFIG;
-      const path = process.env.WEFT_CATALOG_BROWSER_MANIFEST;
-      const origin = process.env.WEFT_CATALOG_BASE_URL;
+      const operator = process.env.BRAID_CATALOG_BROWSER_OPERATOR;
+      const config = process.env.BRAID_CATALOG_BROWSER_OPERATOR_CONFIG;
+      const path = process.env.BRAID_CATALOG_BROWSER_MANIFEST;
+      const origin = process.env.BRAID_CATALOG_BASE_URL;
       requireFixture(
         operator && config && path && origin && isAbsolute(operator),
         "explicit packaged origin/operator/private config/manifest are required",
@@ -704,23 +704,23 @@ export async function syntheticCatalog(
       url.pathname === "/api/auth/session" &&
       !url.search &&
       (request.postDataBuffer()?.length ?? 0) === 0 &&
-      headers["x-weft-session"] === "1" &&
+      headers["x-braid-session"] === "1" &&
       ![
         "content-type",
         "authorization",
         "x-xsrf-token",
-        "x-weft-auth-token",
+        "x-braid-auth-token",
         "idempotency-key",
         "if-match",
         "if-none-match",
         "identitycontext",
         "identity-context",
-        "x-weft-identity-context",
-        "x-weft-actor",
-        "x-weft-role",
-        "x-weft-login",
-        "x-weft-logout",
-        "x-weft-forget-local",
+        "x-braid-identity-context",
+        "x-braid-actor",
+        "x-braid-role",
+        "x-braid-login",
+        "x-braid-logout",
+        "x-braid-forget-local",
       ].some((name) => name in headers);
     await route.fulfill(
       admitted

@@ -313,8 +313,8 @@ pub fn validate(format: DocumentFormat, bytes: &[u8]) -> Result<(), EnvelopeErro
 #[cfg(test)]
 mod tests {
     use super::*;
-    const X12: &str = "ISA*00*          *00*          *ZZ*WEFTSENDER     *ZZ*WEFTRECEIVER   *261024*1200*^*00501*000000330*0*T*:~GS*PO*WEFTSENDER*WEFTRECEIVER*20261024*1200*330*X*005010~ST*850*0330~BEG*00*SA*WEFT-330~SE*3*0330~GE*1*330~IEA*1*000000330~";
-    const EDIFACT: &str = "UNB+UNOC:3+SENDER+RECEIVER+261024:1200+330'UNH+330+ORDERS:D:96A:UN'BGM+220+WEFT-330'UNT+3+330'UNZ+1+330'";
+    const X12: &str = "ISA*00*          *00*          *ZZ*BRAIDSENDER    *ZZ*BRAIDRECEIVER  *261024*1200*^*00501*000000330*0*T*:~GS*PO*BRAIDSENDER*BRAIDRECEIVER*20261024*1200*330*X*005010~ST*850*0330~BEG*00*SA*BRAID-330~SE*3*0330~GE*1*330~IEA*1*000000330~";
+    const EDIFACT: &str = "UNB+UNOC:3+SENDER+RECEIVER+261024:1200+330'UNH+330+ORDERS:D:96A:UN'BGM+220+BRAID-330'UNT+3+330'UNZ+1+330'";
 
     #[test]
     fn complete_multiple_interchanges_and_repeated_values_preserve_structure() {
@@ -323,7 +323,7 @@ mod tests {
             (DocumentFormat::Edifact, EDIFACT, "ONE*TW?+O:3"),
         ] {
             assert_eq!(validate(format, document.as_bytes()), Ok(()));
-            let multi = format!("{document}\n{}", document.replace("WEFT-330", repeated));
+            let multi = format!("{document}\n{}", document.replace("BRAID-330", repeated));
             assert_eq!(validate(format, multi.as_bytes()), Ok(()));
         }
         let messages = EDIFACT.replace(
@@ -376,7 +376,7 @@ mod tests {
     #[test]
     fn acknowledgements_keep_their_own_envelope_counts() {
         let ack = X12.replace(
-            "ST*850*0330~BEG*00*SA*WEFT-330~SE*3*0330~",
+            "ST*850*0330~BEG*00*SA*BRAID-330~SE*3*0330~",
             "ST*999*0330~AK1*PO*330~IK2*850*0330~AK9*A*1*1*1~SE*5*0330~",
         );
         assert_eq!(validate(DocumentFormat::X12, ack.as_bytes()), Ok(()));
@@ -402,7 +402,7 @@ mod tests {
         assert_eq!(
             validate(
                 DocumentFormat::Edifact,
-                EDIFACT.replace("WEFT-330", "WEFT?+?'330").as_bytes()
+                EDIFACT.replace("BRAID-330", "BRAID?+?'330").as_bytes()
             ),
             Ok(())
         );

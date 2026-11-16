@@ -13,7 +13,7 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-spec = importlib.util.spec_from_file_location("weft_native_postgres_launcher", Path(__file__).with_name("run.py"))
+spec = importlib.util.spec_from_file_location("braid_native_postgres_launcher", Path(__file__).with_name("run.py"))
 launcher = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = launcher
 spec.loader.exec_module(launcher)
@@ -59,14 +59,14 @@ class AdmissionTests(unittest.TestCase):
 class EnvironmentTests(unittest.TestCase):
     def test_credentials_hooks_and_conflicting_test_modes_do_not_flow_to_children(self):
         inherited = {"SystemRoot": "C:/Windows", "USERPROFILE": "C:/Users/test", "PATH": "untrusted",
-                     "WEFT_POSTGRES_IMAGE": "other", "PGPASSWORD": "private", "AZURE_CLIENT_SECRET": "private",
+                     "BRAID_POSTGRES_IMAGE": "other", "PGPASSWORD": "private", "AZURE_CLIENT_SECRET": "private",
                      "DOTNET_STARTUP_HOOKS": "hook.dll", "DOTNET_ADD_GLOBAL_TOOLS_TO_PATH": "true"}
         env = launcher.child_environment(options(), Path("C:/q/run"), Path("C:/q/run/clusters"), inherited)
         self.assertEqual(env["DOTNET_ADD_GLOBAL_TOOLS_TO_PATH"], "false")
-        self.assertEqual(env["WEFT_POSTGRES_BIN"], str(options().postgres_bin))
-        self.assertEqual(env["WEFT_POSTGRES_WORK_ROOT"], str(Path("C:/q/run/clusters")))
+        self.assertEqual(env["BRAID_POSTGRES_BIN"], str(options().postgres_bin))
+        self.assertEqual(env["BRAID_POSTGRES_WORK_ROOT"], str(Path("C:/q/run/clusters")))
         self.assertNotIn("untrusted", env["PATH"])
-        for key in ("WEFT_POSTGRES_IMAGE", "PGPASSWORD", "AZURE_CLIENT_SECRET", "DOTNET_STARTUP_HOOKS"):
+        for key in ("BRAID_POSTGRES_IMAGE", "PGPASSWORD", "AZURE_CLIENT_SECRET", "DOTNET_STARTUP_HOOKS"):
             self.assertNotIn(key, env)
         self.assertEqual(env["USERPROFILE"], "C:/Users/test")
 

@@ -1,9 +1,7 @@
 # Catalog search
 
 The header search and `/catalog/search` use the same `ICatalogSearch` query service
-as the HTTP API and other application callers. `weft search "order number"`
-provides the authenticated command-line equivalent, including `--cursor`,
-`--limit`, `--all`, and `--json`.
+as the HTTP API and other application callers.
 
 Search covers project names and descriptions, mapping names, descriptions and
 backend IDs, revision upload filenames and SHA-256 digests, and field names,
@@ -49,32 +47,21 @@ highlight offsets. Ranges never split Unicode scalars. Angular interpolates the
 text and renders separate `<mark>` elements; it never interprets result text as
 HTML. Long descriptions and paths use a bounded context around the first match.
 
-## Indexing and existing reports
+## Indexing
 
 The database administrator first provisions `pg_trgm` in the private
-`weft_search_extensions` schema. PostgreSQL makes trusted extension routines
+`braid_search_extensions` schema. PostgreSQL makes trusted extension routines
 bootstrap-owned; the ordinary migrator cannot remove their default public
 execution privileges. The migration refuses an unprepared extension rather than
-weakening any existing runtime role guard. Fresh local and Azure databases
+weakening runtime role guards. Local and Azure databases
 provision this through `deploy/local/postgres-init.sh` and
-`deploy/azure/provision-database.sh`; for an existing database, its administrator
-runs the following in that database before applying the search migration:
-
-```sql
-CREATE SCHEMA weft_search_extensions AUTHORIZATION weft_migrator;
-CREATE EXTENSION pg_trgm WITH SCHEMA weft_search_extensions;
-REVOKE ALL ON SCHEMA weft_search_extensions FROM PUBLIC;
-REVOKE ALL ON ALL FUNCTIONS IN SCHEMA weft_search_extensions FROM PUBLIC;
-```
-
-Do not move or adopt an extension already installed in another schema without
-reviewing its existing consumers. The ordinary table expression indexes track
+`deploy/azure/provision-database.sh`. The table expression indexes track
 project and mapping metadata, upload filenames and revision digests automatically.
 Runtime roles receive no extension-schema or primary-table write privileges.
 
 A metadata-only, organization-bound publication view includes **every retained
-usable projection**, including publications predating the search migration and
-reports superseded by a later profile or repair. Report publication remains the
+usable projection**, including reports superseded by a later profile or repair.
+Report publication remains the
 single authoritative transaction: there is no secondary publication callback
 that can fail and silently lose a report from search.
 
@@ -93,19 +80,8 @@ an existing catalog needs report reads, private report storage and the configure
 derivation pool; once complete, ordinary searches need only the catalog reader.
 Providing this cache-writer connection does not require enabling native report
 derivation: search still calls only retained-report reads and index publication.
-Missing, corrupt, unsupported or over-limit old reports remain explicit indexing
+Missing, corrupt, unsupported or over-limit reports remain explicit indexing
 failures: restore the retained report or resolve its format/limit configuration.
-Generating a different report does not establish the contents of a missing old
-one.
-
-## Upgrade conservation
-
-Search-only populated-upgrade tests install the exact prefix ending at the
-search migration and repeat that same bounded migration run. They compare the
-existing rows, schema, routines and authority before any later migration that
-intentionally changes those objects. Complete-prefix and document-profile
-upgrades have separate conservation checks; increasing the search-only target
-to the latest migration would no longer test the same invariant.
 
 ## PostgreSQL strategy and measurement
 
@@ -116,15 +92,7 @@ reports containing 64 fields each (640,000 field terms). It captures actual
 execution plans for selective mapping and field-path/name searches and repeats
 them with index scans disabled as a negative control.
 
-Representative local PostgreSQL 16 measurements for these selective queries:
-
-| Query | Trigram index | Sequential negative control |
-| --- | ---: | ---: |
-| Mapping substring | 0.92 ms | 5.71 ms |
-| Retained-report field substring | 0.29 ms | 145.82 ms |
-
-These are query-strategy measurements on self-authored synthetic data, not an
-HTTP latency guarantee. Short/common substrings can be less selective, and the
+Short/common substrings can be less selective, and the
 planner may choose a scan. Page limits, statement deadlines, report byte/item
 limits and the final completeness check remain in force independently of the
 planner's choice.

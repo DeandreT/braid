@@ -20,7 +20,7 @@
 //! caller; PI targets are colon-free. Text, values and namespace URIs do not use
 //! this table. No runtime network access or Unicode-category inference occurs.
 
-// Derived table data attribution (not a license declaration for Weft):
+// Derived table data attribution (not a license declaration for Braid):
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses the upstream file under the MIT license.
 //

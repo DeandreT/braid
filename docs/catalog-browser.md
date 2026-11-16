@@ -74,5 +74,4 @@ application runtime configuration. Real product HTTP creates the project,
 mapping and revision fixtures. Read checks then run with writes, reports, worker
 and private-root configuration disabled. Synthetic response cases cover UI
 cancellation, incompatible scopes and exact large-number rendering separately
-from persistence checks. The executable operator and invocation details are
-recorded with this increment's final verification instructions.
+from persistence checks.

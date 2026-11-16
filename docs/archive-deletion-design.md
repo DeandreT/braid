@@ -1,34 +1,16 @@
 # Archive, deletion and retention design
 
-**Design only; prerequisite reconciliation required before implementation.**
-The audit/AI-usage/quota baseline assumed below does not match this repository's
-applied migration names: `0037_mapping_drafts.sql`,
-`0038_mapping_draft_previews.sql` and `0039_chat_mapping_writes.sql` occupy those
-slots. References below to `0037_audit_log.sql`, `0038_ai_usage.sql`,
-`0039_ai_quotas.sql` and their associated guards are retained design assumptions,
-not installed schema or migration instructions. Reconcile their intended contracts
-with the actual integrated baseline and separately qualified prerequisites before
-writing implementation SQL or choosing a new suffix. Never rename, overwrite or
-repair old hypothetical SQL into deployed migrations. [Project ownership](project-ownership.md#migrations-and-local-setup)
-owns migration integrity; [ROADMAP](../ROADMAP.md) owns future priorities.
+## 1. Scope
 
-## 1. Scope and implementation gates
+This design covers reversible project/mapping archive, permanent deletion, individual resource deletion and organization retention. Read it alongside [organization switching](organization-switching-design.md) for request-local organization admission.
 
-This is the design specification for [#332](https://github.com/DeandreT/weft/issues/332), not a statement of implemented or qualified behavior. It covers reversible project/mapping archive, permanent deletion, individual resource deletion and organization retention. Read it alongside [organization switching](organization-switching-design.md) for request-local organization admission.
+### Required contracts
 
-Implementation must wait for reconciliation and qualification of the intended audit, AI usage and quota prerequisites. The assumed migration identities below are not the installed baseline. Append migrations after the actual integrated head; do not reserve or overwrite an existing number. Verify the CLI prerequisite in [#317](https://github.com/DeandreT/weft/issues/317) before exposing commands. Baseline source presence is not qualification evidence.
-
-### Baseline contracts to preserve
-
-The first three entries describe the proposal's assumed prerequisites. Later
-references to that “baseline”, prefix 0039 or its upgrade matrix carry the same
-reconciliation gate; they are not executable setup or verified schema claims.
-
-* `0037_audit_log.sql` defines an append-only journal with identifiers independent of project/mapping/principal foreign keys and only an organization FK. Source capture and source writes share a transaction. Reads require current organization or exact-project administration authority. Several source-specific audit families still have live-resource FKs.
-* `0038_ai_usage.sql` retains usage and fixed failure categories independently of chat, with only organization and internal usage-child FKs. Coverage is immutable; erased historical turns cannot be reconstructed. Preserve independently known input/output/total counts, unknown-round counts and admission time. Deletion must not re-derive historical usage.
-* `0039_ai_quotas.sql` retains reservations without chat/project FKs. Reservation identity includes private fingerprints, conversation and turn IDs. Incomplete, cancelled and interrupted work does not release reserved capacity. The baseline chat admission takes the organization quota-state lock after the conversation lock; the cross-family gate below must precede both.
+* The append-only journal uses identifiers independent of project/mapping/principal foreign keys and only an organization FK. Source capture and source writes share a transaction. Reads require current organization or exact-project administration authority.
+* Usage and fixed failure categories remain independent of chat, with only organization and internal usage-child FKs. Coverage is immutable. Preserve independently known input/output/total counts, unknown-round counts and admission time when deleting content.
+* Quota reservations have no chat/project FKs. Reservation identity includes private fingerprints, conversation and turn IDs. Incomplete, cancelled and interrupted work does not release reserved capacity. The cross-family gate below precedes conversation and quota-state locks.
 * `0007_private_object_maintenance.sql` and `ObjectCleanupRetirement` admit only orphan reasons, enforce their 24-hour grace and protect committed revisions and successful reports. Publication/retirement rows reference ingestion/derivation owners, and cleanup current/completed pointers form cycles. `PostgresPrivateObjectMaintenanceStore.Materialization.cs` reconstructs full publication owners from live metadata, not only object IDs.
-* Filesystem v2 and Blob use exact-object physical fencing. `IPrivateObjectRetirementStore.RetireAsync(ObjectCleanupClaim)` accepts an orphan claim, not catalog-deletion authority. Filesystem v2 requires Linux qualification, not a native-Windows substitute. Blob replaces the final slot with a permanent empty fence; filesystem v2 unlinks the admitted payload inode and retains gates/fences. Neither is a recursive directory deletion API.
+* Filesystem v2 and Blob use exact-object physical fencing. `IPrivateObjectRetirementStore.RetireAsync(ObjectCleanupClaim)` accepts an orphan claim, not catalog-deletion authority. Blob replaces the final slot with a permanent empty fence; filesystem v2 unlinks the admitted payload inode and retains gates/fences. Neither is a recursive directory deletion API.
 * `0018_build_publication.sql`, `PostgresBuildObjectStore` and [build persistence](build-persistence.md) store build artifacts as private PostgreSQL `bytea`, not filesystem/Blob maintenance objects. Approval/qualification bodies and results can contain private intent, samples and execution data. Retain the particular artifact/audit evidence required by policy, not all build rows.
 * `local_release_targets.active_release_id` is the authoritative active pointer. A historical release with `phase='active'` need not be current. Disabling a target does not clear its pointer; deletion requires the separate retirement operation specified below.
 * `0011_private_chat.sql`, `0032_workspace_chat.sql` and `ChatPersistence.cs` make chat creator-private, including from administrators. Baseline expiry erasure requires expiry and no active turn, and retires identities with content erasure in one transaction. Workspace conversations have immutable optional focus FKs but may discuss other projects. Immediate owner or project-deletion erasure requires new explicit authority.
@@ -44,7 +26,7 @@ Use four states: `active`, `archived`, `deleting`, `deleted`.
 
 * Project archive does not rewrite each mapping. Effective mapping state is the intersection of project and mapping lifecycle. Restoring a project leaves independently archived mappings archived.
 * Archive is reversible only until a hard-delete request commits. It hides resources from ordinary lists/search, but exact authorized reads continue, including revisions, reports, runs, operations history and creator-owned chat. Existing expiry still applies; archive never extends it.
-* Explicit archived/all filters reveal only resources the actor can already read. Search, workspace tools, CLI and lists share filter implementation and cursor binding.
+* Explicit archived/all filters reveal only resources the actor can already read. Search, workspace tools and lists share filter implementation and cursor binding.
 * Archive denies new native uploads/reservations, append/commit, metadata changes, import/export review creation/acceptance that writes state, derivations/repairs, preview/regression execution admission, automation evaluations, approvals, builds, qualification, release registration/activation/rollback and new scoped chat/provider/tool work. Existing output may be read without deriving missing data.
 * Cancellation, safe terminal failure/accounting, grant revocation, administrative access management, deletion and restore are explicit control-plane exceptions. They cannot publish revisions, reports, successful output, artifacts or new provider rounds. There is no generic administrator bypass.
 * Archive increments an authoring write epoch. Work admitted before archive cannot publish new catalog content after archive commits, even if restore occurs before it returns. Restore increments the epoch again. A fresh deliberate request is required; old claims cannot revive.
@@ -88,7 +70,7 @@ The following are design names for new schema. Use typed columns, checked enums,
 * `project_id` and nullable `mapping_id` express immutable ancestry. For projects, `resource_id=project_id`; for mappings, `resource_id=mapping_id`.
 * Fields: `state`, `version bigint > 0`, `write_epoch bigint > 0`, `changed_at`, nullable `archived_at`, `archived_by`, `deletion_job_id` and `deleted_at`.
 * FK only to organization and, where needed, durable project/mapping lifecycle identity, not erasable catalog rows. Surviving identities prevent reuse; retain no names, descriptions or filenames.
-* Every live project/mapping has exactly one matching row. Backfill as active without inventing historical events. Project creation/ingestion-create inserts lifecycle identity atomically. Missing lifecycle metadata fails writes closed.
+* Every live project/mapping has exactly one matching row. Project creation/ingestion-create inserts lifecycle identity atomically. Missing lifecycle metadata fails writes closed.
 * Guard transitions and immutable ancestry. `deleting`/`deleted` cannot reopen. Generation overflow fails explicitly.
 
 `lifecycle_operations`:
@@ -130,7 +112,7 @@ Ingestion also retains the original client lookup namespace `(organization_id, p
 * Store approved storage kind and root/control identity, origin snapshot ID, first retirement time, current/completed attempt and categorical disposition. Never accept arbitrary paths, blob URLs, SAS tokens or connection strings.
 * `deletion_object_attempts` retains generation, attempt/instance/token/lease, times and physical observation. Terminal success requires actual `Deleted` or safe `Missing`. No FK to live catalog data.
 
-Resolve physical bindings from trusted server configuration before destructive work. Provide an operator-managed `private_storage_bindings` registry if needed. Requests cannot select adapters. Existing publication `root_id`/kind must match the binding. Unqualified legacy roots block deletion rather than becoming Missing. No drive/path discovery or relocation is part of deletion.
+Resolve physical bindings from trusted server configuration before destructive work. Provide an operator-managed `private_storage_bindings` registry if needed. Requests cannot select adapters. Publication `root_id`/kind must match the binding. Unsupported roots block deletion rather than becoming Missing. No drive/path discovery or relocation is part of deletion.
 
 ### 3.3 Retained evidence
 
@@ -158,7 +140,7 @@ Retained stores have only organization/durable-evidence FKs; they cannot pin liv
 
 Chat's immutable `retain_until` belongs to canonical turn context. Never rewrite it, replay an old envelope with another deadline or make expired data readable. A sidecar deadline may shorten retention only through explicit confirmed erasure; reads use the earliest applicable deadline. Existing intrinsic preview/chat/invocation expiry remains a maximum readability deadline unless a separately designed contract migration changes it.
 
-Organization retention has no default durations. Nothing is deleted automatically under organization policy until an organization administrator configures a policy for that family; until then, items are held and shown as “not configured”. Audit and usage records keep their independent fixed retention, which these settings cannot shorten. Preserve explicit existing deadlines. Legacy regression/history rows without known deadlines remain held and report “not configured”; never derive policy from test settings.
+Organization retention has no default durations. Nothing is deleted automatically under organization policy until an organization administrator configures a policy for that family; until then, items are held and shown as “not configured”. Audit and usage records keep their independent fixed retention, which these settings cannot shorten. Preserve explicit deadlines; never derive policy from test settings.
 
 ## 4. Transaction and race protocol
 
@@ -268,11 +250,11 @@ Status may truthfully show `catalogRemoved=true` and `objectsPending>0`. Zero cl
 
 ### Scheduler
 
-Use durable due-work scanning in the existing worker host with restricted `weft_lifecycle_worker` pool and explicit feature configuration, not one timer per API instance. No schema CREATE grant. If Wolverine provides wakeups, messages carry organization/job IDs only; committed DB due state is authoritative. Restart scans recover lost wakeups; duplicate delivery cannot duplicate operations. Use existing organization-managed deployment wiring, not new pipeline definitions/registration.
+Use durable due-work scanning in the existing worker host with restricted `braid_lifecycle_worker` pool and explicit feature configuration, not one timer per API instance. No schema CREATE grant. If Wolverine provides wakeups, messages carry organization/job IDs only; committed DB due state is authoritative. Restart scans recover lost wakeups; duplicate delivery cannot duplicate operations. Use existing organization-managed deployment wiring, not new pipeline definitions/registration.
 
-* Strong ETags protect policy reads/writes; UI/CLI never auto-retry. Changes increment generation and append `retentionChanged` once with family/version/mode/safe scalar duration only.
+* Strong ETags protect policy reads/writes; the browser never auto-retries. Changes increment generation and append `retentionChanged` once with family/version/mode/safe scalar duration only.
 * A policy applies prospectively to new data. It applies to existing data only when an administrator explicitly applies it, with separate confirmation of a fixed policy version and counted categories. Preserve canonical identities/deadlines; sidecars control earlier erasure. Saving settings cannot silently shorten every conversation.
-* Backfill deadlines only from verified intrinsic times or an explicit administrator policy application. Never infer chat age from tests, regression terminal time from creation or missing time from migration. Add actual future regression/automation terminal timestamps; unknown historical times remain held.
+* Calculate deadlines from verified intrinsic times or an explicit administrator policy application. Record actual regression/automation terminal timestamps; never substitute creation time for completion time.
 * Select bounded candidates by `(due_at, kind, id)`, one organization per transaction. Claim current policy/version, recheck due time after locks and create/reuse an exact job/receipt. Extension before claim prevents it; extension after irreversible admission cannot restore data. Explain this in UI.
 * Preview/chat become unreadable at effective expiry even if purge lags. Close active expired work safely before purge. Retain reference-held regression evidence until obligations end and report holds rather than silently retrying forever.
 * Separate invocation response bytes, operational history and replay identity. Erase response bytes without extending maximum readability. Remove eligible history only after required audit copy and a no-content caller/target/request-ID tombstone. Repeated expired requests return expired/retired, never execute again. Keep private `request_digest` only if required by exact replay under an approved retention obligation, never as an audit field.
@@ -281,7 +263,7 @@ Use durable due-work scanning in the existing worker host with restricted `weft_
 
 ## 8. Application and persistence interfaces
 
-Place lifecycle types under `Weft.Application/Lifecycle`, retention under `Weft.Application/Retention`, and public DTOs under `Weft.Contracts`. Private claims remain in application/persistence/storage.
+Place lifecycle types under `Braid.Application/Lifecycle`, retention under `Braid.Application/Retention`, and public DTOs under `Braid.Contracts`. Private claims remain in application/persistence/storage.
 
 | Interface | Required operations |
 | --- | --- |
@@ -299,9 +281,9 @@ Adapters: `PostgresResourceLifecycleStore`, `PostgresDeletionJobStore`, `Postgre
 
 Integration includes `PostgresRevisionIngestion*`, `PostgresRevisionDerivationStore*`, publication registries, `PostgresChatStore*`, `PostgresChatLifecycleStore`, preview/regression/build/release/invocation/automation stores, `PostgresCatalogReader*`, `PostgresCatalogSearch`, workspace orchestration and exact schema/role guards. Keep `AuditLogSchemaAdmission`, `AiUsageSchemaAdmission` and `AiQuotaSchemaAdmission` independent and exact; do not whitelist arbitrary changed schema.
 
-## 9. HTTP, browser and CLI
+## 9. HTTP and browser
 
-Retain authentication, CSRF/origin, organization selection, bounded JSON and no-store behavior. Generate OpenAPI from endpoint definitions, not standalone edits to `contracts/weft-v1.json`.
+Retain authentication, CSRF/origin, organization selection, bounded JSON and no-store behavior. Generate OpenAPI from endpoint definitions, not standalone edits to `contracts/braid-v1.json`.
 
 Routes under `/api/v1/organizations/{organizationId}`:
 
@@ -324,18 +306,9 @@ Missing precondition is `428`, stale is `412`, authority follows indistinguishab
 * Show truthful progress/blocked cleanup. Unknown submission remains unconfirmed; resolve original operation ID before a new action. Never claim complete deletion on network failure.
 * Retention shows units, explicit retain/expire, original deadlines/current policy and application scope. Unknown policy is “not configured”, not preselected destruction. Read errors cannot clear unrelated unsaved fields.
 
-### CLI acceptance
-
-* Provide `weft projects archive|restore|delete`, `weft mappings archive|restore|delete`, `weft lifecycle operation`, `weft deletion status` and resource-family delete commands. Share `--archived` or `--state` filtering across list/search.
-* Archive/restore require `--if-match` and `--operation`; deletion requires separately obtained confirmation and exact version/operation. Interactive mode shows preview and deliberate confirmation; noninteractive mode requires explicit arguments. `--yes` cannot invent/bypass confirmation or preconditions.
-* `weft retention show|set` replaces the four-family policy with `--if-match`, without auto-retry. Explicit bounded GET status polling never repeats mutations.
-* Emit machine-safe categories, IDs, counts/status only. Exit categories distinguish accepted-pending, completed, conflict/refusal and unavailable/unconfirmed. Queued does not mean erased.
-
 ## 10. Required verification
 
-These are implementation acceptance requirements, not reported results.
-
-1. **Upgrade/schema:** populate baseline 0039 through original restricted ports with committed/failed/unfinished ingestion, selected/older/repair reports, both chat kinds, builds/qualifications, disabled/active targets, automation and maintenance generations. Apply additive migrations. Verify checksums, exact guards/functions/grants/RLS, rejection of unknown tables, unchanged owner/runtime privileges and no payloads in audit/receipts.
+1. **Schema:** populate committed/failed/unfinished ingestion, selected/older/repair reports, both chat kinds, builds/qualifications, disabled/active targets, automation and maintenance generations. Verify exact guards/functions/grants/RLS, rejection of unknown tables, restricted owner/runtime privileges and no payloads in audit/receipts.
 2. **Archive/restore:** every authoring/deployment port refuses after fencing; authorized exact reads remain. Existing enabled endpoints serve under original target/release/current grants with invocation/audit writes; disabled/revoked endpoints refuse. Restore preserves mapping archives; every surface agrees; parent archive changes effective mapping ETag; old epochs never revive. Deleted-ingestion create/append keys cannot allocate work in a surviving project. Create terminal chat/invocation rows during quiescence and prove final copy/purge includes them without weakening manifest guards.
 3. **Concurrency:** real separate DB connections with deterministic barriers, not sleeps. Both winner orders for archive against native commit, report finish, preview/run completion, chat start/round reserve, build stage/commit, automation enqueue, target registration/activation and administrator revocation. Verify post-wait ACL/time, no partial audit/receipt or post-fence publication, and no unsafe deadlock retry. Include restricted direct SQL.
 4. **Active releases:** disabled target with pointer, historical non-current active release, shared environments, inconsistent ancestry, activation/delete and retire/activation races, stale target ETags. Delete never auto-disables/clears; retire preserves history and increments actual target version.
@@ -344,20 +317,8 @@ These are implementation acceptance requirements, not reported results.
 7. **Idempotency:** erased preview/case/environment/project/create/invocation identities and original ingestion client namespaces never become fresh work. Chat request/round/turn IDs stay retired. Original operation reads resolve unknown commits; changed payload/version conflicts. Expired machine requests never re-execute.
 8. **Physical cleanup:** real qualified filesystem-v2/Blob contracts, not fabricated Deleted results. Process death around claim commit, durable fence, unlink/replacement, Finish and lost reply; stale generations/leases; live readers/writers; kind/root mismatches; bad seals/ETags/inodes; unregistered files and unsupported roots. Verify permanent fences and Busy/unsafe categories. Windows mocks cannot qualify Linux storage.
 9. **Retention:** unit policy clocks and real post-wait DB deadlines; exact boundaries, negative/overflow duration, unconfigured families held, policy races, prospective/explicit-existing application, missing terminal time, reference holds, active expiry, scheduler restart/duplicates and per-item failure isolation. Quota windows/uncertain reservations cannot disappear into free capacity.
-10. **HTTP/browser/CLI:** generated routes/outcomes/headers, strict duplicate/unknown JSON rejection, no-store/CSRF/bearer matrix, wrong organization/owner/submitter, mid-request revocation, expired confirmation, stale parent ETag, decimal-string large counts and fresh authority on every page/status. Exercise unsent/unconfirmed work, identity refresh/change and no automatic resend. CLI emits one mutation only on timeout/412/409.
+10. **HTTP/browser:** generated routes/outcomes/headers, strict duplicate/unknown JSON rejection, no-store/CSRF/bearer matrix, wrong organization/owner/submitter, mid-request revocation, expired confirmation, stale parent ETag, decimal-string large counts and fresh authority on every page/status. Exercise unsent/unconfirmed work, identity refresh/change and no automatic resend.
 
-Qualification uses pinned runtimes and isolated local C: outputs, never U: build/test intermediates or unrelated services. Linux filesystem qualification requires its documented dependency and approved Btrfs environment. This specification does not authorize execution against live services.
+## 11. Workspace history privacy
 
-## 11. Implementation stages and open decisions
-
-1. Integrate the qualified baseline and verify the CLI prerequisite. Add graph/permission tests, lifecycle identities/epochs, organization gate and exact schema admission before routes/scheduler activation.
-2. Implement archive across admission/publication/control exceptions, reads/filters, receipts/audit and HTTP/browser/CLI. Qualify concurrent work before enabling it.
-3. Implement independent retained evidence/tombstones, cycle migrations, job-bound guards, exact-target arbitration and manifests. Verify retained stores have no live-resource pins and preserve orphan policy.
-4. Implement explicit retire, confirmation, active-pointer checks, quiescence, bounded catalog purge, physical capability/adapters, resumable jobs and truthful status. Catalog-only purge is insufficient for enabling hard delete.
-5. Implement owner erasure, reference-safe case/environment deletion, retention policy/sweeps, invocation replay tombstones and explicit existing-data application. Automatic deletion runs only for administrator-configured policies.
-6. Qualify the complete migration/race/privacy/storage matrix and update user/admin/storage documentation with retained categories, serving behavior, statuses and backup limits.
-
-Remaining product/release decisions:
-
-* **Workspace history privacy:** structural deletion includes revision-bound and explicitly focused conversations without inspecting text. Unfocused/other-focus organization conversations remain independent and may contain earlier quotes/citations; their own retention applies and confirmation/docs must disclose this. Broader erasure requires a separately approved complete immutable disclosure-dependency design, provable historical backfill and a policy for unprovable history/collateral whole-conversation erasure. Never scan private text, erase all organization chat or promise complete quotation erasure from citation rows alone.
-* **Integration:** select the actual next migration number only after the qualified baseline is integrated and coordinate request-local organization admission with its specification. No implementation or qualification result is implied by this document.
+Structural deletion includes revision-bound and explicitly focused conversations without inspecting text. Unfocused/other-focus organization conversations remain independent and may contain quotes/citations; their own retention applies and deletion confirmation must disclose this. Broader erasure needs an immutable disclosure-dependency design and a policy for untracked quotations. Never scan private text, erase all organization chat or promise complete quotation erasure from citation rows alone.

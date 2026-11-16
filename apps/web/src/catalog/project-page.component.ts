@@ -21,7 +21,7 @@ interface ProjectScreen {
 }
 
 @Component({
-  selector: "weft-project-page",
+  selector: "braid-project-page",
   imports: [
     DatePipe,
     RouterLink,

@@ -55,7 +55,7 @@ test("account warning tracks unsent MFD work but not a recoverable server review
   });
   try {
     await page.goto(projectPath(data.project.scope) + "/mappings/new");
-    const panel = page.locator("weft-mfd-import");
+    const panel = page.locator("braid-mfd-import");
     const warning = page.locator("#sign-in-navigation-warning");
     await expect(panel.getByLabel("Mapping name")).toBeVisible();
     await page.locator("#account-trigger").click();
@@ -149,7 +149,7 @@ for (const append of [false, true])
         ? mappingPath(data.mapping.scope) + "/revisions/new"
         : projectPath(data.project.scope) + "/mappings/new",
     );
-    const panel = page.locator("weft-mfd-import");
+    const panel = page.locator("braid-mfd-import");
     if (!append) {
       await panel.getByLabel("Mapping name").fill("Retained unavailable name");
       await panel
@@ -361,7 +361,7 @@ test("uncertain confirmation cannot become a new draft when recovery reads fail"
   };
   try {
     await page.goto(projectPath(data.project.scope) + "/mappings/new");
-    const panel = page.locator("weft-mfd-import");
+    const panel = page.locator("braid-mfd-import");
     await panel.getByLabel("Mapping name").fill(review.mappingName);
     await panel.getByLabel("Design and schema files").setInputFiles({
       name: "design.mfd",
@@ -445,7 +445,7 @@ test("same-owner access and focus checks preserve unsent MFD fields and files", 
     await route.fulfill({ json: data.context });
   });
   await page.goto(projectPath(data.project.scope) + "/mappings/new");
-  const panel = page.locator("weft-mfd-import");
+  const panel = page.locator("braid-mfd-import");
   await panel.getByLabel("Mapping name").fill("Retained private name");
   await panel.getByLabel("Description").fill("Retained private notes");
   await panel.getByLabel("Design and schema files").setInputFiles([
@@ -473,7 +473,7 @@ test("same-owner access and focus checks preserve unsent MFD fields and files", 
     await expect.poll(() => waiting).toBe(next);
     expect(
       await original!.evaluate(
-        (element) => element === document.querySelector("weft-mfd-import"),
+        (element) => element === document.querySelector("braid-mfd-import"),
       ),
     ).toBe(true);
     await expect(panel.getByLabel("Mapping name")).toHaveValue(
@@ -579,7 +579,7 @@ for (const operation of ["confirm", "download"])
           : revisionPath(data.revision.scope),
       );
       const panel = page.locator(
-        operation === "confirm" ? "weft-mfd-import" : "weft-mfd-export",
+        operation === "confirm" ? "braid-mfd-import" : "braid-mfd-export",
       );
       if (operation === "confirm") {
         await panel.getByLabel("Mapping name").fill("Private rejected import");
@@ -656,7 +656,7 @@ test("metadata-only import drafts are guarded and cleared when identity changes"
     route.fulfill({ json: data.context }),
   );
   await page.goto(projectPath(data.project.scope) + "/mappings/new");
-  const panel = page.locator("weft-mfd-import");
+  const panel = page.locator("braid-mfd-import");
   await panel.getByLabel("Mapping name").fill("Private draft name");
   await panel.getByLabel("Description").fill("Private draft description");
   const prevented = await page.evaluate(() => {
@@ -722,7 +722,7 @@ for (const append of [false, true]) {
     await page.route("**/mfd-imports/review?*", async (route) => {
       reviews++;
       expect(route.request().headers()["content-type"]).toBe(
-        "application/vnd.weft.mfd-package.v1",
+        "application/vnd.braid.mfd-package.v1",
       );
       expect(route.request().postDataBuffer()!.length).toBeGreaterThan(20);
       await route.fulfill({ json: review });
@@ -746,7 +746,7 @@ for (const append of [false, true]) {
         ? mappingPath(data.mapping.scope) + "/revisions/new"
         : projectPath(data.project.scope) + "/mappings/new",
     );
-    const panel = page.locator("weft-mfd-import");
+    const panel = page.locator("braid-mfd-import");
     await expect(
       panel.getByRole("heading", { name: "Import MapForce design" }),
     ).toBeVisible();
@@ -766,9 +766,9 @@ for (const append of [false, true]) {
     });
     await expect(confirm).toBeDisabled();
     await panel.getByRole("checkbox").check();
-    if (process.env.WEFT_MFD_SCREENSHOT_DIR)
+    if (process.env.BRAID_MFD_SCREENSHOT_DIR)
       await page.screenshot({
-        path: `${process.env.WEFT_MFD_SCREENSHOT_DIR}/mfd-${append ? "append" : "create"}-review.png`,
+        path: `${process.env.BRAID_MFD_SCREENSHOT_DIR}/mfd-${append ? "append" : "create"}-review.png`,
         fullPage: true,
       });
     await confirm.click();
@@ -829,7 +829,7 @@ test("export displays warnings before enabling the verified download", async ({
     }),
   );
   await page.goto(revisionPath(synthetic.revision.scope));
-  const panel = page.locator("weft-mfd-export");
+  const panel = page.locator("braid-mfd-export");
   await panel.getByRole("button", { name: "Review .mfd export" }).click();
   await expect(panel.getByText("Synthetic export warning")).toBeVisible();
   const button = panel.getByRole("button", {
@@ -837,9 +837,9 @@ test("export displays warnings before enabling the verified download", async ({
   });
   await expect(button).toBeDisabled();
   await panel.getByRole("checkbox").check();
-  if (process.env.WEFT_MFD_SCREENSHOT_DIR)
+  if (process.env.BRAID_MFD_SCREENSHOT_DIR)
     await page.screenshot({
-      path: `${process.env.WEFT_MFD_SCREENSHOT_DIR}/mfd-export-review.png`,
+      path: `${process.env.BRAID_MFD_SCREENSHOT_DIR}/mfd-export-review.png`,
       fullPage: true,
     });
   const downloading = page.waitForEvent("download");

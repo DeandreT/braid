@@ -39,8 +39,8 @@
         }}</span>
       </div>
       @if (session.visible()) {
-        <weft-header-search />
-        <weft-notification-popover />
+        <braid-header-search />
+        <braid-notification-popover />
       }
       @if (session.visible() && contexts.context()?.features?.chat) {
         <button
@@ -70,7 +70,7 @@
           }
         </button>
       }
-      <weft-browser-auth-controls
+      <braid-browser-auth-controls
         [organization]="
           contexts.canPresent(contexts.context())
             ? (contexts.context()?.organizationName ?? null)
@@ -89,7 +89,7 @@
       />
     </header>
   }
-  <weft-connection-notice />
+  <braid-connection-notice />
   @if (
     chat.opened() && contexts.canPresent(contexts.context()) && chat.viewLabel()
   ) {
@@ -173,7 +173,7 @@
     <div class="workspace-content">
       <main id="main-content" tabindex="-1"><router-outlet /></main>
       @if (!signInPage()) {
-        <weft-workspace-chat-panel />
+        <braid-workspace-chat-panel />
       }
     </div>
   </div>

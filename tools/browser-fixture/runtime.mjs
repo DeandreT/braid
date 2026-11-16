@@ -145,7 +145,7 @@ export async function runBrowserFixture(definition) {
       cfg = parse(configBytes);
     check(
       cfg.schemaVersion ===
-        `weft.${definition.kind}-browser-operator-config.v1` &&
+        `braid.${definition.kind}-browser-operator-config.v1` &&
         (regressionScenario || cfg.runtimeReleased === true),
     );
     const fixtureId = guid(cfg.fixtureId),
@@ -160,37 +160,37 @@ export async function runBrowserFixture(definition) {
     check(
       process.env[
         buildScenario
-          ? "WEFT_BUILD_BROWSER_MANIFEST"
+          ? "BRAID_BUILD_BROWSER_MANIFEST"
           : regressionScenario
-            ? "WEFT_REGRESSION_BROWSER_MANIFEST"
+            ? "BRAID_REGRESSION_BROWSER_MANIFEST"
             : creationScenario
-              ? "WEFT_PROJECT_CREATION_BROWSER_MANIFEST"
+              ? "BRAID_PROJECT_CREATION_BROWSER_MANIFEST"
               : appendScenario
-                ? "WEFT_NATIVE_REVISION_APPEND_BROWSER_MANIFEST"
+                ? "BRAID_NATIVE_REVISION_APPEND_BROWSER_MANIFEST"
                 : uploadScenario
-                  ? "WEFT_NATIVE_MAPPING_UPLOAD_BROWSER_MANIFEST"
+                  ? "BRAID_NATIVE_MAPPING_UPLOAD_BROWSER_MANIFEST"
                   : metadataScenario
-                    ? "WEFT_MAPPING_METADATA_BROWSER_MANIFEST"
+                    ? "BRAID_MAPPING_METADATA_BROWSER_MANIFEST"
                     : definition.kind === "catalog"
-                      ? "WEFT_CATALOG_BROWSER_MANIFEST"
-                      : "WEFT_REPORTS_BROWSER_MANIFEST"
+                      ? "BRAID_CATALOG_BROWSER_MANIFEST"
+                      : "BRAID_REPORTS_BROWSER_MANIFEST"
       ] === cfg.manifestPath &&
         process.env[
           buildScenario
-            ? "WEFT_BUILD_BASE_URL"
+            ? "BRAID_BUILD_BASE_URL"
             : regressionScenario
-              ? "WEFT_REGRESSION_BASE_URL"
+              ? "BRAID_REGRESSION_BASE_URL"
               : creationScenario
-                ? "WEFT_PROJECT_CREATION_BASE_URL"
+                ? "BRAID_PROJECT_CREATION_BASE_URL"
                 : appendScenario
-                  ? "WEFT_NATIVE_REVISION_APPEND_BASE_URL"
+                  ? "BRAID_NATIVE_REVISION_APPEND_BASE_URL"
                   : uploadScenario
-                    ? "WEFT_NATIVE_MAPPING_UPLOAD_BASE_URL"
+                    ? "BRAID_NATIVE_MAPPING_UPLOAD_BASE_URL"
                     : metadataScenario
-                      ? "WEFT_MAPPING_METADATA_BASE_URL"
+                      ? "BRAID_MAPPING_METADATA_BASE_URL"
                       : definition.kind === "catalog"
-                        ? "WEFT_CATALOG_BASE_URL"
-                        : "WEFT_REPORTS_BASE_URL"
+                        ? "BRAID_CATALOG_BASE_URL"
+                        : "BRAID_REPORTS_BASE_URL"
         ] === origin(cfg.readOrigin),
     );
     origin(cfg.mutationOrigin);
@@ -199,7 +199,7 @@ export async function runBrowserFixture(definition) {
       const release = parse(privateFile(cfg.releasePath));
       check(
         release.schemaVersion ===
-          `weft.${definition.kind}-browser-release.v1` &&
+          `braid.${definition.kind}-browser-release.v1` &&
           release.released === true &&
           release.configurationSha256 === sha(configBytes) &&
           release.operatorSha256 ===
@@ -253,10 +253,10 @@ export async function runBrowserFixture(definition) {
           ];
         });
     const publicationKinds = [
-      ["server", "Weft.Server"],
-      ["databaseTool", "Weft.DatabaseTool"],
-      ...(regressionScenario ? [["worker", "Weft.Worker"]] : []),
-      ...(creationScenario ? [] : [["storageTool", "Weft.StorageTool"]]),
+      ["server", "Braid.Server"],
+      ["databaseTool", "Braid.DatabaseTool"],
+      ...(regressionScenario ? [["worker", "Braid.Worker"]] : []),
+      ...(creationScenario ? [] : [["storageTool", "Braid.StorageTool"]]),
     ];
     for (const [kind, assembly] of publicationKinds) {
       const item = cfg.publications[kind];
@@ -323,22 +323,22 @@ export async function runBrowserFixture(definition) {
         : join(scratch, "private-objects"),
       nonce = randomBytes(8).toString("hex");
     if (regressionScenario)
-      check(storageRoot === "/run/weft-regression-" + fixtureId + "/objects");
+      check(storageRoot === "/run/braid-regression-" + fixtureId + "/objects");
     const resourceName =
       (creationScenario
-        ? "weft-project-creation-browser-"
-        : "weft-catalog-browser-") + nonce;
+        ? "braid-project-creation-browser-"
+        : "braid-catalog-browser-") + nonce;
     const labels = {
-      "weft.qualification.owner": fixtureId,
-      "weft.qualification.nonce": nonce,
-      "weft.qualification.case": resourceName,
+      "braid.qualification.owner": fixtureId,
+      "braid.qualification.nonce": nonce,
+      "braid.qualification.case": resourceName,
     };
     const labelArgs = Object.entries(labels).flatMap(([key, value]) => [
       "--label",
       key + "=" + value,
     ]);
     const state = {
-      schemaVersion: `weft.${definition.kind}-browser-private-ledger.v1`,
+      schemaVersion: `braid.${definition.kind}-browser-private-ledger.v1`,
       fixtureId,
       source: cfg.source.commit,
       labels,
@@ -465,51 +465,51 @@ export async function runBrowserFixture(definition) {
     const workerEvents = new Map(),
       secrets = new Map();
     const rolePairs = [
-      ["weft_migrator", "MIGRATOR"],
-      ["weft_runtime", "RUNTIME"],
-      ["weft_ingest", "INGEST"],
-      ["weft_catalog_reader", "CATALOG"],
-      ["weft_catalog_editor", "METADATA"],
-      ["weft_project_creator", "CREATOR"],
-      ["weft_report_reader", "REPORT"],
-      ["weft_deriver", "DERIVATION"],
-      ["weft_maintenance", "MAINTENANCE"],
-      ["weft_identity_reader", "IDENTITY"],
-      ["weft_payload_permission_reader", "PAYLOAD_PERMISSION"],
-      ["weft_session_reader", "SESSION_READER"],
-      ["weft_session_writer", "SESSION_WRITER"],
-      ["weft_chat_reader", "CHAT_READER"],
-      ["weft_chat_writer", "CHAT_WRITER"],
-      ["weft_chat_approver", "CHAT_APPROVER"],
-      ["weft_chat_lifecycle", "CHAT_LIFECYCLE"],
-      ["weft_preview_reader", "PREVIEW_READER"],
-      ["weft_preview_writer", "PREVIEW_WRITER"],
-      ["weft_case_reader", "CASE_READER"],
-      ["weft_case_writer", "CASE_WRITER"],
-      ["weft_run_reader", "RUN_READER"],
-      ["weft_run_writer", "RUN_WRITER"],
-      ["weft_comparison_settler", "COMPARISON"],
-      ["weft_build_reader", "BUILD_READER"],
-      ["weft_build_writer", "BUILD_WRITER"],
-      ["weft_build_run_reader", "BUILD_RUN_READER"],
-      ["weft_build_run_writer", "BUILD_RUN_WRITER"],
-      ["weft_build_dispatcher", "BUILD_DISPATCHER"],
-      ["weft_build_metadata_reader", "BUILD_METADATA"],
-      ["weft_qualification_reader", "QUALIFICATION_READER"],
-      ["weft_qualification_writer", "QUALIFICATION_WRITER"],
-      ["weft_release_reader", "RELEASE_READER"],
-      ["weft_release_writer", "RELEASE_WRITER"],
-      ["weft_invocation_grant_writer", "INVOCATION_GRANT_WRITER"],
-      ["weft_invocation_writer", "INVOCATION_WRITER"],
-      ["weft_api_audit_writer", "API_AUDIT_WRITER"],
-      ["weft_administration", "ADMINISTRATION"],
-      ["weft_draft_reader", "DRAFT_READER"],
-      ["weft_draft_writer", "DRAFT_WRITER"],
+      ["braid_migrator", "MIGRATOR"],
+      ["braid_runtime", "RUNTIME"],
+      ["braid_ingest", "INGEST"],
+      ["braid_catalog_reader", "CATALOG"],
+      ["braid_catalog_editor", "METADATA"],
+      ["braid_project_creator", "CREATOR"],
+      ["braid_report_reader", "REPORT"],
+      ["braid_deriver", "DERIVATION"],
+      ["braid_maintenance", "MAINTENANCE"],
+      ["braid_identity_reader", "IDENTITY"],
+      ["braid_payload_permission_reader", "PAYLOAD_PERMISSION"],
+      ["braid_session_reader", "SESSION_READER"],
+      ["braid_session_writer", "SESSION_WRITER"],
+      ["braid_chat_reader", "CHAT_READER"],
+      ["braid_chat_writer", "CHAT_WRITER"],
+      ["braid_chat_approver", "CHAT_APPROVER"],
+      ["braid_chat_lifecycle", "CHAT_LIFECYCLE"],
+      ["braid_preview_reader", "PREVIEW_READER"],
+      ["braid_preview_writer", "PREVIEW_WRITER"],
+      ["braid_case_reader", "CASE_READER"],
+      ["braid_case_writer", "CASE_WRITER"],
+      ["braid_run_reader", "RUN_READER"],
+      ["braid_run_writer", "RUN_WRITER"],
+      ["braid_comparison_settler", "COMPARISON"],
+      ["braid_build_reader", "BUILD_READER"],
+      ["braid_build_writer", "BUILD_WRITER"],
+      ["braid_build_run_reader", "BUILD_RUN_READER"],
+      ["braid_build_run_writer", "BUILD_RUN_WRITER"],
+      ["braid_build_dispatcher", "BUILD_DISPATCHER"],
+      ["braid_build_metadata_reader", "BUILD_METADATA"],
+      ["braid_qualification_reader", "QUALIFICATION_READER"],
+      ["braid_qualification_writer", "QUALIFICATION_WRITER"],
+      ["braid_release_reader", "RELEASE_READER"],
+      ["braid_release_writer", "RELEASE_WRITER"],
+      ["braid_invocation_grant_writer", "INVOCATION_GRANT_WRITER"],
+      ["braid_invocation_writer", "INVOCATION_WRITER"],
+      ["braid_api_audit_writer", "API_AUDIT_WRITER"],
+      ["braid_administration", "ADMINISTRATION"],
+      ["braid_draft_reader", "DRAFT_READER"],
+      ["braid_draft_writer", "DRAFT_WRITER"],
     ];
     const roleEnvironment = { ...process.env };
     for (const key of Object.keys(roleEnvironment))
       if (
-        key.startsWith("WEFT_") ||
+        key.startsWith("BRAID_") ||
         key.startsWith("POSTGRES_") ||
         key === "PGPASSWORD"
       )
@@ -517,9 +517,9 @@ export async function runBrowserFixture(definition) {
     for (const role of ["POSTGRES_ADMIN", ...rolePairs.map((pair) => pair[1])])
       secrets.set(role, randomBytes(24).toString("hex"));
     for (const [key, value] of secrets)
-      roleEnvironment["WEFT_LOCAL_" + key + "_PASSWORD"] = value;
+      roleEnvironment["BRAID_LOCAL_" + key + "_PASSWORD"] = value;
     Object.assign(roleEnvironment, {
-      POSTGRES_DB: "weft",
+      POSTGRES_DB: "braid",
       POSTGRES_USER: "postgres",
       POSTGRES_PASSWORD: secrets.get("POSTGRES_ADMIN"),
       POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=trust",
@@ -632,13 +632,13 @@ export async function runBrowserFixture(definition) {
                 if (
                   creationScenario &&
                   item.Type === "container" &&
-                  (/^weft-inspect-[0-9a-f]{32}$/.test(name ?? "") ||
+                  (/^braid-inspect-[0-9a-f]{32}$/.test(name ?? "") ||
                     item.Actor?.Attributes?.image === workerImage)
                 )
                   throw new Failure("productFailure");
                 if (
                   item.Type === "container" &&
-                  /^weft-inspect-[0-9a-f]{32}$/.test(name ?? "") &&
+                  /^braid-inspect-[0-9a-f]{32}$/.test(name ?? "") &&
                   ["create", "destroy"].includes(item.Action)
                 ) {
                   const id = item.Actor.ID ?? item.id;
@@ -768,7 +768,7 @@ export async function runBrowserFixture(definition) {
     }
     function sql(query, admin = false) {
       check(pg && /^(?:SELECT|WITH)\s/i.test(query));
-      const role = admin ? "postgres" : "weft_migrator";
+      const role = admin ? "postgres" : "braid_migrator";
       const password = admin
         ? secrets.get("POSTGRES_ADMIN")
         : secrets.get("MIGRATOR");
@@ -788,7 +788,7 @@ export async function runBrowserFixture(definition) {
           "--username",
           role,
           "--dbname",
-          "weft",
+          "braid",
           "--set=ON_ERROR_STOP=1",
         ],
         {
@@ -838,10 +838,10 @@ export async function runBrowserFixture(definition) {
           tables
             .map((table) =>
               table === "build_publications"
-                ? "'build_publications',(SELECT coalesce(jsonb_agg((to_jsonb(r)-'artifact_body')||jsonb_build_object('artifact_body_sha256',encode(sha256(r.artifact_body),'hex'),'artifact_body_bytes',octet_length(r.artifact_body)) ORDER BY r.organization_id,r.build_id),'[]'::jsonb) FROM weft.build_publications r)"
+                ? "'build_publications',(SELECT coalesce(jsonb_agg((to_jsonb(r)-'artifact_body')||jsonb_build_object('artifact_body_sha256',encode(sha256(r.artifact_body),'hex'),'artifact_body_bytes',octet_length(r.artifact_body)) ORDER BY r.organization_id,r.build_id),'[]'::jsonb) FROM braid.build_publications r)"
                 : "'" +
                   table +
-                  "',(SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text),'[]'::jsonb) FROM weft." +
+                  "',(SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text),'[]'::jsonb) FROM braid." +
                   table +
                   " r)",
             )
@@ -850,11 +850,11 @@ export async function runBrowserFixture(definition) {
       );
     const journal = () =>
       jsonSql(
-        "SELECT coalesce(json_agg(json_build_object('version',version,'checksum',checksum,'appliedAt',applied_at) ORDER BY version),'[]'::json) FROM weft.schema_migrations",
+        "SELECT coalesce(json_agg(json_build_object('version',version,'checksum',checksum,'appliedAt',applied_at) ORDER BY version),'[]'::json) FROM braid.schema_migrations",
       );
     const credentialState = () =>
       jsonSql(
-        "SELECT json_build_object('roles',(SELECT jsonb_agg(to_jsonb(r) ORDER BY rolname) FROM pg_authid r WHERE rolname LIKE 'weft_%'),'memberships',(SELECT coalesce(jsonb_agg(to_jsonb(m) ORDER BY to_jsonb(m)::text),'[]'::jsonb) FROM pg_auth_members m))",
+        "SELECT json_build_object('roles',(SELECT jsonb_agg(to_jsonb(r) ORDER BY rolname) FROM pg_authid r WHERE rolname LIKE 'braid_%'),'memberships',(SELECT coalesce(jsonb_agg(to_jsonb(m) ORDER BY to_jsonb(m)::text),'[]'::jsonb) FROM pg_auth_members m))",
         true,
       );
     // C/D-only, fixed read-only grant capture. Hash complete ordered catalog arrays
@@ -929,14 +929,14 @@ export async function runBrowserFixture(definition) {
         [
           join(
             cfg.publications.databaseTool.directory,
-            "Weft.DatabaseTool.dll",
+            "Braid.DatabaseTool.dll",
           ),
           ...command,
         ],
         {
           env: {
             ...roleEnvironment,
-            WEFT_MIGRATION_CONNECTION_STRING: connections.weft_migrator,
+            BRAID_MIGRATION_CONNECTION_STRING: connections.braid_migrator,
             ...extra,
           },
           timeout: 30000,
@@ -945,11 +945,11 @@ export async function runBrowserFixture(definition) {
     }
     function provision(actor, organization, project = null, role = null) {
       tool(["provision-development-identity"], {
-        WEFT_DEV_ORGANIZATION_ID: organization,
-        WEFT_DEV_ORGANIZATION_NAME: "Catalog browser owned fixture",
-        WEFT_DEV_PRINCIPAL_ID: actor,
+        BRAID_DEV_ORGANIZATION_ID: organization,
+        BRAID_DEV_ORGANIZATION_NAME: "Catalog browser owned fixture",
+        BRAID_DEV_PRINCIPAL_ID: actor,
         ...(project
-          ? { WEFT_DEV_PROJECT_ID: project, WEFT_DEV_PROJECT_ROLE: role }
+          ? { BRAID_DEV_PROJECT_ID: project, BRAID_DEV_PROJECT_ROLE: role }
           : {}),
       });
     }
@@ -973,7 +973,7 @@ export async function runBrowserFixture(definition) {
             "--username",
             "postgres",
             "--dbname",
-            "weft",
+            "braid",
             "--command",
             "SELECT 1",
           ],
@@ -1018,8 +1018,8 @@ export async function runBrowserFixture(definition) {
           equivalent(actual.command, [
             cfg.dotnet,
             host.regressionWorker
-              ? join(cfg.publications.worker.directory, "Weft.Worker.dll")
-              : join(cfg.publications.server.directory, "Weft.Server.dll"),
+              ? join(cfg.publications.worker.directory, "Braid.Worker.dll")
+              : join(cfg.publications.server.directory, "Braid.Server.dll"),
           ]),
         "ownershipChanged",
       );
@@ -1315,25 +1315,25 @@ export async function runBrowserFixture(definition) {
         DOCKER_HOST: "unix://" + cfg.daemonSocket,
         DOTNET_ENVIRONMENT: "Development",
         ASPNETCORE_ENVIRONMENT: "Development",
-        WEFT_CATALOG_ENABLED: "true",
-        WEFT_DEV_IDENTITY_ENABLED: "true",
-        WEFT_DEV_PRINCIPAL_ID: actualActor,
-        WEFT_DEV_ORGANIZATION_ID: organization,
-        WEFT_DEV_BROWSER_ORIGIN: address,
-        WEFT_DEV_LISTEN_ADDR: "127.0.0.1:" + new URL(address).port,
-        WEFT_CATALOG_CONNECTION_STRING:
+        BRAID_CATALOG_ENABLED: "true",
+        BRAID_DEV_IDENTITY_ENABLED: "true",
+        BRAID_DEV_PRINCIPAL_ID: actualActor,
+        BRAID_DEV_ORGANIZATION_ID: organization,
+        BRAID_DEV_BROWSER_ORIGIN: address,
+        BRAID_DEV_LISTEN_ADDR: "127.0.0.1:" + new URL(address).port,
+        BRAID_CATALOG_CONNECTION_STRING:
           profile === "readerUnavailable"
             ? connections.unavailable
-            : connections.weft_catalog_reader,
-        WEFT_PROJECT_CREATION_ENABLED: String(writer || creationOnly),
-        WEFT_REVISION_INGESTION_ENABLED: String(writer || uploadOnly),
-        WEFT_METADATA_EDITS_ENABLED: String(metadataEdits),
-        WEFT_REVISION_REPORTS_ENABLED: "false",
-        WEFT_REVISION_REPORT_DERIVATION_ENABLED: "false",
+            : connections.braid_catalog_reader,
+        BRAID_PROJECT_CREATION_ENABLED: String(writer || creationOnly),
+        BRAID_REVISION_INGESTION_ENABLED: String(writer || uploadOnly),
+        BRAID_METADATA_EDITS_ENABLED: String(metadataEdits),
+        BRAID_REVISION_REPORTS_ENABLED: "false",
+        BRAID_REVISION_REPORT_DERIVATION_ENABLED: "false",
       });
       if (creationOnly) {
-        environment.WEFT_POSTGRES_PROJECT_CREATION_CONNECTION_STRING =
-          connections.weft_project_creator;
+        environment.BRAID_POSTGRES_PROJECT_CREATION_CONNECTION_STRING =
+          connections.braid_project_creator;
         delete environment.DOCKER_HOST;
         delete environment.DOCKER_CONFIG;
       }
@@ -1341,60 +1341,60 @@ export async function runBrowserFixture(definition) {
         delete environment.DOCKER_HOST;
         delete environment.DOCKER_CONFIG;
         if (metadataEdits)
-          environment.WEFT_POSTGRES_METADATA_CONNECTION_STRING =
-            connections.weft_catalog_editor;
+          environment.BRAID_POSTGRES_METADATA_CONNECTION_STRING =
+            connections.braid_catalog_editor;
       }
       if (appendScenario && kind === "mutation" && metadataEdits) {
-        environment.WEFT_POSTGRES_METADATA_CONNECTION_STRING =
-          connections.weft_catalog_editor;
+        environment.BRAID_POSTGRES_METADATA_CONNECTION_STRING =
+          connections.braid_catalog_editor;
         delete environment.DOCKER_HOST;
         delete environment.DOCKER_CONFIG;
       }
       if (writer)
         Object.assign(environment, {
-          WEFT_POSTGRES_PROJECT_CREATION_CONNECTION_STRING:
-            connections.weft_project_creator,
-          WEFT_POSTGRES_INGESTION_CONNECTION_STRING: connections.weft_ingest,
-          WEFT_PRIVATE_STORAGE_ROOT: storageRoot,
-          WEFT_FERRULE_WORKER_IMAGE: workerImage,
+          BRAID_POSTGRES_PROJECT_CREATION_CONNECTION_STRING:
+            connections.braid_project_creator,
+          BRAID_POSTGRES_INGESTION_CONNECTION_STRING: connections.braid_ingest,
+          BRAID_PRIVATE_STORAGE_ROOT: storageRoot,
+          BRAID_FERRULE_WORKER_IMAGE: workerImage,
         });
       if (uploadOnly)
         Object.assign(environment, {
-          WEFT_POSTGRES_INGESTION_CONNECTION_STRING: connections.weft_ingest,
-          WEFT_PRIVATE_STORAGE_ROOT: storageRoot,
-          WEFT_FERRULE_WORKER_IMAGE: workerImage,
+          BRAID_POSTGRES_INGESTION_CONNECTION_STRING: connections.braid_ingest,
+          BRAID_PRIVATE_STORAGE_ROOT: storageRoot,
+          BRAID_FERRULE_WORKER_IMAGE: workerImage,
         });
       if (regression)
         Object.assign(environment, {
-          WEFT_REGRESSIONS_ENABLED: "true",
-          WEFT_FERRULE_WORKER_IMAGE: workerImage,
-          WEFT_REGRESSION_CASE_READER_CONNECTION_STRING:
-            connections.weft_case_reader,
-          WEFT_REGRESSION_CASE_WRITER_CONNECTION_STRING:
-            connections.weft_case_writer,
-          WEFT_REGRESSION_RUN_READER_CONNECTION_STRING:
-            connections.weft_run_reader,
-          WEFT_REGRESSION_RUN_WRITER_CONNECTION_STRING:
-            connections.weft_run_writer,
+          BRAID_REGRESSIONS_ENABLED: "true",
+          BRAID_FERRULE_WORKER_IMAGE: workerImage,
+          BRAID_REGRESSION_CASE_READER_CONNECTION_STRING:
+            connections.braid_case_reader,
+          BRAID_REGRESSION_CASE_WRITER_CONNECTION_STRING:
+            connections.braid_case_writer,
+          BRAID_REGRESSION_RUN_READER_CONNECTION_STRING:
+            connections.braid_run_reader,
+          BRAID_REGRESSION_RUN_WRITER_CONNECTION_STRING:
+            connections.braid_run_writer,
         });
       if (builds)
         Object.assign(environment, {
-          WEFT_BUILDS_ENABLED: "true",
-          WEFT_PRIVATE_STORAGE_ROOT: storageRoot,
-          WEFT_FERRULE_WORKER_IMAGE: workerImage,
-          WEFT_BUILD_METADATA_CONNECTION_STRING:
-            connections.weft_build_metadata_reader,
-          WEFT_BUILD_CONTROL_CONNECTION_STRING: connections.weft_build_writer,
-          WEFT_BUILD_ACCESS_CONNECTION_STRING: connections.weft_runtime,
-          WEFT_BUILD_REPORT_CONNECTION_STRING: connections.weft_report_reader,
-          WEFT_BUILD_CASE_READER_CONNECTION_STRING:
-            connections.weft_case_reader,
-          WEFT_BUILD_EVIDENCE_READER_CONNECTION_STRING:
-            connections.weft_run_reader,
-          WEFT_BUILD_RUN_READER_CONNECTION_STRING:
-            connections.weft_build_run_reader,
-          WEFT_BUILD_RUN_WRITER_CONNECTION_STRING:
-            connections.weft_build_run_writer,
+          BRAID_BUILDS_ENABLED: "true",
+          BRAID_PRIVATE_STORAGE_ROOT: storageRoot,
+          BRAID_FERRULE_WORKER_IMAGE: workerImage,
+          BRAID_BUILD_METADATA_CONNECTION_STRING:
+            connections.braid_build_metadata_reader,
+          BRAID_BUILD_CONTROL_CONNECTION_STRING: connections.braid_build_writer,
+          BRAID_BUILD_ACCESS_CONNECTION_STRING: connections.braid_runtime,
+          BRAID_BUILD_REPORT_CONNECTION_STRING: connections.braid_report_reader,
+          BRAID_BUILD_CASE_READER_CONNECTION_STRING:
+            connections.braid_case_reader,
+          BRAID_BUILD_EVIDENCE_READER_CONNECTION_STRING:
+            connections.braid_run_reader,
+          BRAID_BUILD_RUN_READER_CONNECTION_STRING:
+            connections.braid_build_run_reader,
+          BRAID_BUILD_RUN_WRITER_CONNECTION_STRING:
+            connections.braid_build_run_writer,
         });
       if (
         (uploadScenario || appendScenario) &&
@@ -1406,52 +1406,53 @@ export async function runBrowserFixture(definition) {
       }
       if (reportMode !== null) {
         Object.assign(environment, {
-          WEFT_REVISION_REPORTS_ENABLED: "true",
-          WEFT_REVISION_REPORT_DERIVATION_ENABLED: String(
+          BRAID_REVISION_REPORTS_ENABLED: "true",
+          BRAID_REVISION_REPORT_DERIVATION_ENABLED: String(
             reportMode !== "readOnlyNoWorker",
           ),
-          WEFT_POSTGRES_REPORT_CONNECTION_STRING:
-            connections.weft_report_reader,
-          WEFT_PRIVATE_STORAGE_ROOT: storageRoot,
+          BRAID_POSTGRES_REPORT_CONNECTION_STRING:
+            connections.braid_report_reader,
+          BRAID_PRIVATE_STORAGE_ROOT: storageRoot,
         });
         if (reportMode === "full")
           Object.assign(environment, {
-            WEFT_POSTGRES_DERIVATION_CONNECTION_STRING:
-              connections.weft_deriver,
-            WEFT_FERRULE_WORKER_IMAGE: workerImage,
+            BRAID_POSTGRES_DERIVATION_CONNECTION_STRING:
+              connections.braid_deriver,
+            BRAID_FERRULE_WORKER_IMAGE: workerImage,
           });
       }
       if (regressionWorker) {
         for (const key of Object.keys(environment))
-          if (key.startsWith("WEFT_")) delete environment[key];
+          if (key.startsWith("BRAID_")) delete environment[key];
         Object.assign(environment, {
-          WEFT_PREVIEW_WRITER_CONNECTION_STRING:
-            connections.weft_preview_writer,
-          WEFT_PRIVATE_STORAGE_ROOT: storageRoot,
-          WEFT_FERRULE_WORKER_IMAGE: workerImage,
-          WEFT_DOCKER_EXECUTABLE: cfg.docker,
-          WEFT_REGRESSION_WORKER_ENABLED: "true",
-          WEFT_REGRESSION_RUN_WRITER_CONNECTION_STRING:
-            connections.weft_run_writer,
-          WEFT_REGRESSION_CASE_READER_CONNECTION_STRING:
-            connections.weft_case_reader,
-          WEFT_REGRESSION_ACCESS_CONNECTION_STRING: connections.weft_runtime,
-          WEFT_REGRESSION_REPORT_READER_CONNECTION_STRING:
-            connections.weft_report_reader,
+          BRAID_PREVIEW_WRITER_CONNECTION_STRING:
+            connections.braid_preview_writer,
+          BRAID_PRIVATE_STORAGE_ROOT: storageRoot,
+          BRAID_FERRULE_WORKER_IMAGE: workerImage,
+          BRAID_DOCKER_EXECUTABLE: cfg.docker,
+          BRAID_REGRESSION_WORKER_ENABLED: "true",
+          BRAID_REGRESSION_RUN_WRITER_CONNECTION_STRING:
+            connections.braid_run_writer,
+          BRAID_REGRESSION_CASE_READER_CONNECTION_STRING:
+            connections.braid_case_reader,
+          BRAID_REGRESSION_ACCESS_CONNECTION_STRING: connections.braid_runtime,
+          BRAID_REGRESSION_REPORT_READER_CONNECTION_STRING:
+            connections.braid_report_reader,
         });
         if (buildWorker)
           Object.assign(environment, {
-            WEFT_BUILD_WORKER_ENABLED: "true",
-            WEFT_BUILD_DISPATCHER_CONNECTION_STRING:
-              connections.weft_build_dispatcher,
-            WEFT_BUILD_WRITER_CONNECTION_STRING: connections.weft_build_writer,
-            WEFT_BUILD_ACCESS_CONNECTION_STRING: connections.weft_runtime,
-            WEFT_BUILD_REPORT_READER_CONNECTION_STRING:
-              connections.weft_report_reader,
-            WEFT_BUILD_REGRESSION_RUN_READER_CONNECTION_STRING:
-              connections.weft_run_reader,
-            WEFT_BUILD_CASE_READER_CONNECTION_STRING:
-              connections.weft_case_reader,
+            BRAID_BUILD_WORKER_ENABLED: "true",
+            BRAID_BUILD_DISPATCHER_CONNECTION_STRING:
+              connections.braid_build_dispatcher,
+            BRAID_BUILD_WRITER_CONNECTION_STRING:
+              connections.braid_build_writer,
+            BRAID_BUILD_ACCESS_CONNECTION_STRING: connections.braid_runtime,
+            BRAID_BUILD_REPORT_READER_CONNECTION_STRING:
+              connections.braid_report_reader,
+            BRAID_BUILD_REGRESSION_RUN_READER_CONNECTION_STRING:
+              connections.braid_run_reader,
+            BRAID_BUILD_CASE_READER_CONNECTION_STRING:
+              connections.braid_case_reader,
           });
       }
       check(
@@ -1466,10 +1467,10 @@ export async function runBrowserFixture(definition) {
               key,
             ),
           ) &&
-            environment.WEFT_PROJECT_CREATION_ENABLED === "true" &&
-            environment.WEFT_REVISION_INGESTION_ENABLED === "false" &&
-            environment.WEFT_POSTGRES_PROJECT_CREATION_CONNECTION_STRING ===
-              connections.weft_project_creator,
+            environment.BRAID_PROJECT_CREATION_ENABLED === "true" &&
+            environment.BRAID_REVISION_INGESTION_ENABLED === "false" &&
+            environment.BRAID_POSTGRES_PROJECT_CREATION_CONNECTION_STRING ===
+              connections.braid_project_creator,
         );
       if (metadataScenario && kind === "read")
         check(
@@ -1478,34 +1479,34 @@ export async function runBrowserFixture(definition) {
               key,
             ),
           ) &&
-            environment.WEFT_PROJECT_CREATION_ENABLED === "false" &&
-            environment.WEFT_REVISION_INGESTION_ENABLED === "false" &&
+            environment.BRAID_PROJECT_CREATION_ENABLED === "false" &&
+            environment.BRAID_REVISION_INGESTION_ENABLED === "false" &&
             (metadataEdits
-              ? environment.WEFT_POSTGRES_METADATA_CONNECTION_STRING ===
-                connections.weft_catalog_editor
+              ? environment.BRAID_POSTGRES_METADATA_CONNECTION_STRING ===
+                connections.braid_catalog_editor
               : !Object.hasOwn(
                   environment,
-                  "WEFT_POSTGRES_METADATA_CONNECTION_STRING",
+                  "BRAID_POSTGRES_METADATA_CONNECTION_STRING",
                 )),
         );
       if ((uploadScenario || appendScenario) && kind === "read")
         check(
-          environment.WEFT_PROJECT_CREATION_ENABLED === "false" &&
-            environment.WEFT_METADATA_EDITS_ENABLED === "false" &&
-            environment.WEFT_REVISION_REPORTS_ENABLED === "false" &&
-            environment.WEFT_REVISION_REPORT_DERIVATION_ENABLED === "false" &&
+          environment.BRAID_PROJECT_CREATION_ENABLED === "false" &&
+            environment.BRAID_METADATA_EDITS_ENABLED === "false" &&
+            environment.BRAID_REVISION_REPORTS_ENABLED === "false" &&
+            environment.BRAID_REVISION_REPORT_DERIVATION_ENABLED === "false" &&
             !Object.keys(environment).some((key) =>
               /PROJECT_CREATION_CONNECTION|METADATA_CONNECTION|REPORT_CONNECTION|DERIVATION_CONNECTION|MAINTENANCE_CONNECTION/.test(
                 key,
               ),
             ) &&
             (uploadOnly
-              ? environment.WEFT_REVISION_INGESTION_ENABLED === "true" &&
-                environment.WEFT_POSTGRES_INGESTION_CONNECTION_STRING ===
-                  connections.weft_ingest &&
-                environment.WEFT_PRIVATE_STORAGE_ROOT === storageRoot &&
-                environment.WEFT_FERRULE_WORKER_IMAGE === workerImage
-              : environment.WEFT_REVISION_INGESTION_ENABLED === "false" &&
+              ? environment.BRAID_REVISION_INGESTION_ENABLED === "true" &&
+                environment.BRAID_POSTGRES_INGESTION_CONNECTION_STRING ===
+                  connections.braid_ingest &&
+                environment.BRAID_PRIVATE_STORAGE_ROOT === storageRoot &&
+                environment.BRAID_FERRULE_WORKER_IMAGE === workerImage
+              : environment.BRAID_REVISION_INGESTION_ENABLED === "false" &&
                 !Object.keys(environment).some((key) =>
                   /POSTGRES_|PRIVATE_STORAGE|WORKER_IMAGE|DOCKER_/.test(key),
                 )),
@@ -1527,8 +1528,8 @@ export async function runBrowserFixture(definition) {
       const end = Date.now() + budget(30000),
         product = cfg.publications.server.directory,
         assembly = regressionWorker
-          ? join(cfg.publications.worker.directory, "Weft.Worker.dll")
-          : join(product, "Weft.Server.dll"),
+          ? join(cfg.publications.worker.directory, "Braid.Worker.dll")
+          : join(product, "Braid.Server.dll"),
         child = spawn(cfg.dotnet, [assembly], {
           cwd: product,
           env: environment,
@@ -1717,14 +1718,14 @@ export async function runBrowserFixture(definition) {
         check(
           sha(readFileSync(assembly)) ===
             (regressionWorker
-              ? cfg.publications.worker.hashes["Weft.Worker.dll"]
-              : cfg.publications.server.hashes["Weft.Server.dll"]),
+              ? cfg.publications.worker.hashes["Braid.Worker.dll"]
+              : cfg.publications.server.hashes["Braid.Server.dll"]),
         );
         if (regressionWorker)
           host.ledger.mappedWorkerSha256 = sha(readFileSync(assembly));
         else
           host.ledger.mappedServerSha256 =
-            cfg.publications.server.hashes["Weft.Server.dll"];
+            cfg.publications.server.hashes["Braid.Server.dll"];
         save();
         return host;
       } catch (original) {
@@ -1836,7 +1837,7 @@ export async function runBrowserFixture(definition) {
       const reply = await request(host, path, {
         method: "POST",
         body,
-        media: "application/vnd.weft.project-create.v1+json",
+        media: "application/vnd.braid.project-create.v1+json",
         key,
         unsafe: true,
       });
@@ -1855,7 +1856,7 @@ export async function runBrowserFixture(definition) {
       const replay = await request(host, path, {
         method: "POST",
         body,
-        media: "application/vnd.weft.project-create.v1+json",
+        media: "application/vnd.braid.project-create.v1+json",
         key,
         unsafe: true,
       });
@@ -1956,7 +1957,7 @@ export async function runBrowserFixture(definition) {
       const revisionUrl = mappingPath(scope) + "/revisions/" + scope.revisionId;
       check(reply.body.committedRevisionUrl === revisionUrl);
       const native = jsonSql(
-        "SELECT row_to_json(r) FROM weft.mapping_revisions r WHERE organization_id='" +
+        "SELECT row_to_json(r) FROM braid.mapping_revisions r WHERE organization_id='" +
           guid(scope.organizationId) +
           "' AND project_id='" +
           guid(scope.projectId) +
@@ -2109,7 +2110,7 @@ export async function runBrowserFixture(definition) {
         "POSTGRES_USER",
         "POSTGRES_PASSWORD",
         "POSTGRES_INITDB_ARGS",
-        ...rolePairs.map((pair) => "WEFT_LOCAL_" + pair[1] + "_PASSWORD"),
+        ...rolePairs.map((pair) => "BRAID_LOCAL_" + pair[1] + "_PASSWORD"),
       ];
       pgAttempt.id = docker(
         [
@@ -2142,7 +2143,7 @@ export async function runBrowserFixture(definition) {
       docker([
         "cp",
         join(workspace, "deploy/local/postgres-init.sh"),
-        pgAttempt.id + ":/docker-entrypoint-initdb.d/01-weft-roles.sh",
+        pgAttempt.id + ":/docker-entrypoint-initdb.d/01-braid-roles.sh",
       ]);
       docker(["start", pgAttempt.id]);
       pg = jsonDocker(["inspect", pgAttempt.id])[0];
@@ -2166,14 +2167,14 @@ export async function runBrowserFixture(definition) {
         connections[role] =
           "Host=127.0.0.1;Port=" +
           pg.hostPort +
-          ";Database=weft;Username=" +
+          ";Database=braid;Username=" +
           role +
           ";Password=" +
           secrets.get(key) +
           ";Maximum Pool Size=1;Timeout=15;Command Timeout=15";
-      connections.unavailable = connections.weft_catalog_reader.replace(
-        ";Database=weft;",
-        ";Database=weft_missing_" + nonce + ";",
+      connections.unavailable = connections.braid_catalog_reader.replace(
+        ";Database=braid;",
+        ";Database=braid_missing_" + nonce + ";",
       );
       await pgReady();
       check(
@@ -2183,14 +2184,14 @@ export async function runBrowserFixture(definition) {
       );
       check(
         sql(
-          "SELECT count(*) FROM pg_database WHERE datname='weft_missing_" +
+          "SELECT count(*) FROM pg_database WHERE datname='braid_missing_" +
             nonce +
             "'",
           true,
         ) === "0",
       );
       const roles = jsonSql(
-        "SELECT json_agg(json_build_object('name',rolname,'login',rolcanlogin,'super',rolsuper,'createDb',rolcreatedb,'createRole',rolcreaterole,'inherit',rolinherit,'replication',rolreplication,'bypass',rolbypassrls) ORDER BY rolname) FROM pg_roles WHERE rolname LIKE 'weft_%'",
+        "SELECT json_agg(json_build_object('name',rolname,'login',rolcanlogin,'super',rolsuper,'createDb',rolcreatedb,'createRole',rolcreaterole,'inherit',rolinherit,'replication',rolreplication,'bypass',rolbypassrls) ORDER BY rolname) FROM pg_roles WHERE rolname LIKE 'braid_%'",
         true,
       );
       check(
@@ -2251,7 +2252,7 @@ export async function runBrowserFixture(definition) {
       save();
       verifyInputBodies();
       emit({
-        schemaVersion: `weft.${definition.kind}-browser-ready.v1`,
+        schemaVersion: `braid.${definition.kind}-browser-ready.v1`,
         fixtureId,
         manifestSha256: sha(bytes),
         profile: buildScenario
@@ -2272,7 +2273,7 @@ export async function runBrowserFixture(definition) {
       run(
         cfg.dotnet,
         [
-          join(cfg.publications.storageTool.directory, "Weft.StorageTool.dll"),
+          join(cfg.publications.storageTool.directory, "Braid.StorageTool.dll"),
           "initialize-v2",
           storageRoot,
           cfg.publications.server.directory,
@@ -2281,18 +2282,18 @@ export async function runBrowserFixture(definition) {
         { timeout: 30000 },
       );
       const marker = readFileSync(
-        join(storageRoot, ".weft-private-storage"),
+        join(storageRoot, ".braid-private-storage"),
         "ascii",
       );
       check(
-        /^weft-private-storage-v2\n[0-9a-f]{32}\n[0-9a-f]{32}\n$/.test(marker),
+        /^braid-private-storage-v2\n[0-9a-f]{32}\n[0-9a-f]{32}\n$/.test(marker),
       );
     }
     function captureMembership(primary) {
       check(authorityProject === null);
       authorityProject = primary;
       membership = jsonSql(
-        "SELECT row_to_json(m) FROM weft.project_memberships m WHERE organization_id='" +
+        "SELECT row_to_json(m) FROM braid.project_memberships m WHERE organization_id='" +
           ids.organization +
           "' AND project_id='" +
           primary.projectId +
@@ -2301,7 +2302,7 @@ export async function runBrowserFixture(definition) {
           "'",
       );
       organizationMembership = jsonSql(
-        "SELECT row_to_json(m) FROM weft.organization_memberships m WHERE organization_id='" +
+        "SELECT row_to_json(m) FROM braid.organization_memberships m WHERE organization_id='" +
           ids.organization +
           "' AND principal_id='" +
           ids.viewer +
@@ -2334,7 +2335,7 @@ export async function runBrowserFixture(definition) {
           version: (BigInt(membership.version) + 1n).toString(),
         };
         query =
-          "UPDATE weft.project_memberships SET active=false, version=version+1 WHERE organization_id='" +
+          "UPDATE braid.project_memberships SET active=false, version=version+1 WHERE organization_id='" +
           ids.organization +
           "' AND project_id='" +
           guid(authorityProject.projectId) +
@@ -2351,7 +2352,7 @@ export async function runBrowserFixture(definition) {
         );
         expected = { ...organizationMembership, active: false };
         query =
-          "UPDATE weft.organization_memberships SET active=false WHERE organization_id='" +
+          "UPDATE braid.organization_memberships SET active=false WHERE organization_id='" +
           ids.organization +
           "' AND principal_id='" +
           ids.viewer +
@@ -2372,9 +2373,9 @@ export async function runBrowserFixture(definition) {
           "-qAt",
           "--host=127.0.0.1",
           "--username",
-          "weft_migrator",
+          "braid_migrator",
           "--dbname",
-          "weft",
+          "braid",
           "--set=ON_ERROR_STOP=1",
         ],
         {
@@ -2518,8 +2519,8 @@ export async function runBrowserFixture(definition) {
         BigInt(member.version);
       const query =
         (mode === "viewer"
-          ? "UPDATE weft.project_memberships SET role='viewer',version=version+1"
-          : "DELETE FROM weft.project_memberships") +
+          ? "UPDATE braid.project_memberships SET role='viewer',version=version+1"
+          : "DELETE FROM braid.project_memberships") +
         where +
         " RETURNING row_to_json(project_memberships)";
       const result = run(
@@ -2536,9 +2537,9 @@ export async function runBrowserFixture(definition) {
           "-qAt",
           "--host=127.0.0.1",
           "--username",
-          "weft_migrator",
+          "braid_migrator",
           "--dbname",
-          "weft",
+          "braid",
           "--set=ON_ERROR_STOP=1",
         ],
         {
@@ -2650,7 +2651,7 @@ export async function runBrowserFixture(definition) {
       const version = BigInt(bound.member.version);
       check(version > 0n && version < 9223372036854775807n);
       const query =
-        "UPDATE weft.project_memberships SET role='" +
+        "UPDATE braid.project_memberships SET role='" +
         role +
         "',version=version+1 WHERE organization_id='" +
         ids.organization +
@@ -2677,9 +2678,9 @@ export async function runBrowserFixture(definition) {
           "-qAt",
           "--host=127.0.0.1",
           "--username",
-          "weft_migrator",
+          "braid_migrator",
           "--dbname",
-          "weft",
+          "braid",
           "--set=ON_ERROR_STOP=1",
         ],
         {
@@ -2961,7 +2962,7 @@ export async function runBrowserFixture(definition) {
     }
     async function control(item) {
       const base = {
-        schemaVersion: `weft.${definition.kind}-browser-control.v1`,
+        schemaVersion: `braid.${definition.kind}-browser-control.v1`,
         requestNonce: item.requestNonce,
         fixtureId,
         action: item.action,
@@ -3157,7 +3158,7 @@ export async function runBrowserFixture(definition) {
       // Categorical only: never forward child/provider/SQL text or a JSON request body.
       process.stderr.write(
         JSON.stringify({
-          schemaVersion: `weft.${definition.kind}-browser-operator-error.v1`,
+          schemaVersion: `braid.${definition.kind}-browser-operator-error.v1`,
           failure: state.primaryFailure.category,
         }) + "\n",
       );
@@ -3170,7 +3171,7 @@ export async function runBrowserFixture(definition) {
     // This includes malformed or held private admission. No raw parser/provider text.
     process.stderr.write(
       JSON.stringify({
-        schemaVersion: `weft.${definition.kind}-browser-operator-error.v1`,
+        schemaVersion: `braid.${definition.kind}-browser-operator-error.v1`,
         failure: "stateMismatch",
       }) + "\n",
     );

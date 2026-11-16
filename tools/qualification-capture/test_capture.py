@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -17,7 +18,7 @@ POSIX = unittest.skipUnless(os.name == 'posix', 'the owner runs only on the Linu
 
 class MarkerTests(unittest.TestCase):
     def setUp(self):
-        self.directory = Path(tempfile.mkdtemp(prefix='weft-capture-'))
+        self.directory = Path(tempfile.mkdtemp(prefix='braid-capture-'))
         self.addCleanup(shutil.rmtree, self.directory)
 
     def test_marker_is_never_replaced(self):
@@ -55,7 +56,7 @@ class MarkerTests(unittest.TestCase):
 
 class HistoricalReaderTests(unittest.TestCase):
     def setUp(self):
-        self.directory = Path(tempfile.mkdtemp(prefix='weft-capture-'))
+        self.directory = Path(tempfile.mkdtemp(prefix='braid-capture-'))
         self.addCleanup(shutil.rmtree, self.directory)
 
     def fixture(self, name):
@@ -72,6 +73,40 @@ class HistoricalReaderTests(unittest.TestCase):
             path, golden = self.fixture(name)
             outcomes.add(capture.read_capture(path, golden)['notice']['outcome'])
         self.assertEqual({'passed', 'revoked'}, outcomes)
+
+    def test_fixture_records_bind_actual_bytes_independently_of_the_reader(self):
+        # Do not use capture.canonical/sha256/replay to derive the expected bindings.
+        # Revocation wins at replay, but its retained manifest must still be truthful.
+        for directory in sorted(path for path in FIXTURES.iterdir() if path.is_dir()):
+            with self.subTest(capture=directory.name):
+                records = {}
+                for name in ('header.json', 'manifest.json', 'complete.exit', 'complete.revoked'):
+                    path = directory / name
+                    if not path.exists():
+                        continue
+                    data = path.read_bytes()
+                    records[name] = json.loads(data)
+                    expected = (json.dumps(records[name], sort_keys=True, separators=(',', ':')) + '\n').encode('utf-8')
+                    self.assertEqual(expected, data)
+                members = records['manifest.json']['members']
+                actual_names = {'driver.stdout'}
+                evidence = directory / 'evidence'
+                if evidence.exists():
+                    actual_names.update('evidence/' + path.name for path in evidence.iterdir())
+                self.assertEqual(actual_names, {member['name'] for member in members})
+                self.assertEqual(len(actual_names), len(members))
+                digests = {}
+                for member in members:
+                    data = (directory / member['name']).read_bytes()
+                    digests[member['name']] = hashlib.sha256(data).hexdigest()
+                    self.assertEqual(len(data), member['size'])
+                    self.assertEqual(digests[member['name']], member['sha256'])
+                exited = records['complete.exit']
+                if exited['exit'] == 0:
+                    for name, field in [('header.json', 'headerSha256'), ('manifest.json', 'manifestSha256')]:
+                        self.assertEqual(hashlib.sha256((directory / name).read_bytes()).hexdigest(), exited[field])
+                golden = json.loads((FIXTURES / (directory.name + '.golden.json')).read_bytes())
+                self.assertEqual(None if 'complete.revoked' in records else digests, golden['members'])
 
     def test_read_command_accepts_only_a_passed_capture(self):
         for name in (path.name for path in FIXTURES.iterdir() if path.is_dir()):
@@ -159,7 +194,7 @@ class HistoricalReaderTests(unittest.TestCase):
 @POSIX
 class OwnerTests(unittest.TestCase):
     def setUp(self):
-        self.root = Path(tempfile.mkdtemp(prefix='weft-capture-root-'))
+        self.root = Path(tempfile.mkdtemp(prefix='braid-capture-root-'))
         self.addCleanup(shutil.rmtree, self.root)
         os.chmod(self.root, 0o700)
         self.python = os.path.realpath(sys.executable)

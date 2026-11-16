@@ -1,12 +1,10 @@
 # Native revision ingestion
 
-`IRevisionIngestionService` composes the qualified metadata, private storage, and
+`IRevisionIngestionService` composes the metadata, private storage, and
 native validation adapters. It accepts trusted server actor/project identities
 and a readable stream. [Revision uploads](catalog-revision-uploads.md) owns its
 HTTP adapter; [catalog reads](catalog-reads.md) and [catalog browser](catalog-browser.md)
-own discovery and navigation. This page owns service admission and recovery,
-not host activation or provider/cloud acceptance. Original P3 requirements are
-indexed by the [contract-owner map](catalog-persistence-plan.md#current-contract-owners).
+own discovery and navigation.
 
 ## Submission and ownership
 
@@ -61,8 +59,7 @@ registration captures the engine revision, worker build, adapter build, and
 qualified byte limit. The result converter preserves actual validity,
 provenance, diagnostics, counts, and truncation in the owned versioned evidence
 envelope. Malformed results become protocol failures; enforced evidence overflow
-is a separate policy result. Validation never creates an execution or deployment
-capability.
+is a separate policy result.
 
 ## Recovery and results
 
@@ -98,14 +95,11 @@ through their separate read and derivation boundaries.
 [Ingestion metadata](ingestion-metadata.md) owns the four-table persistence
 boundary. Full organization/project/mapping/revision ancestry, native digest/count,
 logical entry/dependency identity, selected backend, creator and committed sequence
-remain immutable. The original [table/column specification](catalog-ingestion-plan.md#four-tables-and-immutable-ancestry)
-and [exact grants](catalog-ingestion-plan.md#exact-roles-and-transaction-boundaries)
-are retained for traceability; applied migrations and current schema guards define
-the installed contract. Metadata editing is a separate [conditional write](catalog-reads.md#conditional-mapping-metadata),
-not permission to mutate committed native facts.
+remain immutable. Metadata editing uses a separate
+[conditional write](catalog-reads.md#conditional-mapping-metadata).
 
 Reservations freeze the trusted engine, worker build, adapter, policy
-`weft.native-admission.v1` and effective limits. Engine/adapter identity text is
+`braid.native-admission.v1` and effective limits. Engine/adapter identity text is
 bounded to 256 UTF-8 bytes each and worker build to 2,048. The server registration,
 not the client, chooses these values. Retained evidence keeps its original profile
 when the configured Ferrule pin changes. The logical native entry is
@@ -125,12 +119,10 @@ unavailability, timeout, isolation, cancellation or provenance/protocol faults d
 not become semantic invalidity. Typed evidence preserves native owners/locators,
 nullable validity, actual/emitted counts and truncation. Its 8 MiB serialized and
 database-normalized bounds do not permit silent truncation or invented success.
-Admission does not fabricate projection links or execution capability. Orphan
-retirement belongs to [maintenance](private-object-maintenance-metadata.md), not
-ingestion recovery. Neither cross-store atomicity nor power-loss durability follows
-from process-restart recovery.
+Orphan retirement belongs to [maintenance](private-object-maintenance-metadata.md),
+not ingestion recovery.
 
-## Verification boundary
+## Tests
 
 Contract, converter, and orchestration tests use explicitly synthetic snapshots
 and ports. Database lookup tests use the actual restricted PostgreSQL roles.
@@ -140,10 +132,5 @@ at storage/validation/publication boundaries, waits for actual database lease
 expiry, and checks recovery and stale-generation fencing. The probe is copied
 only into test output and is not part of the application package.
 
-Current native worker bounds can reject input before an evidence-envelope budget
-is exceeded. Synthetic converter cases exercise that evidence budget; they do
-not establish a native Ferrule fixture that can reach it. Qualification records
-the source and cases actually executed, separately from inherited unchanged
-engine and viewer evidence. A separate explicitly synthetic owned evidence
-document tests the actual PostgreSQL JSONB normalization limit and its honest
-rejection bookkeeping; it does not represent a native worker observation.
+Converter cases exercise the evidence-envelope budget. A synthetic evidence
+document tests the PostgreSQL JSONB normalization limit and rejection bookkeeping.

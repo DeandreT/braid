@@ -478,7 +478,7 @@ export class BuildApi {
               "X-XSRF-TOKEN": context.requestToken,
               ...(media
                 ? {
-                    "Content-Type": `application/vnd.weft.build-${media}.v1+json`,
+                    "Content-Type": `application/vnd.braid.build-${media}.v1+json`,
                   }
                 : {}),
             },

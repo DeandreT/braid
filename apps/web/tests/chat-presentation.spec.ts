@@ -19,7 +19,7 @@ import {
 
 const chat = (page: Page) => page.locator("#workspace-chat");
 async function captureReview(page: Page, name: string) {
-  const directory = process.env.WEFT_CHAT_REVIEW_CAPTURE_DIR;
+  const directory = process.env.BRAID_CHAT_REVIEW_CAPTURE_DIR;
   if (!directory) return;
   await mkdir(directory, { recursive: true });
   await chat(page).screenshot({ path: `${directory}/${name}-panel.png` });

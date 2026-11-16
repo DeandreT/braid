@@ -24,7 +24,7 @@ fn caller_paths_and_changed_native_resource_profiles_are_refused() {
             "--open-files=65",
         ],
     ] {
-        let output = Command::new(env!("CARGO_BIN_EXE_weft-spec-pdf-worker"))
+        let output = Command::new(env!("CARGO_BIN_EXE_braid-spec-pdf-worker"))
             .args(arguments)
             .output()
             .unwrap();
@@ -37,7 +37,7 @@ fn caller_paths_and_changed_native_resource_profiles_are_refused() {
 #[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
 #[test]
 fn native_sandbox_does_not_fall_back_to_unrestricted_execution() {
-    let output = Command::new(env!("CARGO_BIN_EXE_weft-spec-pdf-worker"))
+    let output = Command::new(env!("CARGO_BIN_EXE_braid-spec-pdf-worker"))
         .args([
             "--service-sandbox",
             "--cpu-seconds=10",

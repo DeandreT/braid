@@ -13,7 +13,7 @@ test("the packaged C# host serves nested Angular navigation and preserves API 40
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  const origin = process.env.WEFT_EDIT_SHELL_DLL
+  const origin = process.env.BRAID_EDIT_SHELL_DLL
     ? baseURL!
     : "http://127.0.0.1:4101";
   await page.goto(
@@ -105,7 +105,7 @@ for (const target of ["/help", "/help/reports#coverage"]) {
     });
     await page.route("**/api/v1/health", (route) =>
       route.fulfill({
-        json: { status: "ok", service: "weft-api", apiVersion: "v1" },
+        json: { status: "ok", service: "braid-api", apiVersion: "v1" },
       }),
     );
     await page.route("**/api/auth/session", (route) =>

@@ -15,7 +15,7 @@ import {
 } from "./automation-api";
 
 @Component({
-  selector: "weft-notification-centre",
+  selector: "braid-notification-centre",
   imports: [DatePipe, RouterLink, CatalogStatusComponent],
   template: ` <section
     class="catalog-page"
@@ -80,7 +80,7 @@ import {
                 </div>
                 <div class="catalog-row-meta">
                   <span
-                    class="weft-pill"
+                    class="braid-pill"
                     [attr.data-tone]="item.read ? null : 'running'"
                     >{{ item.read ? "Read" : "Unread" }}</span
                   >
@@ -100,7 +100,7 @@ import {
             }
           </ul>
         } @else {
-          <section class="weft-state">
+          <section class="braid-state">
             <h2>You're all caught up</h2>
             <p>
               No notifications on this page. Project activity and invitations
@@ -123,7 +123,7 @@ import {
         </nav>
       </div>
     } @else {
-      <weft-catalog-status [kind]="read.state().kind" (retry)="read.retry()" />
+      <braid-catalog-status [kind]="read.state().kind" (retry)="read.retry()" />
     }
     @if (message()) {
       <p role="status">{{ message() }}</p>

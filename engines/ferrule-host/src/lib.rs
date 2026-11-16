@@ -18,7 +18,7 @@ pub mod preview;
 pub mod sandbox;
 mod x12_syntax;
 pub mod xml_document;
-pub use weft_ferrule_core::{
+pub use braid_ferrule_core::{
     canonical_nonzero_guid, decode, inspect, projection, protocol, valid_context_parts, validation,
 };
 
@@ -67,9 +67,9 @@ pub fn handle_stream(reader: &mut impl Read, writer: &mut impl Write) -> io::Res
         protocol_version: Option<String>,
     }
     if serde_json::from_slice::<ProtocolProbe>(&header_bytes).is_ok_and(|probe| {
-        probe.protocol_version.as_deref() == Some(weft_ferrule_core::authoring::transport::PROTOCOL)
+        probe.protocol_version.as_deref() == Some(braid_ferrule_core::authoring::transport::PROTOCOL)
     }) {
-        return weft_ferrule_core::authoring::transport::handle(&header_bytes, reader, writer);
+        return braid_ferrule_core::authoring::transport::handle(&header_bytes, reader, writer);
     }
     if serde_json::from_slice::<ProtocolProbe>(&header_bytes)
         .is_ok_and(|probe| probe.protocol_version.as_deref() == Some(edit::PROTOCOL))

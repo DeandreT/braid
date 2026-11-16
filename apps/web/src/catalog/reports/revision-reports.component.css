@@ -248,7 +248,7 @@
   box-sizing: border-box;
   padding: 0 20px 12px;
 }
-.wb-reports weft-workbench-mapping-table {
+.wb-reports braid-workbench-mapping-table {
   flex: 1;
   min-height: 0;
 }

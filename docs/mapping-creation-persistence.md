@@ -1,8 +1,4 @@
-# Durable mapping creation (0045)
-
-Review worktree: `C:/example/checkout`, based on committed foundation
-`a4e367ae` plus Office integration `e5fdbcdc`. Production composition remains
-disabled. The prior 44 migrations are immutable.
+# Durable mapping creation
 
 ## Trust and retained content
 
@@ -22,7 +18,7 @@ canonical encoding, source/evidence identities, citations and the recomputed
 proposal fingerprint. It never calls the specification physical-object gate.
 The 64 MiB aggregate ceiling is binary, not a base64-expanded envelope.
 
-Only Complete extraction evidence is admitted. The writer selects exact published
+Complete byte evidence and Partial Office/PDF evidence are admitted. The writer selects exact published
 objects from the trusted registry and pins their IDs. It verifies source version,
 format, digest/count, extractor/profile, evidence digest/count and source digest.
 Snapshot validity follows selected content; unrelated bundle additions do not
@@ -66,50 +62,21 @@ NeedsSource recovery never replaces native bytes or allocates another key.
 
 ## Roles and deployment
 
-Provision CONNECT-only `weft_creation_reader`, `weft_creation_writer` and
-`weft_creation_approver` before migration. Local/Azure provisioning exposes
+Provision CONNECT-only `braid_creation_reader`, `braid_creation_writer` and
+`braid_creation_approver` before migration. Local/Azure provisioning exposes
 optional separate credentials; absent credentials leave unusable password logins.
 Reader, writer and approver pools admit only exact function grants. No creation
 profile gets direct table DML or ingestion capabilities.
 
-0045 installs after the exact 0044 history. MigrationRunner preserves checksum
-verification of the complete prefix. Runtime admission checks the catalog shape,
+MigrationRunner verifies installed migration checksums. Runtime admission checks the catalog shape,
 function bodies/signatures/ACLs, constraints, indexes, RLS policies and ingestion
 guard. Ingestion admission also verifies the creation guard dependency shape.
-Inventory tests explicitly advance the current sequence to 45 while retaining
-historical prefix checksums and admitting the precise additive trigger/FK delta.
 
 ## Qualification
 
 Actual PostgreSQL tests use the existing disposable `PostgresFixture` native
 route. Application orchestration tests use the real RevisionIngestionService and
-PostgreSQL metadata with explicitly synthetic validator/in-memory object ports;
-they qualify database transactions, not native sandbox or physical storage.
-Qualification used .NET 10.0.112 Release and native PostgreSQL 16.15. All 96
-selected cases passed across the main run and focused corrective retries, with
-zero skips (not a claim of one clean 96-case run):
-
-- `MappingCreationPersistenceTests`: 20, including disabled internal FK triggers,
-  terminated-lease publication rollback, independent reads, lost acknowledgements,
-  exact registry selection and the real 44-to-45 upgrade.
-- `PostgresIngestionWorkflowTests`: 15.
-- `PostgresMigrationTests`: 10.
-- `PostgresServerSessionUpgradeTests`: 2.
-- `RegressionMigrationIntegrationTests`: 5.
-- `RegressionDeploymentProvisioningTests`: 20.
-- `CatalogSearchContractTests`: 12.
-- `DocumentBuildSchemaSourceTests`: 4.
-- `ReleaseOperationsConfigurationTests`: 8.
-
-Receipts are `creation-regression.trx`, `creation-regression-retry.trx`,
-`creation-upgrade-final.trx` and `creation-preview-final.trx` under the local
-`Temp/opencode/creation-persistence-checks` directory. The final two receipts
-resolve the remaining historical upgrade failures from earlier runs. The
-historical preview helper correction matches the specific file change in
-`d0ad2545`; its ancestry was not imported. Session conservation explicitly admits
-the existing chat commit trigger and the new creation guard. Historical migration
-bytes remain unchanged. OpenAPI generation completed in the main Release run;
-the new codec/store/admission/test files passed whitespace verification.
-
-Independent static review was reported complete with no actionable defects before
-commit. Production composition remains disabled pending the broader rollout.
+PostgreSQL metadata with synthetic validator/in-memory object ports.
+`MappingCreationPersistenceTests` covers disabled internal FK triggers,
+terminated-lease publication rollback, independent reads, lost acknowledgements
+and exact registry selection.

@@ -57,14 +57,14 @@ async function fixture(page: Page, initiallyAuthenticated: boolean) {
       ++logins;
       expect(request.method()).toBe("POST");
       expect(request.postData()).toBeNull();
-      returnTo = request.headers()["x-weft-return-to"] ?? "";
+      returnTo = request.headers()["x-braid-return-to"] ?? "";
       return route.fulfill({
         json: { version: 1, authorizationUrl: provider },
       });
     }
     if (path === "/api/v1/health")
       return route.fulfill({
-        json: { status: "ok", service: "weft-api", apiVersion: "v1" },
+        json: { status: "ok", service: "braid-api", apiVersion: "v1" },
       });
     if (path === "/api/v1/catalog/context")
       return contextAvailable
@@ -249,12 +249,12 @@ for (const kind of ["field", "rule"] as const) {
     await expect(
       page.getByRole("heading", { name: "Catalog unavailable", exact: true }),
     ).toBeVisible();
-    await expect(page.locator("weft-workbench-frame")).toHaveCount(0);
+    await expect(page.locator("braid-workbench-frame")).toHaveCount(0);
     source.contextAvailable(true);
     const requests = source.retained.length;
     await page.getByRole("button", { name: "Retry", exact: true }).click();
     await expect.poll(() => source.retained.length).toBeGreaterThan(requests);
-    await expect(page.locator("weft-workbench-frame")).toBeVisible();
+    await expect(page.locator("braid-workbench-frame")).toBeVisible();
     await page.evaluate(
       () =>
         new Promise<void>((resolve) =>

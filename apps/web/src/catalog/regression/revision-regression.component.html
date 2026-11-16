@@ -9,8 +9,8 @@
       <h2 id="regression-title">Regression tests</h2>
       <p>Check this saved version against reviewed expected results.</p>
     </div>
-    <weft-help-link [section]="'regression-tests'"
-      >About regression tests</weft-help-link
+    <braid-help-link [section]="'regression-tests'"
+      >About regression tests</braid-help-link
     >
   </header>
   @if (!capabilities()) {
@@ -48,7 +48,7 @@
   }
   @if (capabilities(); as capability) {
     <div class="regression-toolbar">
-      <weft-regression-status
+      <braid-regression-status
         [scope]="mapping().scope"
         [context]="context()"
         [revisionId]="revision().scope.revisionId"
@@ -156,7 +156,7 @@
                     }}
                   </td>
                   <td>
-                    <weft-metadata-value
+                    <braid-metadata-value
                       kind="time"
                       label="Test saved time"
                       [value]="item.createdAtUtc"
@@ -777,7 +777,7 @@
           Regression run result
         </h3>
         <p role="status">
-          <weft-status-chip [status]="operationStatus(value.run.state)" /> ·
+          <braid-status-chip [status]="operationStatus(value.run.state)" /> ·
           Attempt {{ value.run.attempt }} of 3
         </p>
         <dl class="catalog-facts">
@@ -814,7 +814,7 @@
         </div>
         @if (value.comparison; as comparison) {
           <p class="regression-verdict">
-            <weft-status-chip
+            <braid-status-chip
               [status]="
                 comparisonStatus(
                   comparison.outcome,
@@ -927,7 +927,7 @@
     @if (!workbench() && shown(); as output) {
       <section class="regression-detail" aria-label="Output text preview">
         <h3>{{ output.name }}</h3>
-        <weft-document-view [data]="output.display" />
+        <braid-document-view [data]="output.display" />
         <button class="catalog-button" type="button" (click)="shown.set(null)">
           Close output preview
         </button>

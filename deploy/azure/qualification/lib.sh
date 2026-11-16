@@ -19,7 +19,7 @@ azg() {
 deploy() { # deployment-name az-deployment-arguments...
   local deployment=$1
   shift
-  WEFT_POSTGRES_ADMIN_PASSWORD=$(<"$work/postgres-admin-password") \
+  BRAID_POSTGRES_ADMIN_PASSWORD=$(<"$work/postgres-admin-password") \
     azg deployment group create --name "$deployment" "$@" --output none
 }
 
@@ -121,20 +121,20 @@ run_job() { # label job [start-options...]
 query_database() { # label sql
   local label=$1 sql=$2 job="$prefix-database-roles" script
   script='set -euo pipefail
-export PGUSER=weft_migrator PGPASSWORD="$WEFT_MIGRATOR_PASSWORD" PGDATABASE=weft PGOPTIONS="-c default_transaction_read_only=on"
-psql --no-psqlrc --set=ON_ERROR_STOP=1 --tuples-only --no-align --field-separator=" " --command="$1" | sed "s/^/weft-qualify-row /"
-echo weft-qualify-end'
+export PGUSER=braid_migrator PGPASSWORD="$BRAID_MIGRATOR_PASSWORD" PGDATABASE=braid PGOPTIONS="-c default_transaction_read_only=on"
+psql --no-psqlrc --set=ON_ERROR_STOP=1 --tuples-only --no-align --field-separator=" " --command="$1" | sed "s/^/braid-qualify-row /"
+echo braid-qualify-end'
   azg containerapp job show --name "$job" --query properties.template --output json >"$work/$label.template.json"
   jq --arg script "$script" --arg sql "$sql" \
-    '{containers: [.containers[0] | {image, name, env, resources, command: ["bash", "-c", $script, "weft-qualify", $sql], args: []}]}' \
+    '{containers: [.containers[0] | {image, name, env, resources, command: ["bash", "-c", $script, "braid-qualify", $sql], args: []}]}' \
     "$work/$label.template.json" >"$work/$label.start.json"
   execution=$(azs rest --method post --url "$arm/resourceGroups/$group/providers/Microsoft.App/jobs/$job/start?api-version=2024-03-01" \
     --body "@$work/$label.start.json" --query name --output tsv)
   [[ -n $execution ]] || fail "$label" 'the evidence query did not report an execution'
   await_execution "$label" "$job" "$execution"
   [[ $execution_status == Succeeded ]] || fail "$label" "the evidence query ended $execution_status"
-  await_lines "$label" "$execution" '^weft-qualify-end'
-  sed -n 's/^weft-qualify-row //p' "$work/$label.lines" >"$work/$label.rows"
+  await_lines "$label" "$execution" '^braid-qualify-end'
+  sed -n 's/^braid-qualify-row //p' "$work/$label.lines" >"$work/$label.rows"
 }
 
 await_execution() { # label job execution

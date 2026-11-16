@@ -16,7 +16,7 @@ import {
 } from "./creation-library-model";
 
 @Component({
-  selector: "weft-creation-library",
+  selector: "braid-creation-library",
   imports: [RouterLink],
   template: `<header class="catalog-heading">
       <div>

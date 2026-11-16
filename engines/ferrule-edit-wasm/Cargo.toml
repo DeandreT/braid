@@ -1,5 +1,5 @@
 [package]
-name = "weft-ferrule-edit-wasm"
+name = "braid-ferrule-edit-wasm"
 version = "0.1.0"
 edition = "2024"
 publish = false
@@ -13,7 +13,7 @@ crate-type = ["cdylib", "rlib"]
 qualification = []
 
 [dependencies]
-weft-ferrule-core = { path = "../ferrule-host/core" }
+braid-ferrule-core = { path = "../ferrule-host/core" }
 serde_json = { version = "=1.0.150", features = ["float_roundtrip"] }
 wasm-bindgen = "=0.2.129"
 

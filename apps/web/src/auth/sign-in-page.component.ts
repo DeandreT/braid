@@ -15,7 +15,7 @@ import { defaultReturnPath, returnPathOrDefault } from "./return-path";
 
 /** The Session profile's entry: one Microsoft sign-in that returns to the requested page. */
 @Component({
-  selector: "weft-sign-in-page",
+  selector: "braid-sign-in-page",
   templateUrl: "./sign-in-page.component.html",
   styleUrl: "./sign-in-page.component.css",
 })

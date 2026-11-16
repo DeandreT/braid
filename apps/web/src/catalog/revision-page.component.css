@@ -12,7 +12,7 @@
   flex: 1;
   min-width: 0;
 }
-.wb-context-path weft-regression-status {
+.wb-context-path braid-regression-status {
   min-width: 0;
 }
 .wb-context-end {
@@ -174,7 +174,7 @@ summary:focus-visible,
 }
 .wb-workflows,
 .wb-mapping,
-.wb-mapping weft-revision-reports {
+.wb-mapping braid-revision-reports {
   height: 100%;
   min-height: 0;
   display: block;
@@ -500,7 +500,7 @@ pre {
   .wb-version-facts .wb-badge {
     order: 1;
   }
-  .wb-version-facts weft-regression-status {
+  .wb-version-facts braid-regression-status {
     order: 2;
     flex-basis: 100%;
   }

@@ -1,9 +1,7 @@
 # XML safety and metadata core
 
 The XML core supplies physical-document validation and saved-boundary metadata
-admission. It does not enable XML previews, regression cases, compiled builds or
-mapping endpoints. Those integrations require their own versioned contracts and
-qualification.
+admission.
 
 The separately configured [native XML preview and regression workflow](xml-previews.md)
 reuses this core. Its regression cases compare exact bytes; it enables neither
@@ -11,7 +9,7 @@ canonical comparison nor compiled XML execution.
 
 ## Safety profile
 
-`weft.xml-safe.v1` accepts one nonempty XML 1.0 document encoded as strict UTF-8,
+`braid.xml-safe.v1` accepts one nonempty XML 1.0 document encoded as strict UTF-8,
 with an optional leading UTF-8 BOM. DTDs are prohibited, external resources are
 never resolved, and declarations cannot select another encoding. The document
 limit is 8 MiB, with a maximum physical depth of 64, one million physical nodes
@@ -34,7 +32,7 @@ and namespace URI values are not restricted by that name table.
 
 ## Saved boundary metadata
 
-`weft.xml-boundary.v1` records the safety profile and optional output schema
+`braid.xml-boundary.v1` records the safety profile and optional output schema
 hints. Inputs cannot carry output hints. Hint locations are literal output
 metadata, not files or URLs to retrieve. Unknown fields, duplicate fields,
 conflicting formats and unsupported saved options are refused.
@@ -51,19 +49,11 @@ admit a declaration that exceeds the .NET budget. Metadata, schema-hint and
 namespace/location records require named JSON objects, never positional arrays.
 
 The shared `engines/ferrule-host/tests/corpora/xml-safety-cases.json` corpus feeds
-the same bytes to each physical-safety implementation. These focused fixtures do
-not replace exhaustive parser compatibility, resource-limit or execution gates.
+the same bytes to each physical-safety implementation.
 
-## Required integration boundaries
+## Internal canonical comparison core
 
-Keep JSON, EDI and CSV serialization and execution paths unchanged. XML needs
-explicit default-off host admission, complete native/generated metadata parity,
-new private envelope and persistence admission, safe display, and real execution
-tests before advertisement.
-
-## Dormant canonical comparison core
-
-The internal .NET core uses policy `weft.regression.xml-c14n10-comments.v1`:
+The internal .NET core uses policy `braid.regression.xml-c14n10-comments.v1`:
 inclusive W3C Canonical XML 1.0 with comments, for complete documents only. It
 directly constructs `XmlDsigC14NWithCommentsTransform` from the exact
 `System.Security.Cryptography.Xml` package reference `[10.0.14]`, sets its resolver
@@ -95,7 +85,6 @@ checks before/after synchronous `LoadInput` and `GetOutput` cannot interrupt tho
 calls. Enabling this policy requires an independently qualified enclosing worker
 that can enforce the existing memory/CPU/deadline limits and terminate/reap these
 calls, along with selected finite canonical budgets and official W3C vectors.
-No new worker topology or process limits are selected by the core.
 
 `XmlComparisonLiveRuntimeTests` uses the existing live service-compile prerequisites
 to exercise the packaged .NET runtime behind the read-only launcher: dependency
@@ -106,4 +95,4 @@ or suitable production canonical budgets. Those remain separate enablement gates
 
 This core is internal and has no host registration or existing comparer-dispatch
 route. Canonical comparison does not replace exact-byte build evidence. The
-complete design is tracked with [#330](https://github.com/DeandreT/weft/issues/330).
+complete design is described in [XML document design](xml-document-design.md).

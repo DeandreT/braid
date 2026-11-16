@@ -5,26 +5,19 @@ order: 18
 summary: Capture specifications, review a new mapping proposal, try samples and explicitly save the exact plan.
 ---
 
-Use this workflow to turn specification documents into a proposed new mapping.
-Uploading documents, asking chat and running a sample do not save a mapping.
-Saving is a separate action after you review the exact proposal.
+Use this workflow to turn specification documents into a proposed new mapping,
+review it, try samples and save it.
 
 ## Check availability and access
 
 Open a project. **Your new mapping proposals** appears when the server advertises
 mapping creation for that project. The proposal library can refresh availability
-and access. Specification intake, chat, creation and sample execution have
-separate requirements; access to one does not turn on the others.
-
-A disabled feature is not an installation failure. An unavailable worker or an
-unverified installation is not a supported shortcut: ask the operator to check
-the required setup. Even when the server advertises a capability, each operation
-checks current access and its own execution requirements again.
+and access. If a required feature or worker is unavailable, ask the operator
+to check its setup.
 
 Reading project metadata does not grant permission to read source content.
 Sharing specification evidence with a model requires a sample-data-capable
-model profile and your current project `run.payload.read` grant. Capturing a
-document does not approve sharing it with an AI provider. See
+model profile and your current project `run.payload.read` grant. See
 [Sample data policy](chat.md#sample-data-policy) before asking chat to use it.
 
 ## Capture specification sources
@@ -63,25 +56,22 @@ Chat can discover authorized source selections and your retained proposals.
 
 New mapping plans can use JSON, XML, flat CSV/TSV, X12 and EDIFACT on either side.
 They support source-field copying and fixed values, not arbitrary calculations,
-lookups, sorting or filtering. This does not promise complete customer-guide
-compliance. Be explicit about XML structure, tabular dialect and EDI envelope
-values; unsupported rules need clarification rather than invented defaults.
+lookups, sorting or filtering. Be explicit about XML structure, tabular dialect
+and EDI envelope values; unsupported rules need clarification rather than invented defaults.
 
 Open the proposal citation in the answer, or choose **Your new mapping proposals**
-on the project page. Opening it is read-only. On **Review new mapping**, inspect
+on the project page. On **Review new mapping**, inspect
 **Source evidence**, **Open questions**, assumptions and **Exact mapping plan**.
-The proposal fingerprint identifies this exact review. A summary or a confident
-chat answer is not a substitute for checking its full plan and sources.
+The proposal fingerprint identifies this exact review.
 
 ## Try samples and give feedback
 
 Under **Test a sample**, paste input or choose a sample file, at most 1 MiB, then
 choose **Run sample**. Compare the displayed output with the expected business
 result. This sends the input for execution against the exact proposal, not
-automatically to the chat model. Empty successful output is different from failed execution. A sample
-checks that input against this exact proposal; it does not establish every rule
-or activate a release. Samples and output stay on the review page rather than
-being carried into a feedback question.
+automatically to the chat model. Empty successful output is different from failed
+execution. Samples and output stay on the review page rather than being carried
+into a feedback question.
 
 Choose **Give feedback in chat**, then **Prepare feedback question**. Review and
 edit the unsent question before sending it. The handoff carries the exact
@@ -96,12 +86,9 @@ review, samples as appropriate, and explicit approval.
 Resolve critical open questions through a new proposal. Accept each critical
 assumption only if it is correct, then check **I've reviewed this exact mapping
 plan and its source evidence.** Choose **Approve and save this mapping**.
-This approves only the displayed proposal, not future changes or the conversation.
-Current permissions and source checks still apply.
 
 Wait for a confirmed **Committed** save status and use **Open saved revision**.
-An **Approval retained** message alone does not confirm a saved mapping. Saving
-creates a catalog revision; it does not build, deploy or activate it. Continue
+An **Approval retained** message alone does not confirm a saved mapping. Continue
 with the [workbench](workbench.md), [previews](previews.md) and
 [regression tests](regression-tests.md) for the saved revision.
 
@@ -109,9 +96,7 @@ with the [workbench](workbench.md), [previews](previews.md) and
 
 A missing or unverified reply can mean the original save committed. Reopen the
 same proposal with its fingerprint and choose **Check save status**. This checks
-and recovers the original operation; it does not generate another proposal or
-grant a new approval. **Refresh proposal and access** alone is not permission
-to approve again after an uncertain reply.
+and recovers the original operation. Use it before choosing another save action.
 
 If recovery confirms a committed receipt, open that saved revision. If it
 reconciles a retained approval with no reservation, or a **Reserved** operation

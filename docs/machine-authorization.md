@@ -48,7 +48,7 @@ the Entra protocol tests.
 
 ## Invocation grants
 
-Migration `0024_machine_invocation.sql` adds `weft.invocation_grants` and their
+Migration `0024_machine_invocation.sql` adds `braid.invocation_grants` and their
 append-only audit. A grant binds one machine principal (provider, tenant and object
 ID) to one registered release target. A principal has at most one active grant per
 target.
@@ -63,15 +63,15 @@ target.
 - Each grant has one granted and, once revoked, one revoked audit event, checked
   complete at commit. Updating or deleting grants or audit is prohibited.
 
-`weft_invocation_grant_writer` is a CONNECT-only login that can only execute the grant
+`braid_invocation_grant_writer` is a CONNECT-only login that can only execute the grant
 write and read functions. Grant administration runs through
-`Weft.DatabaseTool` with `WEFT_INVOCATION_GRANT_WRITER_CONNECTION_STRING`, as one named
+`Braid.DatabaseTool` with `BRAID_INVOCATION_GRANT_WRITER_CONNECTION_STRING`, as one named
 administrator principal whose current role the database checks:
 
 ```sh
-Weft.DatabaseTool grant-machine-invocation ADMIN ORG PROJECT MAPPING ENVIRONMENT VERSION TARGET GRANT TENANT OBJECT
-Weft.DatabaseTool revoke-machine-invocation ADMIN ORG PROJECT MAPPING ENVIRONMENT VERSION TARGET GRANT
-Weft.DatabaseTool list-machine-invocation-grants ADMIN ORG PROJECT MAPPING ENVIRONMENT VERSION TARGET
+Braid.DatabaseTool grant-machine-invocation ADMIN ORG PROJECT MAPPING ENVIRONMENT VERSION TARGET GRANT TENANT OBJECT
+Braid.DatabaseTool revoke-machine-invocation ADMIN ORG PROJECT MAPPING ENVIRONMENT VERSION TARGET GRANT
+Braid.DatabaseTool list-machine-invocation-grants ADMIN ORG PROJECT MAPPING ENVIRONMENT VERSION TARGET
 ```
 
 The listing is empty for a principal without the administrator role.
@@ -79,7 +79,7 @@ The listing is empty for a principal without the administrator role.
 ## Invocation ledger
 
 The same migration adds the ledger that the machine-facing endpoint uses through
-`weft_invocation_writer`, a second CONNECT-only login that can only claim, finish and
+`braid_invocation_writer`, a second CONNECT-only login that can only claim, finish and
 purge. Neither login has table privileges; owner-defined functions pinned in the
 migration are admitted again at runtime, together with the release contract they read.
 
@@ -116,8 +116,6 @@ migration are admitted again at runtime, together with the release contract they
 
 ## Provisioning
 
-New installations create both logins in `deploy/local/postgres-init.sh`. Existing local
-databases provision them with the explicit administrator step in
-`deploy/local/postgres-add-invocation-roles.sh` before the ordered migration; without
-them the migration refuses and the schema stays at version 23. Application startup
-does not provision credentials.
+`deploy/local/postgres-init.sh` creates both restricted logins. The migration tool
+installs their schema and function grants. Application startup does not provision
+credentials.

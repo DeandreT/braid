@@ -151,7 +151,7 @@ await runBrowserFixture({
               (table) =>
                 "'" +
                 table +
-                "',(SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text),'[]'::jsonb) FROM weft." +
+                "',(SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text),'[]'::jsonb) FROM braid." +
                 table +
                 " r" +
                 (exclusions[table]
@@ -291,7 +291,7 @@ await runBrowserFixture({
       return host;
     }
     function captureMarker() {
-      const path = join(storageRoot, ".weft-private-storage"),
+      const path = join(storageRoot, ".braid-private-storage"),
         beforePath = lstatSync(path, { bigint: true });
       const same = (a, b) =>
         a.isFile() &&
@@ -320,7 +320,7 @@ await runBrowserFixture({
         check(readSync(fd, buffer, 0, buffer.length, 0) === 90);
         const bytes = buffer.subarray(0, 90),
           match =
-            /^weft-private-storage-v2\n([0-9a-f]{32})\n([0-9a-f]{32})\n$/.exec(
+            /^braid-private-storage-v2\n([0-9a-f]{32})\n([0-9a-f]{32})\n$/.exec(
               bytes.toString("ascii"),
             );
         check(
@@ -329,7 +329,11 @@ await runBrowserFixture({
             match[2] !== "0".repeat(32) &&
             bytes.equals(
               Buffer.from(
-                "weft-private-storage-v2\n" + match[1] + "\n" + match[2] + "\n",
+                "braid-private-storage-v2\n" +
+                  match[1] +
+                  "\n" +
+                  match[2] +
+                  "\n",
                 "ascii",
               ),
             ) &&
@@ -349,7 +353,7 @@ await runBrowserFixture({
       );
       check(
         reply.status === 200 &&
-          reply.body.schemaVersion === "weft.catalog-revision-report.v1" &&
+          reply.body.schemaVersion === "braid.catalog-revision-report.v1" &&
           reply.body.operation === operation &&
           equivalent(reply.body.revision, primary.scope) &&
           reply.body.state === "available" &&
@@ -450,7 +454,7 @@ await runBrowserFixture({
         counts: counts(current),
       });
       return {
-        schemaVersion: "weft.native-revision-append-browser-fixture.v1",
+        schemaVersion: "braid.native-revision-append-browser-fixture.v1",
         fixtureId,
         source: { commit: cfg.source.commit, tree: cfg.source.tree },
         readOrigin: cfg.readOrigin,
@@ -604,15 +608,15 @@ await runBrowserFixture({
           ingestion.native_digest === nativeDigest &&
           String(ingestion.native_byte_count) === String(sample.bytes.length) &&
           ingestion.logical_entry_document === "entry.native.json" &&
-          ingestion.dependency_manifest_id === "weft.dependencies.empty.v1" &&
+          ingestion.dependency_manifest_id === "braid.dependencies.empty.v1" &&
           String(ingestion.fingerprint_version) === "1" &&
           /^[a-f0-9]{64}$/.test(ingestion.intent_fingerprint) &&
-          ingestion.admission_policy_id === "weft.native-admission.v1" &&
+          ingestion.admission_policy_id === "braid.native-admission.v1" &&
           String(ingestion.effective_native_byte_limit) === "4194304" &&
           ingestion.engine_revision ===
             "238369bf0071ee8ea097d8c54fa5061f433807fb" &&
           ingestion.backend_build === cfg.workerImage &&
-          ingestion.adapter_build === "weft.ferrule-adapter.v3" &&
+          ingestion.adapter_build === "braid.ferrule-adapter.v3" &&
           String(ingestion.claim_count) === "1" &&
           String(ingestion.lease_generation) === "1" &&
           String(ingestion.verified_stage_generation) === "1" &&
@@ -652,7 +656,7 @@ await runBrowserFixture({
           attempt.last_error === null &&
           attempt.reused_attempt_generation === null &&
           attempt.reused_admission === null &&
-          attempt.evidence_version === "weft.ingestion-validation.v1" &&
+          attempt.evidence_version === "braid.ingestion-validation.v1" &&
           attempt.evidence &&
           typeof attempt.evidence === "object" &&
           !Array.isArray(attempt.evidence) &&
@@ -753,7 +757,7 @@ await runBrowserFixture({
             initializedMarker.controlId &&
           // The fixture configures the filesystem store, whose label this is.
           publication.storage_kind === "filesystem" &&
-          publication.format === "weft.private-publication.linux.v2" &&
+          publication.format === "braid.private-publication.linux.v2" &&
           /^[a-f0-9]{64}$/.test(publication.absence_record_digest) &&
           /^[a-f0-9]{64}$/.test(publication.bound_record_digest),
         "productFailure",
@@ -771,7 +775,7 @@ await runBrowserFixture({
         ],
         blob = join(...parts, compact(ingestion.native_object_id) + ".blob"),
         control = join(
-          ".weft-private-control",
+          ".braid-private-control",
           initializedMarker.controlId,
           ...parts,
           compact(ingestion.native_object_id),
@@ -819,7 +823,7 @@ await runBrowserFixture({
       const precise = jsonSql(
         "SELECT json_build_object('expiryMatches',p.owner_lease_expires_at=a.started_at+interval '120 seconds'," +
           "'inode',p.file_inode::text,'major',p.file_device_major::text,'minor',p.file_device_minor::text,'mount',p.file_mount_id::text," +
-          "'directoryInode',p.directory_inode::text,'directoryMajor',p.directory_device_major::text,'directoryMinor',p.directory_device_minor::text,'directoryMount',p.directory_mount_id::text) FROM weft.private_object_publications p JOIN weft.revision_ingestion_attempts a" +
+          "'directoryInode',p.directory_inode::text,'directoryMajor',p.directory_device_major::text,'directoryMinor',p.directory_device_minor::text,'directoryMount',p.directory_mount_id::text) FROM braid.private_object_publications p JOIN braid.revision_ingestion_attempts a" +
           " ON a.organization_id=p.organization_id AND a.project_id=p.project_id AND a.operation_id=p.ingestion_operation_id AND a.generation=p.owner_generation" +
           " WHERE p.organization_id='" +
           guid(project.organizationId) +
@@ -955,7 +959,7 @@ await runBrowserFixture({
             method: "PATCH",
             unsafe: true,
             body,
-            media: "application/vnd.weft.mapping-metadata-edit.v1+json",
+            media: "application/vnd.braid.mapping-metadata-edit.v1+json",
             ifMatch: read.headers.etag,
           });
           check(
@@ -1025,7 +1029,7 @@ await runBrowserFixture({
         (host) => upload(host, project, fixtures[0], primary.scope, 100),
       );
       const ingestion = jsonSql(
-        "SELECT to_json(ingestion_operation_id::text) FROM weft.mapping_revisions WHERE organization_id='" +
+        "SELECT to_json(ingestion_operation_id::text) FROM braid.mapping_revisions WHERE organization_id='" +
           guid(project.organizationId) +
           "' AND project_id='" +
           guid(project.projectId) +

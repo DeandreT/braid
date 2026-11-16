@@ -8,7 +8,7 @@ import {
   maximumApplicationPathLength,
 } from "../src/auth/return-path";
 
-// The server's rule (Weft.Identity.BrowserReturnPath) is tested against the same vectors.
+// The server's rule (Braid.Identity.BrowserReturnPath) is tested against the same vectors.
 const vectors = JSON.parse(
   readFileSync(
     new URL("../../../contracts/browser-return-paths.json", import.meta.url),

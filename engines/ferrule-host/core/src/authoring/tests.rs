@@ -11,7 +11,7 @@ fn group(name: &str, children: Vec<Value>) -> Value {
 
 pub(super) fn plan() -> Value {
     json!({
-        "format":"weft.authoring.v1",
+        "format":"braid.authoring.v1",
         "source":{"schema":group("Source",vec![scalar("code")]),"options":{"kind":"json"}},
         "target":{"schema":group("Target",vec![scalar("code")]),"options":{"kind":"json"}},
         "edit":{"format":"ferrule.edit.v1","operations":[{
@@ -116,8 +116,8 @@ fn unknown_and_duplicate_fields_are_refused_including_nested_options_and_edits()
         rejected(&p, "invalidAuthoring");
     }
     let bytes = serde_json::to_string(&plan()).unwrap().replacen(
-        "\"format\":\"weft.authoring.v1\"",
-        "\"format\":\"weft.authoring.v1\",\"format\":\"weft.authoring.v1\"",
+        "\"format\":\"braid.authoring.v1\"",
+        "\"format\":\"braid.authoring.v1\",\"format\":\"braid.authoring.v1\"",
         1,
     );
     assert_eq!(

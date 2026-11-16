@@ -33,7 +33,7 @@ import { HelpLinkComponent } from "../../help/help-link.component";
 import { MfdImportComponent } from "./mfd-import.component";
 
 @Component({
-  selector: "weft-append-revision-page",
+  selector: "braid-append-revision-page",
   imports: [
     ReactiveFormsModule,
     RouterLink,

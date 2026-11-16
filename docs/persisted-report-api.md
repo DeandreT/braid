@@ -1,9 +1,6 @@
 # Persisted revision-report API
 
-Issue [#51](https://github.com/DeandreT/weft/issues/51) connects the qualified
-[revision-report workflow](revision-report-workflow.md) to the catalog API.
-Implementation is in progress; HTTP, published-host and upgrade qualification
-must pass before this increment is complete.
+The catalog API exposes the [revision-report workflow](revision-report-workflow.md).
 
 ## Requests and authority
 
@@ -67,21 +64,19 @@ Responses use `Cache-Control: no-store` and no metadata ETag.
 ## Host composition and qualification
 
 Report reads and explicit derivation have independent default-off flags:
-`WEFT_REVISION_REPORTS_ENABLED` and `WEFT_REVISION_REPORT_DERIVATION_ENABLED`.
+`BRAID_REVISION_REPORTS_ENABLED` and `BRAID_REVISION_REPORT_DERIVATION_ENABLED`.
 Derivation requires reads and catalog access. Dedicated report-reader and deriver
 credentials are separate. One singleton service shares its work/read capacity
 through both interfaces; writer and worker resolution remain lazy, including
-cached Ensure and historical retained reads.
+cached Ensure and retained reads.
 
 The host opens an explicitly provisioned existing private root. Its physical
 native/derived ceilings remain 4 MiB/16 MiB. A lazily parsed report-local
-`WEFT_DERIVED_READ_BYTE_LIMIT` can reduce report reads without changing ingestion.
+`BRAID_DERIVED_READ_BYTE_LIMIT` can reduce report reads without changing ingestion.
 Pure stored-format validation requires no live worker. Missing report dependencies
 remain local to admitted report requests so catalog metadata can remain usable.
 
 Qualification covers actual scoped HTTP and native derivation, access revocation,
 capacity, cancellation, repair, complete-response boundaries and generated
-contracts. Published verification separately covers fresh setup, a genuine 0005
-upgrade with retained native facts, fresh API/pool tokens and database restart.
-Angular catalog screens, Entra sign-in, chat, preview and cloud deployment follow
-their own delivery increments.
+contracts. Published-host checks cover fresh setup, fresh API/pool tokens and
+database restart.

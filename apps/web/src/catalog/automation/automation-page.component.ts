@@ -24,7 +24,7 @@ import { BrowserSessionState } from "../../auth/browser-session-state";
 import { AutomationPanelComponent } from "./automation-panel.component";
 
 @Component({
-  selector: "weft-automation-page",
+  selector: "braid-automation-page",
   imports: [RouterLink, CatalogStatusComponent, AutomationPanelComponent],
   template: ` <section class="catalog-page">
     @if (data(); as project) {
@@ -54,7 +54,7 @@ import { AutomationPanelComponent } from "./automation-panel.component";
           [hidden]="!data()"
           [attr.inert]="!data() ? '' : null"
         >
-          <weft-automation-panel
+          <braid-automation-panel
             [scope]="project.scope"
             [context]="admission"
             [admin]="project.access.role === 'administrator'"
@@ -63,7 +63,7 @@ import { AutomationPanelComponent } from "./automation-panel.component";
       }
     }
     @if (!data()) {
-      <weft-catalog-status
+      <braid-catalog-status
         [kind]="kind()"
         [firstPage]="firstPage()"
         (retry)="retry()"

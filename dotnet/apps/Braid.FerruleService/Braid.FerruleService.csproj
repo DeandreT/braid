@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>braid-ferrule-service</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- The build writes the service's OpenAPI document from its document-only host. -->
+    <OpenApiDocumentsDirectory>../../../contracts</OpenApiDocumentsDirectory>
+    <OpenApiGenerateDocumentsOptions>--file-name ferrule-service-v1 --openapi-version OpenApi3_1</OpenApiGenerateDocumentsOptions>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.ApiDescription.Server" Version="10.0.12" PrivateAssets="all" />
+    <ProjectReference Include="../../src/Braid.MappingBackends/Braid.MappingBackends.csproj" />
+    <ProjectReference Include="../../src/Braid.Storage.FileSystem/Braid.Storage.FileSystem.csproj" />
+    <ProjectReference Include="../../src/Braid.WorkerTransport/Braid.WorkerTransport.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Braid.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

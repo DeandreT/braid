@@ -39,7 +39,7 @@ const sections: Record<string, HelpSection> = {
           text(" and shows its "),
           { kind: "emphasis", text: "explanation" },
           text(". Run "),
-          { kind: "code", text: "weft help" },
+          { kind: "code", text: "example()" },
           text(" or read about "),
           {
             kind: "link",
@@ -84,7 +84,7 @@ const sections: Record<string, HelpSection> = {
         ],
       },
       { kind: "heading", level: 2, anchor: "commands", text: "Commands" },
-      { kind: "codeBlock", text: "weft help\n  --verbose" },
+      { kind: "codeBlock", text: "example()\n  indented" },
     ],
   },
   reports: {
@@ -159,7 +159,7 @@ async function install(page: Page): Promise<Fixture> {
     if (url.pathname === "/api/v1/health") {
       expect(request.method()).toBe("GET");
       await route.fulfill({
-        json: { status: "ok", service: "weft-api", apiVersion: "v1" },
+        json: { status: "ok", service: "braid-api", apiVersion: "v1" },
       });
       return;
     }
@@ -322,9 +322,9 @@ test("a section renders its structure as text and links", async ({ page }) => {
     body.locator("strong", { hasText: "every revision" }),
   ).toBeVisible();
   await expect(body.locator("em", { hasText: "explanation" })).toBeVisible();
-  await expect(body.locator("p code", { hasText: "weft help" })).toBeVisible();
+  await expect(body.locator("p code", { hasText: "example()" })).toBeVisible();
   await expect(body.locator(".help-body p").first()).toHaveText(
-    "braid keeps every revision and shows its explanation. Run weft help or read about coverage.",
+    "braid keeps every revision and shows its explanation. Run example() or read about coverage.",
   );
   await expect(
     body.getByRole("heading", { level: 2, name: "Words braid uses" }),
@@ -338,7 +338,7 @@ test("a section renders its structure as text and links", async ({ page }) => {
     body.getByRole("columnheader", { name: "Allows" }),
   ).toBeVisible();
   await expect(body.getByRole("cell", { name: "Browse | read" })).toBeVisible();
-  await expect(body.locator("pre code")).toHaveText("weft help\n  --verbose");
+  await expect(body.locator("pre code")).toHaveText("example()\n  indented");
   const outline = body.getByRole("navigation", { name: "On this page" });
   await expect(outline.getByRole("link")).toHaveText([
     "Words braid uses",
@@ -587,7 +587,7 @@ test("a contextual help link opens its section in a new tab", async ({
   page,
   context,
 }) => {
-  process.env.WEFT_REPORTS_BASE_URL = new URL(
+  process.env.BRAID_REPORTS_BASE_URL = new URL(
     test.info().project.use.baseURL!,
   ).origin;
   const reports = new ControlledReports(page);

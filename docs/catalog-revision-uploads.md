@@ -1,15 +1,11 @@
 # Native revision upload and recovery
 
-The P3d3 native revision API implements
-[#30](https://github.com/DeandreT/weft/issues/30), following qualified and merged
-[PR #38](https://github.com/DeandreT/weft/pull/38). This document describes its
-upload and recovery HTTP boundary. [Native revision ingestion](native-revision-ingestion.md)
+This document describes the native revision upload and recovery HTTP boundary.
+[Native revision ingestion](native-revision-ingestion.md)
 owns byte admission, frozen profiles and fenced publication;
 [catalog reads](catalog-reads.md) owns metadata and the Development request boundary.
 [Project creation](project-creation-http.md), [catalog browser](catalog-browser.md)
-and [Session host](session-host.md) own their separate workflows and host activation.
-The [contract-owner map](catalog-persistence-plan.md#current-contract-owners)
-links the original requirements. No local API contract establishes cloud acceptance.
+and [Session host](session-host.md) describe their workflows and host setup.
 
 Let `P=/api/v1/organizations/{organizationId}/projects/{projectId}` and
 `M=P/mappings/{mappingId}`. Every identifier is a canonical nonzero lowercase
@@ -113,25 +109,25 @@ Development profile, use the identity/request setup in
 Protected Session hosts use [their own composition](session-host.md), not the
 Development identity adapter or plain credential delivery.
 
-- `WEFT_REVISION_INGESTION_ENABLED=true`.
-- A dedicated `WEFT_POSTGRES_INGESTION_CONNECTION_STRING`; reader, editor and owner
+- `BRAID_REVISION_INGESTION_ENABLED=true`.
+- A dedicated `BRAID_POSTGRES_INGESTION_CONNECTION_STRING`; reader, editor and owner
   credentials are never substituted.
-- Private storage, explicitly initialized by its owner: `WEFT_PRIVATE_STORAGE_ROOT`,
+- Private storage, explicitly initialized by its owner: `BRAID_PRIVATE_STORAGE_ROOT`,
   a canonical private Linux root outside application and detected Git trees, or
-  the Azure Blob settings selected by `WEFT_PRIVATE_STORAGE_KIND=azure-blob`
+  the Azure Blob settings selected by `BRAID_PRIVATE_STORAGE_KIND=azure-blob`
   ([host selection](private-storage-blob.md#host-selection)).
-- Optional `WEFT_NATIVE_BYTE_LIMIT`, a canonical positive decimal no greater than
+- Optional `BRAID_NATIVE_BYTE_LIMIT`, a canonical positive decimal no greater than
   4,194,304. It reduces new-request application admission. The actual storage
   adapter retains its hard 4 MiB cap so earlier reserved source objects remain
   verifiable after a current admission reduction.
-- An actual configured `WEFT_FERRULE_WORKER_IMAGE` for new Ferrule validation.
+- An actual configured `BRAID_FERRULE_WORKER_IMAGE` for new Ferrule validation.
   An empty current backend registry still permits receipt reads and terminal
   replay; it does not admit new uploads for an unregistered backend.
 
 The web host never creates or adopts a storage root. The owner setup command is:
 
 ```sh
-dotnet run --project dotnet/tools/Weft.StorageTool -- initialize ROOT APPLICATION_ROOT [REPOSITORY_ROOT]
+dotnet run --project dotnet/tools/Braid.StorageTool -- initialize ROOT APPLICATION_ROOT [REPOSITORY_ROOT]
 ```
 
 Use concrete canonical absolute paths and the same user that will run the host.
@@ -143,7 +139,7 @@ live filesystem or worker.
 The local listener uses HTTP/1 with a 65,536-byte request-line ceiling, including
 method and protocol framing, to admit maximum percent-encoded metadata. Host
 request-start diagnostics are suppressed so query and native data do not enter
-logs. These local settings do not qualify Azure proxy or HTTP/2 URL limits.
+logs. Configure proxy and HTTP/2 URL limits to admit the same metadata.
 
 No metadata transaction spans request, private storage or worker waits. Immutable
 revision admission and diagnostics remain distinct: a decoded-invalid revision

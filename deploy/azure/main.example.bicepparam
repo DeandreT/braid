@@ -3,7 +3,7 @@
 using './main.bicep'
 
 param location = 'eastus2'
-param name = 'weft'
+param name = 'braid'
 param entraTenantId = '00000000-0000-0000-0000-000000000000'
 param entraClientId = '00000000-0000-0000-0000-000000000000'
 param organizationId = '00000000-0000-0000-0000-000000000000'
@@ -11,7 +11,7 @@ param operatorPrincipalId = '00000000-0000-0000-0000-000000000000'
 param operatorIpRanges = []
 param customDomain = ''
 param customDomainCertificateId = ''
-param postgresAdministratorPassword = readEnvironmentVariable('WEFT_POSTGRES_ADMIN_PASSWORD')
+param postgresAdministratorPassword = readEnvironmentVariable('BRAID_POSTGRES_ADMIN_PASSWORD')
 param deployApplication = false
 param imageTag = ''
 // Native work through the Ferrule service: 'service' (internal container app) or 'sessions'
@@ -28,8 +28,8 @@ param ferruleServiceCompile = false
 param ferruleCompileToolchain = ''
 param ferruleServiceWorkerClientCertificateSha256 = ''
 param chatEnabled = false
-// Bearer access for signed-in users through allowlisted public clients such as the weft CLI: the Session
-// app registration exposes apiBearerScope (the scp name, for example 'weft.api') and accepts v2 tokens.
+// Bearer access for signed-in users through allowlisted public clients such as the braid CLI: the Session
+// app registration exposes apiBearerScope (the scp name, for example 'braid.api') and accepts v2 tokens.
 param apiBearerEnabled = false
 param apiBearerScope = ''
 param apiBearerClientIds = []

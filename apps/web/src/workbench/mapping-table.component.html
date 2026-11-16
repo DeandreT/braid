@@ -162,7 +162,7 @@
               {{ column.label
               }}{{ sort() === column.id ? (ascending() ? " ↑" : " ↓") : "" }}
             </button>
-            <weft-resize-handle
+            <braid-resize-handle
               [label]="'Resize ' + column.label + ' column'"
               [value]="widths()[column.id]!"
               [minimum]="80"
@@ -224,7 +224,7 @@
                       ) {
                         <div class="wb-observed-source">
                           <span>{{ source.name }}</span
-                          ><weft-sample-value [value]="source.value" />
+                          ><braid-sample-value [value]="source.value" />
                         </div>
                       } @empty {
                         <span class="wb-muted"
@@ -233,7 +233,7 @@
                       }
                     }
                     @case ("output") {
-                      <weft-sample-value
+                      <braid-sample-value
                         [value]="sample()!.output(row, view())"
                       />
                     }

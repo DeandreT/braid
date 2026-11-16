@@ -7,7 +7,7 @@ import {
 } from "../src/workbench/workbench-documents";
 
 const x12 =
-  "ISA*00*          *00*          *ZZ*WEFTSENDER     *ZZ*WEFTRECEIVER   *261024*1200*^*00501*000000330*0*T*:~IEA*0*000000330~";
+  "ISA*00*          *00*          *ZZ*BRAIDSENDER    *ZZ*BRAIDRECEIVER  *261024*1200*^*00501*000000330*0*T*:~IEA*0*000000330~";
 const document = (text: string, mediaType = "application/edi-x12") => ({
   name: null,
   bytesBase64Url: Buffer.from(text).toString("base64url"),

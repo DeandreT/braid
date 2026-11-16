@@ -15,7 +15,7 @@ const hash = (value: string) =>
 const id = "50000000-0000-4000-8000-000000000001";
 const other = "50000000-0000-4000-8000-000000000002";
 const planJson = JSON.stringify({
-  schema: "weft.creation-plan.v1",
+  schema: "braid.creation-plan.v1",
   format: "json-record",
   source: [{ Name: "code", Type: 1, Required: true }],
   target: [{ Name: "item", Type: 1, Required: true }],
@@ -100,8 +100,8 @@ test("plan versions keep exact bytes and all immutable review facts", async () =
   expect(sameCreation(p, different)).toBe(false);
   const v2 = {
     ...p,
-    planJson: '{"schema":"weft.creation-plan.v2"}',
-    planDigest: hash('{"schema":"weft.creation-plan.v2"}'),
+    planJson: '{"schema":"braid.creation-plan.v2"}',
+    planDigest: hash('{"schema":"braid.creation-plan.v2"}'),
   };
   expect(await creationProposal(v2, selection)).toEqual(v2);
 });
@@ -369,9 +369,9 @@ test("review text renders as inert content and passes accessibility checks", asy
     "<img src=x onerror=alert(1)> https://inert.invalid";
   await page.reload();
   await expect(page.getByText(/<img src=x/)).toBeVisible();
-  await expect(page.locator("weft-creation-page img")).toHaveCount(0);
+  await expect(page.locator("braid-creation-page img")).toHaveCount(0);
   const result = await new AxeBuilder({ page })
-    .include("weft-creation-page")
+    .include("braid-creation-page")
     .analyze();
   expect(result.violations).toEqual([]);
 });

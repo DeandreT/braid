@@ -57,8 +57,8 @@ makes a proposal out of date, **Prepare new proposal question** prepares an
 unsent question. Review it before sending. Its replacement needs a new review
 and approval.
 
-A pending or unconfirmed save is not proof that a version was saved. Use
-**Refresh proposal status** before another action. **Resume pending save**
+If a save is pending or unconfirmed, use **Refresh proposal status** before another
+action. **Resume pending save**
 recovers only that proposal's existing operation; recovery does not approve it
 or supply missing source. If another approval is needed, review the complete
 operations again before choosing **Approve this exact proposal again**.

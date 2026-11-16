@@ -5,7 +5,7 @@ import { synthetic } from "./catalog.fixture";
 test("capture authorized administration in the shared shell", async ({
   page,
 }) => {
-  const directory = process.env.WEFT_UI_CAPTURE_DIR;
+  const directory = process.env.BRAID_UI_CAPTURE_DIR;
   test.skip(!directory, "Optional sanitized UI captures");
   await install(page, true);
   await page.goto("/administration");
@@ -116,7 +116,7 @@ async function install(page: Page, session = false) {
       });
     if (url.pathname === "/api/v1/health")
       return route.fulfill({
-        json: { status: "ok", service: "weft-api", apiVersion: "v1" },
+        json: { status: "ok", service: "braid-api", apiVersion: "v1" },
       });
     if (request.method() !== "GET") {
       fixture.writes.push({

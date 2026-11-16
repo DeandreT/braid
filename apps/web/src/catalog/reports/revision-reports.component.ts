@@ -39,7 +39,7 @@ type ReadOutcome = components["schemas"]["CatalogRevisionReportReadOutcomeV1"];
 type Failure = components["schemas"]["CatalogRevisionReportFailureV1"];
 
 @Component({
-  selector: "weft-revision-reports",
+  selector: "braid-revision-reports",
   imports: [
     DatePipe,
     RouterLink,

@@ -1,4 +1,4 @@
-// The Weft container app (server plus same-replica edge) and its manual operator jobs.
+// The Braid container app (server plus same-replica edge) and its manual operator jobs.
 // Every credential is a Key Vault reference resolved with the application identity.
 param location string
 param name string
@@ -46,10 +46,10 @@ param tags object
 // The provisioning job uses the PostgreSQL client from the image whose major version the
 // migrations are qualified against.
 var postgresClientImage = 'docker.io/library/postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc'
-var weftImage = '${registryServer}/weft:${imageTag}'
-var edgeImage = '${registryServer}/weft-edge:${imageTag}'
-var applicationName = 'Weft.Session'
-var keyDirectory = '/var/lib/weft/keys/ring'
+var braidImage = '${registryServer}/braid:${imageTag}'
+var edgeImage = '${registryServer}/braid-edge:${imageTag}'
+var applicationName = 'Braid.Session'
+var keyDirectory = '/var/lib/braid/keys/ring'
 var keyRingMountOptions = 'uid=1654,gid=1654,dir_mode=0700,file_mode=0600,nobrl,mfsymlinks,cache=strict'
 
 resource environment 'Microsoft.App/managedEnvironments@2024-03-01' existing = {
@@ -117,42 +117,42 @@ var inspectionWorker = !empty(inspectionWorkerUrl)
 // Private objects live in the Blob container through the application identity. These carry no
 // secret; they stay dormant until a feature that reads or writes private objects is enabled.
 var privateStorageEnvironment = [
-  { name: 'WEFT_PRIVATE_STORAGE_KIND', value: 'azure-blob' }
-  { name: 'WEFT_PRIVATE_STORAGE_BLOB_ENDPOINT', value: privateObjectsEndpoint }
-  { name: 'WEFT_PRIVATE_STORAGE_BLOB_CONTAINER', value: privateObjectsContainer }
-  { name: 'WEFT_PRIVATE_STORAGE_BLOB_CREDENTIAL', value: 'managed-identity' }
-  { name: 'WEFT_PRIVATE_STORAGE_BLOB_CLIENT_ID', value: identityClientId }
+  { name: 'BRAID_PRIVATE_STORAGE_KIND', value: 'azure-blob' }
+  { name: 'BRAID_PRIVATE_STORAGE_BLOB_ENDPOINT', value: privateObjectsEndpoint }
+  { name: 'BRAID_PRIVATE_STORAGE_BLOB_CONTAINER', value: privateObjectsContainer }
+  { name: 'BRAID_PRIVATE_STORAGE_BLOB_CREDENTIAL', value: 'managed-identity' }
+  { name: 'BRAID_PRIVATE_STORAGE_BLOB_CLIENT_ID', value: identityClientId }
 ]
 
 // Previews, regression cases and runs, and builds: each login reaches the Session host only as an owner-only
 // file that the entrypoint writes (Key Vault login key, host setting and private file name).
 var nativeWorkFiles = [
-  { key: 'preview-reader', setting: 'WEFT_POSTGRES_PREVIEW_READER_CONNECTION_STRING', file: 'preview-reader' }
-  { key: 'preview-writer', setting: 'WEFT_POSTGRES_PREVIEW_WRITER_CONNECTION_STRING', file: 'preview-writer' }
-  { key: 'case-reader', setting: 'WEFT_REGRESSION_CASE_READER_CONNECTION_STRING', file: 'case-reader' }
-  { key: 'case-writer', setting: 'WEFT_REGRESSION_CASE_WRITER_CONNECTION_STRING', file: 'case-writer' }
-  { key: 'run-reader', setting: 'WEFT_REGRESSION_RUN_READER_CONNECTION_STRING', file: 'run-reader' }
-  { key: 'run-writer', setting: 'WEFT_REGRESSION_RUN_WRITER_CONNECTION_STRING', file: 'run-writer' }
-  { key: 'build-metadata', setting: 'WEFT_BUILD_METADATA_CONNECTION_STRING', file: 'build-metadata' }
-  { key: 'build-writer', setting: 'WEFT_BUILD_CONTROL_CONNECTION_STRING', file: 'build-control' }
-  { key: 'runtime', setting: 'WEFT_BUILD_ACCESS_CONNECTION_STRING', file: 'build-access' }
-  { key: 'report', setting: 'WEFT_BUILD_REPORT_CONNECTION_STRING', file: 'build-report' }
-  { key: 'case-reader', setting: 'WEFT_BUILD_CASE_READER_CONNECTION_STRING', file: 'build-case-reader' }
-  { key: 'run-reader', setting: 'WEFT_BUILD_EVIDENCE_READER_CONNECTION_STRING', file: 'build-evidence' }
-  { key: 'build-run-reader', setting: 'WEFT_BUILD_RUN_READER_CONNECTION_STRING', file: 'build-run-reader' }
-  { key: 'build-run-writer', setting: 'WEFT_BUILD_RUN_WRITER_CONNECTION_STRING', file: 'build-run-writer' }
-  { key: 'release-reader', setting: 'WEFT_RELEASE_READER_CONNECTION_STRING', file: 'release-reader' }
-  { key: 'release-writer', setting: 'WEFT_RELEASE_WRITER_CONNECTION_STRING', file: 'release-writer' }
-  { key: 'qualification-reader', setting: 'WEFT_QUALIFICATION_READER_CONNECTION_STRING', file: 'qualification-reader' }
+  { key: 'preview-reader', setting: 'BRAID_POSTGRES_PREVIEW_READER_CONNECTION_STRING', file: 'preview-reader' }
+  { key: 'preview-writer', setting: 'BRAID_POSTGRES_PREVIEW_WRITER_CONNECTION_STRING', file: 'preview-writer' }
+  { key: 'case-reader', setting: 'BRAID_REGRESSION_CASE_READER_CONNECTION_STRING', file: 'case-reader' }
+  { key: 'case-writer', setting: 'BRAID_REGRESSION_CASE_WRITER_CONNECTION_STRING', file: 'case-writer' }
+  { key: 'run-reader', setting: 'BRAID_REGRESSION_RUN_READER_CONNECTION_STRING', file: 'run-reader' }
+  { key: 'run-writer', setting: 'BRAID_REGRESSION_RUN_WRITER_CONNECTION_STRING', file: 'run-writer' }
+  { key: 'build-metadata', setting: 'BRAID_BUILD_METADATA_CONNECTION_STRING', file: 'build-metadata' }
+  { key: 'build-writer', setting: 'BRAID_BUILD_CONTROL_CONNECTION_STRING', file: 'build-control' }
+  { key: 'runtime', setting: 'BRAID_BUILD_ACCESS_CONNECTION_STRING', file: 'build-access' }
+  { key: 'report', setting: 'BRAID_BUILD_REPORT_CONNECTION_STRING', file: 'build-report' }
+  { key: 'case-reader', setting: 'BRAID_BUILD_CASE_READER_CONNECTION_STRING', file: 'build-case-reader' }
+  { key: 'run-reader', setting: 'BRAID_BUILD_EVIDENCE_READER_CONNECTION_STRING', file: 'build-evidence' }
+  { key: 'build-run-reader', setting: 'BRAID_BUILD_RUN_READER_CONNECTION_STRING', file: 'build-run-reader' }
+  { key: 'build-run-writer', setting: 'BRAID_BUILD_RUN_WRITER_CONNECTION_STRING', file: 'build-run-writer' }
+  { key: 'release-reader', setting: 'BRAID_RELEASE_READER_CONNECTION_STRING', file: 'release-reader' }
+  { key: 'release-writer', setting: 'BRAID_RELEASE_WRITER_CONNECTION_STRING', file: 'release-writer' }
+  { key: 'qualification-reader', setting: 'BRAID_QUALIFICATION_READER_CONNECTION_STRING', file: 'qualification-reader' }
 ]
 var chatFiles = [
-  { key: 'chat-reader', setting: 'WEFT_CHAT_READER_CONNECTION_STRING', file: 'chat-reader-connection' }
-  { key: 'chat-writer', setting: 'WEFT_CHAT_WRITER_CONNECTION_STRING', file: 'chat-writer-connection' }
-  { key: 'payload-permission', setting: 'WEFT_CHAT_PAYLOAD_PERMISSION_CONNECTION_STRING', file: 'chat-payload-permission-connection' }
+  { key: 'chat-reader', setting: 'BRAID_CHAT_READER_CONNECTION_STRING', file: 'chat-reader-connection' }
+  { key: 'chat-writer', setting: 'BRAID_CHAT_WRITER_CONNECTION_STRING', file: 'chat-writer-connection' }
+  { key: 'payload-permission', setting: 'BRAID_CHAT_PAYLOAD_PERMISSION_CONNECTION_STRING', file: 'chat-payload-permission-connection' }
 ]
 // Mutating bearer requests are audited through their own append-only login.
 var bearerFiles = [
-  { key: 'api-audit-writer', setting: 'WEFT_API_AUDIT_WRITER_CONNECTION_STRING', file: 'api-audit-writer' }
+  { key: 'api-audit-writer', setting: 'BRAID_API_AUDIT_WRITER_CONNECTION_STRING', file: 'api-audit-writer' }
 ]
 var serverFiles = concat(nativeWorkEnabled ? nativeWorkFiles : [], chatEnabled ? chatFiles : [], apiBearerEnabled ? bearerFiles : [])
 
@@ -169,89 +169,89 @@ var serverSecretNames = union([
   nativeWorkEnabled ? ['ingest-connection', 'report-connection', 'derivation-connection'] : [],
   chatEnabled ? ['chat-profiles', 'model-provider-credential'] : [], map(serverFiles, login => '${login.key}-connection'))
 var vaultNames = {
-  'session-key-pem': 'weft-session-key'
-  'entra-client-pem': 'weft-entra-client'
-  'inspection-client-pem': 'weft-inspection-client'
-  'ferrule-service-client-pem': 'weft-ferrule-service-client'
-  'chat-profiles': 'weft-chat-profiles'
-  'model-provider-credential': 'weft-model-provider-credential'
+  'session-key-pem': 'braid-session-key'
+  'entra-client-pem': 'braid-entra-client'
+  'inspection-client-pem': 'braid-inspection-client'
+  'ferrule-service-client-pem': 'braid-ferrule-service-client'
+  'chat-profiles': 'braid-chat-profiles'
+  'model-provider-credential': 'braid-model-provider-credential'
 }
 
 var serverEnvironment = concat([
-  { name: 'WEFT_CATALOG_AUTH_MODE', value: 'session' }
-  { name: 'WEFT_CATALOG_ENABLED', value: 'true' }
-  { name: 'WEFT_PUBLIC_ORIGIN', value: 'https://${publicHost}' }
-  { name: 'WEFT_HOST_TRANSPORT', value: 'trustedProxyOneHop' }
-  { name: 'WEFT_LISTEN_ADDR', value: '127.0.0.1:8081' }
-  { name: 'WEFT_KNOWN_PROXY_IP', value: '127.0.0.1' }
-  { name: 'WEFT_SESSION_ORGANIZATION_ID', value: organizationId }
-  { name: 'WEFT_SESSION_APPLICATION_NAME', value: applicationName }
-  { name: 'WEFT_SESSION_KEY_DIRECTORY', value: keyDirectory }
-  { name: 'WEFT_ENTRA_TENANT_ID', value: entraTenantId }
-  { name: 'WEFT_ENTRA_CLIENT_ID', value: entraClientId }
-  { name: 'WEFT_DELIVER_SESSION_KEY_PEM', secretRef: 'session-key-pem' }
-  { name: 'WEFT_DELIVER_ENTRA_CLIENT_PEM', secretRef: 'entra-client-pem' }
-  { name: 'WEFT_DELIVER_SESSION_READER_CONNECTION_STRING', secretRef: 'session-reader-connection' }
-  { name: 'WEFT_DELIVER_SESSION_WRITER_CONNECTION_STRING', secretRef: 'session-writer-connection' }
-  { name: 'WEFT_DELIVER_IDENTITY_READER_CONNECTION_STRING', secretRef: 'identity-connection' }
-  { name: 'WEFT_CATALOG_CONNECTION_STRING', secretRef: 'catalog-connection' }
+  { name: 'BRAID_CATALOG_AUTH_MODE', value: 'session' }
+  { name: 'BRAID_CATALOG_ENABLED', value: 'true' }
+  { name: 'BRAID_PUBLIC_ORIGIN', value: 'https://${publicHost}' }
+  { name: 'BRAID_HOST_TRANSPORT', value: 'trustedProxyOneHop' }
+  { name: 'BRAID_LISTEN_ADDR', value: '127.0.0.1:8081' }
+  { name: 'BRAID_KNOWN_PROXY_IP', value: '127.0.0.1' }
+  { name: 'BRAID_SESSION_ORGANIZATION_ID', value: organizationId }
+  { name: 'BRAID_SESSION_APPLICATION_NAME', value: applicationName }
+  { name: 'BRAID_SESSION_KEY_DIRECTORY', value: keyDirectory }
+  { name: 'BRAID_ENTRA_TENANT_ID', value: entraTenantId }
+  { name: 'BRAID_ENTRA_CLIENT_ID', value: entraClientId }
+  { name: 'BRAID_DELIVER_SESSION_KEY_PEM', secretRef: 'session-key-pem' }
+  { name: 'BRAID_DELIVER_ENTRA_CLIENT_PEM', secretRef: 'entra-client-pem' }
+  { name: 'BRAID_DELIVER_SESSION_READER_CONNECTION_STRING', secretRef: 'session-reader-connection' }
+  { name: 'BRAID_DELIVER_SESSION_WRITER_CONNECTION_STRING', secretRef: 'session-writer-connection' }
+  { name: 'BRAID_DELIVER_IDENTITY_READER_CONNECTION_STRING', secretRef: 'identity-connection' }
+  { name: 'BRAID_CATALOG_CONNECTION_STRING', secretRef: 'catalog-connection' }
   // The host accepts only lowercase true/false; ARM string() would capitalize booleans.
-  { name: 'WEFT_METADATA_EDITS_ENABLED', value: enableMetadataEdits ? 'true' : 'false' }
-  { name: 'WEFT_PROJECT_CREATION_ENABLED', value: enableProjectCreation ? 'true' : 'false' }
+  { name: 'BRAID_METADATA_EDITS_ENABLED', value: enableMetadataEdits ? 'true' : 'false' }
+  { name: 'BRAID_PROJECT_CREATION_ENABLED', value: enableProjectCreation ? 'true' : 'false' }
 ], privateStorageEnvironment, enableMetadataEdits ? [
-  { name: 'WEFT_POSTGRES_METADATA_CONNECTION_STRING', secretRef: 'metadata-connection' }
+  { name: 'BRAID_POSTGRES_METADATA_CONNECTION_STRING', secretRef: 'metadata-connection' }
 ] : [], enableProjectCreation ? [
-  { name: 'WEFT_POSTGRES_PROJECT_CREATION_CONNECTION_STRING', secretRef: 'creator-connection' }
+  { name: 'BRAID_POSTGRES_PROJECT_CREATION_CONNECTION_STRING', secretRef: 'creator-connection' }
 ] : [], inspectionWorker ? [
-  { name: 'WEFT_INSPECTION_WORKER_URL', value: inspectionWorkerUrl }
-  { name: 'WEFT_INSPECTION_WORKER_CERTIFICATE_SHA256', value: inspectionWorkerCertificateSha256 }
-  { name: 'WEFT_FERRULE_WORKER_IMAGE', value: ferruleWorkerImage }
-  { name: 'WEFT_DELIVER_INSPECTION_CLIENT_PEM', secretRef: 'inspection-client-pem' }
+  { name: 'BRAID_INSPECTION_WORKER_URL', value: inspectionWorkerUrl }
+  { name: 'BRAID_INSPECTION_WORKER_CERTIFICATE_SHA256', value: inspectionWorkerCertificateSha256 }
+  { name: 'BRAID_FERRULE_WORKER_IMAGE', value: ferruleWorkerImage }
+  { name: 'BRAID_DELIVER_INSPECTION_CLIENT_PEM', secretRef: 'inspection-client-pem' }
 ] : [], ferruleRunner == 'service' ? [
   // The Ferrule service in this environment, pinned in both directions over its TCP ingress.
-  { name: 'WEFT_FERRULE_RUNNER', value: 'service' }
-  { name: 'WEFT_FERRULE_SERVICE_URL', value: ferruleServiceUrl }
-  { name: 'WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256', value: ferruleServiceCertificateSha256 }
-  { name: 'WEFT_FERRULE_WORKER_IMAGE', value: ferruleServiceIdentity }
-  { name: 'WEFT_DELIVER_FERRULE_SERVICE_CLIENT_PEM', secretRef: 'ferrule-service-client-pem' }
+  { name: 'BRAID_FERRULE_RUNNER', value: 'service' }
+  { name: 'BRAID_FERRULE_SERVICE_URL', value: ferruleServiceUrl }
+  { name: 'BRAID_FERRULE_SERVICE_CERTIFICATE_SHA256', value: ferruleServiceCertificateSha256 }
+  { name: 'BRAID_FERRULE_WORKER_IMAGE', value: ferruleServiceIdentity }
+  { name: 'BRAID_DELIVER_FERRULE_SERVICE_CLIENT_PEM', secretRef: 'ferrule-service-client-pem' }
 ] : [], ferruleRunner != 'worker' && !empty(ferruleCompileToolchain) ? [
-  { name: 'WEFT_FERRULE_COMPILE_TOOLCHAIN', value: ferruleCompileToolchain }
+  { name: 'BRAID_FERRULE_COMPILE_TOOLCHAIN', value: ferruleCompileToolchain }
 ] : [], ferruleRunner == 'sessions' ? [
   // Dynamic sessions with this app's managed identity; no credential is configured.
-  { name: 'WEFT_FERRULE_RUNNER', value: 'azureContainerAppsSessions' }
-  { name: 'WEFT_FERRULE_SESSIONS_POOL_ENDPOINT', value: ferruleSessionsEndpoint }
-  { name: 'WEFT_FERRULE_SESSIONS_MANAGED_IDENTITY_CLIENT_ID', value: identityClientId }
-  { name: 'WEFT_FERRULE_WORKER_IMAGE', value: ferruleServiceIdentity }
+  { name: 'BRAID_FERRULE_RUNNER', value: 'azureContainerAppsSessions' }
+  { name: 'BRAID_FERRULE_SESSIONS_POOL_ENDPOINT', value: ferruleSessionsEndpoint }
+  { name: 'BRAID_FERRULE_SESSIONS_MANAGED_IDENTITY_CLIENT_ID', value: identityClientId }
+  { name: 'BRAID_FERRULE_WORKER_IMAGE', value: ferruleServiceIdentity }
 ] : [], nativeWorkEnabled ? [
   // Native upload, report reads and derivation run here through the selected runner; previews, regression runs
   // and builds are recorded here and executed by the worker app.
-  { name: 'WEFT_REVISION_INGESTION_ENABLED', value: 'true' }
-  { name: 'WEFT_MFD_INTERCHANGE_ENABLED', value: ferruleRunner == 'worker' ? 'false' : 'true' }
-  { name: 'WEFT_POSTGRES_INGESTION_CONNECTION_STRING', secretRef: 'ingest-connection' }
-  { name: 'WEFT_REVISION_REPORTS_ENABLED', value: 'true' }
-  { name: 'WEFT_POSTGRES_REPORT_CONNECTION_STRING', secretRef: 'report-connection' }
-  { name: 'WEFT_REVISION_REPORT_DERIVATION_ENABLED', value: 'true' }
-  { name: 'WEFT_POSTGRES_DERIVATION_CONNECTION_STRING', secretRef: 'derivation-connection' }
-  { name: 'WEFT_PREVIEWS_ENABLED', value: 'true' }
-  { name: 'WEFT_REGRESSIONS_ENABLED', value: 'true' }
-  { name: 'WEFT_BUILDS_ENABLED', value: 'true' }
-  { name: 'WEFT_RELEASE_OPERATIONS_ENABLED', value: 'true' }
+  { name: 'BRAID_REVISION_INGESTION_ENABLED', value: 'true' }
+  { name: 'BRAID_MFD_INTERCHANGE_ENABLED', value: ferruleRunner == 'worker' ? 'false' : 'true' }
+  { name: 'BRAID_POSTGRES_INGESTION_CONNECTION_STRING', secretRef: 'ingest-connection' }
+  { name: 'BRAID_REVISION_REPORTS_ENABLED', value: 'true' }
+  { name: 'BRAID_POSTGRES_REPORT_CONNECTION_STRING', secretRef: 'report-connection' }
+  { name: 'BRAID_REVISION_REPORT_DERIVATION_ENABLED', value: 'true' }
+  { name: 'BRAID_POSTGRES_DERIVATION_CONNECTION_STRING', secretRef: 'derivation-connection' }
+  { name: 'BRAID_PREVIEWS_ENABLED', value: 'true' }
+  { name: 'BRAID_REGRESSIONS_ENABLED', value: 'true' }
+  { name: 'BRAID_BUILDS_ENABLED', value: 'true' }
+  { name: 'BRAID_RELEASE_OPERATIONS_ENABLED', value: 'true' }
 ] : [], chatEnabled ? [
   // The profile document and the model credential are private files; the profile's credential entry names
-  // /run/weft/secrets/model-provider-credential or a managed-identity token.
-  { name: 'WEFT_CHAT_ENABLED', value: 'true' }
-  { name: 'WEFT_CHAT_PROFILES_FILE', value: '/run/weft/secrets/chat-profiles' }
-  { name: 'WEFT_DELIVER_FILE_CHAT_PROFILES', secretRef: 'chat-profiles' }
-  { name: 'WEFT_DELIVER_FILE_MODEL_PROVIDER_CREDENTIAL', secretRef: 'model-provider-credential' }
+  // /run/braid/secrets/model-provider-credential or a managed-identity token.
+  { name: 'BRAID_CHAT_ENABLED', value: 'true' }
+  { name: 'BRAID_CHAT_PROFILES_FILE', value: '/run/braid/secrets/chat-profiles' }
+  { name: 'BRAID_DELIVER_FILE_CHAT_PROFILES', secretRef: 'chat-profiles' }
+  { name: 'BRAID_DELIVER_FILE_MODEL_PROVIDER_CREDENTIAL', secretRef: 'model-provider-credential' }
 ] : [], apiBearerEnabled ? [
   // Signed-in users' delegated v2 access tokens for the Session app's exposed scope, from the allowlisted clients.
-  { name: 'WEFT_API_BEARER_ENABLED', value: 'true' }
-  { name: 'WEFT_API_BEARER_AUDIENCE', value: entraClientId }
-  { name: 'WEFT_API_BEARER_SCOPE', value: apiBearerScope }
-  { name: 'WEFT_API_BEARER_CLIENT_IDS', value: join(apiBearerClientIds, ',') }
+  { name: 'BRAID_API_BEARER_ENABLED', value: 'true' }
+  { name: 'BRAID_API_BEARER_AUDIENCE', value: entraClientId }
+  { name: 'BRAID_API_BEARER_SCOPE', value: apiBearerScope }
+  { name: 'BRAID_API_BEARER_CLIENT_IDS', value: join(apiBearerClientIds, ',') }
 ] : [], flatten(map(serverFiles, login => [
-  { name: 'WEFT_DELIVER_FILE_${toUpper(replace(login.file, '-', '_'))}', secretRef: '${login.key}-connection' }
-  { name: '${login.setting}_FILE', value: '/run/weft/secrets/${login.file}' }
+  { name: 'BRAID_DELIVER_FILE_${toUpper(replace(login.file, '-', '_'))}', secretRef: '${login.key}-connection' }
+  { name: '${login.setting}_FILE', value: '/run/braid/secrets/${login.file}' }
 ])))
 
 var healthProbe = {
@@ -294,7 +294,7 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'server'
-          image: weftImage
+          image: braidImage
           args: ['server']
           env: serverEnvironment
           resources: {
@@ -304,7 +304,7 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
           volumeMounts: [
             {
               volumeName: 'session-keys'
-              mountPath: '/var/lib/weft/keys'
+              mountPath: '/var/lib/braid/keys'
             }
           ]
         }
@@ -312,8 +312,8 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'edge'
           image: edgeImage
           env: [
-            { name: 'WEFT_PUBLIC_HOST', value: publicHost }
-            { name: 'WEFT_EDGE_TRUSTED_PROXIES', value: trustedIngressRange }
+            { name: 'BRAID_PUBLIC_HOST', value: publicHost }
+            { name: 'BRAID_EDGE_TRUSTED_PROXIES', value: trustedIngressRange }
           ]
           resources: {
             cpu: json('0.25')
@@ -409,7 +409,7 @@ resource databaseRoles 'Microsoft.App/jobs@2024-03-01' = {
             // The client image has no CA bundle; the connection stays inside the virtual network.
             { name: 'PGSSLMODE', value: 'require' }
             { name: 'PGCONNECT_TIMEOUT', value: '15' }
-          ], map(roles, role => { name: 'WEFT_${role.env}_PASSWORD', secretRef: 'pg-${role.key}-password' }))
+          ], map(roles, role => { name: 'BRAID_${role.env}_PASSWORD', secretRef: 'pg-${role.key}-password' }))
           resources: jobResources
         }
       ]
@@ -432,10 +432,10 @@ resource migrate 'Microsoft.App/jobs@2024-03-01' = {
       containers: [
         {
           name: 'migrate'
-          image: weftImage
+          image: braidImage
           args: ['migrate']
           env: [
-            { name: 'WEFT_MIGRATION_CONNECTION_STRING', secretRef: 'migrator-connection' }
+            { name: 'BRAID_MIGRATION_CONNECTION_STRING', secretRef: 'migrator-connection' }
           ]
           resources: jobResources
         }
@@ -453,25 +453,25 @@ resource sessionKeys 'Microsoft.App/jobs@2024-03-01' = {
     environmentId: environment.id
     workloadProfileName: 'Consumption'
     configuration: union(jobConfiguration, {
-      secrets: [vaultSecret(vaultUri, identityId, 'session-key-pem', 'weft-session-key')]
+      secrets: [vaultSecret(vaultUri, identityId, 'session-key-pem', 'braid-session-key')]
     })
     template: {
       containers: [
         {
           name: 'session-keys'
-          image: weftImage
+          image: braidImage
           args: ['bootstrap-session-keys']
           env: [
-            { name: 'WEFT_SESSION_ORGANIZATION_ID', value: organizationId }
-            { name: 'WEFT_SESSION_APPLICATION_NAME', value: applicationName }
-            { name: 'WEFT_SESSION_KEY_DIRECTORY', value: keyDirectory }
-            { name: 'WEFT_DELIVER_SESSION_KEY_PEM', secretRef: 'session-key-pem' }
+            { name: 'BRAID_SESSION_ORGANIZATION_ID', value: organizationId }
+            { name: 'BRAID_SESSION_APPLICATION_NAME', value: applicationName }
+            { name: 'BRAID_SESSION_KEY_DIRECTORY', value: keyDirectory }
+            { name: 'BRAID_DELIVER_SESSION_KEY_PEM', secretRef: 'session-key-pem' }
           ]
           resources: jobResources
           volumeMounts: [
             {
               volumeName: 'session-keys'
-              mountPath: '/var/lib/weft/keys'
+              mountPath: '/var/lib/braid/keys'
             }
           ]
         }
@@ -503,7 +503,7 @@ resource privateStorage 'Microsoft.App/jobs@2024-03-01' = {
       containers: [
         {
           name: 'private-storage'
-          image: weftImage
+          image: braidImage
           args: ['storage', 'initialize-blob']
           env: privateStorageEnvironment
           resources: jobResources
@@ -530,10 +530,10 @@ resource maintenance 'Microsoft.App/jobs@2024-03-01' = {
       containers: [
         {
           name: 'maintenance'
-          image: weftImage
+          image: braidImage
           args: ['maintenance', '--help']
           env: concat([
-            { name: 'WEFT_MAINTENANCE_CONNECTION_STRING', secretRef: 'maintenance-connection' }
+            { name: 'BRAID_MAINTENANCE_CONNECTION_STRING', secretRef: 'maintenance-connection' }
           ], privateStorageEnvironment)
           resources: jobResources
         }
@@ -543,7 +543,7 @@ resource maintenance 'Microsoft.App/jobs@2024-03-01' = {
 }
 
 // Owner commands with the migrator credential; supply the command as arguments when starting
-// an execution. `weft-owner-input` becomes standard input for commands that read it.
+// an execution. `braid-owner-input` becomes standard input for commands that read it.
 resource owner 'Microsoft.App/jobs@2024-03-01' = {
   name: '${jobPrefix}-owner'
   location: location
@@ -555,18 +555,18 @@ resource owner 'Microsoft.App/jobs@2024-03-01' = {
     configuration: union(jobConfiguration, {
       secrets: [
         vaultSecret(vaultUri, identityId, 'migrator-connection', 'pg-migrator-connection')
-        vaultSecret(vaultUri, identityId, 'owner-input', 'weft-owner-input')
+        vaultSecret(vaultUri, identityId, 'owner-input', 'braid-owner-input')
       ]
     })
     template: {
       containers: [
         {
           name: 'owner'
-          image: weftImage
+          image: braidImage
           args: ['database']
           env: [
-            { name: 'WEFT_MIGRATION_CONNECTION_STRING', secretRef: 'migrator-connection' }
-            { name: 'WEFT_DELIVER_OWNER_INPUT', secretRef: 'owner-input' }
+            { name: 'BRAID_MIGRATION_CONNECTION_STRING', secretRef: 'migrator-connection' }
+            { name: 'BRAID_DELIVER_OWNER_INPUT', secretRef: 'owner-input' }
           ]
           resources: jobResources
         }

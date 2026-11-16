@@ -22,7 +22,7 @@ import { ThemePreference, type ThemeChoice } from "../theme-preference";
 
 /** The header account menu: the session's state, organization and explicit session actions. */
 @Component({
-  selector: "weft-browser-auth-controls",
+  selector: "braid-browser-auth-controls",
   templateUrl: "./browser-auth-controls.component.html",
   styleUrl: "./browser-auth-controls.component.css",
 })

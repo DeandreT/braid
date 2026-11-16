@@ -53,9 +53,9 @@ resource caller 'Microsoft.App/jobs@2024-03-01' = {
           // Each execution supplies its own arguments: invoke CALL ORIGIN REQUEST CREDENTIAL, or ready CALL ORIGIN.
           args: ['ready', 'none', 'https://localhost']
           env: [
-            { name: 'WEFT_QUALIFY_CALLER_TOKEN', secretRef: 'caller-token' }
-            { name: 'WEFT_QUALIFY_FOREIGN_TOKEN', secretRef: 'foreign-token' }
-            { name: 'WEFT_QUALIFY_EXPIRING_TOKEN', secretRef: 'expiring-token' }
+            { name: 'BRAID_QUALIFY_CALLER_TOKEN', secretRef: 'caller-token' }
+            { name: 'BRAID_QUALIFY_FOREIGN_TOKEN', secretRef: 'foreign-token' }
+            { name: 'BRAID_QUALIFY_EXPIRING_TOKEN', secretRef: 'expiring-token' }
           ]
           resources: {
             cpu: json('0.25')

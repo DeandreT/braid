@@ -3,11 +3,11 @@
   "version": 1,
   "cli": { "analytics": false },
   "projects": {
-    "weft": {
+    "braid": {
       "projectType": "application",
       "root": "",
       "sourceRoot": "src",
-      "prefix": "weft",
+      "prefix": "braid",
       "architect": {
         "build": {
           "builder": "@angular/build:application",
@@ -16,7 +16,7 @@
             "index": "index.html",
             "tsConfig": "tsconfig.app.json",
             "styles": ["src/style.css"],
-            "outputPath": "dist/weft",
+            "outputPath": "dist/braid",
             "deployUrl": "/",
             "assets": [{ "glob": "**/*", "input": "public", "output": "/" }]
           },
@@ -64,7 +64,7 @@
             },
             "tsConfig": "tsconfig.browser-session-probe.json",
             "styles": ["src/style.css"],
-            "deployUrl": "/__weft119_probe/",
+            "deployUrl": "/__braid119_probe/",
             "outputPath": {
               "base": "dist/browser-session-probe",
               "browser": "browser"
@@ -105,7 +105,7 @@
           },
           "defaultConfiguration": "development",
           "configurations": {
-            "development": { "buildTarget": "weft:build:devServer" }
+            "development": { "buildTarget": "braid:build:devServer" }
           }
         }
       }

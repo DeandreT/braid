@@ -9,11 +9,7 @@ inside that worker; application results contain braid-owned data and evidence.
 Hosted environments that cannot run Docker use the same worker binary and
 protocols inside the [Ferrule service](ferrule-service.md).
 
-Inspection and validation were qualified in
-[PR #10](https://github.com/DeandreT/weft/pull/10). Native projection is tracked in
-[#8](https://github.com/DeandreT/weft/issues/8), followed by the Angular viewer in
-[#9](https://github.com/DeandreT/weft/issues/9). See
-[Ferrule projection](ferrule-projection.md) for explanation semantics.
+See [Ferrule projection](ferrule-projection.md) for explanation semantics.
 
 ## Native authority and results
 
@@ -30,22 +26,11 @@ records the full immutable revision scope, native digest, engine revision,
 trusted worker image identity, and adapter build. `Confirmed` means the adapter
 accepted matching bounded worker output; it does not imply execution admission.
 
-The current adapter identity is `weft.ferrule-adapter.v3`. Current report keys
+The current adapter identity is `braid.ferrule-adapter.v3`. Current report keys
 include this identity, the full Ferrule commit and the server-selected immutable
 image. A changed engine selects a different key without rewriting native bytes,
 ingestion facts or retained report provenance. Stored-format readers compare a
 retained report with its own complete key and do not resolve a current worker.
-
-Advancing the pin therefore has these effects. Native revisions are unchanged and
-decode at the new pin, including legacy unmarked files. Current reads select new
-projection and validation keys, so retained reports re-derive with the new worker
-on their next current request; reports and ingestion evidence derived earlier keep
-their original engine, image and adapter provenance and stay readable by their own
-keys. Preview provenance, saved regression cases and build intents carry the full
-engine revision and image identity. A saved case runs only on its recorded
-runtime, and existing builds, approvals and published artifacts stay bound to
-their original compiler and runtime images: the new runtime refuses them, so they
-need a new build, regression evidence and approval at the new revision.
 
 Validation validity and total issue count are separate from the emitted bounded
 diagnostics. Exact typed owners identify graph/function nodes, endpoints,
@@ -55,21 +40,20 @@ boundary as strings. Human location text is display data and is never parsed to
 recover identity.
 
 Native JSON pointers account for the versioned `/document` envelope. A shallow
-header probe follows authoritative decoding and preserves ignored legacy
-metadata behavior. A pointer whose precision or size is unqualified falls back
+header probe follows authoritative decoding. A pointer whose precision or size exceeds supported limits falls back
 to the document locator while retaining its typed owner. Exact endpoint owner
 names exceeding the text budget refuse admission instead of silently changing
 identity. Display-name and diagnostic text truncation is explicit.
 
 ## Protocol and limits
 
-Editing uses the separate `weft.ferrule-edit.v1` protocol: header, exact native
+Editing uses the separate `braid.ferrule-edit.v1` protocol: header, exact native
 base and typed operation-log frames. Its result carries authoritative validation,
 projection and a separate exact native frame. It preserves inspection's sandbox
 profile and deadline; only the bounded output framing is enlarged. The shared
 core also builds the dedicated browser wasm module. See [Mapping editing](mapping-editing.md).
 
-`weft.ferrule-host.v1` admits one request per worker process:
+`braid.ferrule-host.v1` admits one request per worker process:
 
 1. A four-byte unsigned big-endian header length, followed by UTF-8 JSON.
 2. A four-byte unsigned big-endian native length, followed by exact native bytes.
@@ -85,7 +69,7 @@ artifact paths, commands, payloads, credentials, or execution parameters.
 | Boundary | Compiled ceiling |
 | --- | --- |
 | Header | 16 KiB |
-| Native document | 4 MiB, including legacy files |
+| Native document | 4 MiB |
 | Response | 8 MiB |
 | Structural traversal items | 8,192 |
 | Emitted diagnostics | 128 |
@@ -104,13 +88,13 @@ and cleanup failure remain distinct outcomes.
 ## Deterministic edit checkpoints
 
 `IMappingEditBackend` replays the closed `ferrule.edit.v1` operation vocabulary
-against exact server-owned base bytes. `weft-ferrule-core`, under the worker's
+against exact server-owned base bytes. `braid-ferrule-core`, under the worker's
 `core/` directory, shares Ferrule's codec, `edit-ops` command history, validation
 and braid's projection walker with the browser wasm module. The host retains its
 existing library exports and binary entry point; preview, build and sandbox code
 are not dependencies of the shared core.
 
-`weft.ferrule-edit.v1` admits three length-prefixed frames: the context header,
+`braid.ferrule-edit.v1` admits three length-prefixed frames: the context header,
 the immutable native base (4 MiB), and the typed operation log (1 MiB and 2,000
 operations). The header names `edit` and binds both input SHA-256 digests. It
 accepts no paths, commands or arbitrary model patches. Trailing frames are refused.
@@ -134,8 +118,8 @@ wasm-bindgen's error throw and error-string conversion intrinsics.
 ## JSON sample preview
 
 `IMappingPreviewBackend` runs one bounded sample preview of an exact native
-revision. `FerrulePreviewBackend` (adapter `weft.ferrule-preview-adapter.v1`)
-sends a separate `weft.ferrule-preview.v1` request to the same worker image:
+revision. `FerrulePreviewBackend` (adapter `braid.ferrule-preview-adapter.v1`)
+sends a separate `braid.ferrule-preview.v1` request to the same worker image:
 
 1. The length-prefixed UTF-8 JSON header, bounded by the same 16 KiB.
 2. The exact native frame.
@@ -153,7 +137,7 @@ count, byte length and SHA-256, in primary-then-named order.
 The worker calls Ferrule's public `cli::run_project_value_payloads` with
 `with_current_datetime`, the supplied parameters and target selection; it never
 substitutes ambient time or design-time preview values. Profile
-`weft.ferrule-json-preview.v1` admits only valid mappings whose reachable
+`braid.ferrule-json-preview.v1` admits only valid mappings whose reachable
 boundaries are static plain JSON: no format option other than JSON selection,
 any stored design-time path must name a `.json` document, and dynamic inputs
 or outputs are refused. Admission, required named inputs and declared parameter
@@ -172,17 +156,14 @@ errors and limits are distinct bounded failures; no partial outputs are returned
 
 Preview containers use the `DockerWorkerProfile.Preview` runner profile. It changes
 only memory, CPU time, wall deadline and frame bounds; network, filesystem, user,
-capability, process and cleanup policy are identical to inspection. Inspection
-results continue to report preview as `notQualified` until a product preview
-workflow is exposed.
+capability, process and cleanup policy are identical to inspection.
 
 ## Explicit document preview protocol
 
-The worker also accepts `weft.ferrule-document-preview.v1`, using the same
+The worker also accepts `braid.ferrule-document-preview.v1`, using the same
 bounded frame shape, target selection, digest verification and sandbox ceilings
-as JSON preview. Its response profile is `weft.ferrule-document-preview.v1`.
-This is a distinct admission contract: the existing JSON protocol and profile
-retain their original behavior.
+as JSON preview. Its response profile is `braid.ferrule-document-preview.v1`.
+This is a distinct admission contract from the JSON profile.
 
 Document boundaries require an explicit `json_document` or `edi_kind` (`x12` or
 `edifact`) in the native mapping. Stored paths, sample filenames and caller media
@@ -192,19 +173,17 @@ stateful formats, dynamic sources and dynamic output paths are refused before
 input parsing. Embedded EDI constraints, lexical formats, implied decimals and
 matching envelope autocomplete settings pass to Ferrule without reinterpretation.
 
-Inputs and selected outputs receive synthetic `/weft/input/` and `/weft/output/`
+Inputs and selected outputs receive synthetic `/braid/input/` and `/braid/output/`
 identities with family-specific suffixes. Named targets need no stored path.
 Output frames preserve Ferrule's exact bytes and report `application/json`,
 `application/edi-x12` or `application/edifact` per selected target, including mixed
 target families. The C# adapter requires an explicit
-`PreviewExecutionProfile.Document` selection; its default remains legacy JSON.
+`PreviewExecutionProfile.Document` selection; its default is JSON.
 It checks the distinct protocol/profile and records a distinct adapter identity.
 
 Catalog preview submissions can explicitly request this profile; it is retained
 in the queued request and recorded result. See [Preview runs](preview-runs.md)
-for per-format limits, persistence and download behavior. Regression runtime
-contracts, compiled builds and endpoint content negotiation retain independent
-admission and do not gain document support from a successful sample preview.
+for per-format limits, persistence and download behavior.
 
 ## Local isolation and lifecycle
 
@@ -219,7 +198,7 @@ excluded. Known Docker default environment values are admitted explicitly.
 
 Creation, attachment, and removal are separate operations. Each admission generates
 a fresh random name and an independent random operation marker. The container label
-`io.weft.inspection.operation.v1` holds the marker as 32 lowercase hexadecimal
+`io.braid.inspection.operation.v1` holds the marker as 32 lowercase hexadecimal
 characters; it contains no credentials or mapping data. Neither the name prefix,
 image, nor a previous operation's marker establishes ownership. Before startup,
 the runner verifies the acknowledged full container ID, exact name, current marker
@@ -271,9 +250,9 @@ that cannot be removed, an unexpected exception and a reaper fault still close t
 runner until restart. Shutdown cancels the reaper and joins it; an identity still
 pending at shutdown faults the stop as before.
 
-The server's Development runner and `Weft.Worker`'s preview and build runners
-read two optional budgets, `WEFT_FERRULE_DOCKER_CREATE_TIMEOUT_SECONDS` and
-`WEFT_FERRULE_DOCKER_CLEANUP_TIMEOUT_SECONDS` (whole seconds, 1–120). Unset, creation
+The server's Development runner and `Braid.Worker`'s preview and build runners
+read two optional budgets, `BRAID_FERRULE_DOCKER_CREATE_TIMEOUT_SECONDS` and
+`BRAID_FERRULE_DOCKER_CLEANUP_TIMEOUT_SECONDS` (whole seconds, 1–120). Unset, creation
 settles within the operation's wall budget and cleanup has two seconds. A create
 budget gives creation its own deadline and starts the wall budget after creation
 settles. Reaper attempts perform only ownership inspection and removal. The hosted
@@ -290,9 +269,6 @@ manual stop before replacement; a newly generated policy cannot protect the old
 unit's stop job retroactively. Identical stamped reruns do not stop the unit.
 
 Qualification teardown follows the same marker/name/full-ID rule before removal.
-Legacy probe records that retain only a generated name authorize read-only absence
-checks; they do not authorize deleting a live object. A live object under such a
-record remains a failed qualification requiring separately attributed settlement.
 
 The server host owns the shared runner's shutdown. When the host begins stopping,
 the runner closes admission, cancels queued and running work through the normal
@@ -320,7 +296,7 @@ and dependency copyright/license metadata. BuildKit is required to build it.
 The hosted Session server has no Docker access. `RemoteInspectionWorkerRunner`
 implements the same byte-only `IInspectionWorkerRunner` seam and forwards each
 inspection, validation or projection frame to the inspection service in
-`Weft.Worker`, which runs it with its own singleton runner and the fixed
+`Braid.Worker`, which runs it with its own singleton runner and the fixed
 inspection profile. The Session host keeps the Ferrule adapter: it builds the exact
 frame, and it decodes and verifies the exact worker output, including digests,
 echoed revision context and typed owners. The transport adds no mapping semantics.
@@ -334,7 +310,7 @@ only durable record, and a lost call is recovered by the workflow's own resume o
 ensure. Durable Wolverine jobs remain for previews, which outlive the submitting
 request.
 
-`weft.inspection-transport.v1` runs HTTP/1.1 over TLS 1.2 or 1.3 on a private
+`braid.inspection-transport.v1` runs HTTP/1.1 over TLS 1.2 or 1.3 on a private
 network. Each side admits exactly one peer certificate by its SHA-256 pin: the
 Session host pins the worker's certificate, and the worker requires a client
 certificate and admits only the Session host's pin. Trust stores, host names and
@@ -344,12 +320,12 @@ revocation are not consulted. Each operation:
    retry cannot deliver a frame twice.
 2. Sends `GET /v1/inspection/ready` on it. Under TLS 1.3 the client finishes its
    handshake before the worker has judged its certificate; this answer proves the
-   worker admitted the client, and its `Weft-Worker-Image` must equal the Session
+   worker admitted the client, and its `Braid-Worker-Image` must equal the Session
    host's configured image. No frame byte is sent before it.
 3. Sends `POST /v1/inspection/operations/{operation}` on the same connection with a
    fresh 128-bit operation identity, the exact frame as `application/octet-stream`
    with a known length, and the expected image.
-4. Receives `200` with `Weft-Worker-Result` (`none`, `canceled`, `timedOut`,
+4. Receives `200` with `Braid-Worker-Result` (`none`, `canceled`, `timedOut`,
    `startFailed`, `workerFailed`, `outputLimitExceeded`, `cleanupFailed` or
    `sandboxUnavailable`), the worker's image and, only for `none`, the exact runner
    output with a known length.
@@ -385,18 +361,18 @@ unconfirmed cleanup faults the worker's exit.
 
 ### Worker inspection service
 
-`Weft.Worker` serves the transport only with `WEFT_INSPECTION_WORKER_ENABLED=true`:
+`Braid.Worker` serves the transport only with `BRAID_INSPECTION_WORKER_ENABLED=true`:
 
 | Setting | Value |
 | --- | --- |
-| `WEFT_INSPECTION_LISTEN_ADDR` | One canonical literal IP endpoint with a nonzero port on the private network, for example `0.0.0.0:8443` inside a container. |
-| `WEFT_INSPECTION_SERVER_CERTIFICATE_FILE` / `WEFT_INSPECTION_SERVER_PRIVATE_KEY_FILE` | The worker's current RSA (at least 2048-bit) PEM certificate and key as protected private files, admitted like the Session host's deliveries. |
-| `WEFT_INSPECTION_CLIENT_CERTIFICATE_SHA256` | Lowercase hexadecimal SHA-256 of the Session host's client certificate (DER). |
-| `WEFT_FERRULE_WORKER_IMAGE` | The immutable image ID shared with the Session host. |
-| `WEFT_DOCKER_EXECUTABLE` | Optional Docker CLI path (default `/usr/bin/docker`). |
+| `BRAID_INSPECTION_LISTEN_ADDR` | One canonical literal IP endpoint with a nonzero port on the private network, for example `0.0.0.0:8443` inside a container. |
+| `BRAID_INSPECTION_SERVER_CERTIFICATE_FILE` / `BRAID_INSPECTION_SERVER_PRIVATE_KEY_FILE` | The worker's current RSA (at least 2048-bit) PEM certificate and key as protected private files, admitted like the Session host's deliveries. |
+| `BRAID_INSPECTION_CLIENT_CERTIFICATE_SHA256` | Lowercase hexadecimal SHA-256 of the Session host's client certificate (DER). |
+| `BRAID_FERRULE_WORKER_IMAGE` | The immutable image ID shared with the Session host. |
+| `BRAID_DOCKER_EXECUTABLE` | Optional Docker CLI path (default `/usr/bin/docker`). |
 
 The worker needs the Docker access described above; it is never reachable from the
-internet. A worker that only serves inspection sets `WEFT_PREVIEW_WORKER_ENABLED=false`
+internet. A worker that only serves inspection sets `BRAID_PREVIEW_WORKER_ENABLED=false`
 and then needs no preview database login or storage root; regression and build
 execution require the preview worker. Invalid or incomplete settings stop the
 worker at startup. Its client and worker certificates rotate by restart: deliver a
@@ -409,15 +385,14 @@ From the repository root, with the pinned .NET SDK and Rust toolchain installed:
 ```sh
 CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/ferrule-host \
   cargo +1.98.1 test --manifest-path engines/ferrule-host/Cargo.toml --locked
-docker build --iidfile /tmp/weft-worker-image-id engines/ferrule-host
-dotnet build dotnet/Weft.slnx --configuration Release --no-restore
+docker build --iidfile /tmp/braid-worker-image-id engines/ferrule-host
+dotnet build dotnet/Braid.slnx --configuration Release --no-restore
 ```
 
-Set `WEFT_FERRULE_WORKER_IMAGE` to the immutable `sha256:...` value written to that
+Set `BRAID_FERRULE_WORKER_IMAGE` to the immutable `sha256:...` value written to that
 image-ID file, then run the normal .NET tests. CI builds and supplies this image
 automatically. Without the image setting, live Docker tests are explicitly
-skipped and do not qualify isolation. Unit process transcripts qualify lifecycle
-logic; real Docker tests independently check native transport, typed validation
+skipped. Unit process transcripts check lifecycle logic; real Docker tests check native transport, typed validation
 owners, resource isolation, cancellation, timeout, abrupt worker death, cleanup,
 and subsequent admission. Projection integration cases also check the admitted
 public explanation and native locators against retained artifact bytes. The

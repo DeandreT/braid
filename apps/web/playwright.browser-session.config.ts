@@ -2,8 +2,8 @@ import { defineConfig } from "@playwright/test";
 
 process.env.PLAYWRIGHT_NO_COPY_PROMPT = "1";
 if (
-  !process.env.WEFT_BROWSER_SESSION_CONTROLLED_CONFIG ||
-  !process.env.WEFT_CHROMIUM_EXECUTABLE
+  !process.env.BRAID_BROWSER_SESSION_CONTROLLED_CONFIG ||
+  !process.env.BRAID_CHROMIUM_EXECUTABLE
 )
   throw new Error(
     "Browser session checks require the root-admitted private static configuration and pinned browser.",
@@ -19,7 +19,7 @@ export default defineConfig({
   expect: { timeout: 10000 },
   use: {
     headless: false,
-    launchOptions: { executablePath: process.env.WEFT_CHROMIUM_EXECUTABLE },
+    launchOptions: { executablePath: process.env.BRAID_CHROMIUM_EXECUTABLE },
     trace: "off",
     video: "off",
     screenshot: "off",

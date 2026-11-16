@@ -8,11 +8,11 @@ if (args.length > 1 || (args.length === 1 && args[0] !== "--check")) {
   process.exit(1);
 }
 
-const schema = new URL("../../contracts/weft-v1.json", import.meta.url);
+const schema = new URL("../../contracts/braid-v1.json", import.meta.url);
 const directory = new URL("../../apps/web/src/api/", import.meta.url);
 const output = new URL("generated.ts", directory);
 const header = `/**
- * Generated from contracts/weft-v1.json. Do not edit manually.
+ * Generated from contracts/braid-v1.json. Do not edit manually.
  * Refresh with: npm run contracts:generate
  */
 `;
@@ -34,7 +34,7 @@ if (args[0] === "--check") {
     );
     process.exitCode = 1;
   } else {
-    console.log("Angular API types match contracts/weft-v1.json.");
+    console.log("Angular API types match contracts/braid-v1.json.");
   }
 } else {
   await mkdir(directory, { recursive: true });

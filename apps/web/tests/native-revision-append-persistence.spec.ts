@@ -717,11 +717,11 @@ class AppendWire {
     this.diagnosticAttempted = true;
     try {
       const config =
-        process.env.WEFT_NATIVE_REVISION_APPEND_BROWSER_OPERATOR_CONFIG;
+        process.env.BRAID_NATIVE_REVISION_APPEND_BROWSER_OPERATOR_CONFIG;
       if (!config || !isAbsolute(config)) return;
       const limit = other ? 16 : 32;
       const serialized = JSON.stringify({
-        schemaVersion: "weft.native-append-get-diagnostic.v1",
+        schemaVersion: "braid.native-append-get-diagnostic.v1",
         diagnosticOnly: true,
         primary: this.diagnosticSnapshot(limit),
         secondary: other ? other.diagnosticSnapshot(limit) : null,

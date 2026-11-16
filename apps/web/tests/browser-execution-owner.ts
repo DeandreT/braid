@@ -70,8 +70,8 @@ export class ExecutionOwner<M extends ExecutionManifest = ExecutionManifest> {
         "DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=false",
         "HOME=" + b.privateRoot,
         "TMPDIR=" + b.privateRoot,
-        `WEFT_${prefix}_BROWSER_MANIFEST=` + b.manifest,
-        `WEFT_${prefix}_BASE_URL=` + b.readOrigin,
+        `BRAID_${prefix}_BROWSER_MANIFEST=` + b.manifest,
+        `BRAID_${prefix}_BASE_URL=` + b.readOrigin,
         "/usr/bin/python3",
         "-I",
         "-B",
@@ -116,7 +116,7 @@ export class ExecutionOwner<M extends ExecutionManifest = ExecutionManifest> {
       this.fail();
     });
     const ready = await this.next(300000);
-    expect(ready.schemaVersion).toBe(`weft.${this.kind}-browser-ready.v1`);
+    expect(ready.schemaVersion).toBe(`braid.${this.kind}-browser-ready.v1`);
     expect(ready.fixtureId).toBe(b.fixtureId);
     const bytes = execFileSync(
       "wsl.exe",
@@ -136,7 +136,7 @@ export class ExecutionOwner<M extends ExecutionManifest = ExecutionManifest> {
     );
     this.manifest = JSON.parse(bytes.toString("utf8")) as M;
     expect(this.manifest.schemaVersion).toBe(
-      `weft.${this.kind}-browser-fixture.v1`,
+      `braid.${this.kind}-browser-fixture.v1`,
     );
     expect(this.manifest.fixtureId).toBe(b.fixtureId);
     expect(this.manifest.readOrigin).toBe(b.readOrigin);
@@ -172,7 +172,7 @@ export class ExecutionOwner<M extends ExecutionManifest = ExecutionManifest> {
     const ack = await this.next(maximum);
     expect(ack.requestNonce).toBe(requestNonce);
     expect(ack.action).toBe(action);
-    expect(ack.schemaVersion).toBe(`weft.${this.kind}-browser-control.v1`);
+    expect(ack.schemaVersion).toBe(`braid.${this.kind}-browser-control.v1`);
     expect(ack.outcome).not.toBe("failed");
     expect(ack.outcome).not.toBe("refused");
     return ack;

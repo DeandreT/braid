@@ -1,28 +1,35 @@
-# XML document integration design
+# XML document contract
 
-## Scope and qualification boundary
+## Scope
 
-This is the design specification for [#330](https://github.com/DeandreT/weft/issues/330), not a statement of implemented or qualified behavior. Add one explicit, opt-in XML-to-XML capability for closed structured input and static primary/named document outputs. Keep legacy JSON, JSON/EDI document execution, and the separate primary-only CSV/TSV contracts unchanged. Do not infer a format from an upload name, stored path, media type, or XML-looking text. Ferrule remains the only mapping engine.
+This contract defines explicit XML-to-XML execution for closed structured input
+and static primary/named document outputs. Formats come from saved native
+options, not upload names, stored paths, media types or XML-looking text. Ferrule
+owns mapping execution.
 
-The native/generated API and runtime contracts below are based on pinned source inspection, not execution qualification. The compatibility adapter is bound to Ferrule commit `238369bf0071ee8ea097d8c54fa5061f433807fb`. Dependency and adapter changes require implementation and qualification before their capabilities are enabled. A typed upstream improvement is preferred but is not a prerequisite for this pinned design.
+The native/generated API and error classifier below bind to Ferrule commit
+`238369bf0071ee8ea097d8c54fa5061f433807fb`.
 
 ## 1. Capability and exact admission
 
 Use separate identifiers, following the CSV pattern:
 
-- Capability: `weft.xml.structured-document.v1`.
-- Preview/runtime profile: `weft.ferrule-xml-preview.v1`.
-- Preview adapter: `weft.ferrule-xml-preview-adapter.v1`.
-- C# build profile: `weft.ferrule-csharp-xml.v1`.
-- Compiled execution protocol: `weft.ferrule-compiled-xml.v1`.
-- Safety profile: `weft.xml-safe.v1`.
+- Capability: `braid.xml.structured-document.v1`.
+- Preview/runtime profile: `braid.ferrule-xml-preview.v1`.
+- Preview adapter: `braid.ferrule-xml-preview-adapter.v1`.
+- C# build profile: `braid.ferrule-csharp-xml.v1`.
+- Compiled execution protocol: `braid.ferrule-compiled-xml.v1`.
+- Safety profile: `braid.xml-safe.v1`.
 - Format/media/extension: `xml`, `application/xml`, `.xml`.
 
-These are new identifiers, not existing capabilities. Add independent default-off XML preview, regression, and build gates. Existing gates must not enable XML indirectly.
+XML preview, regression and build each have an independent default-off gate.
 
 ### Exact saved FormatOptions
 
-Admission operates on Ferrule's decoded `FormatOptions` and compares the complete value with a constructed allowlist value, not a list of ignored keys. For this new XML profile only, also reject duplicate or unknown raw option keys before typed normalization: `FormatOptions` itself does not declare `deny_unknown_fields`, so typed equality alone cannot detect an ignored unknown key. Use the pinned format-options field inventory, allow known fields only at their defaults unless listed below, and keep legacy native decoding unchanged. Handle both the native envelope and legacy bare-project representation without guessing option locations:
+Admission compares Ferrule's complete decoded `FormatOptions` with an allowlisted
+value and rejects duplicate or unknown raw option keys before typed normalization.
+`FormatOptions` does not declare `deny_unknown_fields`, so typed equality alone
+cannot detect ignored unknown keys. Known fields must be at their defaults except:
 
 | Role | Exact non-default fields allowed |
 | --- | --- |
@@ -65,7 +72,7 @@ Ferrule also exposes the separate `format_xml::from_str_structured(text, schema)
 
 Run these checks on original input bytes before invoking the native payload API or generated mapping, and on every output before any publication. Check the whole input/output set before publishing any part of it.
 
-| Resource / syntax | `weft.xml-safe.v1` rule |
+| Resource / syntax | `braid.xml-safe.v1` rule |
 | --- | --- |
 | Encoding | Strict UTF-8; optional initial UTF-8 BOM; declaration absent or XML 1.0 with absent/UTF-8 encoding, case-insensitive encoding spelling. Reject XML 1.1 and conflicting encodings. Never transcode. |
 | Document | One well-formed root; no empty/zero-byte XML document; no fragment mode. |
@@ -145,9 +152,13 @@ A match maps to the existing fixed public resource-limit category (`resourceLimi
 
 Handle `DocumentLimit` and existing typed parser/set resource exceptions separately using their actual qualified types and structured properties. A parser exception whose outer message contains a listed caption is not a match when the boundary has an inner exception. After the specific resource cases, any other authentic qualified `Kind == Input` boundary maps to `invalidInput`; it must not be resource-classified just because its text resembles a resource error. Other kinds keep their ordinary schema/setup, mapping or output classification. A foreign identity/type/caption/kind never obtains a resource classification from this rule.
 
-Any engine revision, runtime-source bundle, compiler/profile or relevant adapter-identity change disables this compatibility classifier and its dependent compiled XML capability until renewed review and fixture qualification. Do not carry the captions forward automatically or relabel old evidence. Exact generated-limit fixtures, not merely hand-constructed exceptions, must demonstrate all three positive paths through the real entrypoints before the profile is enabled.
+Any engine revision, runtime-source bundle, compiler/profile or relevant adapter
+identity change disables this classifier and dependent compiled XML capability
+until its generated-limit fixtures are checked against the new identity. The
+fixtures must exercise all three failures through the real entrypoints.
 
-Long term, prefer an upstream typed projection-resource cause with explicit resource/count/limit and preserved wrappers. Such a change requires its own reviewed identity and permits replacing this compatibility rule, but is not required for braid's current-pin implementation. Never patch emitted runtime sources to manufacture matching failures or add a second projection engine.
+Do not patch emitted runtime sources to manufacture matching failures or add a
+second projection engine.
 
 ## 4. Metadata, persistence, and contract preservation
 
@@ -155,8 +166,8 @@ Follow CSV's resolved-metadata flow, without reusing or weakening `csvDialect`:
 
 ```text
 xmlMetadata: {
-  schema: "weft.xml-boundary.v1",
-  safetyProfile: "weft.xml-safe.v1",
+  schema: "braid.xml-boundary.v1",
+  safetyProfile: "braid.xml-safe.v1",
   schemaHints: null | {
     noNamespaceLocation: null | string,
     locations: [{ namespace: string, location: string }]
@@ -168,8 +179,11 @@ All fields are explicit and the record is closed. Input metadata requires `schem
 
 - Read saved native options under the existing qualified native-source ports and exact revision/digest checks. A .NET metadata projection may extract hints/identity, but cannot establish full compiler support. Extend the CSV-style authoritative build-boundary inspection seam for XML instead of trusting projection recognition.
 - Carry `xmlMetadata` on XML input/output descriptors, preview results, private saved requests, regression cases/results, build boundaries/intents, compiled request/results, and machine-endpoint documents. Reject absent, unknown-version, wrong-role, mismatching, or foreign-format XML metadata. Compare complete metadata before content comparison. Do not allow `csvDialect` and `xmlMetadata` together.
-- Add XML-specific versioned saved request/case/result envelopes and an additive migration after the actual integrated migration head at implementation time. This design reserves no migration number. Do not edit or repurpose the CSV migration. Bind metadata, safety/profile identity, raw-byte digest, length and media into existing canonical fingerprints, replay integrity checks, SQL validation and read-back verification.
-- Old JSON/EDI/CSV encoders must omit `xmlMetadata` entirely and preserve their current canonical bytes, schemas, empty-input rules and default dispatch. XML remains nonempty. Reject explicit XML under an old profile even when an XML media type is supplied.
+- XML-specific saved request/case/result envelopes bind metadata, safety/profile
+  identity, raw-byte digest, length and media into canonical fingerprints, replay
+  checks, SQL validation and read-back verification.
+- XML documents must be nonempty. Reject explicit XML under a non-XML profile
+  even when an XML media type is supplied.
 - Keep exact-byte private storage/downloads. Browser XML display is escaped text in a bounded preview, never HTML insertion, iframe/XML navigation, XSLT, or external resource rendering. Server-selected media/download name and current attachment/CSP rules remain authoritative.
 - Reuse existing source registration checks, startup-only configuration validation, lazy worker resolution and identity pinning. Reporting/ingestion remain authoritative; enabling XML must not open credentials or start workers merely to list capabilities. Existing role, ownership, request ledger, approval and authorization checks remain mandatory.
 
@@ -184,7 +198,15 @@ Use these additional XML-only rules:
 1. One 32 KiB metadata ledger for the complete declared operation. Let `E(m)` count the UTF-8 JSON bytes of a complete `"xmlMetadata":<object>` property, including its name, colon, object punctuation, nested arrays/keys, explicit nulls and a reserved separator byte. Sum every primary/named input and output occurrence, including unselected and unused boundaries, before execution or source emission. Require `sum(E(m)) <= 32,768`; this is one budget shared by at most `16 + 64 = 80` boundaries, not 32 KiB per boundary or per direction. Empty-hint records consume under 128 encoded bytes each, so 80 such records consume under 10 KiB; remaining capacity is shared by every hint. Repeated hints count each time they are serialized; no name/path-based deduplication discount.
 2. Count encoded bytes, not string length. Measure with the production canonical metadata JSON writer and its fixed escaping policy, including quotes, backslashes, control escapes, HTML-sensitive characters and non-ASCII/supplementary characters. Require Rust and .NET metadata budget counters to agree on shared golden fixtures. If their actual wire encoders have different escaping, reserve the larger exact encoded length for each property and enforce the full actual wire length too. Do not use raw UTF-8 length, UTF-16 length, or a serializer that builds an unbounded byte array before measuring.
 3. Bounded write/count implementation. Run the actual serializer over a capped counting sink that uses checked arithmetic, fails on the first byte beyond the allowance, and retains no payload; use the same writer settings and field ordering for persisted encoding. Rust uses a capped `Write` sink with `serde_json::to_writer`; .NET uses `Utf8JsonWriter` over a capped stream. Apply the larger-encoder reservation rule through one specified common metadata encoding/counting contract, not a value trusted from the caller. After counting, write only to an equally capped destination. A byte count or digest supplied by a client never bypasses this check.
-4. Full envelopes have their own independent bounds. Partition the unchanged 128 KiB build header for this new XML profile only: at most 32 KiB for the complete metadata ledger, 32 KiB for all other context/boundary JSON, and 64 KiB reserved for the source-file manifest. Account for every key, quote, comma, bracket and outer delimiter; separator reserves may conservatively overcount, never omit bytes. Before queuing a build or emitting sources, count the real complete boundary/context scaffold with fixed-width digest placeholders and maximum admitted numeric widths; require it within 32 KiB and reserve the entire 64 KiB manifest allowance. After source emission, require the actual manifest within 64 KiB and recount the actual full header within 128 KiB before starting compilation or writing a reply. Retain the existing maximum 128 files and path bounds as independent checks. The 80-boundary/128-file maxima do not guarantee their Cartesian product fits: escaped names and paths may force a bounded XML-specific refusal. Source emission may reveal a manifest refusal; the existing job records a failure, no compiler starts, no oversized frame is attempted, and no partial artifact is published. Do not introduce these sublimits into legacy JSON/EDI/CSV profiles.
+4. Full envelopes have independent bounds. Partition the XML profile's 128 KiB
+   build header: at most 32 KiB metadata, 32 KiB other context/boundary JSON and
+   64 KiB source-file manifest. Count every key, delimiter and separator. Before
+   queuing or emission, count the boundary/context scaffold with fixed-width
+   digest placeholders and maximum numeric widths, and reserve the full manifest
+   allowance. After emission, check the actual manifest and complete header before
+   compilation or reply. The 128-file maximum and path bounds remain independent;
+   escaped names/paths may exceed the header even within item limits. A manifest
+   refusal fails the job without starting a compiler or publishing partial output.
 5. Do not place output metadata in the 16 KiB preview request header. That header carries only supplied input descriptors and their null-hint XML metadata; resolve the complete declared output table from the pinned native artifact inside the worker and at authorized host admission. Count the actual request, including parameters and escaped input names, against 16 KiB before queuing/execution. Up to 16 individually valid inputs/32 parameters may still exceed that shared header and must be refused. Persist any required full boundary table only in its versioned private envelope, subject to both the 32 KiB metadata ledger and that envelope's unchanged total cap.
 6. Recheck every trust boundary and persisted read. Enforce the complete-declaration metadata ledger during native inspection, preview/case admission, build-intent construction and worker admission before mapping execution/source emission. Check the actual response/header/body limits before publication. For repeated serialized tables, such as intent plus replay descriptors, also count every physical occurrence against its enclosing header/body cap; the logical metadata ledger is not a discount for repeated wire bytes. Read-back recomputes the same budgets and rejects oversized/tampered records. An admission size refusal creates no new queue item, approved intent or case version; a later actual-manifest/output-envelope refusal fails the existing job with no partial successful output, retaining its normal audit history. Use a fixed resource-limit/metadata-too-large result. Never truncate hints or replace them with an unverified digest.
 
@@ -192,15 +214,7 @@ Use these additional XML-only rules:
 
 XML regression cases compare exact original bytes, like other formats. Validate stable output keys, XML media and complete role-correct metadata/safety versions, then compare every matched output byte for byte. Report missing/unexpected output, media mismatch and XML metadata mismatch ahead of byte differences. Original uploaded/generated bytes, digests, persistence and downloads remain untouched. `BuildQualification` and `PersistedBuildIntentFactory` continue to require the existing exact-byte policy and complete all-output evidence.
 
-## 6. Implementation order and acceptance gates
-
-1. Add the separate XML policy/metadata and exact native admission helper, including the 32 KiB complete-operation metadata ledger and all actual envelope checks. Wire native preview safety preflight and output publication checks. Cover DTD/entity, physical bounds and every unsupported options family before widening any UI or host gate.
-2. Add XML-only preview/case/result schemas and persistence integrity, exact-byte regression comparison and escaped-text display. Preserve old serialized fixtures byte-for-byte.
-3. Add authoritative XML build-boundary inspection, emission-plan checks, generated API dispatch and the XML-only compiled protocol with the exact identity-bound projection-error classifier. Qualify the pinned runtime/codegen identity and actual generated-limit paths before enabling compiled XML; no upstream change is required. Build approval remains tied to all declared outputs and original exact-byte evidence.
-4. Add default-off XML host composition, CLI/API/web selections and machine endpoint metadata. Propagate capability/provenance identities through every operation; do not mark XML supported from filename, schema display or generic compiler success. Keep preview, regression and compiled capability gates distinct where their prerequisites differ.
-5. Qualify the exact combined source against the integrated, qualified CSV/TSV prerequisite, without disturbing an active qualification freeze. Include focused native/generated/transport/persistence checks, then the existing regression suites. Preserve unrelated work, native toolchain pins, the 25 GiB free-space reserve and no-U:-build rule. These implementation gates do not authorize builds, service changes or Azure work as part of writing this design.
-
-Required focused cases for implementation qualification:
+## 6. Required checks
 
 - Primary XML and primary-plus-static-named inputs/outputs; declaration-order stability; `All`, selected primary and selected named target; missing/extra/duplicate inputs; always-run failure-rule source requirements; unselected failing target stays isolated in selected mode.
 - Namespaces (default, prefixed, reset, namespaced attributes), optional/repeating children, empty text/empty element, nil, escaped attributes/text, supplementary Unicode values, fixed clock and typed parameters. Target hints and collisions are verified in final bytes, with zero schema/network resolution.
@@ -211,21 +225,15 @@ Required focused cases for implementation qualification:
 - Wrapper tests for the real `TargetInvocationException`, `FerruleXmlExecutionException` and `FerruleXmlOutputSetException` paths: boundary property and inner reference agree, only the boundary's own message is matched, primary/named owner is retained when present, absent owner is not invented, and inconsistent/wrong-assembly wrappers fail closed. Genuine parser failures with inner causes remain `invalidInput` unless a separately recognized typed resource cause applies. A runtime revision change disables this rule pending review, rather than silently reusing message matches. No failure publishes raw exception text or partial output.
 - Metadata boundaries at exactly 32,768 encoded bytes and one over for the entire declared table; 16 inputs plus 64 outputs; many individually small hints exceeding the aggregate; a single upstream-valid hint set below the native 4 MiB limit but above the metadata cap; unselected target hints included. Cover quotes/backslashes/HTML-sensitive and supplementary Unicode escaping with shared Rust/.NET golden encoded counts. No caller-controlled counts, truncation or deduplication bypass.
 - Build header partitions and actual frame tests at each boundary/one over: 32 KiB metadata, 32 KiB scaffold including escaped names, 64 KiB manifest including escaped paths, and unchanged 128 KiB total. Also test the unchanged 16 KiB preview request with 16 inputs/parameters, response/compiled/private-envelope caps, duplicate metadata occurrences in real envelopes, persisted oversized/tampered cases and prequeue/precompiler refusal. Admission failures create no new work or case; a late manifest/output failure completes the existing job as failed rather than leaving it queued or publishing a successful artifact.
-- Persistence round trips/tamper refusals, exact metadata and digest mismatches, old JSON/EDI/CSV wire/fingerprint fixtures unchanged, existing CSV explicit-empty semantics unchanged, missing native-source composition fails closed, and default-off XML rejected before source/worker access.
+- Persistence round trips/tamper refusals, exact metadata and digest mismatches,
+  missing native-source composition and default-off XML rejection before
+  source/worker access.
 - Exact native/generated output parity for the bounded admitted cohort; `BuildQualification` and `PersistedBuildIntentFactory` continue to require original exact-byte evidence.
-
-## Remaining qualification gates
-
-The contract is exact-byte regression comparison, DTD-free bounded admission and original exact-byte build proof. Encoded whole-operation metadata admission, build-header partitions and unchanged full transport caps are part of that contract.
-
-The pinned Ferrule runtime can use the actual-type/identity/whole-message classifier; there is no upstream typed-cause dependency. Compiled XML still requires qualification of that exact classifier and the actual generated-limit fixtures, and identity changes disable the rule pending review.
-
-If native/generated evidence shows original-byte differences, the existing exact-byte build gate remains closed until upstream parity is fixed; XML can remain preview/regression-only meanwhile.
 
 ## Source map and references
 
-- braid native host: `engines/ferrule-host/src/{document_format.rs,csv_document.rs,document_limits.rs,build.rs,preview/admission.rs,preview/mod.rs}`. Implement against the integrated CSV/TSV source and its documentation.
-- braid metadata/contracts: `dotnet/src/Weft.Application/{CsvDocumentPolicy.cs,CsvNativeDialect.cs,MappingPreview.cs,Regression/RegressionComparisonService.cs,Regression/RegressionCaseVersion.cs}`; `dotnet/src/Weft.Deployment/{PersistedBuildIntentFactory.cs,BuildIntent.cs,BuildCompilation.cs,BuildQualification.cs,CompiledRuntimeProtocol.cs}`; `dotnet/apps/Weft.CompiledRuntime/Program.cs`.
+- braid native host: `engines/ferrule-host/src/{document_format.rs,csv_document.rs,document_limits.rs,build.rs,preview/admission.rs,preview/mod.rs}`.
+- braid metadata/contracts: `dotnet/src/Braid.Application/{CsvDocumentPolicy.cs,CsvNativeDialect.cs,MappingPreview.cs,Regression/RegressionComparisonService.cs,Regression/RegressionCaseVersion.cs}`; `dotnet/src/Braid.Deployment/{PersistedBuildIntentFactory.cs,BuildIntent.cs,BuildCompilation.cs,BuildQualification.cs,CompiledRuntimeProtocol.cs}`; `dotnet/apps/Braid.CompiledRuntime/Program.cs`.
 - Ferrule exact saved options/hints: `crates/mapping/src/model/format_options.rs`; `crates/ir/src/xml_schema_hints.rs`.
 - Ferrule parser distinctions/limits: `crates/format-xml/src/instance/{mod.rs,structured.rs,structured/parser_guards.rs}`; `crates/ir/src/xml_structured_input.rs`; `crates/cli/src/{payload.rs,payload/serialization.rs}`; `runtime/csharp/Ferrule.Runtime/FerruleXml.{Input.Structured,InputSet,OutputSet,Output}.cs`.
 - Ferrule compiler and static API: `crates/codegen/src/{lower/xml_request.rs,emission_plan.rs,static_document_boundary.rs,primary_document_boundary.rs}`; `crates/codegen-csharp/src/{lib.rs,primary_xml_document.rs,mapping/xml_api.rs,mapping/xml_api/named_inputs.rs,mapping/xml_api/selected_bytes.rs}`; `docs/generated-xml-qualification-index.md`.

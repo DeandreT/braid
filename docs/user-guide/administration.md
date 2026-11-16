@@ -53,7 +53,3 @@ The account menu warns when signing in or out would lose an unsent form, a
 member-role choice, a pending edit, or a private invitation link. A normal
 access refresh keeps unsent changes, and saving one form leaves other drafts
 alone.
-
-The [command-line client](cli.md) offers matching `weft administration` commands.
-Run `weft administration --help` for the available actions. Every edit needs the
-strong ETag printed by a fresh `weft administration show` command.

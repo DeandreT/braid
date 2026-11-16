@@ -91,14 +91,14 @@ test("builder resolves project editor assets and pins its configured transport",
         runInNewContext(source, { require: mockRequire, module: exported });
         const context = {
           workspaceRoot: root,
-          target: { project: "weft" },
+          target: { project: "braid" },
           async getProjectMetadata(name) {
-            assert.equal(name, "weft");
+            assert.equal(name, "braid");
             return { root: projectRoot };
           },
         };
         const options = {
-          buildTarget: "weft:build:devServer",
+          buildTarget: "braid:build:devServer",
           host: "127.0.0.1",
           // Angular can override the requested port; trust only the listener.
           port: 4200,
@@ -108,9 +108,9 @@ test("builder resolves project editor assets and pins its configured transport",
           assert.equal(result.success, true);
         assert.equal(called, true);
         for (const buildTarget of [
-          "weft:build:production",
-          "weft:build:development",
-          "weft:build:devServer,production",
+          "braid:build:production",
+          "braid:build:development",
+          "braid:build:devServer,production",
           undefined,
         ]) {
           await assert.rejects(async () => {

@@ -157,7 +157,7 @@ test("creation citation streams, opens an authenticated exact review, and replay
   const requestToken = "ZXBvY2gtYQ";
   await context.addCookies([
     {
-      name: "weft-creation-fixture",
+      name: "braid-creation-fixture",
       value: "synthetic-session",
       url: baseURL!,
       httpOnly: true,
@@ -188,7 +188,7 @@ test("creation citation streams, opens an authenticated exact review, and replay
     }),
   );
   const planJson = JSON.stringify({
-    schema: "weft.creation-plan.v1",
+    schema: "braid.creation-plan.v1",
     format: "json-record",
     source: [{ Name: "code", Type: 1, Required: true }],
     target: [{ Name: "item", Type: 1, Required: true }],
@@ -236,7 +236,7 @@ test("creation citation streams, opens an authenticated exact review, and replay
     if (
       request.method() !== "GET" ||
       url.pathname + url.search !== apiPath ||
-      !cookie.includes("weft-creation-fixture=synthetic-session")
+      !cookie.includes("braid-creation-fixture=synthetic-session")
     )
       return route.fulfill({ status: 403, json: { code: "NotFound" } });
     return route.fulfill({ json: proposal });
@@ -275,7 +275,7 @@ test("creation citation streams, opens an authenticated exact review, and replay
       method: "GET",
       path: apiPath,
       cookie: expect.stringContaining(
-        "weft-creation-fixture=synthetic-session",
+        "braid-creation-fixture=synthetic-session",
       ),
     },
   ]);
@@ -780,7 +780,7 @@ test("content navigation preserves unsent chat without a discard warning", async
 test("capture sanitized chat page and workbench at a fixed viewport", async ({
   page,
 }) => {
-  const dir = process.env.WEFT_CHAT_CAPTURE_DIR;
+  const dir = process.env.BRAID_CHAT_CAPTURE_DIR;
   test.skip(
     !dir,
     "Screenshots are captured only in an explicit full-lock run.",
@@ -789,7 +789,7 @@ test("capture sanitized chat page and workbench at a fixed viewport", async ({
   await page.setViewportSize({ width: 1440, height: 1000 });
   const f = await workspaceFixture(page);
   await page.goto("/chat");
-  if (process.env.WEFT_CHAT_CAPTURE_BASE !== "true") {
+  if (process.env.BRAID_CHAT_CAPTURE_BASE !== "true") {
     await create(page);
     await ask(page);
     await expectComplete(page);

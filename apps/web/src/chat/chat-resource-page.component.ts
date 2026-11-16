@@ -30,7 +30,7 @@ type ResourceView = {
 
 /** Citation reads use existing typed, freshly authorized app clients. No model requests or payload display. */
 @Component({
-  selector: "weft-chat-resource-page",
+  selector: "braid-chat-resource-page",
   imports: [RouterLink, CatalogStatusComponent],
   template: `<section class="chat-resource-page">
     <p>Workspace reference</p>
@@ -50,7 +50,7 @@ type ResourceView = {
         </dl>
         <a [routerLink]="state.data.location">{{ state.data.locationLabel }}</a>
       } @else {
-        <weft-catalog-status [kind]="state.kind" (retry)="read.retry()" />
+        <braid-catalog-status [kind]="state.kind" (retry)="read.retry()" />
       }
     }
     <p>

@@ -64,7 +64,7 @@ export async function mfdPackage(
     number(bytes.length);
     parts.push(bytes);
   };
-  text("weft.interchange-package.v1");
+  text("braid.interchange-package.v1");
   text(designPath);
   number(entries.length);
   for (const entry of entries) {
@@ -72,7 +72,7 @@ export async function mfdPackage(
     number(entry.file.size);
     parts.push(await entry.file.arrayBuffer());
   }
-  return new Blob(parts, { type: "application/vnd.weft.mfd-package.v1" });
+  return new Blob(parts, { type: "application/vnd.braid.mfd-package.v1" });
 }
 
 const id = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;

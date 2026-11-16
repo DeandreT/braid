@@ -1,12 +1,8 @@
 # Explicit-capability project creation
 
 This page owns project-creation authority, atomic persistence and durable retries.
-The original P3d4a requirement is [#39](https://github.com/DeandreT/weft/issues/39).
 [Project creation HTTP](project-creation-http.md) owns requests and responses;
 [project ownership](project-ownership.md) owns shared access and migration rules.
-The [catalog contract-owner map](catalog-persistence-plan.md#current-contract-owners)
-links the retained design. Creating an empty project is not mapping generation or
-approval; those are separate [creation runtime](mapping-creation-runtime.md) operations.
 
 ## Creation authority
 
@@ -45,7 +41,7 @@ are rejected. Direct SQL must supply an already normalized name; SQL does not
 apply a second normalization or change the description.
 
 A version-one SHA-256 fingerprint binds the accepted intent. Its bytes are the
-length-framed UTF-8 tag `weft.project-creation-intent`, a big-endian version,
+length-framed UTF-8 tag `braid.project-creation-intent`, a big-endian version,
 network-order organization/actor/key UUIDs, then length-framed accepted name and
 exact description. The database computes it, and the application independently
 recomputes it when restoring a receipt. Timestamp and generated project UUID are
@@ -71,9 +67,8 @@ new retry identity or restoring membership.
 
 Migration `0005_project_creation.sql` adds the capability and immutable creation
 tables, scoped foreign keys/RLS, a new-table transition guard and pinned routines.
-Applied migrations 0001–0004 and predecessor role profiles remain unchanged.
 
-The separately provisioned `weft_project_creator` login receives schema usage and
+The separately provisioned `braid_project_creator` login receives schema usage and
 EXECUTE on exactly `get_project_creation_admission_v1` and `create_project_v1`.
 It has no direct application-table SELECT or DML rights. The owner-defined
 routines use qualified static SQL and a fixed trusted search path, scope every
@@ -96,23 +91,17 @@ admission checks and do not fence subsequent owner changes.
 
 ## Explicit owner setup
 
-A fresh local compose database provisions the separate creator password/login.
-For an existing database, stop application clients, supply
-`WEFT_LOCAL_CREATOR_PASSWORD` in the updated local compose environment, and run
-`deploy/local/postgres-add-project-creator.sh` explicitly as that database's
-administrator before migration. The helper creates only the new login and its
-CONNECT grant. It refuses an already existing login rather than rotating its
-password or adopting a different profile. Updating an environment file alone
-does not create a role in an existing volume.
+A local Compose database provisions the separate creator login using
+`BRAID_LOCAL_CREATOR_PASSWORD`.
 
 Using the dedicated migration-owner connection in
-`WEFT_MIGRATION_CONNECTION_STRING`, apply current migrations and then explicitly
+`BRAID_MIGRATION_CONNECTION_STRING`, apply current migrations and then explicitly
 grant or revoke a capability:
 
 ```sh
-dotnet run --configuration Release --project dotnet/tools/Weft.DatabaseTool -- migrate
-dotnet run --configuration Release --project dotnet/tools/Weft.DatabaseTool -- set-project-creation-capability ORGANIZATION_UUID PRINCIPAL_UUID true
-dotnet run --configuration Release --project dotnet/tools/Weft.DatabaseTool -- set-project-creation-capability ORGANIZATION_UUID PRINCIPAL_UUID false
+dotnet run --configuration Release --project dotnet/tools/Braid.DatabaseTool -- migrate
+dotnet run --configuration Release --project dotnet/tools/Braid.DatabaseTool -- set-project-creation-capability ORGANIZATION_UUID PRINCIPAL_UUID true
+dotnet run --configuration Release --project dotnet/tools/Braid.DatabaseTool -- set-project-creation-capability ORGANIZATION_UUID PRINCIPAL_UUID false
 ```
 
 Both identifiers must be canonical lowercase nonzero UUIDs. Only the exact
@@ -123,9 +112,9 @@ only the capability; it never creates/reactivates identity, organization
 admission or project membership. The web application does not use this owner
 connection or expose this command.
 
-## Qualification
+## Tests
 
-Actual PostgreSQL gates cover fresh/current-0004 upgrade and no-op preservation,
+Actual PostgreSQL gates cover schema installation and no-op preservation,
 direct-login restrictions, routine/role/relation tamper restoration, exact
 fingerprint/text vectors, atomic counts and rollback, same-key contention,
 distinct-key independence, both authority-revocation lock orders, immutable
@@ -134,20 +123,3 @@ cluster restart. The late-insert rollback case blocks only the new facts table
 with an owner-held SHARE lock and observes the creator's actual backend locks
 before cancellation; it adds no product fault hook. Owner-tool subprocess checks
 exercise explicit grant/revoke and bounded credential-free output.
-
-The source and qualification records belong to the focused #39 PR. A usable HTTP
-creation feature is qualified separately in #31, including actual creation,
-ordinary catalog reads and native revision upload in the new project.
-
-## Historical delivery checkpoint
-
-This original sequencing note records the persistence/HTTP split, not a current
-implementation queue:
-
-P3d4a / [#39](https://github.com/DeandreT/weft/issues/39) implements the persistence
-prerequisite for project creation. Its implementation and actual PostgreSQL
-qualification follow the merged upload API in
-[PR #40](https://github.com/DeandreT/weft/pull/40). The HTTP route, organization
-actions and server composition are a separate dependent increment,
-[P3d4b #31](https://github.com/DeandreT/weft/issues/31). Its request and host
-contract is documented in [Project creation HTTP](project-creation-http.md).

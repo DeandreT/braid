@@ -8,9 +8,9 @@ image that any container platform can run and scale by adding replicas. The
 per-operation Docker runners remain the local development and test runners.
 
 The service keeps the restricted workers' semantics: the same `ferrule-host`
-binary, the same framed protocols (`weft.ferrule-host.v1`,
-`weft.ferrule-preview.v1`, `weft.ferrule-document-preview.v1`,
-`weft.ferrule-csv-preview.v1`, `weft.ferrule-edit.v1`, `weft.ferrule-build.v1`) and the same fixed limits. Its
+binary, the same framed protocols (`braid.ferrule-host.v1`,
+`braid.ferrule-preview.v1`, `braid.ferrule-document-preview.v1`,
+`braid.ferrule-csv-preview.v1`, `braid.ferrule-edit.v1`, `braid.ferrule-build.v1`) and the same fixed limits. Its
 answers are byte for byte what the Docker runner, or for compilation the Docker
 compiler worker, returns for the same frame.
 
@@ -18,10 +18,10 @@ compiler worker, returns for the same frame.
 
 `engines/ferrule-service/Dockerfile` builds from the repository root on top of the
 native worker image built from `engines/ferrule-host`. It verifies the native
-binary against `WEFT_NATIVE_BINARY_SHA256` and assembles a shell-less image with
-the service (`/app/weft-ferrule-service`), the verified worker (`/ferrule-host`),
+binary against `BRAID_NATIVE_BINARY_SHA256` and assembles a shell-less image with
+the service (`/app/braid-ferrule-service`), the verified worker (`/ferrule-host`),
 the .NET and ASP.NET Core shared frameworks and their libraries. For compilation it
-also holds the compile launcher (`/weft-compile-sandbox`, built from
+also holds the compile launcher (`/braid-compile-sandbox`, built from
 `engines/compile-sandbox` with the worker's pinned Rust toolchain) and, of the pinned
 SDK archive the Docker compiler uses, only the Roslyn compiler and the reference
 assemblies (about 85 MB). It runs as UID/GID 65532 with a read-only root, needs a
@@ -29,26 +29,26 @@ writable volume at `/tmp`, and needs no outbound network. The build requires
 BuildKit.
 
 The service host is .NET so that it shares one implementation of the worker
-transport server with `Weft.Worker`; Ferrule types and native decoding stay inside
+transport server with `Braid.Worker`; Ferrule types and native decoding stay inside
 the worker child. The service's **build identity** is `sha256:` followed by the
 SHA-256 of the exact `/ferrule-host` it runs. The service computes it at startup,
-and the image records the expected digest in its `io.weft.ferrule.worker-sha256`
+and the image records the expected digest in its `io.braid.ferrule.worker-sha256`
 label. Clients configure that identity and refuse a service reporting another.
 
 The image's `identity` command reports its measured native, toolchain and combined
-build identities as `weft.compiler-image-identity.v1`, after proving the compiler
+build identities as `braid.compiler-image-identity.v1`, after proving the compiler
 sandbox. Run it against the trusted image with a private writable `/tmp`; it needs
 no listener, caller certificate or network. This supports explicit operator
 pinning before starting a hosted build stack. It does not adopt an unknown
 remote replica's capabilities or change a saved build's identity.
 
-## API: `weft.ferrule-service.v1`
+## API: `braid.ferrule-service.v1`
 
 An independently enabled [compiled execution profile](compiled-service-runtime.md)
 serves verified release invocations in read-only children and uses a separate
 runtime identity from compilation.
 
-The protocol extends `weft.inspection-transport.v1` (see
+The protocol extends `braid.inspection-transport.v1` (see
 [Ferrule worker](ferrule-worker.md#hosted-inspection-transport)) for a horizontally
 scaled service. A route selects a trusted profile; the frame's own header selects
 the Ferrule operation within it.
@@ -60,15 +60,15 @@ statuses and the mutual-TLS security scheme.
 
 | Route | Purpose |
 | --- | --- |
-| `GET /v1/ready` | `204` with `Weft-Worker-Image` (native identity) and `Weft-Service-Protocol`; a compiling service also returns `Weft-Compile-Toolchain`. Over pinned TLS, the answer proves that the service admitted the client certificate. Unhealthy or stopping replicas return `503`. |
+| `GET /v1/ready` | `204` with `Braid-Worker-Image` (native identity) and `Braid-Service-Protocol`; a compiling service also returns `Braid-Compile-Toolchain`. Over pinned TLS, the answer proves that the service admitted the client certificate. Unhealthy or stopping replicas return `503`. |
 | `GET /v1/capabilities` | JSON: protocol, build identity, engine revision, per-replica concurrency, capacity and admission wait, the served profiles with their limits (the compile profile also with its toolchain), and reserved profiles. |
-| `POST /v1/operations/{profile}/{operation}` | One exact frame (`application/octet-stream`, known length, `Weft-Worker-Image` equal to the native identity) under a fresh 128-bit operation identity (32 lowercase hexadecimal characters). Compile calls also require the exact `Weft-Compile-Toolchain` pin. |
+| `POST /v1/operations/{profile}/{operation}` | One exact frame (`application/octet-stream`, known length, `Braid-Worker-Image` equal to the native identity) under a fresh 128-bit operation identity (32 lowercase hexadecimal characters). Compile calls also require the exact `Braid-Compile-Toolchain` pin. |
 | `POST /v1/operations/{profile}/{operation}/cancel` | Cancels that operation, or refuses it when it arrives later. |
 | `GET /v1/health/live`, `GET /v1/health/ready` | Platform probes; readiness fails while stopping or after an unconfirmed cleanup. |
 
 Profiles are `inspection` (inspect, validate and project frames), `edit` (exact-base
 typed replay, encoding, validation and projection), `preview` and
-`compile` (`weft.ferrule-build.v1` capability inspection and compilation). A service
+`compile` (`braid.ferrule-build.v1` capability inspection and compilation). A service
 serves `compile` only when compilation is enabled; otherwise the profile is reserved
 and answers `501`. With it, the capability route reports the compile toolchain: the
 build protocol and profile, the SDK and runtime versions, and the **toolchain
@@ -78,20 +78,19 @@ label, length and SHA-256 in ordinal order). The client checks the configured pi
 before sending bytes, the service checks it before admission, and the client
 checks it again on the response. An unknown or changed toolchain is not adopted.
 
-A served compile profile also advertises `weft.ferrule-csharp-csv.v1` in
+A served compile profile also advertises `braid.ferrule-csharp-csv.v1` in
 `supportedProfiles`. A served execution profile advertises
-`weft.ferrule-compiled-csv.v1` in `supportedProtocols`. These entries are present
+`braid.ferrule-compiled-csv.v1` in `supportedProtocols`. These entries are present
 only with their configured runner and required toolchain/runtime identity; a
-reserved compile or execution profile does not advertise CSV support. They do
-not enable CSV build controls in the Server or qualify a particular mapping.
+reserved compile or execution profile does not advertise CSV support.
 
-Configure `WEFT_FERRULE_COMPILE_TOOLCHAIN` with the admitted toolchain digest on
+Configure `BRAID_FERRULE_COMPILE_TOOLCHAIN` with the admitted toolchain digest on
 the Server and ordinary Worker when using service-backed builds. It is required
 for the service/Sessions build runner and optional for inspection-only or
 preview-only configurations. It is invalid with Docker or the inspection-worker
-transport; `WEFT_FERRULE_WORKER_IMAGE` retains its native identity.
+transport; `BRAID_FERRULE_WORKER_IMAGE` retains its native identity.
 
-Compilation provenance uses `weft.compiler-identity.v1`, a digest binding the native
+Compilation provenance uses `braid.compiler-identity.v1`, a digest binding the native
 and toolchain identities. Build-related inspection and preview clients use the
 same pin so their report and regression evidence has that same combined identity.
 Clients without a toolchain pin retain their existing native identity and behavior.
@@ -101,7 +100,7 @@ against a single service instance unchanged.
 
 An operation is admitted once. The service reads the complete frame before
 admission, so an incomplete frame never runs. An admitted operation answers `200`
-only after its child has settled, with `Weft-Worker-Result` (`none`, `canceled`,
+only after its child has settled, with `Braid-Worker-Result` (`none`, `canceled`,
 `timedOut`, `startFailed`, `workerFailed`, `outputLimitExceeded`, `cleanupFailed`
 or `sandboxUnavailable`) and, only for `none`, the exact worker output. Any other
 status means nothing ran:
@@ -119,7 +118,7 @@ streams of one HTTP/2 connection; a layer-4 load balancer keeps a connection on
 one replica. A platform sandbox routes an operation's requests to one session by
 its identifier.
 
-Every mapped response carries `Weft-Service-Replica`, a random 32-character lowercase
+Every mapped response carries `Braid-Service-Replica`, a random 32-character lowercase
 hexadecimal identity created when that service process starts. It is diagnostic only:
 it is neither an affinity token nor proof that an operation settled. The service does
 not retain operation results or expose an operation-status lookup; recovery uses the
@@ -175,7 +174,7 @@ implementation, in two fresh children:
 2. **Compilation.** The service writes only the known generated mapping,
    target-builder and Runtime C# files, the fixed global usings, the compiler
    response file and an empty output assembly into a fresh private directory under
-   `/tmp`, then starts `/weft-compile-sandbox` there. Before the compiler runs, the
+   `/tmp`, then starts `/braid-compile-sandbox` there. Before the compiler runs, the
    launcher refuses any inherited descriptor beyond its standard streams, applies
    fixed hard limits (CPU, address space, open files, a 64 MiB file size, no core
    dumps, locked memory, message queues or realtime priority), becomes non-dumpable,
@@ -202,7 +201,7 @@ waits until it is reaped; unconfirmed cleanup closes the replica as for every
 profile. With compilation enabled the service starts only after one launcher proved
 these controls in procfs on the platform, so a kernel without Landlock ABI 3
 (Linux 6.2) or a runtime that refuses its system calls stops the service with
-`WeftFerruleServiceConfigurationFailed`. The launcher keeps no state between
+`BraidFerruleServiceConfigurationFailed`. The launcher keeps no state between
 operations and can confine any program it is given, not only the compiler.
 
 Concurrent children of one replica share its kernel and user ID. The controls
@@ -214,14 +213,14 @@ concurrency of one inside a sandboxed runtime.
 
 ## Concurrency and scaling
 
-Each replica runs at most `WEFT_FERRULE_SERVICE_CONCURRENCY` children and reserves
-at most that concurrency plus `WEFT_FERRULE_SERVICE_QUEUE` request slots. A slot
+Each replica runs at most `BRAID_FERRULE_SERVICE_CONCURRENCY` children and reserves
+at most that concurrency plus `BRAID_FERRULE_SERVICE_QUEUE` request slots. A slot
 is held before buffering an incoming body until the request settles, so incomplete
 uploads share the capacity limit with queued and running operations. Body reading
 has its own deadline bounded by the selected profile's wall limit; an incomplete
 or abandoned body releases its slot without recording an executed operation.
 Cancellation routes do not consume those slots. A queued operation that does not start
-within `WEFT_FERRULE_SERVICE_ADMISSION_WAIT_SECONDS` is refused unexecuted, and an
+within `BRAID_FERRULE_SERVICE_ADMISSION_WAIT_SECONDS` is refused unexecuted, and an
 operation beyond capacity is refused at once with `503` and `Retry-After: 1`.
 Nothing ran, so a client may retry with a fresh operation, and new replicas absorb
 load as a platform autoscaler adds them. Budget for concurrency times 512 MiB (the
@@ -339,8 +338,7 @@ resolving an unused runner just to check admission.
 The same policy applies to dynamic sessions: their service runs the same bounded
 children and isolation, session identifiers are never reused, and closing each
 channel still attempts to stop its session. Recovery probes create and stop a fresh
-session and cannot certify the old session's result. No live Azure access is needed
-for the connector's local protocol tests.
+session and cannot certify the old session's result.
 
 The hosted inspection transport remains fail-closed until restart. Local Docker
 runners reopen only after their reaper confirms removal of the exact container
@@ -348,7 +346,7 @@ runners reopen only after their reaper confirms removal of the exact container
 Docker cleanup uncertainty may leave a real container with an independent
 lifetime, so the service-child lifetime proof does not apply. The inspection
 transport can itself wrap that Docker runner and does not advertise a bounded-child
-service profile; merely receiving its legacy ready response is not such a proof.
+service profile; its ready response does not establish bounded child lifetime.
 Use the explicit service connector to obtain bounded recovery.
 
 The pinned connector (`PinnedServiceConnector`) opens one HTTP/2 connection per
@@ -357,27 +355,27 @@ deliver a frame elsewhere or twice. Place the service behind a layer-4 load bala
 (for example a Kubernetes `Service` or Container Apps TCP ingress); TLS terminates
 in the service.
 
-Hosts select the runner explicitly with `WEFT_FERRULE_RUNNER`:
+Hosts select the runner explicitly with `BRAID_FERRULE_RUNNER`:
 
 | Host | Values (default first) |
 | --- | --- |
 | Development host (`DOTNET_ENVIRONMENT=Development`) | `docker`, `service`, `azureContainerAppsSessions` |
 | Session host (native upload and report derivation) | `worker` (the hosted inspection transport), `service`, `azureContainerAppsSessions` |
-| `Weft.Worker` previews, the regressions that run them, and builds | `docker`, `service`, `azureContainerAppsSessions` |
+| `Braid.Worker` previews, the regressions that run them, and builds | `docker`, `service`, `azureContainerAppsSessions` |
 
 With `service`, the host requires:
 
 | Setting | Value |
 | --- | --- |
-| `WEFT_FERRULE_SERVICE_URL` | The service's canonical HTTPS origin, for example `https://ferrule:8443`. |
-| `WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256` | Lowercase SHA-256 of the service certificate (DER); the only certificate admitted for it. |
-| `WEFT_FERRULE_WORKER_IMAGE` | The service's build identity, recorded in admission, report and preview provenance. |
-| `WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_FILE` / `WEFT_FERRULE_SERVICE_CLIENT_PRIVATE_KEY_FILE` | The host's current RSA client PEM certificate and key as protected private files; its pin is in the service's admitted pins. |
+| `BRAID_FERRULE_SERVICE_URL` | The service's canonical HTTPS origin, for example `https://ferrule:8443`. |
+| `BRAID_FERRULE_SERVICE_CERTIFICATE_SHA256` | Lowercase SHA-256 of the service certificate (DER); the only certificate admitted for it. |
+| `BRAID_FERRULE_WORKER_IMAGE` | The service's build identity, recorded in admission, report and preview provenance. |
+| `BRAID_FERRULE_SERVICE_CLIENT_CERTIFICATE_FILE` / `BRAID_FERRULE_SERVICE_CLIENT_PRIVATE_KEY_FILE` | The host's current RSA client PEM certificate and key as protected private files; its pin is in the service's admitted pins. |
 
 Settings for a runner that is not selected are refused as ambiguous: for example, service
-scalars beside the default hosted worker, or `WEFT_INSPECTION_WORKER_*` beside
+scalars beside the default hosted worker, or `BRAID_INSPECTION_WORKER_*` beside
 `service` on the Session host. Startup does not contact the service; an unreachable
-service fails operations as a retryable unavailable backend. `Weft.Worker`'s builds
+service fails operations as a retryable unavailable backend. `Braid.Worker`'s builds
 use the selected runner's compile profile (see [build runs](build-runs.md)); its own
 inspection transport keeps using Docker.
 
@@ -385,7 +383,7 @@ inspection transport keeps using Docker.
 
 Stronger isolation than one replica's child processes comes from the platform. A
 platform sandbox plugs in as an `IFerruleServiceConnector` (in
-`Weft.MappingBackends.Workers`) without changing core braid, the runner or the
+`Braid.MappingBackends.Workers`) without changing core braid, the runner or the
 service. A connector opens one channel per operation and supplies only the
 transport and the caller's authentication. It must deliver every request of a
 channel, including the cancellation, to the same service instance, and must never
@@ -393,11 +391,11 @@ send a request twice. The service runs unchanged inside the sandbox.
 
 ### Azure Container Apps dynamic sessions
 
-`Weft.MappingBackends.AzureSessions` is the only project that depends on the Azure
+`Braid.MappingBackends.AzureSessions` is the only project that depends on the Azure
 SDK. `AzureSessionsConnector` runs each operation in a fresh session of a
 custom-container session pool that runs the Ferrule service image:
 
-- every channel is a new random session identifier (`weft-` plus 32 hexadecimal
+- every channel is a new random session identifier (`braid-` plus 32 hexadecimal
   characters), passed as `identifier` on every request and never used again;
 - requests go to the pool management endpoint with a managed-identity token for
   `https://dynamicsessions.io/.default`; the pool forwards the path to the session's
@@ -409,20 +407,20 @@ custom-container session pool that runs the Ferrule service image:
   a fresh session; an answer after frame bytes that does not come from the service,
   such as a gateway error, is a cleanup failure.
 
-Select it with `WEFT_FERRULE_RUNNER=azureContainerAppsSessions` in the Development
-host, the Session host or `Weft.Worker`:
+Select it with `BRAID_FERRULE_RUNNER=azureContainerAppsSessions` in the Development
+host, the Session host or `Braid.Worker`:
 
 | Setting | Value |
 | --- | --- |
-| `WEFT_FERRULE_SESSIONS_POOL_ENDPOINT` | The pool's management endpoint, one canonical HTTPS origin such as `https://<pool>.<environment>.<region>.azurecontainerapps.io`. |
-| `WEFT_FERRULE_WORKER_IMAGE` | The service image's build identity. |
-| `WEFT_FERRULE_SESSIONS_MANAGED_IDENTITY_CLIENT_ID` | Optional client ID of a user-assigned managed identity; without it, the system-assigned identity is used. |
+| `BRAID_FERRULE_SESSIONS_POOL_ENDPOINT` | The pool's management endpoint, one canonical HTTPS origin such as `https://<pool>.<environment>.<region>.azurecontainerapps.io`. |
+| `BRAID_FERRULE_WORKER_IMAGE` | The service image's build identity. |
+| `BRAID_FERRULE_SESSIONS_MANAGED_IDENTITY_CLIENT_ID` | Optional client ID of a user-assigned managed identity; without it, the system-assigned identity is used. |
 
 The host's identity needs the *Azure ContainerApps Session Executor* role on the
 pool. Configure the pool as a custom container pool with network egress disabled,
-running the service image with `WEFT_FERRULE_SERVICE_AUTHENTICATION=platformSandbox`,
-`WEFT_FERRULE_SERVICE_LISTEN_ADDR=0.0.0.0:8080` (the pool's target port),
-`WEFT_FERRULE_SERVICE_CONCURRENCY=1` and `WEFT_FERRULE_SERVICE_QUEUE=0`, a writable
+running the service image with `BRAID_FERRULE_SERVICE_AUTHENTICATION=platformSandbox`,
+`BRAID_FERRULE_SERVICE_LISTEN_ADDR=0.0.0.0:8080` (the pool's target port),
+`BRAID_FERRULE_SERVICE_CONCURRENCY=1` and `BRAID_FERRULE_SERVICE_QUEUE=0`, a writable
 `/tmp`, and liveness and startup probes on `/v1/health/live` and `/v1/health/ready`.
 Each session is a Hyper-V sandbox that serves exactly one operation, so concurrent
 operations never share a kernel. The pool's maximum sessions bound concurrent
@@ -432,7 +430,7 @@ operations, and its ready sessions absorb bursts.
 
 - **Kubernetes with a sandboxed runtime.** Run the same image as a Deployment with a
   gVisor or Kata `RuntimeClass` behind a layer-4 `Service`, and use the pinned
-  connector unchanged. With `WEFT_FERRULE_SERVICE_CONCURRENCY=1`, each pod's
+  connector unchanged. With `BRAID_FERRULE_SERVICE_CONCURRENCY=1`, each pod's
   sandbox runs one operation at a time; scale pods with an HPA or KEDA on concurrent
   connections or CPU. The child-process controls stay in force inside the sandbox.
 - **Per-operation sandboxes on other platforms** (for example a sandbox API that
@@ -452,8 +450,8 @@ a writable `/tmp` and a TCP listener:
 
 1. Build the native worker image from `engines/ferrule-host`, then the service image
    from `engines/ferrule-service/Dockerfile` with that native image and the SHA-256 of
-   its `/ferrule-host`. Configure braid hosts with `WEFT_FERRULE_WORKER_IMAGE` set to
-   `sha256:` followed by the image's `io.weft.ferrule.worker-sha256` label.
+   its `/ferrule-host`. Configure braid hosts with `BRAID_FERRULE_WORKER_IMAGE` set to
+   `sha256:` followed by the image's `io.braid.ferrule.worker-sha256` label.
 2. Create one RSA service certificate for all replicas and one client certificate per
    calling host. Give the service its PEM bundle and the client pins; give each host
    the service pin and its own client PEM. Rotate them by restart.
@@ -464,7 +462,7 @@ a writable `/tmp` and a TCP listener:
 4. Put a layer-4 load balancer in front of the TLS port; the service terminates TLS.
    Point readiness and liveness probes at `/v1/health/ready` and `/v1/health/live`
    on the plain probe port. Where only exec health checks exist, use
-   `/app/weft-ferrule-service probe`, which exits 0 when the local service is ready.
+   `/app/braid-ferrule-service probe`, which exits 0 when the local service is ready.
 5. Scale replicas on load. Each operation holds one connection for its duration, so
    concurrent connections per replica (or CPU) track busy children. Target the
    per-replica concurrency, and size each replica for that many 512 MiB children, its
@@ -486,21 +484,21 @@ shape.
 
 | Setting | Value |
 | --- | --- |
-| `WEFT_FERRULE_SERVICE_LISTEN_ADDR` | One canonical literal IP endpoint with a nonzero port, for example `0.0.0.0:8443`. |
-| `WEFT_FERRULE_SERVICE_AUTHENTICATION` | `pinnedMutualTls` (default) or `platformSandbox`. |
-| `WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256` | One to eight comma-separated lowercase SHA-256 pins of admitted client certificates (DER), for example the Session host's and `Weft.Worker`'s. |
-| `WEFT_FERRULE_SERVICE_PEM` | The service's current RSA (at least 2048-bit) certificate and private key as one PEM bundle, for platforms that deliver secrets as environment values. |
-| `WEFT_FERRULE_SERVICE_CERTIFICATE_FILE` / `WEFT_FERRULE_SERVICE_PRIVATE_KEY_FILE` | The same as protected private files (owned by the service user, mode `0600`); exclusive with the PEM bundle. |
-| `WEFT_FERRULE_SERVICE_HEALTH_ADDR` | Optional plain HTTP probe listener (another port); it serves only liveness and readiness. |
-| `WEFT_FERRULE_SERVICE_CONCURRENCY` | Children per replica, 1–64 (default: the available processor count). |
-| `WEFT_FERRULE_SERVICE_QUEUE` | Queued operations per replica (default: the concurrency). |
-| `WEFT_FERRULE_SERVICE_ADMISSION_WAIT_SECONDS` | 0–20 (default 5). |
-| `WEFT_FERRULE_SERVICE_WORKER_EXECUTABLE` / `WEFT_FERRULE_SERVICE_TEMPORARY_ROOT` | `/ferrule-host` and `/tmp` in the image. |
-| `WEFT_FERRULE_SERVICE_COMPILE_ENABLED` | `true` serves the `compile` profile; `false` (default) keeps it reserved. |
-| `WEFT_FERRULE_SERVICE_COMPILE_LAUNCHER` / `WEFT_FERRULE_SERVICE_COMPILE_TOOLCHAIN` | `/weft-compile-sandbox` and `/usr/share/dotnet` in the image; refused unless compilation is enabled. |
+| `BRAID_FERRULE_SERVICE_LISTEN_ADDR` | One canonical literal IP endpoint with a nonzero port, for example `0.0.0.0:8443`. |
+| `BRAID_FERRULE_SERVICE_AUTHENTICATION` | `pinnedMutualTls` (default) or `platformSandbox`. |
+| `BRAID_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256` | One to eight comma-separated lowercase SHA-256 pins of admitted client certificates (DER), for example the Session host's and `Braid.Worker`'s. |
+| `BRAID_FERRULE_SERVICE_PEM` | The service's current RSA (at least 2048-bit) certificate and private key as one PEM bundle, for platforms that deliver secrets as environment values. |
+| `BRAID_FERRULE_SERVICE_CERTIFICATE_FILE` / `BRAID_FERRULE_SERVICE_PRIVATE_KEY_FILE` | The same as protected private files (owned by the service user, mode `0600`); exclusive with the PEM bundle. |
+| `BRAID_FERRULE_SERVICE_HEALTH_ADDR` | Optional plain HTTP probe listener (another port); it serves only liveness and readiness. |
+| `BRAID_FERRULE_SERVICE_CONCURRENCY` | Children per replica, 1–64 (default: the available processor count). |
+| `BRAID_FERRULE_SERVICE_QUEUE` | Queued operations per replica (default: the concurrency). |
+| `BRAID_FERRULE_SERVICE_ADMISSION_WAIT_SECONDS` | 0–20 (default 5). |
+| `BRAID_FERRULE_SERVICE_WORKER_EXECUTABLE` / `BRAID_FERRULE_SERVICE_TEMPORARY_ROOT` | `/ferrule-host` and `/tmp` in the image. |
+| `BRAID_FERRULE_SERVICE_COMPILE_ENABLED` | `true` serves the `compile` profile; `false` (default) keeps it reserved. |
+| `BRAID_FERRULE_SERVICE_COMPILE_LAUNCHER` / `BRAID_FERRULE_SERVICE_COMPILE_TOOLCHAIN` | `/braid-compile-sandbox` and `/usr/share/dotnet` in the image; refused unless compilation is enabled. |
 
 Invalid or incomplete settings stop the service with
-`WeftFerruleServiceConfigurationFailed` and no echoed values; so do an unreadable
+`BraidFerruleServiceConfigurationFailed` and no echoed values; so do an unreadable
 worker, an unwritable temporary root, and with compilation enabled a missing
 toolchain or a compile sandbox the platform does not enforce. Certificates rotate by restart: deliver
 the new certificate and its pin to the clients together.
@@ -537,16 +535,16 @@ of the grants and the private directory, writes to the output only (none without
 output grant), no other process's procfs entries, the address-space limit, and
 termination at the CPU and file-size limits.
 
-Set `WEFT_FERRULE_HOST_EXECUTABLE` to a worker built from this source to run the
-live .NET service tests. With `WEFT_FERRULE_WORKER_IMAGE` naming an image that
+Set `BRAID_FERRULE_HOST_EXECUTABLE` to a worker built from this source to run the
+live .NET service tests. With `BRAID_FERRULE_WORKER_IMAGE` naming an image that
 contains the same binary, the equivalence test also compares every child answer
-with the Docker runner byte for byte. With `WEFT_COMPILE_SANDBOX_EXECUTABLE` naming a
+with the Docker runner byte for byte. With `BRAID_COMPILE_SANDBOX_EXECUTABLE` naming a
 launcher built from this source and `DOTNET_ROOT` holding the pinned SDK, the compile
 tests run real compilations, deadline, cancellation and stop through the service's
-children, the packaged host and the sessions stub; with `WEFT_BUILD_WORKER_IMAGE`
+children, the packaged host and the sessions stub; with `BRAID_BUILD_WORKER_IMAGE`
 naming the Docker compiler built from the same worker, every compile and inspection
 reply for every fixture must equal the Docker compiler's byte for byte. With
-`WEFT_FERRULE_SERVICE_IMAGE` as well, the same comparison runs against the service
+`BRAID_FERRULE_SERVICE_IMAGE` as well, the same comparison runs against the service
 image itself under the container runtime. Without these settings the live tests are
 explicitly skipped. The dynamic-sessions adapter is qualified against a local stub
 of the pool management API (token checks, per-identifier sessions, forwarding,

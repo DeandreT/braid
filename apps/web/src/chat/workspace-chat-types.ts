@@ -90,7 +90,7 @@ export function workspaceAvailability(
 ): UiAvailability | null {
   if (
     !object(value) ||
-    value.schemaVersion !== "weft.chat.v1" ||
+    value.schemaVersion !== "braid.chat.v1" ||
     value.organizationId !== organizationId ||
     !object(value.limits) ||
     !integer(value.limits.maxTextBytes, 32768) ||

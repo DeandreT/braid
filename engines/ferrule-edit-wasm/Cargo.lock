@@ -784,7 +784,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "weft-ferrule-core"
+name = "braid-ferrule-core"
 version = "0.1.0"
 dependencies = [
  "edit-ops",
@@ -802,12 +802,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "weft-ferrule-edit-wasm"
+name = "braid-ferrule-edit-wasm"
 version = "0.1.0"
 dependencies = [
  "serde_json",
  "wasm-bindgen",
- "weft-ferrule-core",
+ "braid-ferrule-core",
 ]
 
 [[package]]

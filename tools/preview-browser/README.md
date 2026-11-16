@@ -1,6 +1,6 @@
-# Actual preview browser qualification
+# Preview browser fixture
 
-`run.mjs` qualifies the Angular preview panel against the actual API, PostgreSQL,
+`run.mjs` tests the Angular preview panel against the API, PostgreSQL,
 Wolverine worker host and Ferrule worker image. It owns every resource it uses:
 
 - one labeled PostgreSQL container with the restricted roles from
@@ -11,9 +11,9 @@ Wolverine worker host and Ferrule worker image. It owns every resource it uses:
   runner, which creates the project and uploads `preview-orders.json` and
   `preview-csv-source.json` through ordinary HTTP;
 - the browser host on `127.0.0.1:4120` (Development identity, previews enabled with
-  the two preview logins) and the separate `Weft.Worker` preview host.
+  the two preview logins) and the separate `Braid.Worker` preview host.
 
-Publisher and viewer memberships are provisioned with `Weft.DatabaseTool`. The
+Publisher and viewer memberships are provisioned with `Braid.DatabaseTool`. The
 Playwright spec `apps/web/tests/preview-live.spec.ts` drives the real panel through
 a successful preview with exact output downloads, worker-refused invalid input and
 an unsupported mapping, cancellation of a queued run while the worker is stopped,
@@ -29,21 +29,21 @@ Build the Angular application, then publish the four products from the same buil
 
 ```sh
 npm ci && npm run build
-dotnet build dotnet/Weft.slnx -c Release
-for item in server:apps/Weft.Server worker:apps/Weft.Worker \
-    database:tools/Weft.DatabaseTool storage:tools/Weft.StorageTool; do
+dotnet build dotnet/Braid.slnx -c Release
+for item in server:apps/Braid.Server worker:apps/Braid.Worker \
+    database:tools/Braid.DatabaseTool storage:tools/Braid.StorageTool; do
   name=${item%%:*} project=${item#*:}
   dotnet publish "dotnet/$project/${project#*/}.csproj" -c Release --no-build -o "$PUBLISH/$name"
 done
 ```
 
 With Docker access, the pinned PostgreSQL image and the Ferrule worker image
-available locally, and Chrome for Testing in `WEFT_CHROMIUM_EXECUTABLE`:
+available locally, and Chrome for Testing in `BRAID_CHROMIUM_EXECUTABLE`:
 
 ```sh
 env -u WAYLAND_DISPLAY -u XDG_RUNTIME_DIR -u XDG_SESSION_TYPE xvfb-run -a -w 10 \
   node tools/preview-browser/run.mjs --publications "$PUBLISH" \
-  --worker-image "$WEFT_FERRULE_WORKER_IMAGE"
+  --worker-image "$BRAID_FERRULE_WORKER_IMAGE"
 ```
 
 Ports 4120 and 4121 must be free; they stay clear of a local instance on 4100.

@@ -2,11 +2,11 @@ import { defineConfig } from "@playwright/test";
 
 // Run through tools/preview-browser/run.mjs, which owns the actual API, worker and database.
 for (const name of [
-  "WEFT_PREVIEW_BROWSER_MANIFEST",
-  "WEFT_PREVIEW_BROWSER_BASE_URL",
-  "WEFT_PREVIEW_BROWSER_CONTROL",
-  "WEFT_PREVIEW_BROWSER_CONTROL_TOKEN",
-  "WEFT_CHROMIUM_EXECUTABLE",
+  "BRAID_PREVIEW_BROWSER_MANIFEST",
+  "BRAID_PREVIEW_BROWSER_BASE_URL",
+  "BRAID_PREVIEW_BROWSER_CONTROL",
+  "BRAID_PREVIEW_BROWSER_CONTROL_TOKEN",
+  "BRAID_CHROMIUM_EXECUTABLE",
 ])
   if (!process.env[name])
     throw new Error(`Actual preview browser checks require ${name}.`);
@@ -21,9 +21,9 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   forbidOnly: true,
   use: {
-    baseURL: process.env.WEFT_PREVIEW_BROWSER_BASE_URL,
+    baseURL: process.env.BRAID_PREVIEW_BROWSER_BASE_URL,
     headless: true,
-    launchOptions: { executablePath: process.env.WEFT_CHROMIUM_EXECUTABLE },
+    launchOptions: { executablePath: process.env.BRAID_CHROMIUM_EXECUTABLE },
     trace: "off",
     screenshot: "off",
     video: "off",

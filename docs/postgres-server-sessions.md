@@ -1,23 +1,12 @@
 # PostgreSQL server-session metadata
 
-The implementation for [P4c1b #106](https://github.com/DeandreT/weft/issues/106)
-passes locked restore, formatting verification, Release build and all 33 focused
-PostgreSQL cases, with no failures or skips. Full backend and browser regression
-qualification remains pending. It follows qualified, merged
-[payload permission #93](project-payload-permissions.md) and session contracts #97.
-Migration `0010_server_sessions.sql` has SHA256
-`73b4713aa5e2bafd886abc616c6e03dbf3bb6544cb24d55ea26b8134209f0e24`;
-all nine preceding migration bodies remain unchanged.
-
-This is dormant private metadata. It adds no sign-in, cookie, `ITicketStore`,
-ticket codec, Data Protection key ring, provider integration, host registration,
-HTTP route or Angular behavior. Synthetic protected-ticket bytes in store tests
-qualify metadata only; they do not establish cryptographic protection or working
-authentication.
+The session store persists private session facts and opaque protected tickets.
+[Protected sessions](protected-server-sessions.md) supplies ticket protection;
+[Session host](session-host.md) describes sign-in configuration.
 
 ## Persisted facts and lifetime
 
-`weft.server_sessions` has exactly thirteen private columns:
+`braid.server_sessions` has exactly thirteen private columns:
 
 | Columns | Meaning |
 | --- | --- |
@@ -32,7 +21,7 @@ authentication.
 | `policy_version`, `codec_version` | Fixed supported version 1 for each contract. |
 | `protected_ticket` | Immutable opaque blob of 1–16384 bytes; this store does not decode it. |
 
-The binding FK preserves P4a's immutable owner. No duplicate principal owner,
+The binding FK preserves the immutable owner. No duplicate principal owner,
 provider key/subject/claim/token, email, role, membership, project permission,
 key-ring material, payload or native bytes are persisted in the session row.
 
@@ -68,7 +57,7 @@ accept the matching profile and do not own or dispose that database. Each pool
 is lazy, normalized and resetting; do not share one pool between profiles or
 substitute a migrator credential.
 
-| Relation | `weft_session_reader` SELECT | `weft_session_writer` SELECT |
+| Relation | `braid_session_reader` SELECT | `braid_session_writer` SELECT |
 | --- | --- | --- |
 | `server_sessions` | All 13 columns | All 13 columns |
 | `external_identity_bindings` | Exactly `binding_id`, `principal_id`, `enabled`, `version` | The same four columns |
@@ -84,8 +73,7 @@ profile can read provider-key columns, memberships, project/payload grants,
 artifacts or the migration journal. There are no table-level privileges, parent
 writes, DELETE/TRUNCATE, helper EXECUTE, role memberships, ownership, CREATE/TEMP
 or RLS bypass. Existing runtime profiles receive no session-table access.
-P4a's strict binding ACL admission permits only the four named columns for each
-of these exact new roles; its old identity-reader rights stay unchanged.
+Binding ACL admission permits only the four named columns for each of these roles.
 
 Every operation leases a bounded Read Committed transaction, read-only for the
 reader and read-write for the writer, with local 1-second lock and 5-second
@@ -97,9 +85,7 @@ rights or reuse an earlier positive result.
 
 The selected transition function is read-only, `STABLE`, `SECURITY INVOKER` and
 uses `statement_timestamp()` from its caller statement. It does not take
-privileged parent locks or resample a volatile clock. Installed catalog forms,
-STABLE invocation/snapshot behavior and exact SQL transitions remain actual
-PostgreSQL qualification work; a source declaration is not that proof.
+privileged parent locks or resample a volatile clock.
 
 ## Observation, creation and acknowledgements
 
@@ -110,7 +96,7 @@ returns null. Broken references, wrong returned identity, malformed facts/schema
 storage failure and cancellation remain failures. A positive result is private
 current metadata, not authentication, a lease or cached authorization.
 
-The selected `CreateOnlyAsync` correction has these explicit stages:
+`CreateOnlyAsync` has these stages:
 
 1. After transaction preparation, enclose creation in a source-owned savepoint.
    Npgsql can queue `SAVEPOINT` with the following SQL; completion of that
@@ -142,12 +128,6 @@ arbiter wait and the final observation. Remaining TTL is conservatively shorter;
 it is never reset to the later sample. Savepoint undo adds no DELETE privilege.
 Integrity failure, cancellation, rollback/release failure or failed/ambiguous
 COMMIT remains an exception rather than an acknowledged denial or success.
-
-This protocol deliberately strengthens the earlier single-statement creation
-source. It does not claim that the original DAL already supplied the final
-observation/undo behavior. The corrected protocol has passed independent source
-review and the focused PostgreSQL checks; complete regression qualification
-remains required for release.
 
 Parent changes committed before the final observation are seen. Changes after
 its snapshot are not fenced through COMMIT: there is no parent-row commit fence.
@@ -187,65 +167,30 @@ Never log or attach handles/digests, protected-ticket bytes, private identifiers
 provider facts, SQL, credentials or raw exception/request dumps. Store metadata
 cannot be used as a public session-enumeration or grant-management API.
 
-## Local initialization and existing-volume upgrade
+## Local initialization
 
 Follow [project ownership setup](project-ownership.md#migrations-and-local-setup)
-and the earlier identity/payload role prerequisites. The selected local compose
+and the identity/payload role prerequisites. The local compose
 profile requires two separate private values:
-`WEFT_LOCAL_SESSION_READER_PASSWORD` and `WEFT_LOCAL_SESSION_WRITER_PASSWORD`.
+`BRAID_LOCAL_SESSION_READER_PASSWORD` and `BRAID_LOCAL_SESSION_WRITER_PASSWORD`.
 Keep administrator/migrator and all runtime credentials separate. New-volume
 initialization creates the two logins with CONNECT only; the session migration
 later supplies their precise schema/column rights. It creates no session,
 principal, binding, membership or payload-grant row.
 
-Changing an environment file does not rerun initialization on an existing
-volume. Once this increment is integrated and released, upgrade an existing
-qualified nine-migration payload-permission database with coordinated
-stop/migrate/start:
+Run DatabaseTool `migrate` with the separate private
+`BRAID_MIGRATION_CONNECTION_STRING`:
 
-1. Stop application processes/pools using that database and retain the volume.
-   Complete the earlier role prerequisites first.
-2. In the intended local PostgreSQL administrator environment, explicitly run
-   `deploy/local/postgres-add-session-roles.sh` with the two private password
-   variables and `POSTGRES_USER`/`POSTGRES_DB`. This script is for the compose
-   `weft` database. It creates both exact CONNECT-only logins in one transaction.
-   If either role already exists, the whole transaction refuses: it does not
-   adopt, alter or rotate a role, and it does not leave the other newly created
-   role behind. Investigate a refusal rather than silently broadening rights.
-3. Run the existing DatabaseTool `migrate` operation with the separate private
-   `WEFT_MIGRATION_CONNECTION_STRING`, then restart only after migration succeeds
-   with each process's distinct restricted credential. For a source checkout,
-   the tool entry is:
+```sh
+dotnet run --configuration Release --project dotnet/tools/Braid.DatabaseTool -- migrate
+```
 
-   ```sh
-   dotnet run --configuration Release --project dotnet/tools/Weft.DatabaseTool -- migrate
-   ```
+Both roles must exist CONNECT-only before the session migration creates any
+object, grant or journal entry. Missing or broadened profiles refuse; migrations
+do not create, repair or adopt roles.
 
-The new migration requires both roles to exist CONNECT-only before creating any
-session object, grant or journal entry. Missing or broadened profiles refuse;
-the migration does not create, repair or adopt roles. The exact migration
-name/checksum is recorded above. Old migration bodies/checksums must not be edited
-to accommodate the new roles.
+## Tests
 
-Fresh, concurrent and repeated install plus a genuinely populated nine-prefix
-upgrade must preserve old native/catalog/report history, active/disabled identity
-bindings, active/revoked payload grants, all old rows, definitions, journal
-checksums/creation times, ACLs and effective rights of old roles and PUBLIC. The only intended additions
-are the session objects, exact new-role grants (thirteen old-column SELECT
-entries and forty-two session-column entries), four precisely identified incoming
-parent FK triggers and the new journal entry. Missing-role and broadened-role
-install refusals must prove the same conservation with no new objects or
-partially adopted install. Synthetic historical ticket/native/report metadata
-does not claim a worker, codec or naturally elapsed lifetime.
-
-## Qualification boundary
-
-All 33 focused PostgreSQL cases pass on the host integration build, covering
-installation/upgrade conservation, restricted rights and drift, actual schema and
-STABLE invocation, lifetime/concurrency/cancellation, lost acknowledgement,
-reset/restart and ordinary resource cleanup. Full discovery finds 3,018 cases.
-The clean build, full backend regression and fresh browser workflows remain
-separate pending qualification. This document claims no cookie, provider,
-hosted sign-in or Azure qualification. Later trusted issuance must freshly supply verified binding facts,
-a random handle digest, independent epoch and protected minimal-ticket bytes;
-this foundation neither generates those credentials nor activates their use.
+PostgreSQL tests cover installation, restricted rights and drift, STABLE
+invocation, lifetime/concurrency/cancellation, lost acknowledgements,
+pool reset, restart and resource cleanup.

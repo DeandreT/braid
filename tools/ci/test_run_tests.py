@@ -17,7 +17,7 @@ import test_groups
 
 class LauncherTests(unittest.TestCase):
     def test_command_exit_and_explicit_global_tools_opt_out_are_preserved(self):
-        with patch.dict(os.environ, {"DOTNET_ADD_GLOBAL_TOOLS_TO_PATH": "true", "WEFT_TEST_PIN": "retained"}):
+        with patch.dict(os.environ, {"DOTNET_ADD_GLOBAL_TOOLS_TO_PATH": "true", "BRAID_TEST_PIN": "retained"}):
             with patch.object(run_tests.subprocess, "run", return_value=subprocess.CompletedProcess(["fixture"], 7)) as launch:
                 self.assertEqual(7, run_tests.run(["fixture", "argument"]))
             args, options = launch.call_args
@@ -25,14 +25,14 @@ class LauncherTests(unittest.TestCase):
             self.assertTrue(options["close_fds"])
             self.assertFalse(options["check"])
             self.assertEqual("false", options["env"]["DOTNET_ADD_GLOBAL_TOOLS_TO_PATH"])
-            self.assertEqual("retained", options["env"]["WEFT_TEST_PIN"])
+            self.assertEqual("retained", options["env"]["BRAID_TEST_PIN"])
             self.assertEqual("true", os.environ["DOTNET_ADD_GLOBAL_TOOLS_TO_PATH"])
 
     def test_selection_and_diagnostic_logging_do_not_change_deadlines(self):
         with patch.object(run_tests, "run", return_value=0) as launch:
             self.assertEqual(0, run_tests.main([]))
         self.assertEqual([
-            "dotnet", "test", "dotnet/Weft.slnx", "--configuration", "Release", "--no-build", "--no-restore",
+            "dotnet", "test", "dotnet/Braid.slnx", "--configuration", "Release", "--no-build", "--no-restore",
             "--logger", "console;verbosity=normal",
         ], launch.call_args.args[0])
 
@@ -54,7 +54,7 @@ class LauncherTests(unittest.TestCase):
 
 
 class ShardTests(unittest.TestCase):
-    METHODS = [f"Weft.Tests.Class{i}.Method{j}" for i in range(40) for j in range(3)]
+    METHODS = [f"Braid.Tests.Class{i}.Method{j}" for i in range(40) for j in range(3)]
 
     def test_partition_is_exhaustive_disjoint_stable_and_keeps_each_class_together(self):
         shards = run_tests.partition(self.METHODS, 4)
@@ -76,23 +76,23 @@ class ShardTests(unittest.TestCase):
             self.assertEqual("/Settings:exact settings.xml", launch.call_args.args[0][-1])
 
     def test_invalid_empty_or_unsafe_selections_fail_closed(self):
-        for methods, count in ((self.METHODS, 0), ([], 4), (["Weft.Tests.One.Test"], 4),
-                               (["Weft.Tests.One.Test|FullyQualifiedName~Other"], 1)):
+        for methods, count in ((self.METHODS, 0), ([], 4), (["Braid.Tests.One.Test"], 4),
+                               (["Braid.Tests.One.Test|FullyQualifiedName~Other"], 1)):
             with self.assertRaises(ValueError):
                 run_tests.partition(methods, count)
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "tests.txt"
-            for value in ("", "Weft.Tests.One.Test\n\n", "Warning: no tests"):
+            for value in ("", "Braid.Tests.One.Test\n\n", "Warning: no tests"):
                 path.write_text(value)
                 with self.assertRaises(ValueError):
                     run_tests.read_methods(path)
-            path.write_text("\ufeffWeft.Tests.One.Test\nWeft.Tests.One.Test\n", encoding="utf-8")
-            self.assertEqual(["Weft.Tests.One.Test"], run_tests.read_methods(path))
+            path.write_text("\ufeffBraid.Tests.One.Test\nBraid.Tests.One.Test\n", encoding="utf-8")
+            self.assertEqual(["Braid.Tests.One.Test"], run_tests.read_methods(path))
 
     def test_settings_use_exact_fqns_so_theory_rows_and_overloads_stay_selected(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "test.runsettings"
-            methods = ["Weft.Tests.Outer+Nested.Test", "Weft.Tests.Other.Theory"]
+            methods = ["Braid.Tests.Outer+Nested.Test", "Braid.Tests.Other.Theory"]
             run_tests.write_settings(path, methods)
             self.assertEqual("|".join("FullyQualifiedName=" + name for name in methods),
                              ET.parse(path).findtext("./RunConfiguration/TestCaseFilter"))
@@ -170,26 +170,26 @@ class ShardTests(unittest.TestCase):
 
 
 class GroupTests(unittest.TestCase):
-    GROUPS = {"fast": ("Weft.Tests.Pure", "Weft.Tests.Outer+Nested"),
-              "integration": ("Weft.Tests.Service",)}
-    METHODS = ["Weft.Tests.Pure.Theory", "Weft.Tests.Pure.Fact", "Weft.Tests.Outer+Nested.Fact",
-               "Weft.Tests.Service.Theory", "Weft.Tests.Service.Fact"]
+    GROUPS = {"fast": ("Braid.Tests.Pure", "Braid.Tests.Outer+Nested"),
+              "integration": ("Braid.Tests.Service",)}
+    METHODS = ["Braid.Tests.Pure.Theory", "Braid.Tests.Pure.Fact", "Braid.Tests.Outer+Nested.Fact",
+               "Braid.Tests.Service.Theory", "Braid.Tests.Service.Fact"]
 
     def test_actual_fqn_classification_is_exhaustive_disjoint_stable_and_deduplicates_theories(self):
         groups = run_tests.classify(self.METHODS, self.GROUPS)
         self.assertEqual(groups, run_tests.classify([*reversed(self.METHODS), *self.METHODS], self.GROUPS))
         self.assertEqual(sorted(self.METHODS), sorted(method for methods in groups.values() for method in methods))
         self.assertTrue(set(groups["fast"]).isdisjoint(groups["integration"]))
-        self.assertIn("Weft.Tests.Pure.Theory", groups["fast"])
-        self.assertIn("Weft.Tests.Outer+Nested.Fact", groups["fast"])
+        self.assertIn("Braid.Tests.Pure.Theory", groups["fast"])
+        self.assertIn("Braid.Tests.Outer+Nested.Fact", groups["fast"])
 
     def test_unknown_classes_stale_classes_empty_and_overlapping_rosters_fail_closed(self):
-        cases = [([], self.GROUPS), (self.METHODS + ["Weft.Tests.New.Test"], self.GROUPS),
+        cases = [([], self.GROUPS), (self.METHODS + ["Braid.Tests.New.Test"], self.GROUPS),
                  (self.METHODS, {**self.GROUPS, "empty": ()}),
-                 (self.METHODS, {**self.GROUPS, "overlap": ("Weft.Tests.Pure",)}),
-                 (self.METHODS, {**self.GROUPS, "stale": ("Weft.Tests.Removed",)}),
-                 (self.METHODS, {**self.GROUPS, "unsafe": ("Weft.Tests.Foo|Other",)}),
-                 (self.METHODS + ["Weft.Tests.Pure.Theory(value: 1)"], self.GROUPS)]
+                 (self.METHODS, {**self.GROUPS, "overlap": ("Braid.Tests.Pure",)}),
+                 (self.METHODS, {**self.GROUPS, "stale": ("Braid.Tests.Removed",)}),
+                 (self.METHODS, {**self.GROUPS, "unsafe": ("Braid.Tests.Foo|Other",)}),
+                 (self.METHODS + ["Braid.Tests.Pure.Theory(value: 1)"], self.GROUPS)]
         for methods, groups in cases:
             with self.subTest(methods=methods, groups=groups), self.assertRaises(ValueError):
                 run_tests.classify(methods, groups)
@@ -289,7 +289,7 @@ class GroupTests(unittest.TestCase):
         # Bounded to this audited source style, NOT a C# discovery implementation.
         # Real execution always proves the roster against VSTest's discovered FQNs.
         classes = set()
-        for path in Path("dotnet/tests/Weft.Tests").rglob("*.cs"):
+        for path in Path("dotnet/tests/Braid.Tests").rglob("*.cs"):
             if {"bin", "obj"}.intersection(path.parts):
                 continue
             source = path.read_text()
@@ -306,11 +306,11 @@ class GroupTests(unittest.TestCase):
         names = [name for roster in groups.values() for name in roster]
         self.assertEqual(len(names), len(set(names)))
         self.assertEqual(classes, set(names))
-        self.assertEqual({"Weft.Tests.AccountDisplayNameTests", "Weft.Tests.ExternalIdentityKeyTests",
-                          "Weft.Tests.MaintenanceServiceTestTimeProviderTests", "Weft.Tests.ProjectPayloadPermissionContractTests"},
+        self.assertEqual({"Braid.Tests.AccountDisplayNameTests", "Braid.Tests.ExternalIdentityKeyTests",
+                          "Braid.Tests.MaintenanceServiceTestTimeProviderTests", "Braid.Tests.ProjectPayloadPermissionContractTests"},
                          set(groups["fast"]))
-        self.assertIn("Weft.Tests.AiProviderTests", groups["live-provider"], "all partials stay together")
-        self.assertIn("Weft.Tests.AuthBrowserHttpsQualificationTests", groups["packaged-browser"])
+        self.assertIn("Braid.Tests.AiProviderTests", groups["live-provider"], "all partials stay together")
+        self.assertIn("Braid.Tests.AuthBrowserHttpsQualificationTests", groups["packaged-browser"])
         self.assertNotIn("cloud", groups, "Azure harness tests use fake tools, not live cloud")
         # Exercise the real roster with fixture identities; this is still mocked
         # input, not evidence that .NET discovered or executed these methods.
@@ -329,7 +329,7 @@ class GroupTests(unittest.TestCase):
     def test_source_binding_detects_changes_to_helpers_production_linked_sources_and_build_inputs(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            project = root / "dotnet/tests/Weft.Tests/Weft.Tests.csproj"
+            project = root / "dotnet/tests/Braid.Tests/Braid.Tests.csproj"
             project.parent.mkdir(parents=True)
             linked = root / "dotnet/tools/Probe/Wire.cs"
             linked.parent.mkdir(parents=True)
@@ -362,7 +362,7 @@ class GroupTests(unittest.TestCase):
 
 class PrerequisiteTests(unittest.TestCase):
     def test_fast_needs_only_the_built_assembly_and_dotnet_without_setting_or_scrubbing_env(self):
-        with patch.dict(os.environ, {"WEFT_LIVE_OLLAMA_MODEL": "unchanged"}, clear=True), \
+        with patch.dict(os.environ, {"BRAID_LIVE_OLLAMA_MODEL": "unchanged"}, clear=True), \
                 patch.object(Path, "is_file", return_value=True), \
                 patch.object(run_tests.shutil, "which", return_value="fixture") as which:
             before = os.environ.copy()
@@ -379,10 +379,10 @@ class PrerequisiteTests(unittest.TestCase):
         self.assertIn("Contracts/browser-return-paths.json", str(error.exception))
 
     def test_each_expensive_group_refuses_its_missing_configuration_without_launching(self):
-        expected = {"integration": "WEFT_FERRULE_HOST_EXECUTABLE", "packaged-browser": "WEFT_AUTH_BROWSER_ADMISSION_FILE",
-                    "installed-documents": "WEFT_SPEC_DOCUMENT_WORKERS", "installed-document-probes": "WEFT_TEST_DOCUMENT_PROFILE_PROBE_ASSEMBLY",
-                    "live-provider": "WEFT_LIVE_OLLAMA_ENDPOINT", "native-windows": "WEFT_POSTGRES_BIN",
-                    "incremental-build": "WEFT_OPENAPI_INCREMENTAL_TESTS"}
+        expected = {"integration": "BRAID_FERRULE_HOST_EXECUTABLE", "packaged-browser": "BRAID_AUTH_BROWSER_ADMISSION_FILE",
+                    "installed-documents": "BRAID_SPEC_DOCUMENT_WORKERS", "installed-document-probes": "BRAID_TEST_DOCUMENT_PROFILE_PROBE_ASSEMBLY",
+                    "live-provider": "BRAID_LIVE_OLLAMA_ENDPOINT", "native-windows": "BRAID_POSTGRES_BIN",
+                    "incremental-build": "BRAID_OPENAPI_INCREMENTAL_TESTS"}
         for group, message in expected.items():
             with self.subTest(group=group), patch.dict(os.environ, {}, clear=True), \
                     patch.object(Path, "is_file", return_value=True), patch.object(Path, "is_dir", return_value=True), \
@@ -392,8 +392,8 @@ class PrerequisiteTests(unittest.TestCase):
             run.assert_not_called()
 
     def test_live_provider_and_incremental_build_admission_do_not_create_configuration(self):
-        for group, environment in (("live-provider", {"WEFT_LIVE_OLLAMA_ENDPOINT": "http://127.0.0.1:1/api/chat", "WEFT_LIVE_OLLAMA_MODEL": "model"}),
-                                   ("incremental-build", {"WEFT_OPENAPI_INCREMENTAL_TESTS": "1"})):
+        for group, environment in (("live-provider", {"BRAID_LIVE_OLLAMA_ENDPOINT": "http://127.0.0.1:1/api/chat", "BRAID_LIVE_OLLAMA_MODEL": "model"}),
+                                   ("incremental-build", {"BRAID_OPENAPI_INCREMENTAL_TESTS": "1"})):
             with patch.dict(os.environ, environment, clear=True), patch.object(Path, "is_file", return_value=True), \
                     patch.object(run_tests.shutil, "which", return_value="fixture"):
                 run_tests.require_prerequisites([group], Path("fixture.dll"))
@@ -401,16 +401,16 @@ class PrerequisiteTests(unittest.TestCase):
 
     def test_integration_requires_canonical_fixtures_matching_worker_images_and_executable_files(self):
         environment = {
-            "WEFT_POSTGRES_IMAGE": "wrong", "WEFT_POSTGRES_BIN": "/native", "WEFT_AZURITE_IMAGE": "wrong",
-            "WEFT_AZURITE_LOOPBACK_ENDPOINT": "http://127.0.0.1:1", "WEFT_BUILD_WORKER_IMAGE": "one",
-            "WEFT_FERRULE_WORKER_IMAGE": "two", "WEFT_AUTOMATION_DOCKER_TESTS": "false",
-            "WEFT_FERRULE_HOST_EXECUTABLE": "relative", "DOTNET_ROOT": "/missing",
+            "BRAID_POSTGRES_IMAGE": "wrong", "BRAID_POSTGRES_BIN": "/native", "BRAID_AZURITE_IMAGE": "wrong",
+            "BRAID_AZURITE_LOOPBACK_ENDPOINT": "http://127.0.0.1:1", "BRAID_BUILD_WORKER_IMAGE": "one",
+            "BRAID_FERRULE_WORKER_IMAGE": "two", "BRAID_AUTOMATION_DOCKER_TESTS": "false",
+            "BRAID_FERRULE_HOST_EXECUTABLE": "relative", "DOTNET_ROOT": "/missing",
         }
         with patch.dict(os.environ, environment, clear=True), patch.object(Path, "is_file", return_value=False), \
                 patch.object(Path, "is_dir", return_value=False), patch.object(run_tests.shutil, "which", return_value=None), \
                 patch.object(run_tests.sys, "platform", "win32"), self.assertRaises(ValueError) as error:
             run_tests.require_prerequisites(["integration"], Path("fixture.dll"))
-        for message in ("require Linux", "WEFT_POSTGRES_IMAGE", "native/client-container", "WEFT_AZURITE_IMAGE",
+        for message in ("require Linux", "BRAID_POSTGRES_IMAGE", "native/client-container", "BRAID_AZURITE_IMAGE",
                         "LOOPBACK_ENDPOINT", "same combined worker", "AUTOMATION_DOCKER_TESTS=true", "existing absolute executable",
                         "10.0.112 compiler", "10.0.12 reference pack"):
             self.assertIn(message, str(error.exception))
@@ -418,34 +418,34 @@ class PrerequisiteTests(unittest.TestCase):
     def test_valid_prerequisite_profiles_are_admitted_without_any_process_or_environment_changes(self):
         postgres = "docker.io/library/postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc"
         integration = {
-            "WEFT_POSTGRES_IMAGE": postgres,
-            "WEFT_AZURITE_IMAGE": "mcr.microsoft.com/azure-storage/azurite@sha256:830430c1da1a2d537e08f3e6764dd1f5ae00cf0346bcaf625b968ec3f0971fd5",
-            "WEFT_FERRULE_WORKER_IMAGE": "same-build", "WEFT_BUILD_WORKER_IMAGE": "same-build",
-            "WEFT_COMPILED_RUNTIME_IMAGE": "runtime", "WEFT_FERRULE_SERVICE_IMAGE": "service",
-            "WEFT_AUTOMATION_DOCKER_TESTS": "true", "DOTNET_ROOT": "/sdk",
+            "BRAID_POSTGRES_IMAGE": postgres,
+            "BRAID_AZURITE_IMAGE": "mcr.microsoft.com/azure-storage/azurite@sha256:830430c1da1a2d537e08f3e6764dd1f5ae00cf0346bcaf625b968ec3f0971fd5",
+            "BRAID_FERRULE_WORKER_IMAGE": "same-build", "BRAID_BUILD_WORKER_IMAGE": "same-build",
+            "BRAID_COMPILED_RUNTIME_IMAGE": "runtime", "BRAID_FERRULE_SERVICE_IMAGE": "service",
+            "BRAID_AUTOMATION_DOCKER_TESTS": "true", "DOTNET_ROOT": "/sdk",
         }
-        for name in ("WEFT_FERRULE_HOST_EXECUTABLE", "WEFT_COMPILE_SANDBOX_EXECUTABLE", "WEFT_TEST_PDF_EXECUTABLE",
-                     "WEFT_AUTHORING_TEST_EXECUTABLE", "WEFT_AUTHORED_PREVIEW_TEST_EXECUTABLE", "WEFT_EDIT_TEST_EXECUTABLE",
-                     "WEFT_HOST_TEST_SERVER_PATH", "WEFT_HOST_PRIVACY_PROBE_PATH"):
+        for name in ("BRAID_FERRULE_HOST_EXECUTABLE", "BRAID_COMPILE_SANDBOX_EXECUTABLE", "BRAID_TEST_PDF_EXECUTABLE",
+                     "BRAID_AUTHORING_TEST_EXECUTABLE", "BRAID_AUTHORED_PREVIEW_TEST_EXECUTABLE", "BRAID_EDIT_TEST_EXECUTABLE",
+                     "BRAID_HOST_TEST_SERVER_PATH", "BRAID_HOST_PRIVACY_PROBE_PATH"):
             integration[name] = "/fixture/" + name
-        installed = {"WEFT_TEST_DOCUMENT_HOST_LINUX": "1", "WEFT_SPEC_DOCUMENT_WORKERS": "optional",
-                     "WEFT_TEST_PDF_EXECUTABLE": "/fixture/pdf", "WEFT_TEST_DOCUMENT_PID_NAMESPACE_RECORD": "/fixture/record",
-                     "WEFT_TEST_DOCUMENT_PID_NAMESPACE_RECORD_SHA256": "a" * 64}
+        installed = {"BRAID_TEST_DOCUMENT_HOST_LINUX": "1", "BRAID_SPEC_DOCUMENT_WORKERS": "optional",
+                     "BRAID_TEST_PDF_EXECUTABLE": "/fixture/pdf", "BRAID_TEST_DOCUMENT_PID_NAMESPACE_RECORD": "/fixture/record",
+                     "BRAID_TEST_DOCUMENT_PID_NAMESPACE_RECORD_SHA256": "a" * 64}
         for suffix in ("OFFICE_ASSEMBLY", "OFFICE_LAUNCHER", "PDF_EXECUTABLE", "DOTNET_ROOT", "OFFICE_WORK_ROOT", "PDF_WORK_ROOT"):
-            installed["WEFT_SPEC_DOCUMENT_" + suffix] = "/fixture/" + suffix
+            installed["BRAID_SPEC_DOCUMENT_" + suffix] = "/fixture/" + suffix
         for suffix in ("OFFICE_PROFILE_SHA256", "OFFICE_BUILD_SHA256", "OFFICE_RUNTIME_SHA256", "PDF_BUILD_SHA256", "PDF_PROFILE_SHA256"):
-            installed["WEFT_SPEC_DOCUMENT_" + suffix] = "a" * 64
+            installed["BRAID_SPEC_DOCUMENT_" + suffix] = "a" * 64
         probes = dict(installed)
-        for prefix in ("WEFT_TEST_DOCUMENT_PROFILE_PROBE_", "WEFT_TEST_DOCUMENT_RESOURCE_PROBE_"):
+        for prefix in ("BRAID_TEST_DOCUMENT_PROFILE_PROBE_", "BRAID_TEST_DOCUMENT_RESOURCE_PROBE_"):
             probes[prefix + "ASSEMBLY"] = "/fixture/probe.dll"
             probes[prefix + "BUILD_SHA256"] = "a" * 64
             probes[prefix + "RUNTIME_SHA256"] = "b" * 64
         profiles = {
             "integration": integration,
-            "packaged-browser": {"WEFT_POSTGRES_IMAGE": postgres, "WEFT_AUTH_BROWSER_ADMISSION_ROOT": "/fixture/root",
-                                 "WEFT_AUTH_BROWSER_ADMISSION_FILE": "/fixture/record", "WEFT_WORKSPACE_CHAT_BROWSER": "true", "DISPLAY": ":999"},
+            "packaged-browser": {"BRAID_POSTGRES_IMAGE": postgres, "BRAID_AUTH_BROWSER_ADMISSION_ROOT": "/fixture/root",
+                                 "BRAID_AUTH_BROWSER_ADMISSION_FILE": "/fixture/record", "BRAID_WORKSPACE_CHAT_BROWSER": "true", "DISPLAY": ":999"},
             "installed-documents": installed, "installed-document-probes": probes,
-            "native-windows": {"WEFT_POSTGRES_BIN": "/fixture/postgres"},
+            "native-windows": {"BRAID_POSTGRES_BIN": "/fixture/postgres"},
         }
         for group, environment in profiles.items():
             with self.subTest(group=group), patch.dict(os.environ, environment, clear=True), \
@@ -458,10 +458,10 @@ class PrerequisiteTests(unittest.TestCase):
                 launch.assert_not_called()
 
     def test_relative_or_nonexecutable_paths_and_missing_protected_context_are_not_accepted(self):
-        environment = {"WEFT_TEST_DOCUMENT_HOST_LINUX": "1", "WEFT_SPEC_DOCUMENT_WORKERS": "optional",
-                       "WEFT_SPEC_DOCUMENT_OFFICE_ASSEMBLY": "relative.dll",
-                       "WEFT_SPEC_DOCUMENT_OFFICE_LAUNCHER": "/fixture/nonexecutable",
-                       "WEFT_SPEC_DOCUMENT_OFFICE_BUILD_SHA256": "A" * 64}
+        environment = {"BRAID_TEST_DOCUMENT_HOST_LINUX": "1", "BRAID_SPEC_DOCUMENT_WORKERS": "optional",
+                       "BRAID_SPEC_DOCUMENT_OFFICE_ASSEMBLY": "relative.dll",
+                       "BRAID_SPEC_DOCUMENT_OFFICE_LAUNCHER": "/fixture/nonexecutable",
+                       "BRAID_SPEC_DOCUMENT_OFFICE_BUILD_SHA256": "A" * 64}
         with patch.dict(os.environ, environment, clear=True), patch.object(Path, "is_file", return_value=True), \
                 patch.object(Path, "is_dir", return_value=True), patch.object(os, "access", return_value=False), \
                 patch.object(run_tests.shutil, "which", return_value="fixture"), \

@@ -70,7 +70,7 @@ export function encodeContent(bytes: Uint8Array): string {
 }
 
 @Component({
-  selector: "weft-sandbox-page",
+  selector: "braid-sandbox-page",
   imports: [FormsModule, RouterLink],
   templateUrl: "./sandbox-page.component.html",
   styleUrls: ["../catalog.css", "./sandbox-page.component.css"],

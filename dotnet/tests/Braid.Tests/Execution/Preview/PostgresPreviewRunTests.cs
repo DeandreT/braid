@@ -1,0 +1,492 @@
+using System.Text;
+using System.Text.Json.Nodes;
+using Npgsql;
+using Braid.Application;
+using Braid.Domain;
+using Braid.MappingBackends;
+using Braid.MappingBackends.Workers;
+using Braid.Persistence.Postgres;
+
+namespace Braid.Tests;
+
+[Collection(PostgresCollection.Name)]
+[System.Runtime.Versioning.SupportedOSPlatform("linux")]
+public sealed class PostgresPreviewRunTests(PostgresFixture fixture)
+{
+    private static readonly byte[] Order = PreviewRunTestSupport.Order;
+    private static readonly byte[] Rates = PreviewRunTestSupport.Rates;
+
+    [PostgresFact]
+    public async Task Missing_csv_reader_on_a_csv_schema_is_not_treated_as_a_legacy_prefix()
+    {
+        await using var test = await PreviewRunTestSupport.CreateAsync(fixture, CsvPreviewTestData.Native);
+        var submission = new PreviewRunSubmission(test.Revision, Guid.NewGuid(), PreviewTargetSelection.All,
+            new(null, [], CsvPreviewTestData.Dialect), [], [])
+        { Profile = PreviewExecutionProfile.CsvDocument };
+        var run = (await test.Service().SubmitAsync(test.Alice, submission)).RunId!.Value;
+        await test.Case.ExecuteAsync("DROP FUNCTION braid.preview_csv_input(uuid,uuid,uuid,integer)");
+        await Assert.ThrowsAsync<InvalidOperationException>(() => test.Reader.ReadInputAsync(test.Alice, test.Revision.OrganizationId, run, 0));
+    }
+
+    [RegressionPostgresTheory]
+    [InlineData(13)]
+    [InlineData(33)]
+    public async Task Legacy_json_reads_work_before_csv_migration_and_conserve_bytes_after_upgrade(int prefix)
+    {
+        await using var test = await fixture.CreateCaseAsync(migrate: false);
+        await using (var initial = new MigrationRunner(test.MigrationConnectionString, MigrationRunner.EmbeddedMigrations.Take(2).ToArray()))
+            await initial.MigrateAsync();
+        var seed = await PostgresSeedData.CreateAsync(test);
+        await test.ExecuteAsync("UPDATE braid.project_memberships SET role='publisher',version=version+1 WHERE principal_id=$1", seed.Alice);
+        var actor = new ActorContext(new(seed.Alice));
+        var receipt = await HistoricalIngestionSeed.CommitCreateAsync(test, actor, new(seed.OrganizationA, seed.ProjectA));
+        await using (var previous = new MigrationRunner(test.MigrationConnectionString, MigrationRunner.EmbeddedMigrations.Take(prefix).ToArray()))
+            await previous.MigrateAsync();
+        await using var writer = new PostgresPreviewDatabase(test.PreviewWriterConnectionString, PreviewDatabaseProfile.Writer);
+        await using var reader = new PostgresPreviewDatabase(test.PreviewReaderConnectionString, PreviewDatabaseProfile.Reader);
+        var store = new PostgresPreviewRunStore(writer);
+        var reads = new PostgresPreviewRunReader(reader);
+        var scope = receipt.Facts.FutureRevision;
+        var submission = new PreviewRunSubmission(scope, Guid.NewGuid(), PreviewTargetSelection.Primary, new(null, "{}"u8), [], []);
+        var record = new PreviewRunRecord(submission, PreviewRequestDocument.Encode(submission, PreviewLimits.Default),
+            "2026-10-31T00:00:00Z", 3, TimeSpan.FromHours(24));
+        var run = (await HistoricalPreviewAccess.SubmitAsync(test, prefix, actor, record)).RunId!.Value;
+        Assert.Equal(1, (await HistoricalPreviewAccess.ReadAsync(test, prefix, actor, scope.OrganizationId, run)).State);
+        var claim = await HistoricalPreviewAccess.ClaimAsync(test, prefix, scope.OrganizationId, run);
+        Assert.True(await HistoricalPreviewAccess.CompleteAsync(test, prefix, scope.OrganizationId, run, claim, PreviewPolicy.Profile, PreviewPolicy.MediaType, "{}"u8.ToArray()));
+        var before = await HistoricalPreviewAccess.ReadAsync(test, prefix, actor, scope.OrganizationId, run);
+        Assert.Equal("{}"u8.ToArray(), await HistoricalPreviewAccess.ReadContentAsync(test, prefix, actor, scope.OrganizationId, run, false));
+        if (prefix >= 33) Assert.Equal("{}"u8.ToArray(), await HistoricalPreviewAccess.ReadContentAsync(test, prefix, actor, scope.OrganizationId, run, true));
+        var outputRows = await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(d) ORDER BY ordinal)::text FROM braid.preview_documents d WHERE direction=2");
+        Assert.Equal(PreviewSubmitOutcome.Replayed, (await HistoricalPreviewAccess.SubmitAsync(test, prefix, actor, record)).Outcome);
+        await test.MigrateAsync();
+        var after = (await reads.ReadAsync(actor, scope.OrganizationId, run))!;
+        Assert.Equal(before.RequestFingerprint, after.RequestFingerprint);
+        Assert.Equal(outputRows, await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(d)-'csv_input'-'csv_dialect' ORDER BY ordinal)::text FROM braid.preview_documents d WHERE direction=2"));
+        var output = Assert.Single(after.Outputs);
+        Assert.Equal(PreviewPolicy.MediaType, output.MediaType);
+        Assert.Equal(Sha256Digest.FromBytes("{}"u8), output.Digest);
+        Assert.Equal("{}"u8.ToArray(), (await reads.ReadOutputAsync(actor, scope.OrganizationId, run, 0))!.Content);
+        Assert.Equal("{}"u8.ToArray(), (await reads.ReadInputAsync(actor, scope.OrganizationId, run, 0))!.Content);
+    }
+
+    [PostgresFact]
+    public async Task DocumentPreviewUpgradePreservesSavedJsonRunsAndOnlyAddsAdmittedOutputMedia()
+    {
+        await using var test = await fixture.CreateCaseAsync(migrate: false);
+        await using (var prefix = new MigrationRunner(test.MigrationConnectionString, MigrationRunner.EmbeddedMigrations.Take(2).ToArray()))
+            await prefix.MigrateAsync();
+        var seed = await PostgresSeedData.CreateAsync(test);
+        await test.ExecuteAsync("UPDATE braid.project_memberships SET role='publisher',version=version+1 WHERE principal_id=$1", seed.Alice);
+        var actor = new ActorContext(new(seed.Alice));
+        var receipt = await HistoricalIngestionSeed.CommitCreateAsync(test, actor, new(seed.OrganizationA, seed.ProjectA));
+        await using (var prefix = new MigrationRunner(test.MigrationConnectionString, MigrationRunner.EmbeddedMigrations.Take(24).ToArray()))
+            await prefix.MigrateAsync();
+        var revision = receipt.Facts.FutureRevision;
+        await using var writer = new PostgresPreviewDatabase(test.PreviewWriterConnectionString, PreviewDatabaseProfile.Writer);
+        await using var reader = new PostgresPreviewDatabase(test.PreviewReaderConnectionString, PreviewDatabaseProfile.Reader);
+        var store = new PostgresPreviewRunStore(writer);
+        var reads = new PostgresPreviewRunReader(reader);
+        var submission = new PreviewRunSubmission(revision, Guid.NewGuid(), PreviewTargetSelection.Primary, new(null, "{}"u8), [], []);
+        var historical = true;
+        async Task<Guid> Submit(PreviewRunSubmission value)
+        {
+            var record = new PreviewRunRecord(value, PreviewRequestDocument.Encode(value, PreviewLimits.Default), "2026-10-24T12:00:00Z", 3, TimeSpan.FromHours(24));
+            var result = historical ? await HistoricalPreviewAccess.SubmitAsync(test, 24, actor, record) : await store.SubmitAsync(actor, record);
+            return result.RunId!.Value;
+        }
+        async Task Complete(Guid run, string profile, string media, byte[] content)
+        {
+            if (historical)
+            {
+                var token = await HistoricalPreviewAccess.ClaimAsync(test, 24, revision.OrganizationId, run);
+                Assert.True(await HistoricalPreviewAccess.CompleteAsync(test, 24, revision.OrganizationId, run, token, profile, media, content, "Interchange"));
+                return;
+            }
+            var claimed = await store.ClaimAsync(revision.OrganizationId, run, Guid.NewGuid(), TimeSpan.FromSeconds(90));
+            Assert.True(await store.CompleteAsync(claimed.Claim!, new(PreviewRunOutcome.Succeeded, null,
+                new(true, "engine", "image", "adapter", profile), 1, [new("primary-output", "Interchange", false, media, 1, content)])));
+        }
+        var legacyRun = await Submit(submission);
+        await Complete(legacyRun, PreviewPolicy.Profile, PreviewPolicy.MediaType, "{}"u8.ToArray());
+        historical = false;
+        var before = await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(r) ORDER BY run_id)::text FROM braid.preview_runs r");
+        var documents = await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(d) ORDER BY direction,ordinal)::text FROM braid.preview_documents d");
+        await test.MigrateAsync();
+        // 0038 adds the draft subject columns and 0041 csv_profile; every pre-existing run stays a revision JSON run.
+        Assert.Equal(before, await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(r)-'csv_profile'-'draft_id'-'draft_version'-'draft_base_revision_id' ORDER BY run_id)::text FROM braid.preview_runs r"));
+        Assert.Equal(0L, await test.ScalarAsync<long>("SELECT count(*) FROM braid.preview_runs WHERE csv_profile OR draft_id IS NOT NULL OR draft_version IS NOT NULL OR draft_base_revision_id IS NOT NULL"));
+        Assert.Equal(documents, await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(d)-'csv_input'-'csv_dialect' ORDER BY direction,ordinal)::text FROM braid.preview_documents d"));
+        Assert.Equal(PreviewPolicy.MediaType, (await reads.ReadOutputAsync(actor, revision.OrganizationId, legacyRun, 0))!.MediaType);
+        Assert.Equal(new PreviewSubmitResult(PreviewSubmitOutcome.Replayed, legacyRun), await store.SubmitAsync(actor,
+            new(submission, PreviewRequestDocument.Encode(submission, PreviewLimits.Default), "2026-10-24T12:00:00Z", 3, TimeSpan.FromHours(24))));
+        foreach (var family in new[] { "x12", "edifact" })
+        {
+            var run = await Submit(submission with { RequestKey = Guid.NewGuid(), Profile = PreviewExecutionProfile.Document });
+            var media = family == "x12" ? "application/edi-x12" : "application/edifact";
+            var content = DocumentPreviewTestData.Input(family);
+            await Complete(run, DocumentPreviewPolicy.Profile, media, content);
+            var output = (await reads.ReadOutputAsync(actor, revision.OrganizationId, run, 0))!;
+            Assert.Equal(media, output.MediaType);
+            Assert.Equal(content, output.Content);
+        }
+    }
+
+    [PostgresFact]
+    public async Task Csv_empty_input_and_output_retain_dialect_bytes_and_idempotency()
+    {
+        await using var test = await PreviewRunTestSupport.CreateAsync(fixture, CsvPreviewTestData.Native);
+        var submission = new PreviewRunSubmission(test.Revision, Guid.NewGuid(), PreviewTargetSelection.All,
+            new(null, [], CsvPreviewTestData.Dialect), [], [])
+        { Profile = PreviewExecutionProfile.CsvDocument };
+        var created = await test.Service().SubmitAsync(test.Alice, submission);
+        Assert.Equal(PreviewSubmitOutcome.Created, created.Outcome);
+        Assert.Equal(new PreviewSubmitResult(PreviewSubmitOutcome.Replayed, created.RunId), await test.Service().SubmitAsync(test.Alice, submission));
+        var backend = new CsvPreviewTestData.Backend();
+        Assert.Equal(PreviewExecutionOutcome.Completed, await test.Executor(backend).ExecuteAsync(test.Revision.OrganizationId, created.RunId!.Value, Guid.NewGuid()));
+        var saved = (await test.Reader.ReadAsync(test.Alice, test.Revision.OrganizationId, created.RunId.Value))!;
+        var descriptor = Assert.Single(saved.Outputs);
+        Assert.Equal(CsvDocumentPolicy.Profile, saved.Provenance!.Profile);
+        Assert.Equal(CsvPreviewTestData.Dialect, descriptor.CsvDialect);
+        Assert.Equal(0, descriptor.ByteCount);
+        Assert.Equal(Sha256Digest.FromBytes([]), descriptor.Digest);
+        var output = (await test.Reader.ReadOutputAsync(test.Alice, test.Revision.OrganizationId, created.RunId.Value, 0))!;
+        Assert.Empty(output.Content);
+        Assert.Equal("text/tab-separated-values", output.MediaType);
+        Assert.Equal(CsvPreviewTestData.Dialect, output.CsvDialect);
+        var input = (await test.Reader.ReadInputAsync(test.Alice, test.Revision.OrganizationId, created.RunId.Value, 0))!;
+        Assert.Equal("text/tab-separated-values", input.MediaType);
+        Assert.Equal(CsvPreviewTestData.Dialect, input.CsvDialect);
+        Assert.Equal(PreviewExecutionOutcome.Finished, await test.Executor(backend).ExecuteAsync(test.Revision.OrganizationId, created.RunId.Value, Guid.NewGuid()));
+        Assert.Equal(1, backend.Calls);
+        Assert.Equal(PreviewSubmitOutcome.Conflict, (await test.Service().SubmitAsync(test.Alice,
+            submission with { Primary = new(null, "changed"u8, CsvPreviewTestData.Dialect) })).Outcome);
+        Assert.Null(await test.Reader.ReadAsync(new ActorContext(new PrincipalId(test.Catalog.Seed.Bob)), test.Revision.OrganizationId, created.RunId.Value));
+    }
+
+    [PostgresFact]
+    public async Task Csv_worker_cannot_change_the_pinned_native_output_dialect()
+    {
+        await using var test = await PreviewRunTestSupport.CreateAsync(fixture, CsvPreviewTestData.Native);
+        var submission = new PreviewRunSubmission(test.Revision, Guid.NewGuid(), PreviewTargetSelection.All,
+            new(null, [], CsvPreviewTestData.Dialect), [], [])
+        { Profile = PreviewExecutionProfile.CsvDocument };
+        var run = (await test.Service().SubmitAsync(test.Alice, submission)).RunId!.Value;
+        await test.Executor(new CsvPreviewTestData.Backend(CsvPreviewTestData.Dialect with { HasHeaderRow = true }))
+            .ExecuteAsync(test.Revision.OrganizationId, run, Guid.NewGuid());
+        var saved = (await test.Reader.ReadAsync(test.Alice, test.Revision.OrganizationId, run))!;
+        Assert.Equal(PreviewRunOutcome.ProtocolFailure, saved.Outcome);
+        Assert.Empty(saved.Outputs);
+    }
+
+    [PostgresFact]
+    public async Task ReadsUseOneSnapshotForTheRunAndItsOutputsWhileWritesStayReadCommitted()
+    {
+        await using var test = await PreviewRunTestSupport.CreateAsync(fixture);
+        var created = await test.Service().SubmitAsync(test.Alice, test.Submission());
+        var run = created.RunId!.Value;
+        var org = test.Revision.OrganizationId;
+        async Task<int> State(NpgsqlConnection connection, NpgsqlTransaction transaction)
+        {
+            await using var command = new NpgsqlCommand("SELECT state FROM braid.preview_read($1,$2,$3)", connection, transaction);
+            command.Parameters.AddWithValue(org); command.Parameters.AddWithValue(run); command.Parameters.AddWithValue(test.Alice.PrincipalId.Value);
+            return (int)(await command.ExecuteScalarAsync())!;
+        }
+        static async Task<string> Isolation(NpgsqlConnection connection, NpgsqlTransaction transaction)
+        {
+            await using var command = new NpgsqlCommand("SELECT current_setting('transaction_isolation')", connection, transaction);
+            return (string)(await command.ExecuteScalarAsync())!;
+        }
+
+        var (isolation, before, during) = await test.ReaderDatabase.RunAsync(false, async (connection, transaction) =>
+        {
+            var first = await State(connection, transaction);
+            // A cancellation committed between two reads of one transaction stays invisible to it.
+            Assert.Equal(PreviewCancelOutcome.Canceled, await test.Service().CancelAsync(test.Alice, org, run));
+            return (await Isolation(connection, transaction), first, await State(connection, transaction));
+        }, CancellationToken.None);
+        Assert.Equal("repeatable read", isolation);
+        Assert.Equal(1, before);
+        Assert.Equal(before, during);
+        Assert.Equal(PreviewRunState.Canceled, (await test.Reader.ReadAsync(test.Alice, org, run))!.State);
+        Assert.Equal("read committed", await test.WriterDatabase.RunAsync(true, Isolation, CancellationToken.None));
+    }
+
+    [PostgresFact]
+    public async Task SubmissionReplaysOneKeyRefusesChangedContentAndRequiresFreshRunnerAuthority()
+    {
+        await using var test = await PreviewRunTestSupport.CreateAsync(fixture);
+        var submission = test.Submission();
+        var created = await test.Service().SubmitAsync(test.Alice, submission);
+        Assert.Equal(PreviewSubmitOutcome.Created, created.Outcome);
+        var run = created.RunId!.Value;
+
+        var replayed = await test.Service().SubmitAsync(test.Alice, submission with
+        {
+            Primary = new(null, Order),
+            NamedInputs = [new("rates", Rates)]
+        });
+        Assert.Equal(new PreviewSubmitResult(PreviewSubmitOutcome.Replayed, run), replayed);
+        Assert.Equal(new PreviewSubmitResult(PreviewSubmitOutcome.Conflict, null), await test.Service().SubmitAsync(test.Alice,
+            submission with { Parameters = [new("region", PreviewParameterKind.String, "east"), new("express", PreviewParameterKind.Boolean, "true")] }));
+        Assert.Equal(new PreviewSubmitResult(PreviewSubmitOutcome.Conflict, null), await test.Service().SubmitAsync(test.Alice,
+            submission with { NamedInputs = [new("rates", "{\"currency\":\"USD\"}"u8)] }));
+
+        await test.Catalog.Seed.AddMembershipAsync(test.Case, test.Catalog.Seed.OrganizationA, test.Catalog.Seed.ProjectA,
+            test.Catalog.Seed.Admitted, "viewer");
+        var viewer = new ActorContext(new PrincipalId(test.Catalog.Seed.Admitted));
+        Assert.Equal(PreviewSubmitOutcome.NotAuthorizedOrNotFound,
+            (await test.Service().SubmitAsync(viewer, submission with { RequestKey = Guid.NewGuid() })).Outcome);
+        Assert.Equal(PreviewSubmitOutcome.NotAuthorizedOrNotFound,
+            (await test.Service().SubmitAsync(new ActorContext(new PrincipalId(test.Catalog.Seed.Bob)), submission)).Outcome);
+        Assert.Equal(PreviewSubmitOutcome.NotAuthorizedOrNotFound, (await test.Service().SubmitAsync(test.Alice,
+            submission with { Subject = new RevisionPreviewSubject(new(test.Revision.OrganizationId, test.Revision.ProjectId, test.Revision.MappingId, Guid.NewGuid())), RequestKey = Guid.NewGuid() })).Outcome);
+
+        var snapshot = Assert.IsType<PreviewRunSnapshot>(await test.Service().ReadAsync(test.Alice, test.Revision.OrganizationId, run));
+        Assert.Equal(PreviewRunState.Queued, snapshot.State);
+        Assert.Equal(test.Revision, Assert.IsType<RevisionPreviewSubject>(snapshot.Subject).Revision);
+        Assert.Equal(0, snapshot.Attempt);
+        Assert.Equal(3, snapshot.MaxAttempts);
+        Assert.Null(snapshot.Outcome);
+        Assert.Empty(snapshot.Outputs);
+        Assert.Equal("2026-10-20T08:30:00.0000000Z", snapshot.CurrentDateTime);
+        Assert.Equal(PreviewRequestDocument.Fingerprint(PreviewRequestDocument.Encode(submission, PreviewLimits.Default)), snapshot.RequestFingerprint);
+        Assert.InRange(snapshot.ExpiresAtUtc - snapshot.CreatedAtUtc, TimeSpan.FromHours(24) - TimeSpan.FromSeconds(1), TimeSpan.FromHours(24) + TimeSpan.FromSeconds(1));
+        Assert.Equal(new long[] { 2, Order.Length + Rates.Length }, await test.Case.ScalarAsync<long[]>(
+            "SELECT ARRAY[count(*), sum(byte_count)] FROM braid.preview_documents WHERE run_id=$1 AND direction=1", run));
+
+        // Reads are submitter-only, and authority is checked again on every read.
+        await test.Case.ExecuteAsync("UPDATE braid.project_memberships SET role='runner',version=version+1 WHERE principal_id=$1", test.Catalog.Seed.Admitted);
+        Assert.Null(await test.Service().ReadAsync(viewer, test.Revision.OrganizationId, run));
+        await test.Case.ExecuteAsync("UPDATE braid.project_memberships SET role='viewer',version=version+1 WHERE principal_id=$1", test.Catalog.Seed.Alice);
+        Assert.Null(await test.Service().ReadAsync(test.Alice, test.Revision.OrganizationId, run));
+        Assert.Equal(PreviewSubmitOutcome.NotAuthorizedOrNotFound, (await test.Service().SubmitAsync(test.Alice, submission)).Outcome);
+    }
+
+    [PostgresFact]
+    public async Task LeasesFenceEveryTransitionAndOnlyTheCurrentAttemptPublishesOneResultSet()
+    {
+        await using var test = await PreviewRunTestSupport.CreateAsync(fixture);
+        var run = (await test.Service().SubmitAsync(test.Alice, test.Submission())).RunId!.Value;
+        var org = test.Revision.OrganizationId;
+        var first = Assert.IsType<PreviewRunClaim>((await test.Store.ClaimAsync(org, run, Guid.NewGuid(), TimeSpan.FromSeconds(60))).Claim);
+        Assert.Equal(1, first.Attempt);
+        Assert.Equal(test.Revision, Assert.IsType<RevisionPreviewSubject>(first.Subject).Revision);
+        Assert.Equal(test.Native, Assert.IsType<StoredPreviewNative>(first.Native).Reference);
+        Assert.Equal(test.Alice.PrincipalId, first.Submitter);
+        Assert.Equal(PreviewClaimOutcome.Busy, (await test.Store.ClaimAsync(org, run, Guid.NewGuid(), TimeSpan.FromSeconds(60))).Outcome);
+        var inputs = await test.Store.ReadInputsAsync(first);
+        Assert.Equal([null, "rates"], inputs.Select(input => input.Name));
+        Assert.Equal(Order, inputs[0].Content);
+        Assert.Equal(Sha256Digest.FromBytes(Rates), inputs[1].Digest);
+
+        await test.Case.ExecuteAsync("UPDATE braid.preview_runs SET lease_expires_at=statement_timestamp()-interval '1 second' WHERE run_id=$1", run);
+        var second = Assert.IsType<PreviewRunClaim>((await test.Store.ClaimAsync(org, run, Guid.NewGuid(), TimeSpan.FromSeconds(60))).Claim);
+        Assert.Equal(2, second.Attempt);
+        Assert.NotEqual(first.LeaseToken, second.LeaseToken);
+        Assert.Empty(await test.Store.ReadInputsAsync(first));
+        Assert.Equal(new PreviewClaimObservation(false, false), await test.Store.ObserveAsync(first));
+        Assert.Equal(new PreviewClaimObservation(true, false), await test.Store.ObserveAsync(second));
+
+        var stale = Success("stale");
+        Assert.False(await test.Store.CompleteAsync(first, stale));
+        Assert.False(await test.Store.ReleaseAsync(first, TimeSpan.Zero));
+        Assert.True(await test.Store.CompleteAsync(second, Success("current")));
+        Assert.False(await test.Store.CompleteAsync(second, Success("again")));
+        Assert.Equal(PreviewClaimOutcome.Finished, (await test.Store.ClaimAsync(org, run, Guid.NewGuid(), TimeSpan.FromSeconds(60))).Outcome);
+
+        var snapshot = Assert.IsType<PreviewRunSnapshot>(await test.Service().ReadAsync(test.Alice, org, run));
+        Assert.Equal(PreviewRunState.Completed, snapshot.State);
+        Assert.Equal(PreviewRunOutcome.Succeeded, snapshot.Outcome);
+        Assert.Equal(2, snapshot.Attempt);
+        Assert.Equal(new PreviewRunProvenance(true, "engine", "image", "adapter", "profile"), snapshot.Provenance);
+        Assert.Equal(7, snapshot.RecordsWritten);
+        Assert.Equal(["primary-output", "named-output:0"], snapshot.Outputs.Select(output => output.BoundaryId));
+        var output = Assert.IsType<PreviewOutputContent>(await test.Service().ReadOutputAsync(test.Alice, org, run, 1));
+        Assert.Equal("{\"current\":1}"u8.ToArray(), output.Content);
+        Assert.Equal(snapshot.Outputs[1].Digest, output.Digest);
+        Assert.Null(await test.Service().ReadOutputAsync(test.Alice, org, run, 2));
+        Assert.Equal(2L, await test.Case.ScalarAsync<long>("SELECT count(*) FROM braid.preview_documents WHERE run_id=$1 AND direction=2", run));
+    }
+
+    [PostgresFact]
+    public async Task CancellationRevocationAndExhaustedAttemptsFinishWithoutPublishingOutputs()
+    {
+        await using var test = await PreviewRunTestSupport.CreateAsync(fixture);
+        var org = test.Revision.OrganizationId;
+        var queued = (await test.Service().SubmitAsync(test.Alice, test.Submission())).RunId!.Value;
+        Assert.Equal(PreviewCancelOutcome.NotAuthorizedOrNotFound,
+            await test.Service().CancelAsync(new ActorContext(new PrincipalId(test.Catalog.Seed.Bob)), org, queued));
+        Assert.Equal(PreviewCancelOutcome.Canceled, await test.Service().CancelAsync(test.Alice, org, queued));
+        Assert.Equal(PreviewCancelOutcome.Finished, await test.Service().CancelAsync(test.Alice, org, queued));
+        Assert.Equal(PreviewClaimOutcome.Finished, (await test.Store.ClaimAsync(org, queued, Guid.NewGuid(), TimeSpan.FromSeconds(60))).Outcome);
+        var canceled = Assert.IsType<PreviewRunSnapshot>(await test.Service().ReadAsync(test.Alice, org, queued));
+        Assert.Equal((PreviewRunState.Canceled, PreviewRunOutcome.Canceled, 0), (canceled.State, canceled.Outcome!.Value, canceled.Attempt));
+
+        var running = (await test.Service().SubmitAsync(test.Alice, test.Submission())).RunId!.Value;
+        var claim = Assert.IsType<PreviewRunClaim>((await test.Store.ClaimAsync(org, running, Guid.NewGuid(), TimeSpan.FromSeconds(60))).Claim);
+        Assert.Equal(PreviewCancelOutcome.Requested, await test.Service().CancelAsync(test.Alice, org, running));
+        Assert.Equal(new PreviewClaimObservation(true, true), await test.Store.ObserveAsync(claim));
+        Assert.True(await test.Store.ReleaseAsync(claim, TimeSpan.Zero));
+        Assert.Equal(PreviewClaimOutcome.Finished, (await test.Store.ClaimAsync(org, running, Guid.NewGuid(), TimeSpan.FromSeconds(60))).Outcome);
+        Assert.Equal(PreviewRunOutcome.Canceled, (await test.Service().ReadAsync(test.Alice, org, running))!.Outcome);
+
+        var exhausted = (await test.Service(new() { MaxAttempts = 1 }).SubmitAsync(test.Alice, test.Submission())).RunId!.Value;
+        claim = Assert.IsType<PreviewRunClaim>((await test.Store.ClaimAsync(org, exhausted, Guid.NewGuid(), TimeSpan.FromSeconds(60))).Claim);
+        Assert.True(await test.Store.ReleaseAsync(claim, TimeSpan.FromSeconds(3600)));
+        Assert.Equal(PreviewClaimOutcome.Busy, (await test.Store.ClaimAsync(org, exhausted, Guid.NewGuid(), TimeSpan.FromSeconds(60))).Outcome);
+        await test.Case.ExecuteAsync("UPDATE braid.preview_runs SET not_before=statement_timestamp()-interval '1 second' WHERE run_id=$1", exhausted);
+        Assert.Equal(PreviewClaimOutcome.Finished, (await test.Store.ClaimAsync(org, exhausted, Guid.NewGuid(), TimeSpan.FromSeconds(60))).Outcome);
+        Assert.Equal(PreviewRunOutcome.AttemptsExhausted, (await test.Service().ReadAsync(test.Alice, org, exhausted))!.Outcome);
+
+        var revoked = (await test.Service().SubmitAsync(test.Alice, test.Submission())).RunId!.Value;
+        await test.Case.ExecuteAsync("UPDATE braid.project_memberships SET active=false,version=version+1 WHERE principal_id=$1", test.Catalog.Seed.Alice);
+        Assert.Equal(PreviewClaimOutcome.Finished, (await test.Store.ClaimAsync(org, revoked, Guid.NewGuid(), TimeSpan.FromSeconds(60))).Outcome);
+        Assert.Null(await test.Service().ReadAsync(test.Alice, org, revoked));
+        Assert.Equal("authorityRevoked", await test.Case.ScalarAsync<string>("SELECT outcome FROM braid.preview_runs WHERE run_id=$1", revoked));
+        Assert.Equal(0L, await test.Case.ScalarAsync<long>("SELECT count(*) FROM braid.preview_documents WHERE direction=2"));
+    }
+
+    [PostgresFact]
+    public async Task RestrictedProfilesReachOnlyTheirOwnFunctionsAndNoTables()
+    {
+        await using var test = await PreviewRunTestSupport.CreateAsync(fixture);
+        var run = (await test.Service().SubmitAsync(test.Alice, test.Submission())).RunId!.Value;
+        foreach (var (connection, sql) in new[]
+        {
+            (test.Case.PreviewReaderConnectionString, "SELECT count(*) FROM braid.preview_runs"),
+            (test.Case.PreviewReaderConnectionString, "SELECT count(*) FROM braid.preview_documents"),
+            (test.Case.PreviewReaderConnectionString, $"SELECT braid.preview_cancel('{test.Revision.OrganizationId}','{run}','{test.Catalog.Seed.Alice}')"),
+            (test.Case.PreviewWriterConnectionString, "SELECT count(*) FROM braid.preview_runs"),
+            (test.Case.PreviewWriterConnectionString, $"SELECT * FROM braid.preview_read('{test.Revision.OrganizationId}','{run}','{test.Catalog.Seed.Alice}')"),
+            (test.Case.PreviewWriterConnectionString, "UPDATE braid.preview_runs SET state=3"),
+            (test.Case.CatalogConnectionString, $"SELECT * FROM braid.preview_read('{test.Revision.OrganizationId}','{run}','{test.Catalog.Seed.Alice}')"),
+            (test.Case.ChatWriterConnectionString, $"SELECT braid.preview_cancel('{test.Revision.OrganizationId}','{run}','{test.Catalog.Seed.Alice}')")
+        })
+        {
+            await using var source = NpgsqlDataSource.Create(connection);
+            await using var command = source.CreateCommand(sql);
+            var error = await Assert.ThrowsAsync<PostgresException>(() => command.ExecuteScalarAsync());
+            Assert.Equal("42501", error.SqlState);
+        }
+        Assert.Equal(PreviewRunState.Queued, (await test.Service().ReadAsync(test.Alice, test.Revision.OrganizationId, run))!.State);
+    }
+
+    [PostgresFact]
+    public async Task InfrastructureFailuresReleaseForBoundedRetryAndStoredInputsAreVerified()
+    {
+        await using var test = await PreviewRunTestSupport.CreateAsync(fixture);
+        var org = test.Revision.OrganizationId;
+        var backend = new PreviewRunTestSupport.ScriptedBackend(MappingPreviewStatus.BackendUnavailable);
+        var options = new PreviewRunOptions { MaxAttempts = 2, RetryDelay = TimeSpan.FromSeconds(30) };
+        var service = test.Service(options);
+        var executor = test.Executor(backend, options);
+        var run = (await service.SubmitAsync(test.Alice, test.Submission())).RunId!.Value;
+        Assert.Equal(PreviewExecutionOutcome.Released, await executor.ExecuteAsync(org, run, Guid.NewGuid()));
+        Assert.Equal(PreviewExecutionOutcome.Busy, await executor.ExecuteAsync(org, run, Guid.NewGuid()));
+        await test.Case.ExecuteAsync("UPDATE braid.preview_runs SET not_before=statement_timestamp() WHERE run_id=$1", run);
+        Assert.Equal(PreviewExecutionOutcome.Released, await executor.ExecuteAsync(org, run, Guid.NewGuid()));
+        await test.Case.ExecuteAsync("UPDATE braid.preview_runs SET not_before=statement_timestamp() WHERE run_id=$1", run);
+        Assert.Equal(PreviewExecutionOutcome.Finished, await executor.ExecuteAsync(org, run, Guid.NewGuid()));
+        Assert.Equal(2, backend.Calls);
+        Assert.Equal(PreviewRunOutcome.AttemptsExhausted, (await service.ReadAsync(test.Alice, org, run))!.Outcome);
+        var request = Assert.IsType<MappingPreviewRequest>(backend.LastRequest);
+        Assert.Equal("2026-10-20T08:30:00.0000000Z", request.CurrentDateTime);
+        Assert.Equal(test.Native.Digest, request.Artifact.Digest);
+        Assert.Equal(Order, request.Primary.CopyBytes());
+        Assert.Equal("rates", Assert.Single(request.NamedInputs).Name);
+
+        var tampered = (await service.SubmitAsync(test.Alice, test.Submission())).RunId!.Value;
+        await test.Case.ExecuteAsync("UPDATE braid.preview_runs SET request_document=replace(request_document,'\"west\"','\"east\"'),"
+            + "request_fingerprint=encode(sha256(convert_to(replace(request_document,'\"west\"','\"east\"'),'UTF8')),'hex') WHERE run_id=$1", tampered);
+        await test.Case.ExecuteAsync("UPDATE braid.preview_runs SET request_document=replace(request_document,'\"byteLength\":18','\"byteLength\":19'),"
+            + "request_fingerprint=encode(sha256(convert_to(replace(request_document,'\"byteLength\":18','\"byteLength\":19'),'UTF8')),'hex') WHERE run_id=$1", tampered);
+        Assert.Equal(PreviewExecutionOutcome.Completed, await executor.ExecuteAsync(org, tampered, Guid.NewGuid()));
+        var refused = (await service.ReadAsync(test.Alice, org, tampered))!;
+        Assert.Equal(PreviewRunOutcome.ProtocolFailure, refused.Outcome);
+        Assert.Equal("preview.storedRequest", refused.Failure!.Code);
+        Assert.Equal(2, backend.Calls);
+    }
+
+    [PostgresFact]
+    public async Task ARequestedCancellationStopsTheRunningBackendAndCompletesTheRunAsCanceled()
+    {
+        await using var test = await PreviewRunTestSupport.CreateAsync(fixture);
+        var backend = new PreviewRunTestSupport.ScriptedBackend(MappingPreviewStatus.Succeeded, blockUntilCanceled: true);
+        var options = new PreviewRunOptions { CancellationPollInterval = TimeSpan.FromMilliseconds(100) };
+        var service = test.Service(options);
+        var executor = test.Executor(backend, options);
+        var org = test.Revision.OrganizationId;
+        var run = (await service.SubmitAsync(test.Alice, test.Submission())).RunId!.Value;
+        var execution = executor.ExecuteAsync(org, run, Guid.NewGuid());
+        await backend.Started.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Equal(PreviewRunState.Running, (await service.ReadAsync(test.Alice, org, run))!.State);
+        Assert.Equal(PreviewCancelOutcome.Requested, await service.CancelAsync(test.Alice, org, run));
+        Assert.Equal(PreviewExecutionOutcome.Completed, await execution.WaitAsync(TimeSpan.FromSeconds(30)));
+        var snapshot = (await service.ReadAsync(test.Alice, org, run))!;
+        Assert.Equal((PreviewRunState.Canceled, PreviewRunOutcome.Canceled), (snapshot.State, snapshot.Outcome!.Value));
+        Assert.Equal("preview.canceled", snapshot.Failure!.Code);
+        Assert.Null(snapshot.Provenance);
+        Assert.Empty(snapshot.Outputs);
+
+        // Host shutdown releases the attempt for another worker instead of finishing it.
+        var released = (await service.SubmitAsync(test.Alice, test.Submission())).RunId!.Value;
+        var shutdownBackend = new PreviewRunTestSupport.ScriptedBackend(MappingPreviewStatus.Succeeded, blockUntilCanceled: true);
+        using var shutdown = new CancellationTokenSource();
+        var stopping = test.Executor(shutdownBackend).ExecuteAsync(org, released, Guid.NewGuid(), shutdown.Token);
+        await shutdownBackend.Started.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        await shutdown.CancelAsync();
+        Assert.Equal(PreviewExecutionOutcome.Released, await stopping.WaitAsync(TimeSpan.FromSeconds(30)));
+        Assert.Equal((PreviewRunState.Queued, 1), ((await service.ReadAsync(test.Alice, org, released))!.State, (await service.ReadAsync(test.Alice, org, released))!.Attempt));
+    }
+
+    [PreviewWorkerFact]
+    public async Task ActualWorkerExecutionPublishesExactOutputsOnceAndReplaysTheFinishedRun()
+    {
+        await using var test = await PreviewRunTestSupport.CreateAsync(fixture);
+        var backend = new FerrulePreviewBackend(new DockerInspectionWorkerRunner(new DockerInspectionWorkerOptions("/usr/bin/docker",
+            Environment.GetEnvironmentVariable("BRAID_FERRULE_WORKER_IMAGE")!, profile: DockerWorkerProfile.Preview)));
+        var service = test.Service();
+        var executor = test.Executor(backend);
+        var org = test.Revision.OrganizationId;
+        var submission = test.Submission();
+        var run = (await service.SubmitAsync(test.Alice, submission)).RunId!.Value;
+        Assert.Equal(PreviewExecutionOutcome.Completed, await executor.ExecuteAsync(org, run, Guid.NewGuid()));
+        Assert.Equal(PreviewExecutionOutcome.Finished, await executor.ExecuteAsync(org, run, Guid.NewGuid()));
+        Assert.Equal(new PreviewSubmitResult(PreviewSubmitOutcome.Replayed, run), await service.SubmitAsync(test.Alice, submission));
+
+        var snapshot = Assert.IsType<PreviewRunSnapshot>(await service.ReadAsync(test.Alice, org, run));
+        Assert.True(snapshot.Outcome == PreviewRunOutcome.Succeeded, snapshot.Failure?.Message);
+        Assert.Equal(1, snapshot.Attempt);
+        Assert.Equal(Environment.GetEnvironmentVariable("BRAID_FERRULE_WORKER_IMAGE"), snapshot.Provenance!.BackendBuild);
+        Assert.Equal(FerruleInspectionBackend.EngineRevision, snapshot.Provenance.EngineRevision);
+        Assert.Equal(FerrulePreviewBackend.AdapterBuild, snapshot.Provenance.AdapterBuild);
+        Assert.Equal(["primary-output", "named-output:0"], snapshot.Outputs.Select(output => output.BoundaryId));
+        var shipment = (await service.ReadOutputAsync(test.Alice, org, run, 0))!.Content;
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse("""
+            {"orderId":"SO-1","region":"west","generatedAt":"2026-10-20T08:30:00.0000000Z","currency":"EUR","express":true,
+             "items":[{"sku":"A","quantity":2},{"sku":"B","quantity":9007199254740993}]}
+            """), JsonNode.Parse(shipment)));
+        Assert.Contains("9007199254740993", Encoding.UTF8.GetString(shipment), StringComparison.Ordinal);
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse("""{"lineCount":2,"region":"west"}"""),
+            JsonNode.Parse((await service.ReadOutputAsync(test.Alice, org, run, 1))!.Content)));
+        Assert.Equal(2L, await test.Case.ScalarAsync<long>("SELECT count(*) FROM braid.preview_documents WHERE run_id=$1 AND direction=2", run));
+    }
+
+    private static PreviewRunCompletion Success(string marker) => new(PreviewRunOutcome.Succeeded, null,
+        new PreviewRunProvenance(true, "engine", "image", "adapter", "profile"), 7,
+        [
+            new("primary-output", "Shipment", false, "application/json", 1, Encoding.UTF8.GetBytes($"{{\"{marker}\":0}}")),
+            new("named-output:0", "summary", false, "application/json", 1, Encoding.UTF8.GetBytes($"{{\"{marker}\":1}}"))
+        ]);
+
+    public sealed class PreviewWorkerFactAttribute : FactAttribute
+    {
+        public PreviewWorkerFactAttribute()
+        {
+            if (!PostgresFixture.IsConfigured || !OperatingSystem.IsLinux()
+                || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("BRAID_FERRULE_WORKER_IMAGE")))
+                Skip = "Set BRAID_POSTGRES_IMAGE and BRAID_FERRULE_WORKER_IMAGE for actual preview execution.";
+        }
+    }
+}

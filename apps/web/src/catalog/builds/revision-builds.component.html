@@ -12,7 +12,7 @@
         will not change the version currently in use.
       </p>
     </div>
-    <weft-help-link [section]="'builds'">About builds</weft-help-link>
+    <braid-help-link [section]="'builds'">About builds</braid-help-link>
   </header>
   @if (!capabilities()) {
     <section
@@ -497,7 +497,7 @@
                       </details>
                     </td>
                     <td>
-                      <weft-status-chip [status]="buildStatus(item.state)" />
+                      <braid-status-chip [status]="buildStatus(item.state)" />
                       @if (item.outcome) {
                         <details>
                           <summary>Technical details</summary>
@@ -507,7 +507,7 @@
                     </td>
                     <td>
                       @if (item.artifact; as file) {
-                        <weft-metadata-value
+                        <braid-metadata-value
                           kind="bytes"
                           label="Prepared file size"
                           [value]="file.byteCount"
@@ -524,7 +524,7 @@
                       }}
                     </td>
                     <td>
-                      <weft-metadata-value
+                      <braid-metadata-value
                         kind="time"
                         label="Preparation time"
                         [value]="item.createdAtUtc"
@@ -587,7 +587,7 @@
           aria-labelledby="builds-result-title"
         >
           <h4 id="builds-result-title">
-            <weft-status-chip [status]="buildStatus(value.state)" /> · Attempt
+            <braid-status-chip [status]="buildStatus(value.state)" /> · Attempt
             {{ value.attempt }} of 3
           </h4>
           @if (value.state === "uncertain") {
@@ -600,7 +600,7 @@
           @if (value.artifact; as artifact) {
             <p>
               {{ artifact.format }} ·
-              <weft-metadata-value
+              <braid-metadata-value
                 kind="bytes"
                 label="Prepared file size"
                 [value]="artifact.byteCount"
@@ -624,7 +624,7 @@
                 </dd>
                 <dt>Bytes</dt>
                 <dd>
-                  <weft-metadata-value
+                  <braid-metadata-value
                     kind="bytes"
                     label="Prepared file size"
                     [value]="artifact.byteCount"
@@ -660,7 +660,7 @@
     </section>
   }
 </section>
-<weft-confirmation
+<braid-confirmation
   [model]="confirmation()?.view ?? null"
   (confirmed)="confirmAction()"
   (dismissed)="dismissConfirmation()"

@@ -1,9 +1,7 @@
 # Specification object storage foundation
 
-**Follow-up:** [Durable bundle registry](spec-bundle-registry.md) adds the PostgreSQL implementation and lifecycle service behind these hooks; [intake API](spec-intake-api.md) adds opt-in host composition. Integration now includes real 0042/0043 and activates 0044. Database/Blob qualification remains outstanding. The original foundation description below records its initial scope.
-
-This unit adds project/bundle-owned storage contracts without introducing a mapping or revision scope.
-No server composition, API, database role, registry implementation or migration enables the capability.
+Project/bundle-owned storage uses the [durable registry](spec-bundle-registry.md)
+and [intake API](spec-intake-api.md), independently of mapping/revision scope.
 
 ## Implemented boundaries
 
@@ -27,23 +25,25 @@ Publications use `If-None-Match: *`; reads verify metadata, actual bytes, digest
 
 The physical fence must remain indefinitely. Deleting the name would let an already dispatched, delayed create-only request resurrect data after database tombstoning. Even a stale registry admission cannot overwrite the fence. This also distinguishes a retired empty object from a legitimate live empty object. Provider/ETag conflicts are safe failures, not successful deletion claims.
 
-`Retired` means the current payload was replaced by the fence. It does **not** prove deletion of Azure versions, snapshots, soft-deleted copies, replication copies or backups. Before production activation, define and qualify provider retention and exact-object historical-version cleanup; preserve the current fence. No cloud service settings were changed or queried in this unit.
-
-Tests exercise the real adapter through SDK client subclasses with no HTTP transport or credential acquisition. They do not qualify actual Azure/Azurite behavior, SDK wire requests or cloud policies; that remains a separate activation prerequisite.
+`Retired` means the current payload was replaced by the fence. Azure versions,
+snapshots, soft-deleted copies, replicas and backups follow provider retention
+policies. Cleanup of those copies must preserve the current fence.
 
 ## Filesystem capability
 
 `FileSystemSpecObjectStore` is intentionally **unavailable on every platform** and does no filesystem I/O, even when a registry is supplied. Canonical configuration validation reuses `FileSystemStorageOptions`. It never falls back to ordinary path-based I/O, follows a junction/reparse point/symlink, or fabricates a revision identity.
 
-The existing descriptor-relative Linux implementation is suitable low-level infrastructure, but its v2 owner records, temporary-file identity binding, publication seals and retirement records are revision-specific. Enabling bundle storage requires a new bundle-owned durable protocol on those primitives, crash/restart and cross-process qualification, and an equivalent permanent no-resurrection fence. Windows remains unavailable until an independently qualified handle-relative implementation exists. Passing these offline tests is not filesystem qualification.
+The descriptor-relative Linux primitives have revision-specific owner records,
+temporary identities, seals and retirement records. Bundle storage needs its own
+durable protocol, crash/restart and cross-process checks and permanent
+no-resurrection fence. Windows has no handle-relative implementation.
 
-See [filesystem protocol prerequisites](spec-filesystem-protocol-prerequisites.md) for the inspected native primitives, missing bundle ownership/recovery contracts, and exact supported-platform qualification cases. The follow-up capability tests preserve this unavailable boundary; they do not enable a filesystem protocol.
+See [filesystem requirements](spec-filesystem-protocol-prerequisites.md) for native
+primitives, physical ownership/recovery requirements and supported-platform checks.
 
 ## Required registry/lifecycle integration
 
-Reserve the future **0044 spec database** slot after **0041 CSV**, **0042 XML**, and **0043 proposal**. This document creates no migration or SQL reservation artifact.
-
-The production `ISpecObjectRegistry` must:
+`ISpecObjectRegistry` must:
 
 1. Bind each unique store ID to the verified physical deployment/container. Bind claims durably to exact organization/project/bundle/source version, object kind/ID, bytes/digest, and workflow owner before source consumption. Never reuse object identities, including failed or retired attempts.
 2. Retain extraction provenance separately: extractor/profile version and exact source digest. Storage treats both kinds as opaque bytes and does not validate a document or extraction manifest.
@@ -54,4 +54,5 @@ The production `ISpecObjectRegistry` must:
 7. Track incomplete/uncertain attempts, retirement progress and retries, with bounded maintenance selection. Do not sweep a container or delete names based on a filename prefix. Do not reinterpret the existing orphan policy as successful-evidence expiration.
 8. Reconcile originals, extractions and their consumers under an explicit retention policy; removing an original alone does not remove excerpts in conversations or generated evidence.
 
-No in-memory registry is provided outside the test assembly. A missing registry is capability-unavailable. Production capability flags and composition must remain disabled until the registry and backend-specific activation qualifications exist.
+The host uses the durable PostgreSQL registry. A missing registry returns
+capability-unavailable.

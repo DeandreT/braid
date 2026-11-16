@@ -79,9 +79,6 @@ replacement work. Forgetting uncertain work requires explicit confirmation.
 Publication waits for every selected file read to settle. Changing or leaving a
 view retires unfinished file reads; their callbacks cannot update a new editor.
 
-Controlled HTTP browser checks cover presentation behavior. They do not replace
-actual API, database, worker and hosted-session qualification.
-
 The actual fixture is in `tools/regression-browser`. Its native Windows launcher
 exports a committed source snapshot, creates verified Linux publications on
 Btrfs and runs the ordinary API/worker against an owned PostgreSQL instance.

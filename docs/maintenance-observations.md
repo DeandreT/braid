@@ -1,13 +1,7 @@
 # Maintenance observations
 
-Issue #72 adds three bounded read-only ports for the later maintenance command.
-They report retained metadata, physical directory entries and agreement between
-those observations. They confer no claim, retirement, publication or deletion
-authority. This increment adds no command, HTTP route, schema or grant.
-
-Implementation and qualification are recorded separately in
-[issue #72](https://github.com/DeandreT/weft/issues/72) and its linked implementing
-pull request. This document describes the contract; it does not claim a test run.
+Three bounded read-only ports report retained metadata, physical directory entries
+and agreement between those observations for the [maintenance command](maintenance-command.md).
 
 ## Retained metadata status
 

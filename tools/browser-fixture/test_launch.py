@@ -26,7 +26,7 @@ class LaunchTests(unittest.TestCase):
     def test_default_arguments_and_literal_forwarding(self):
         arguments = ["--config", "tests/example config.ts", "--grep", "$(touch nope); *"]
         self.assertEqual(launch.launch_arguments(arguments, {}), [
-            "xvfb-run", "-a", "-w", "10", "npm", "--workspace", "@weft/web",
+            "xvfb-run", "-a", "-w", "10", "npm", "--workspace", "@braid/web",
             "run", "test:e2e", "--", *arguments,
         ])
         self.assertEqual(launch.launch_arguments([], {})[-1], "test:e2e")
@@ -35,18 +35,18 @@ class LaunchTests(unittest.TestCase):
         for value in ("0", "91", "00102"):
             with self.subTest(value=value):
                 self.assertEqual(launch.launch_arguments([], {
-                    "WEFT_XVFB_SERVER_NUM": value,
+                    "BRAID_XVFB_SERVER_NUM": value,
                 }, True)[1], "--server-num=" + value)
-        for environment in ({}, {"WEFT_XVFB_SERVER_NUM": ""}):
+        for environment in ({}, {"BRAID_XVFB_SERVER_NUM": ""}):
             self.assertEqual(launch.launch_arguments([], environment, True)[1], "-a")
         self.assertEqual(launch.launch_arguments([], {
-            "WEFT_XVFB_SERVER_NUM": "123",
+            "BRAID_XVFB_SERVER_NUM": "123",
         })[1], "-a", "other aliases must keep automatic display selection")
 
     def test_invalid_display_is_rejected_without_launching_or_changing_limits(self):
         for value in ("-1", ":91", "1.0", "1 2", " 91", "91\n", "١", "91;false", "--auto-servernum"):
             with self.subTest(value=value), patch.dict(os.environ, {
-                "WEFT_XVFB_SERVER_NUM": value,
+                "BRAID_XVFB_SERVER_NUM": value,
             }), patch.object(launch.os, "execvpe") as execute, patch.object(
                 launch.resource, "setrlimit",
             ) as limits, contextlib.redirect_stderr(io.StringIO()):
@@ -59,7 +59,7 @@ class LaunchTests(unittest.TestCase):
     def test_environment_is_copied_and_only_desktop_variables_are_removed(self):
         original = {
             **{name: "user-desktop" for name in launch.DESKTOP_VARIABLES},
-            "PATH": "/tools", "DISPLAY": ":17", "WEFT_TEST": "kept", "HOME": "/home/test",
+            "PATH": "/tools", "DISPLAY": ":17", "BRAID_TEST": "kept", "HOME": "/home/test",
         }
         with patch.dict(os.environ, original, clear=True), patch.object(
             launch.os, "execvpe",
@@ -129,7 +129,7 @@ class LaunchTests(unittest.TestCase):
 class ExecFixtureTests(unittest.TestCase):
     def setUp(self):
         # Respect the caller's TMPDIR; no graphical/server executable is used.
-        self.directory = tempfile.TemporaryDirectory(prefix="weft-launch-test-")
+        self.directory = tempfile.TemporaryDirectory(prefix="braid-launch-test-")
         self.addCleanup(self.directory.cleanup)
         fixture = Path(self.directory.name) / "xvfb-run"
         fixture.write_text("#!" + sys.executable + "\n" + '''
@@ -179,7 +179,7 @@ else:
         before = resource.getrlimit(resource.RLIMIT_CORE)
         result = subprocess.run(
             [sys.executable, str(LAUNCHER), "--display-from-env", "--no-core-dumps", "--"],
-            env={**self.environment, "WEFT_XVFB_SERVER_NUM": "109"},
+            env={**self.environment, "BRAID_XVFB_SERVER_NUM": "109"},
             capture_output=True, text=True, timeout=10,
         )
         self.assertEqual(result.returncode, 0, result.stderr)

@@ -4,7 +4,7 @@ FROM ubuntu@sha256:f610ab94648195aa356059f5b41d6085c9d4d903c072430cdd1af7bdb6461
 ENV CARGO_HOME=/opt/cargo \
     RUSTUP_HOME=/opt/rustup \
     RUSTUP_TOOLCHAIN=1.98.1 \
-    CARGO_TARGET_DIR=/opt/weft-target \
+    CARGO_TARGET_DIR=/opt/braid-target \
     CARGO_BUILD_JOBS=2 \
     CARGO_INCREMENTAL=0 \
     RUSTUP_USE_CURL=1 \
@@ -20,8 +20,8 @@ RUN apt-get update \
 RUN --mount=type=secret,id=proxy_ca <<'EOF'
 set -eu
 if [ -s /run/secrets/proxy_ca ]; then
-    cat /etc/ssl/certs/ca-certificates.crt /run/secrets/proxy_ca > /tmp/weft-build-ca.pem
-    export CURL_CA_BUNDLE=/tmp/weft-build-ca.pem
+    cat /etc/ssl/certs/ca-certificates.crt /run/secrets/proxy_ca > /tmp/braid-build-ca.pem
+    export CURL_CA_BUNDLE=/tmp/braid-build-ca.pem
 fi
 curl --proto '=https' --tlsv1.2 --fail --show-error --location \
     https://static.rust-lang.org/rustup/archive/1.29.1/x86_64-unknown-linux-gnu/rustup-init \
@@ -35,7 +35,7 @@ rustup set auto-self-update disable
 test "$(rustc --version)" = 'rustc 1.98.1 (48a229cea 2026-09-01)'
 rustup component list --toolchain "$RUSTUP_TOOLCHAIN" --installed | grep -Fx 'clippy-x86_64-unknown-linux-gnu'
 cargo clippy --version
-rm -f /tmp/rustup-init /tmp/weft-build-ca.pem
+rm -f /tmp/rustup-init /tmp/braid-build-ca.pem
 EOF
 
 WORKDIR /work
@@ -46,28 +46,28 @@ ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 RUN --mount=type=secret,id=proxy_ca <<'EOF'
 set -eu
 if [ -s /run/secrets/proxy_ca ]; then
-    cat /etc/ssl/certs/ca-certificates.crt /run/secrets/proxy_ca > /tmp/weft-build-ca.pem
-    export CARGO_HTTP_CAINFO=/tmp/weft-build-ca.pem
-    export CURL_CA_BUNDLE=/tmp/weft-build-ca.pem
-    export GIT_SSL_CAINFO=/tmp/weft-build-ca.pem
+    cat /etc/ssl/certs/ca-certificates.crt /run/secrets/proxy_ca > /tmp/braid-build-ca.pem
+    export CARGO_HTTP_CAINFO=/tmp/braid-build-ca.pem
+    export CURL_CA_BUNDLE=/tmp/braid-build-ca.pem
+    export GIT_SSL_CAINFO=/tmp/braid-build-ca.pem
 fi
-cargo build --release --locked --package weft-ferrule-host --bin weft-ferrule-host
-rm -f /tmp/weft-build-ca.pem
+cargo build --release --locked --package braid-ferrule-host --bin braid-ferrule-host
+rm -f /tmp/braid-build-ca.pem
 EOF
 
 # Assemble only the worker and its observed, trusted GNU runtime dependencies.
 # Unexpected dependencies fail the build instead of widening the runtime image.
 RUN <<'EOF'
 set -eu
-install -D -m 0555 /opt/weft-target/release/weft-ferrule-host /runtime/ferrule-host
-ldd /runtime/ferrule-host > /tmp/weft-ldd.txt
+install -D -m 0555 /opt/braid-target/release/braid-ferrule-host /runtime/ferrule-host
+ldd /runtime/ferrule-host > /tmp/braid-ldd.txt
 awk '
     NF == 0 || $1 == "linux-vdso.so.1" { next }
     $2 == "=>" && $3 ~ /^\// { print $3; next }
     $1 ~ /^\// { print $1; next }
     { print "Unexpected worker runtime dependency: " $0 > "/dev/stderr"; exit 1 }
-' /tmp/weft-ldd.txt > /tmp/weft-runtime-libraries.txt
-test -s /tmp/weft-runtime-libraries.txt
+' /tmp/braid-ldd.txt > /tmp/braid-runtime-libraries.txt
+test -s /tmp/braid-runtime-libraries.txt
 while IFS= read -r library; do
     case "$library" in
         /lib64/ld-linux-x86-64.so.2|/usr/lib64/ld-linux-x86-64.so.2|\
@@ -93,27 +93,27 @@ while IFS= read -r library; do
             ;;
     esac
     cp --dereference --parents "$library" /runtime/
-done < /tmp/weft-runtime-libraries.txt
+done < /tmp/braid-runtime-libraries.txt
 install -D -m 0444 /usr/share/doc/libc6/copyright \
-    /runtime/usr/share/weft-ferrule-host/runtime/libc6-copyright
+    /runtime/usr/share/braid-ferrule-host/runtime/libc6-copyright
 install -D -m 0444 /usr/share/doc/libgcc-s1/copyright \
-    /runtime/usr/share/weft-ferrule-host/runtime/libgcc-s1-copyright
+    /runtime/usr/share/braid-ferrule-host/runtime/libgcc-s1-copyright
 install -D -m 0444 \
     "$RUSTUP_HOME/toolchains/$RUSTUP_TOOLCHAIN-x86_64-unknown-linux-gnu/share/doc/rust/COPYRIGHT-library.html" \
-    /runtime/usr/share/weft-ferrule-host/runtime/rust-std-COPYRIGHT.html
-cp -R /work/third-party /runtime/usr/share/weft-ferrule-host/third-party
+    /runtime/usr/share/braid-ferrule-host/runtime/rust-std-COPYRIGHT.html
+cp -R /work/third-party /runtime/usr/share/braid-ferrule-host/third-party
 EOF
 
 FROM build AS qualification
-RUN cargo test --release --locked --package weft-ferrule-host --lib --test build_qualification --test protocol_qualification --test preview_qualification --test edit_qualification --test sandbox_qualification --test interchange_qualification --test csv_documents
+RUN cargo test --release --locked --package braid-ferrule-host --lib --test build_qualification --test protocol_qualification --test preview_qualification --test edit_qualification --test sandbox_qualification --test interchange_qualification --test csv_documents
 
 FROM scratch
-ARG WEFT_REVISION=""
-LABEL org.opencontainers.image.title="Weft Ferrule worker" \
-      org.opencontainers.image.source="https://github.com/DeandreT/weft" \
-      org.opencontainers.image.revision="$WEFT_REVISION" \
-      io.weft.ferrule.revision="238369bf0071ee8ea097d8c54fa5061f433807fb" \
-      io.weft.rust.toolchain="1.98.1"
+ARG BRAID_REVISION=""
+LABEL org.opencontainers.image.title="Braid Ferrule worker" \
+      org.opencontainers.image.source="https://github.com/DeandreT/braid" \
+      org.opencontainers.image.revision="$BRAID_REVISION" \
+      io.braid.ferrule.revision="238369bf0071ee8ea097d8c54fa5061f433807fb" \
+      io.braid.rust.toolchain="1.98.1"
 COPY --from=build /runtime/ /
 USER 65532:65532
 ENTRYPOINT ["/ferrule-host"]

@@ -2,8 +2,8 @@
 
 `RevisionReportService` implements the Application reader and deriver ports over
 the scoped metadata reader/store, a pure profile registry and a lazy private-store
-registration. The native revision remains authoritative. Persisted-report HTTP
-routes and production host composition belong to [#51](https://github.com/DeandreT/weft/issues/51).
+registration. The native revision remains authoritative. See the
+[persisted-report API](persisted-report-api.md) for HTTP routes.
 
 ## Reads and cache identity
 
@@ -76,5 +76,4 @@ leases or lost authority leave durable facts for later explicit recovery.
 
 The test-only workflow probe exercises process death before completion and after
 acknowledgment, plus independent read-only reopening. Test checkpoints and fault
-decorators stay outside the production service. Qualification must distinguish
-actual PostgreSQL/filesystem/worker/process behavior from injected faults.
+decorators stay outside the production service.

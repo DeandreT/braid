@@ -1,6 +1,6 @@
 /** Native settings from the versioned artifact metadata, never inferred from a filename or payload. */
 export interface CsvDocumentDialect {
-  schema: "weft.csv-dialect.v1";
+  schema: "braid.csv-dialect.v1";
   delimiter: string;
   quote: string | null;
   quoteDisabled: boolean;
@@ -72,7 +72,7 @@ function readDialect(value: unknown): CsvDocumentDialect | null {
     preserveEmptyStrings,
   } = dialect;
   if (
-    schema !== "weft.csv-dialect.v1" ||
+    schema !== "braid.csv-dialect.v1" ||
     typeof delimiter !== "string" ||
     delimiter.length !== 1 ||
     !/^[\x01-\x09\x0b\x0c\x0e-\x7f]$/.test(delimiter) ||

@@ -111,7 +111,7 @@ export function csvProfile(value: unknown): value is BuildProfile {
     value.id === csvBuildProfile &&
     value.version === "1" &&
     value.runtime === "dotnet" &&
-    value.artifactFormat === "weft.dotnet-assembly.v1"
+    value.artifactFormat === "braid.dotnet-assembly.v1"
   );
 }
 export function project(

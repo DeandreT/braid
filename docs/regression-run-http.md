@@ -23,7 +23,7 @@ All responses are `Cache-Control: no-store` and omit ETags.
 
 IDs are canonical lowercase UUIDs. Versions are positive decimal strings, not
 JavaScript numbers. PUT accepts only `caseId` and `version`, using
-`application/vnd.weft.regression-run.v1+json` and at most 2 KiB. The server
+`application/vnd.braid.regression-run.v1+json` and at most 2 KiB. The server
 loads the immutable case and derives its complete reference; the caller cannot
 substitute a digest, creator, runtime or native revision in the run request.
 
@@ -46,21 +46,21 @@ result; a completed unsuccessful execution never becomes a passing comparison.
 
 ## Server composition
 
-`WEFT_REGRESSIONS_ENABLED=true` explicitly enables case and run APIs. It requires
-an enabled catalog, the canonical `WEFT_FERRULE_WORKER_IMAGE` runtime selection,
+`BRAID_REGRESSIONS_ENABLED=true` explicitly enables case and run APIs. It requires
+an enabled catalog, the canonical `BRAID_FERRULE_WORKER_IMAGE` runtime selection,
 and four separate database profiles:
 
-- `WEFT_REGRESSION_CASE_READER_CONNECTION_STRING`
-- `WEFT_REGRESSION_CASE_WRITER_CONNECTION_STRING`
-- `WEFT_REGRESSION_RUN_READER_CONNECTION_STRING`
-- `WEFT_REGRESSION_RUN_WRITER_CONNECTION_STRING`
+- `BRAID_REGRESSION_CASE_READER_CONNECTION_STRING`
+- `BRAID_REGRESSION_CASE_WRITER_CONNECTION_STRING`
+- `BRAID_REGRESSION_RUN_READER_CONNECTION_STRING`
+- `BRAID_REGRESSION_RUN_WRITER_CONNECTION_STRING`
 
 The Session host uses each variable's `_FILE` form and the existing protected
 connection-delivery checks. Development uses the explicit connection-string
 inputs. Disabled mode reads none of those inputs. The host does not install
 schema, provision credentials, or start regression execution implicitly.
 
-Case routes are mapped by `MapWeftRegressionCases`; run routes are mapped by
-`MapWeftRegressionRuns`. The ordinary and Session server entrypoints compose
+Case routes are mapped by `MapBraidRegressionCases`; run routes are mapped by
+`MapBraidRegressionRuns`. The ordinary and Session server entrypoints compose
 both. Worker enablement remains independent; see
 [durable regression runs](regression-runs.md).

@@ -6,12 +6,12 @@ use std::process::{Command, Stdio};
 
 use serde_json::{Value, json};
 use support::{BASIC, INVALID, digest};
-use weft_ferrule_host::preview::protocol::{
+use braid_ferrule_host::preview::protocol::{
     MAX_PREVIEW_INPUT_BYTES, MAX_PREVIEW_OUTPUT_BYTES, PREVIEW_PROFILE, PREVIEW_PROTOCOL_VERSION,
     PreviewInput, PreviewLimits, PreviewParameter, PreviewRequestHeader, PreviewTarget,
     PreviewValue,
 };
-use weft_ferrule_host::protocol::{ENGINE_REVISION, Revision};
+use braid_ferrule_host::protocol::{ENGINE_REVISION, Revision};
 
 const ORDERS: &[u8] = include_bytes!("fixtures/preview-orders.json");
 const CSV_SOURCE: &[u8] = include_bytes!("fixtures/preview-csv-source.json");
@@ -19,8 +19,8 @@ const ORDER: &[u8] =
     br#"{"id":"SO-1","lines":[{"sku":"A","qty":2},{"sku":"B","qty":9007199254740993}]}"#;
 const RATES: &[u8] = br#"{"currency":"EUR"}"#;
 const CLOCK: &str = "2026-10-20T01:02:03.5+02:00";
-const X12_DOCUMENT: &[u8] = b"ISA*00*          *00*          *ZZ*WEFTSENDER     *ZZ*WEFTRECEIVER   *261024*1200*^*00501*000000330*0*T*:~GS*OW*WEFTSENDER*WEFTRECEIVER*20261024*1200*330*X*005010~ST*940*0330~BGM*220*WEFT-330~SE*3*0330~GE*1*330~IEA*1*000000330~";
-const EDIFACT_DOCUMENT: &[u8] = b"UNB+UNOC:3+WEFTSENDER+WEFTRECEIVER+261024:1200+330'UNH+330+ORDERS:D:96A:UN'BGM+220+WEFT-330'UNT+3+330'UNZ+1+330'";
+const X12_DOCUMENT: &[u8] = b"ISA*00*          *00*          *ZZ*BRAIDSENDER    *ZZ*BRAIDRECEIVER  *261024*1200*^*00501*000000330*0*T*:~GS*OW*BRAIDSENDER*BRAIDRECEIVER*20261024*1200*330*X*005010~ST*940*0330~BGM*220*BRAID-330~SE*3*0330~GE*1*330~IEA*1*000000330~";
+const EDIFACT_DOCUMENT: &[u8] = b"UNB+UNOC:3+BRAIDSENDER+BRAIDRECEIVER+261024:1200+330'UNH+330+ORDERS:D:96A:UN'BGM+220+BRAID-330'UNT+3+330'UNZ+1+330'";
 
 fn strict_envelope_mapping(kind: &str, document: &str) -> Vec<u8> {
     support::edi_identity_mapping(kind, document, false)
@@ -28,7 +28,7 @@ fn strict_envelope_mapping(kind: &str, document: &str) -> Vec<u8> {
 
 #[test]
 fn strict_complete_envelopes_preserve_controls_and_refuse_broken_counts_without_lenient_segments() {
-    use weft_ferrule_host::preview::protocol::DOCUMENT_PREVIEW_PROTOCOL_VERSION;
+    use braid_ferrule_host::preview::protocol::DOCUMENT_PREVIEW_PROTOCOL_VERSION;
     for (kind, input, old, changed) in [
         ("x12", X12_DOCUMENT, "SE*3*0330", "SE*9*0330"),
         ("edifact", EDIFACT_DOCUMENT, "UNT+3+330", "UNT+9+330"),
@@ -57,9 +57,9 @@ fn strict_complete_envelopes_preserve_controls_and_refuse_broken_counts_without_
 
 #[test]
 fn strict_acknowledgement_envelopes_keep_action_codes_and_refuse_control_mismatches() {
-    use weft_ferrule_host::preview::protocol::DOCUMENT_PREVIEW_PROTOCOL_VERSION;
+    use braid_ferrule_host::preview::protocol::DOCUMENT_PREVIEW_PROTOCOL_VERSION;
     let x12 = std::str::from_utf8(X12_DOCUMENT).unwrap().replace(
-        "ST*940*0330~BGM*220*WEFT-330~SE*3*0330~",
+        "ST*940*0330~BGM*220*BRAID-330~SE*3*0330~",
         "ST*999*0330~AK1*PO*329~IK2*850*0329~AK9*A*1*1*1~SE*5*0330~",
     );
     let edifact = "UNB+UNOC:3+SENDER+RECEIVER+261024:1200+1'UNH+1+CONTRL:D:96A:UN'UCI+330+SENDER+RECEIVER+7'UNT+3+1'UNZ+1+1'";
@@ -96,10 +96,10 @@ fn strict_acknowledgement_envelopes_keep_action_codes_and_refuse_control_mismatc
 
 #[test]
 fn complete_x12_repeated_elements_reach_json_in_the_original_order() {
-    use weft_ferrule_host::preview::protocol::DOCUMENT_PREVIEW_PROTOCOL_VERSION;
+    use braid_ferrule_host::preview::protocol::DOCUMENT_PREVIEW_PROTOCOL_VERSION;
     let text = std::str::from_utf8(X12_DOCUMENT)
         .unwrap()
-        .replace("WEFT-330", "FIRST^SECOND^THIRD");
+        .replace("BRAID-330", "FIRST^SECOND^THIRD");
     let mut mapping: Value =
         serde_json::from_slice(&strict_envelope_mapping("x12", &text)).unwrap();
     for side in ["source", "target"] {
@@ -143,10 +143,10 @@ fn complete_x12_repeated_elements_reach_json_in_the_original_order() {
 
 #[test]
 fn complete_multiple_interchanges_reach_json_as_distinct_ordered_records() {
-    use weft_ferrule_host::preview::protocol::DOCUMENT_PREVIEW_PROTOCOL_VERSION;
+    use braid_ferrule_host::preview::protocol::DOCUMENT_PREVIEW_PROTOCOL_VERSION;
     for (kind, document) in [("x12", X12_DOCUMENT), ("edifact", EDIFACT_DOCUMENT)] {
         let first = std::str::from_utf8(document).unwrap();
-        let second = first.replace("WEFT-330", "SECOND");
+        let second = first.replace("BRAID-330", "SECOND");
         let text = format!("{first}\n{second}");
         let mut mapping: Value =
             serde_json::from_slice(&strict_envelope_mapping(kind, first)).unwrap();
@@ -175,14 +175,14 @@ fn complete_multiple_interchanges_reach_json_as_distinct_ordered_records() {
         assert!(response["failure"].is_null(), "{response:#}");
         let output: Value = serde_json::from_slice(&outputs[0]).unwrap();
         assert_eq!(output["Interchange"].as_array().unwrap().len(), 2);
-        assert_eq!(output["Interchange"][0]["BGM"]["e2"], "WEFT-330");
+        assert_eq!(output["Interchange"][0]["BGM"]["e2"], "BRAID-330");
         assert_eq!(output["Interchange"][1]["BGM"]["e2"], "SECOND");
     }
 }
 
 #[test]
 fn lenient_x12_preserves_every_interchange_with_different_syntax() {
-    use weft_ferrule_host::preview::protocol::DOCUMENT_PREVIEW_PROTOCOL_VERSION;
+    use braid_ferrule_host::preview::protocol::DOCUMENT_PREVIEW_PROTOCOL_VERSION;
     let first = std::str::from_utf8(X12_DOCUMENT).unwrap();
     let mut mapping: Value =
         serde_json::from_slice(&strict_envelope_mapping("x12", first)).unwrap();
@@ -226,12 +226,12 @@ fn lenient_x12_preserves_every_interchange_with_different_syntax() {
 
 #[test]
 fn mixed_x12_cross_role_syntax_preserves_repeated_composites_and_explicit_mismatch_refuses() {
-    use weft_ferrule_host::preview::protocol::DOCUMENT_PREVIEW_PROTOCOL_VERSION;
+    use braid_ferrule_host::preview::protocol::DOCUMENT_PREVIEW_PROTOCOL_VERSION;
     let first = std::str::from_utf8(X12_DOCUMENT).unwrap();
     let native = support::x12_interchange_mapping(first);
-    let first = first.replace("BGM*220*WEFT-330~", "BGM*220*WEFT-330*A:B^C:D~");
+    let first = first.replace("BGM*220*BRAID-330~", "BGM*220*BRAID-330*A:B^C:D~");
     let second: String = first
-        .replace("WEFT-330", "SECOND")
+        .replace("BRAID-330", "SECOND")
         .chars()
         .map(|c| match c {
             '*' => '|',
@@ -247,7 +247,7 @@ fn mixed_x12_cross_role_syntax_preserves_repeated_composites_and_explicit_mismat
     let (response, outputs) = preview(&request, &native, &[text.as_bytes()]);
     assert!(response["failure"].is_null(), "{response:#}");
     let value: Value = serde_json::from_slice(&outputs[0]).unwrap();
-    for (index, id) in ["WEFT-330", "SECOND"].iter().enumerate() {
+    for (index, id) in ["BRAID-330", "SECOND"].iter().enumerate() {
         let body = &value["Interchanges"][index]["Groups"][0]["Messages"][0]["BGM"];
         assert_eq!(body["e2"], *id);
         assert_eq!(body["e3"], json!([{"c1":"A","c2":"B"},{"c1":"C","c2":"D"}]));
@@ -265,7 +265,7 @@ fn mixed_x12_cross_role_syntax_preserves_repeated_composites_and_explicit_mismat
 
 #[test]
 fn complete_edi_groups_and_transactions_remain_distinct_ordered_records() {
-    use weft_ferrule_host::preview::protocol::DOCUMENT_PREVIEW_PROTOCOL_VERSION;
+    use braid_ferrule_host::preview::protocol::DOCUMENT_PREVIEW_PROTOCOL_VERSION;
     for kind in ["x12", "edifact"] {
         let edifact = std::str::from_utf8(EDIFACT_DOCUMENT)
             .unwrap()
@@ -297,7 +297,7 @@ fn complete_edi_groups_and_transactions_remain_distinct_ordered_records() {
             let begin = first.find(start).unwrap();
             let finish = first.find(end).unwrap();
             let second = first[begin..finish]
-                .replace("WEFT-330", "SECOND")
+                .replace("BRAID-330", "SECOND")
                 .replace("0330", "0331")
                 .replace("*330*X", "*331*X")
                 .replace("GE*1*330", "GE*1*331")
@@ -345,7 +345,7 @@ fn complete_edi_groups_and_transactions_remain_distinct_ordered_records() {
             assert!(response["failure"].is_null(), "{response:#}");
             let output: Value = serde_json::from_slice(&outputs[0]).unwrap();
             assert_eq!(output[collection].as_array().unwrap().len(), 2);
-            assert_eq!(output[collection][0]["BGM"]["e2"], "WEFT-330");
+            assert_eq!(output[collection][0]["BGM"]["e2"], "BRAID-330");
             assert_eq!(output[collection][1]["BGM"]["e2"], "SECOND");
         }
     }
@@ -378,20 +378,20 @@ fn document_mapping(source_options: Value, target_options: Value) -> Vec<u8> {
 
 #[test]
 fn document_profile_runs_explicit_edi_inputs_and_outputs_without_path_inference() {
-    use weft_ferrule_host::preview::protocol::{
+    use braid_ferrule_host::preview::protocol::{
         DOCUMENT_PREVIEW_PROFILE, DOCUMENT_PREVIEW_PROTOCOL_VERSION,
     };
     for (kind, input, expected, media) in [
         (
             "x12",
             X12_DOCUMENT,
-            "BGM*220*WEFT-330~",
+            "BGM*220*BRAID-330~",
             "application/edi-x12",
         ),
         (
             "edifact",
             EDIFACT_DOCUMENT,
-            "BGM+220+WEFT-330'",
+            "BGM+220+BRAID-330'",
             "application/edifact",
         ),
     ] {
@@ -422,11 +422,11 @@ fn document_profile_runs_explicit_edi_inputs_and_outputs_without_path_inference(
 
 #[test]
 fn document_profile_converts_edi_to_json_and_json_to_edi() {
-    use weft_ferrule_host::preview::protocol::DOCUMENT_PREVIEW_PROTOCOL_VERSION;
-    let json_input = br#"{"BGM":{"code":"220","number":"WEFT-330"}}"#;
+    use braid_ferrule_host::preview::protocol::DOCUMENT_PREVIEW_PROTOCOL_VERSION;
+    let json_input = br#"{"BGM":{"code":"220","number":"BRAID-330"}}"#;
     for (kind, edi, expected) in [
-        ("x12", X12_DOCUMENT, "BGM*220*WEFT-330~"),
-        ("edifact", EDIFACT_DOCUMENT, "BGM+220+WEFT-330'"),
+        ("x12", X12_DOCUMENT, "BGM*220*BRAID-330~"),
+        ("edifact", EDIFACT_DOCUMENT, "BGM+220+BRAID-330'"),
     ] {
         for (source, target, input, expected_media) in [
             (
@@ -472,7 +472,7 @@ fn document_profile_converts_edi_to_json_and_json_to_edi() {
 
 #[test]
 fn document_profile_refuses_unselected_and_conflicting_codecs_before_parsing() {
-    use weft_ferrule_host::preview::protocol::DOCUMENT_PREVIEW_PROTOCOL_VERSION;
+    use braid_ferrule_host::preview::protocol::DOCUMENT_PREVIEW_PROTOCOL_VERSION;
     for options in [
         json!({}),
         json!({"edi_kind":"x12","xml_document":true}),
@@ -493,7 +493,7 @@ fn document_profile_refuses_unselected_and_conflicting_codecs_before_parsing() {
 
 #[test]
 fn document_profile_keeps_invalid_edi_and_output_limits_structured_without_partial_frames() {
-    use weft_ferrule_host::preview::protocol::DOCUMENT_PREVIEW_PROTOCOL_VERSION;
+    use braid_ferrule_host::preview::protocol::DOCUMENT_PREVIEW_PROTOCOL_VERSION;
     for kind in ["x12", "edifact"] {
         let native = document_mapping(json!({"edi_kind":kind}), json!({"json_document":true}));
         let mut request = header(&native, &[], b"invalid", PreviewTarget::All, vec![]);
@@ -503,7 +503,7 @@ fn document_profile_keeps_invalid_edi_and_output_limits_structured_without_parti
         assert!(outputs.is_empty());
 
         let native = document_mapping(json!({"json_document":true}), json!({"edi_kind":kind}));
-        let input = br#"{"BGM":{"code":"220","number":"WEFT-330"}}"#;
+        let input = br#"{"BGM":{"code":"220","number":"BRAID-330"}}"#;
         let mut request = header(&native, &[], input, PreviewTarget::All, vec![]);
         request.protocol_version = DOCUMENT_PREVIEW_PROTOCOL_VERSION.into();
         request.limits.maximum_output_bytes = 1;
@@ -515,11 +515,11 @@ fn document_profile_keeps_invalid_edi_and_output_limits_structured_without_parti
 
 #[test]
 fn document_profile_applies_format_limits_before_parsing_without_changing_legacy_json() {
-    use weft_ferrule_host::preview::protocol::DOCUMENT_PREVIEW_PROTOCOL_VERSION;
+    use braid_ferrule_host::preview::protocol::DOCUMENT_PREVIEW_PROTOCOL_VERSION;
     for (options, input) in [
         (
             json!({"edi_kind":"x12"}),
-            vec![b'x'; weft_ferrule_host::document_limits::MAX_EDI_BYTES + 1],
+            vec![b'x'; braid_ferrule_host::document_limits::MAX_EDI_BYTES + 1],
         ),
         (
             json!({"edi_kind":"edifact"}),
@@ -551,7 +551,7 @@ fn document_profile_applies_format_limits_before_parsing_without_changing_legacy
 
 #[test]
 fn document_profile_refuses_edi_without_an_embedded_executable_schema() {
-    use weft_ferrule_host::preview::protocol::DOCUMENT_PREVIEW_PROTOCOL_VERSION;
+    use braid_ferrule_host::preview::protocol::DOCUMENT_PREVIEW_PROTOCOL_VERSION;
     for kind in ["x12", "edifact"] {
         let native = serde_json::to_vec(&json!({
             "source":{"name":"Input","kind":{"kind":"group","children":[]}},
@@ -573,7 +573,7 @@ fn document_profile_refuses_edi_without_an_embedded_executable_schema() {
 
 #[test]
 fn document_profile_supports_mixed_named_boundaries_and_target_selection() {
-    use weft_ferrule_host::preview::protocol::DOCUMENT_PREVIEW_PROTOCOL_VERSION;
+    use braid_ferrule_host::preview::protocol::DOCUMENT_PREVIEW_PROTOCOL_VERSION;
     let mut mapping: Value = serde_json::from_slice(&document_mapping(
         json!({"json_document":true}),
         json!({"edi_kind":"x12"}),
@@ -616,7 +616,7 @@ fn document_profile_supports_mixed_named_boundaries_and_target_selection() {
             std::str::from_utf8(outputs.last().unwrap())
                 .unwrap()
                 .trim_end(),
-            "BGM+220+WEFT-330'"
+            "BGM+220+BRAID-330'"
         );
         if matches!(target, PreviewTarget::All) {
             assert_eq!(artifacts.len(), 2);
@@ -715,7 +715,7 @@ fn reply(output: &[u8]) -> (Value, Vec<Vec<u8>>) {
 
 fn stream(bytes: &[u8]) -> (Value, Vec<Vec<u8>>) {
     let mut output = Vec::new();
-    weft_ferrule_host::handle_stream(&mut Cursor::new(bytes), &mut output).unwrap();
+    braid_ferrule_host::handle_stream(&mut Cursor::new(bytes), &mut output).unwrap();
     reply(&output)
 }
 
@@ -743,9 +743,9 @@ fn direct(
     target: Option<ferrule_engine::TargetSelection<'_>>,
 ) -> ferrule_cli::PayloadRunOutcome {
     let project = ferrule_mapping::project_file::decode_bytes(native).unwrap();
-    let primary_path = PathBuf::from("/weft/input/primary.json");
+    let primary_path = PathBuf::from("/braid/input/primary.json");
     let paths = (0..named.len())
-        .map(|index| PathBuf::from(format!("/weft/input/named-{}.json", index + 1)))
+        .map(|index| PathBuf::from(format!("/braid/input/named-{}.json", index + 1)))
         .collect::<Vec<_>>();
     let named = named
         .iter()
@@ -769,7 +769,7 @@ fn direct(
         ferrule_cli::PayloadDocument::new(&primary_path, primary).unwrap(),
     )
     .with_extra_sources(&named)
-    .with_output_path(Path::new("/weft/output/primary.json"))
+    .with_output_path(Path::new("/braid/output/primary.json"))
     .with_runtime_parameters(&parameters);
     if let Some(target) = target {
         options = options.with_target(target);
@@ -777,7 +777,7 @@ fn direct(
     let options = options.with_current_datetime(CLOCK).unwrap();
     ferrule_cli::run_project_value_payloads(
         &project,
-        Path::new("/weft/entry.native.json"),
+        Path::new("/braid/entry.native.json"),
         &options,
     )
     .unwrap()
@@ -1200,7 +1200,7 @@ fn executable_streams_preview_frames_on_stdout_only() {
 
 #[test]
 fn executable_document_preview_matches_in_process_frames() {
-    use weft_ferrule_host::preview::protocol::DOCUMENT_PREVIEW_PROTOCOL_VERSION;
+    use braid_ferrule_host::preview::protocol::DOCUMENT_PREVIEW_PROTOCOL_VERSION;
     for (kind, input) in [("x12", X12_DOCUMENT), ("edifact", EDIFACT_DOCUMENT)] {
         let native = document_mapping(
             json!({"edi_kind":kind,"lenient_segments":true}),
@@ -1216,7 +1216,7 @@ fn executable_document_preview_matches_in_process_frames() {
 }
 
 fn executable(bytes: &[u8]) -> (Value, Vec<Vec<u8>>) {
-    let mut worker = Command::new(env!("CARGO_BIN_EXE_weft-ferrule-host"))
+    let mut worker = Command::new(env!("CARGO_BIN_EXE_braid-ferrule-host"))
         .env_clear()
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

@@ -1,4 +1,4 @@
-export const xmlPreviewProfile = "weft.ferrule-xml-preview.v1";
+export const xmlPreviewProfile = "braid.ferrule-xml-preview.v1";
 export interface XmlMetadata {
   schema: string;
   safetyProfile: string;
@@ -36,8 +36,8 @@ function token(value: unknown): value is string {
 export function xmlMetadata(value: unknown): value is XmlMetadata {
   if (
     !shape(value, ["schema", "safetyProfile", "schemaHints"]) ||
-    value.schema !== "weft.xml-boundary.v1" ||
-    value.safetyProfile !== "weft.xml-safe.v1"
+    value.schema !== "braid.xml-boundary.v1" ||
+    value.safetyProfile !== "braid.xml-safe.v1"
   )
     return false;
   const hints = value.schemaHints;

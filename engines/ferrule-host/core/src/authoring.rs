@@ -26,7 +26,7 @@ struct Plan {
 
 #[derive(Deserialize)]
 enum Version {
-    #[serde(rename = "weft.authoring.v1")]
+    #[serde(rename = "braid.authoring.v1")]
     V1,
 }
 
@@ -132,7 +132,7 @@ pub fn compile(bytes: &[u8]) -> Result<Checkpoint, EditFailure> {
     let plan: Plan = serde_json::from_slice(bytes).map_err(|_| {
         refusal(
             "invalidAuthoring",
-            "Authoring must match the closed weft.authoring.v1 contract.",
+            "Authoring must match the closed braid.authoring.v1 contract.",
         )
     })?;
     let _ = plan.format;

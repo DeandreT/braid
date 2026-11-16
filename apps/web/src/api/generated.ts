@@ -1,5 +1,5 @@
 /**
- * Generated from contracts/weft-v1.json. Do not edit manually.
+ * Generated from contracts/braid-v1.json. Do not edit manually.
  * Refresh with: npm run contracts:generate
  */
 export interface paths {
@@ -12,7 +12,7 @@ export interface paths {
     };
     /**
      * Complete the fixed Entra code flow.
-     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity. Only sign-in may select where it returns: an optional X-Weft-Return-To application path, validated by the shared browser return-path rule and carried in the protected state. Exactly code,state,session_state,client_info,iss,error,error_description,error_uri; protected state at most 12288 characters within the unchanged 16384-byte callback query bound. No duplicates, token fields or code+error. Success only 303 to the validated return path, or '/' when sign-in named none, after acknowledged fresh issuance; failure is fixed readable401/503 HTML, never provider text.
+     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity. Only sign-in may select where it returns: an optional X-Braid-Return-To application path, validated by the shared browser return-path rule and carried in the protected state. Exactly code,state,session_state,client_info,iss,error,error_description,error_uri; protected state at most 12288 characters within the unchanged 16384-byte callback query bound. No duplicates, token fields or code+error. Success only 303 to the validated return path, or '/' when sign-in named none, after acknowledged fresh issuance; failure is fixed readable401/503 HTML, never provider text.
      */
     get: operations["CompleteEntraLogin"];
     put?: never;
@@ -34,7 +34,7 @@ export interface paths {
     put?: never;
     /**
      * Explicit browser authentication protocol.
-     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity. Only sign-in may select where it returns: an optional X-Weft-Return-To application path, validated by the shared browser return-path rule and carried in the protected state. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.
+     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity. Only sign-in may select where it returns: an optional X-Braid-Return-To application path, validated by the shared browser return-path rule and carried in the protected state. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.
      */
     post: operations["ForgetDeniedLocalSession"];
     delete?: never;
@@ -54,7 +54,7 @@ export interface paths {
     put?: never;
     /**
      * Explicit browser authentication protocol.
-     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity. Only sign-in may select where it returns: an optional X-Weft-Return-To application path, validated by the shared browser return-path rule and carried in the protected state. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.
+     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity. Only sign-in may select where it returns: an optional X-Braid-Return-To application path, validated by the shared browser return-path rule and carried in the protected state. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.
      */
     post: operations["BeginBrowserLogin"];
     delete?: never;
@@ -74,7 +74,7 @@ export interface paths {
     put?: never;
     /**
      * Explicit browser authentication protocol.
-     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity. Only sign-in may select where it returns: an optional X-Weft-Return-To application path, validated by the shared browser return-path rule and carried in the protected state. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.
+     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity. Only sign-in may select where it returns: an optional X-Braid-Return-To application path, validated by the shared browser return-path rule and carried in the protected state. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.
      */
     post: operations["LogoutBrowserSession"];
     delete?: never;
@@ -92,7 +92,7 @@ export interface paths {
     };
     /**
      * Explicit browser authentication protocol.
-     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity. Only sign-in may select where it returns: an optional X-Weft-Return-To application path, validated by the shared browser return-path rule and carried in the protected state. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.
+     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity. Only sign-in may select where it returns: an optional X-Braid-Return-To application path, validated by the shared browser return-path rule and carried in the protected state. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.
      */
     get: operations["ReadBrowserAuthentication"];
     put?: never;
@@ -1325,7 +1325,7 @@ export interface paths {
     put?: never;
     /**
      * Convert an immutable MFD package for review without publishing a revision.
-     * @description Consumes canonical application/vnd.weft.mfd-package.v1 framing. At most 128 files, 4194304 bytes each, 16777216 aggregate content bytes, 256 UTF-8 bytes per path. This route alone permits the bounded package body; native upload and global limits are unchanged. Fresh upload authority precedes body consumption. No Idempotency-Key or conditional headers. Nothing is published before explicit confirmation.
+     * @description Consumes canonical application/vnd.braid.mfd-package.v1 framing. At most 128 files, 4194304 bytes each, 16777216 aggregate content bytes, 256 UTF-8 bytes per path. This route alone permits the bounded package body; native upload and global limits are unchanged. Fresh upload authority precedes body consumption. No Idempotency-Key or conditional headers. Nothing is published before explicit confirmation.
      */
     post: operations["ReviewMfdAppend"];
     delete?: never;
@@ -1993,7 +1993,7 @@ export interface paths {
     put?: never;
     /**
      * Convert an immutable MFD package for review without publishing a revision.
-     * @description Consumes canonical application/vnd.weft.mfd-package.v1 framing. At most 128 files, 4194304 bytes each, 16777216 aggregate content bytes, 256 UTF-8 bytes per path. This route alone permits the bounded package body; native upload and global limits are unchanged. Fresh upload authority precedes body consumption. No Idempotency-Key or conditional headers. Nothing is published before explicit confirmation.
+     * @description Consumes canonical application/vnd.braid.mfd-package.v1 framing. At most 128 files, 4194304 bytes each, 16777216 aggregate content bytes, 256 UTF-8 bytes per path. This route alone permits the bounded package body; native upload and global limits are unchanged. Fresh upload authority precedes body consumption. No Idempotency-Key or conditional headers. Nothing is published before explicit confirmation.
      */
     post: operations["ReviewMfdCreate"];
     delete?: never;
@@ -2901,10 +2901,10 @@ export interface components {
        * @enum {null|string}
        */
       profile?:
-        | "weft.ferrule-json-preview.v1"
-        | "weft.ferrule-document-preview.v1"
-        | "weft.ferrule-csv-preview.v1"
-        | "weft.ferrule-xml-preview.v1"
+        | "braid.ferrule-json-preview.v1"
+        | "braid.ferrule-document-preview.v1"
+        | "braid.ferrule-csv-preview.v1"
+        | "braid.ferrule-xml-preview.v1"
         | null;
       target: {
         kind: string;
@@ -2951,7 +2951,7 @@ export interface components {
       result: null | components["schemas"]["CatalogRevisionReportResultV1"];
       revision: components["schemas"]["CatalogRevisionScopeV1"];
       /** @enum {string} */
-      readonly schemaVersion: "weft.catalog-revision-report.v1";
+      readonly schemaVersion: "braid.catalog-revision-report.v1";
       state: components["schemas"]["CatalogRevisionReportStateV1"];
       status: null | components["schemas"]["OperationStatusV1"];
     };
@@ -3171,7 +3171,7 @@ export interface components {
       result: null | components["schemas"]["CatalogRevisionReportResultV1"];
       revision: components["schemas"]["CatalogRevisionScopeV1"];
       /** @enum {string} */
-      readonly schemaVersion: "weft.catalog-revision-report.v1";
+      readonly schemaVersion: "braid.catalog-revision-report.v1";
       state: components["schemas"]["CatalogRevisionReportStateV1"];
       status: null | components["schemas"]["OperationStatusV1"];
     };
@@ -3224,7 +3224,7 @@ export interface components {
       profiles: components["schemas"]["ChatProfileV1"][];
       revision: components["schemas"]["CatalogRevisionScopeV1"];
       /** @enum {string} */
-      readonly schemaVersion: "weft.chat.v1";
+      readonly schemaVersion: "braid.chat.v1";
       toolsEnabled: boolean;
     };
     ChatConversationCreateV1: {
@@ -3621,7 +3621,7 @@ export interface components {
       organizationId: string;
       profiles: components["schemas"]["ChatWorkspaceProfileV1"][];
       /** @enum {string} */
-      readonly schemaVersion: "weft.chat.v1";
+      readonly schemaVersion: "braid.chat.v1";
     };
     /** @enum {unknown} */
     ChatWorkspaceCitationKindV1:
@@ -4928,7 +4928,7 @@ export interface components {
       relationships: components["schemas"]["ProjectionRelationship"][];
       rules: components["schemas"]["ProjectionRule"][];
       /** @enum {string} */
-      readonly schemaVersion: "weft.mapping-projection.v1";
+      readonly schemaVersion: "braid.mapping-projection.v1";
     };
     ProjectionField: {
       boundaryId: string;
@@ -5727,8 +5727,8 @@ export interface operations {
       query?: never;
       header: {
         Origin: string;
-        "X-Weft-Auth-Token": string;
-        "X-Weft-Forget-Local": "1";
+        "X-Braid-Auth-Token": string;
+        "X-Braid-Forget-Local": "1";
       };
       path?: never;
       cookie?: never;
@@ -5819,10 +5819,10 @@ export interface operations {
       query?: never;
       header: {
         Origin: string;
-        "X-Weft-Auth-Token": string;
-        "X-Weft-Invitation"?: string;
-        "X-Weft-Login": "1";
-        "X-Weft-Return-To"?: string;
+        "X-Braid-Auth-Token": string;
+        "X-Braid-Invitation"?: string;
+        "X-Braid-Login": "1";
+        "X-Braid-Return-To"?: string;
         "X-XSRF-TOKEN"?: string;
       };
       path?: never;
@@ -5914,8 +5914,8 @@ export interface operations {
       query?: never;
       header: {
         Origin: string;
-        "X-Weft-Auth-Token": string;
-        "X-Weft-Logout": "1";
+        "X-Braid-Auth-Token": string;
+        "X-Braid-Logout": "1";
         "X-XSRF-TOKEN"?: string;
       };
       path?: never;
@@ -6004,7 +6004,7 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
-        "X-Weft-Session": "1";
+        "X-Braid-Session": "1";
       };
       path?: never;
       cookie?: never;
@@ -7491,9 +7491,9 @@ export interface operations {
     parameters: {
       query?: never;
       header?: {
-        /** @description Required with weftSession; omitted with entraBearer. The exact configured origin for this browser request. */
+        /** @description Required with braidSession; omitted with entraBearer. The exact configured origin for this browser request. */
         Origin?: string;
-        /** @description Required with weftSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
+        /** @description Required with braidSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
         "X-XSRF-TOKEN"?: string;
       };
       path: {
@@ -7769,9 +7769,9 @@ export interface operations {
     parameters: {
       query?: never;
       header?: {
-        /** @description Required with weftSession; omitted with entraBearer. The exact configured origin for this browser request. */
+        /** @description Required with braidSession; omitted with entraBearer. The exact configured origin for this browser request. */
         Origin?: string;
-        /** @description Required with weftSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
+        /** @description Required with braidSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
         "X-XSRF-TOKEN"?: string;
       };
       path: {
@@ -7918,9 +7918,9 @@ export interface operations {
     parameters: {
       query?: never;
       header?: {
-        /** @description Required with weftSession; omitted with entraBearer. The exact configured origin for this browser request. */
+        /** @description Required with braidSession; omitted with entraBearer. The exact configured origin for this browser request. */
         Origin?: string;
-        /** @description Required with weftSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
+        /** @description Required with braidSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
         "X-XSRF-TOKEN"?: string;
       };
       path: {
@@ -8452,9 +8452,9 @@ export interface operations {
     parameters: {
       query?: never;
       header?: {
-        /** @description Required with weftSession; omitted with entraBearer. The exact configured origin for this browser request. */
+        /** @description Required with braidSession; omitted with entraBearer. The exact configured origin for this browser request. */
         Origin?: string;
-        /** @description Required with weftSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
+        /** @description Required with braidSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
         "X-XSRF-TOKEN"?: string;
       };
       path: {
@@ -8728,9 +8728,9 @@ export interface operations {
     parameters: {
       query?: never;
       header?: {
-        /** @description Required with weftSession; omitted with entraBearer. The exact configured origin for this browser request. */
+        /** @description Required with braidSession; omitted with entraBearer. The exact configured origin for this browser request. */
         Origin?: string;
-        /** @description Required with weftSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
+        /** @description Required with braidSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
         "X-XSRF-TOKEN"?: string;
       };
       path: {
@@ -9000,9 +9000,9 @@ export interface operations {
     parameters: {
       query?: never;
       header?: {
-        /** @description Required with weftSession; omitted with entraBearer. The exact configured origin for this browser request. */
+        /** @description Required with braidSession; omitted with entraBearer. The exact configured origin for this browser request. */
         Origin?: string;
-        /** @description Required with weftSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
+        /** @description Required with braidSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
         "X-XSRF-TOKEN"?: string;
       };
       path: {
@@ -9713,9 +9713,9 @@ export interface operations {
         "Content-Encoding"?: string;
         /** @description Exactly one nonzero canonical lowercase D-format UUID with only surrounding SP/HTAB OWS allowed. Raw value at most 128 characters; duplicates and lists are rejected. */
         "Idempotency-Key": string;
-        /** @description Required with weftSession; omitted with entraBearer. One exact canonical configured browser origin, checked before any body read. */
+        /** @description Required with braidSession; omitted with entraBearer. One exact canonical configured browser origin, checked before any body read. */
         Origin?: string;
-        /** @description Required with weftSession; omitted with entraBearer. Cookie-bound framework request token from a successfully admitted catalog context, at most 4096 characters. */
+        /** @description Required with braidSession; omitted with entraBearer. Cookie-bound framework request token from a successfully admitted catalog context, at most 4096 characters. */
         "X-XSRF-TOKEN"?: string;
       };
       path: {
@@ -9725,7 +9725,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/vnd.weft.project-create.v1+json": components["schemas"]["CatalogProjectCreateV1"];
+        "application/vnd.braid.project-create.v1+json": components["schemas"]["CatalogProjectCreateV1"];
       };
     };
     responses: {
@@ -11020,7 +11020,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/vnd.weft.build-environment.v1+json": components["schemas"]["BuildEnvironmentPutV1"];
+        "application/vnd.braid.build-environment.v1+json": components["schemas"]["BuildEnvironmentPutV1"];
       };
     };
     responses: {
@@ -12334,7 +12334,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/vnd.weft.build-approval.v1+json": components["schemas"]["BuildApprovalPutV1"];
+        "application/vnd.braid.build-approval.v1+json": components["schemas"]["BuildApprovalPutV1"];
       };
     };
     responses: {
@@ -12811,7 +12811,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/vnd.weft.build-run.v1+json": components["schemas"]["BuildRunPutV1"];
+        "application/vnd.braid.build-run.v1+json": components["schemas"]["BuildRunPutV1"];
       };
     };
     responses: {
@@ -15303,7 +15303,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/vnd.weft.mapping-metadata-edit.v1+json": components["schemas"]["CatalogMappingMetadataEditV1"];
+        "application/vnd.braid.mapping-metadata-edit.v1+json": components["schemas"]["CatalogMappingMetadataEditV1"];
       };
     };
     responses: {
@@ -15447,9 +15447,9 @@ export interface operations {
       header?: {
         /** @description Absent or exactly identity; compression is not accepted. */
         "Content-Encoding"?: string;
-        /** @description Required with weftSession; omitted with entraBearer. Exact configured browser origin. */
+        /** @description Required with braidSession; omitted with entraBearer. Exact configured browser origin. */
         Origin?: string;
-        /** @description Required with weftSession; omitted with entraBearer. Current cookie-bound request token obtained from catalog context; no state change is admitted without it. */
+        /** @description Required with braidSession; omitted with entraBearer. Current cookie-bound request token obtained from catalog context; no state change is admitted without it. */
         "X-XSRF-TOKEN"?: string;
       };
       path: {
@@ -15461,7 +15461,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/vnd.weft.mfd-package.v1": string;
+        "application/vnd.braid.mfd-package.v1": string;
       };
     };
     responses: {
@@ -16277,7 +16277,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/vnd.weft.regression-case.v1+json": components["schemas"]["RegressionCasePutV1"];
+        "application/vnd.braid.regression-case.v1+json": components["schemas"]["RegressionCasePutV1"];
       };
     };
     responses: {
@@ -16705,7 +16705,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/vnd.weft.regression-run.v1+json": components["schemas"]["RegressionRunPutV1"];
+        "application/vnd.braid.regression-run.v1+json": components["schemas"]["RegressionRunPutV1"];
       };
     };
     responses: {
@@ -17579,9 +17579,9 @@ export interface operations {
     parameters: {
       query?: never;
       header?: {
-        /** @description Required with weftSession; omitted with entraBearer. The exact configured origin for this browser request. */
+        /** @description Required with braidSession; omitted with entraBearer. The exact configured origin for this browser request. */
         Origin?: string;
-        /** @description Required with weftSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
+        /** @description Required with braidSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
         "X-XSRF-TOKEN"?: string;
       };
       path: {
@@ -17863,9 +17863,9 @@ export interface operations {
     parameters: {
       query?: never;
       header?: {
-        /** @description Required with weftSession; omitted with entraBearer. The exact configured origin for this browser request. */
+        /** @description Required with braidSession; omitted with entraBearer. The exact configured origin for this browser request. */
         Origin?: string;
-        /** @description Required with weftSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
+        /** @description Required with braidSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
         "X-XSRF-TOKEN"?: string;
       };
       path: {
@@ -18015,9 +18015,9 @@ export interface operations {
     parameters: {
       query?: never;
       header?: {
-        /** @description Required with weftSession; omitted with entraBearer. The exact configured origin for this browser request. */
+        /** @description Required with braidSession; omitted with entraBearer. The exact configured origin for this browser request. */
         Origin?: string;
-        /** @description Required with weftSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
+        /** @description Required with braidSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
         "X-XSRF-TOKEN"?: string;
       };
       path: {
@@ -18292,9 +18292,9 @@ export interface operations {
     parameters: {
       query?: never;
       header?: {
-        /** @description Required with weftSession; omitted with entraBearer. Exact configured browser origin. */
+        /** @description Required with braidSession; omitted with entraBearer. Exact configured browser origin. */
         Origin?: string;
-        /** @description Required with weftSession; omitted with entraBearer. Current cookie-bound request token obtained from catalog context; no state change is admitted without it. */
+        /** @description Required with braidSession; omitted with entraBearer. Current cookie-bound request token obtained from catalog context; no state change is admitted without it. */
         "X-XSRF-TOKEN"?: string;
       };
       path: {
@@ -18451,9 +18451,9 @@ export interface operations {
     parameters: {
       query?: never;
       header?: {
-        /** @description Required with weftSession; omitted with entraBearer. Exact configured browser origin. */
+        /** @description Required with braidSession; omitted with entraBearer. Exact configured browser origin. */
         Origin?: string;
-        /** @description Required with weftSession; omitted with entraBearer. Current cookie-bound request token obtained from catalog context; no state change is admitted without it. */
+        /** @description Required with braidSession; omitted with entraBearer. Current cookie-bound request token obtained from catalog context; no state change is admitted without it. */
         "X-XSRF-TOKEN"?: string;
       };
       path: {
@@ -18997,9 +18997,9 @@ export interface operations {
       header?: {
         /** @description Absent or a single identity token; no other coding or request body is accepted. */
         "Content-Encoding"?: string;
-        /** @description Required with weftSession; omitted with entraBearer. One exact configured canonical browser origin. */
+        /** @description Required with braidSession; omitted with entraBearer. One exact configured canonical browser origin. */
         Origin?: string;
-        /** @description Required with weftSession; omitted with entraBearer. Framework cookie-bound token issued by an admitted catalog context. */
+        /** @description Required with braidSession; omitted with entraBearer. Framework cookie-bound token issued by an admitted catalog context. */
         "X-XSRF-TOKEN"?: string;
       };
       path: {
@@ -19409,9 +19409,9 @@ export interface operations {
       header?: {
         /** @description Absent or a single identity token; no other coding or request body is accepted. */
         "Content-Encoding"?: string;
-        /** @description Required with weftSession; omitted with entraBearer. One exact configured canonical browser origin. */
+        /** @description Required with braidSession; omitted with entraBearer. One exact configured canonical browser origin. */
         Origin?: string;
-        /** @description Required with weftSession; omitted with entraBearer. Framework cookie-bound token issued by an admitted catalog context. */
+        /** @description Required with braidSession; omitted with entraBearer. Framework cookie-bound token issued by an admitted catalog context. */
         "X-XSRF-TOKEN"?: string;
       };
       path: {
@@ -20691,9 +20691,9 @@ export interface operations {
       header: {
         /** @description Canonical reviewId UUID; one value. */
         "Idempotency-Key": string;
-        /** @description Required with weftSession; omitted with entraBearer. Exact configured browser origin. */
+        /** @description Required with braidSession; omitted with entraBearer. Exact configured browser origin. */
         Origin?: string;
-        /** @description Required with weftSession; omitted with entraBearer. Current cookie-bound request token obtained from catalog context; no state change is admitted without it. */
+        /** @description Required with braidSession; omitted with entraBearer. Current cookie-bound request token obtained from catalog context; no state change is admitted without it. */
         "X-XSRF-TOKEN"?: string;
       };
       path: {
@@ -20897,9 +20897,9 @@ export interface operations {
       header?: {
         /** @description Absent or exactly identity; compression is not accepted. */
         "Content-Encoding"?: string;
-        /** @description Required with weftSession; omitted with entraBearer. Exact configured browser origin. */
+        /** @description Required with braidSession; omitted with entraBearer. Exact configured browser origin. */
         Origin?: string;
-        /** @description Required with weftSession; omitted with entraBearer. Current cookie-bound request token obtained from catalog context; no state change is admitted without it. */
+        /** @description Required with braidSession; omitted with entraBearer. Current cookie-bound request token obtained from catalog context; no state change is admitted without it. */
         "X-XSRF-TOKEN"?: string;
       };
       path: {
@@ -20910,7 +20910,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/vnd.weft.mfd-package.v1": string;
+        "application/vnd.braid.mfd-package.v1": string;
       };
     };
     responses: {
@@ -22462,7 +22462,7 @@ export interface operations {
       200: {
         headers: {
           /** @description Positive mutation CAS version, also in the response body. Not a representation validator: publication acknowledgements can change inventory without changing this version. No ETag is issued. */
-          "X-Weft-Spec-Version"?: number;
+          "X-Braid-Spec-Version"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -22570,7 +22570,7 @@ export interface operations {
       200: {
         headers: {
           /** @description Positive mutation CAS version, also in the response body. Not a representation validator: publication acknowledgements can change inventory without changing this version. No ETag is issued. */
-          "X-Weft-Spec-Version"?: number;
+          "X-Braid-Spec-Version"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -22679,7 +22679,7 @@ export interface operations {
       200: {
         headers: {
           /** @description Positive mutation CAS version, also in the response body. Not a representation validator: publication acknowledgements can change inventory without changing this version. No ETag is issued. */
-          "X-Weft-Spec-Version"?: number;
+          "X-Braid-Spec-Version"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -23004,7 +23004,7 @@ export interface operations {
       200: {
         headers: {
           /** @description Positive mutation CAS version, also in the response body. Not a representation validator: publication acknowledgements can change inventory without changing this version. No ETag is issued. */
-          "X-Weft-Spec-Version"?: number;
+          "X-Braid-Spec-Version"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -23207,7 +23207,7 @@ export interface operations {
         /** @description One quoted positive bundle version, for example "1". Required; stale CAS answers 409. Original reservation replay retains its original version. */
         "If-Match": string;
         /** @description Strict JSON SpecUploadV1: sourceId, sourceVersion, originalObjectId, uploadKey, extractionObjectId, extractionKey, extractionExpectedVersion, format. All fields required; IDs nonzero and publication IDs/keys distinct. Format: text, json, openapi-json, docx, xlsx, pdf; use GetSpecIntakeCapabilities for currently admitted formats, extractor versions and byte caps. Structural formats require qualified workers and schema 46; unavailable formats return 503 DocumentWorkerUnavailable before retention. Raw body at most 10 MiB (PDF at most 8 MiB). The extraction CAS normally starts at If-Match+1; after a conflict before its reservation, refresh inventory and update only extractionExpectedVersion. Document refusals retain the original; process failures are 503, not document outcomes. */
-        "X-Weft-Spec-Upload": string;
+        "X-Braid-Spec-Upload": string;
       };
       path: {
         bundleId: string;

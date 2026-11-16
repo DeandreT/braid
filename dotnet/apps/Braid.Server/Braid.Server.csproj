@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <!-- Angular assets are copied into the packaged host, not served from SDK source manifests. -->
+    <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
+    <OpenApiDocumentsDirectory>../../../contracts</OpenApiDocumentsDirectory>
+    <OpenApiGenerateDocumentsOptions>--file-name braid-v1 --openapi-version OpenApi3_1</OpenApiGenerateDocumentsOptions>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.ApiDescription.Server" Version="10.0.12" PrivateAssets="all" />
+    <ProjectReference Include="../../src/Braid.Api/Braid.Api.csproj" />
+    <ProjectReference Include="../../src/Braid.Application/Braid.Application.csproj" />
+    <ProjectReference Include="../../src/Braid.Identity/Braid.Identity.csproj" />
+    <ProjectReference Include="../../src/Braid.Jobs/Braid.Jobs.csproj" />
+    <ProjectReference Include="../../src/Braid.MappingBackends/Braid.MappingBackends.csproj" />
+    <ProjectReference Include="../../src/Braid.MappingBackends.AzureSessions/Braid.MappingBackends.AzureSessions.csproj" />
+    <ProjectReference Include="../../src/Braid.Persistence.Postgres/Braid.Persistence.Postgres.csproj" />
+    <ProjectReference Include="../../src/Braid.Storage.FileSystem/Braid.Storage.FileSystem.csproj" />
+    <ProjectReference Include="../../src/Braid.Storage.Hosting/Braid.Storage.Hosting.csproj" />
+    <Content Include="../../../apps/web/dist/braid/browser/**/*"
+             Link="wwwroot/%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Braid.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

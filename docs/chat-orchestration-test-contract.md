@@ -22,9 +22,8 @@ The shared `AiHttpFixture` is supplied by the provider contract tests. It is an
 owned real HTTP/1.1 peer, with authored SSE bytes, not an HTTP mock inserted into
 the client. Its requests and complete JSON bodies are the dispatch oracle. Every
 profile, secret reference, bearer value and mapping fact here is synthetic. No
-test reads environment credentials or calls a live model. Later authorized test
-execution uses owned ephemeral loopback sockets; authoring source does not open
-them.
+test reads environment credentials or calls a live model. Test execution uses
+owned ephemeral loopback sockets.
 
 ## Adversarial oracles
 
@@ -48,7 +47,7 @@ them.
   before Completed. Refusal, filtering and output-limit are failed turns.
   Unknown usage remains null; partial known-zero accounting remains partial.
   A valid ChatCompletions terminal frame can carry both usage and final text;
-  `Weft.Ai` emits that frame's usage before its text. Usage before any native finish
+  `Braid.Ai` emits that frame's usage before its text. Usage before any native finish
   is malformed wire input, not a valid ordering test.
 - Withholding native DONE after an actually persisted leading text event permits
   no tool action. A complete tool stream whose real ordinary cleanup callback is
@@ -159,7 +158,7 @@ shared client's actual owner DisposeAsync is joined separately; it does not turn
 an unreturned per-turn task into an observable one. There is no public oracle for
 its exact identity or internal settlement instant. Do not fabricate one with
 reflection, a fresh waiter, a timeout, or a disposed borrowed global client.
-In the `Weft.Ai` throwing-initialization path, failure is latched: actual owner
+In the `Braid.Ai` throwing-initialization path, failure is latched: actual owner
 DisposeAsync faults with the fixed categorical cleanup error and returns the
 same cached task on every call. The test and fixture teardown must both expect
 that same cached failure, not a successful shutdown. ReleaseSafe stays false.

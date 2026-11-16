@@ -10,7 +10,7 @@ absolute paths, empty/dot/parent segments, backslashes, colons and controls are
 rejected. Neither package admission nor decoding accesses the filesystem/network.
 
 The canonical package encoding uses four-byte, unsigned-range big-endian lengths
-for each field: the UTF-8 string `weft.interchange-package.v1`, the design path,
+for each field: the UTF-8 string `braid.interchange-package.v1`, the design path,
 the file count, and each file's path and original bytes. Files sort by **UTF-8 byte
 order**, including supplementary Unicode characters; .NET UTF-16 ordinal sorting
 is not equivalent. The SHA-256 digest covers that complete framing. Decoding
@@ -21,8 +21,7 @@ the input package digest, native bytes and a complete report. Native output is
 bounded by the existing 4 MiB native admission ceiling. Reports allow 256 warnings
 (128-byte code, 2048-byte message) and an 8192-byte summary. Warning overflow fails
 conversion rather than producing an incomplete review. Transport adapters must
-validate these facts before constructing an output; an echoed digest is not proof
-of sandbox isolation.
+validate these facts before constructing an output.
 
 ## Review and confirmation
 
@@ -79,14 +78,13 @@ The restored intent fingerprint still requires the original provenance, so a
 missing or changed source snapshot cannot become a native-only receipt.
 
 The ingestion schema admission guard verifies the review/provenance tables' exact columns,
-constraints, RLS, grants and transition functions. Native-only intent fingerprints
-remain byte-for-byte compatible with version 1.
+constraints, RLS, grants and transition functions.
 
 ## Worker transport
 
 Package conversion uses the separate `interchange` Docker/service profile:
 512 MiB memory, 30-second CPU/wall limit, and the existing no-filesystem/no-network
-sandbox. The `weft.ferrule-mfd.v1` request contains a length-prefixed JSON header
+sandbox. The `braid.ferrule-mfd.v1` request contains a length-prefixed JSON header
 (at most 16 KiB) and one length-prefixed binary payload, then EOF. Its header binds
 request ID, operation (`import` or `export`), input SHA-256, design path and exact
 engine revision. Import payloads use the canonical package encoding; export
@@ -107,7 +105,7 @@ warning overflow refuses the conversion rather than truncating the review.
 
 ## HTTP and browser workflow
 
-Interchange is disabled by default. Set `WEFT_MFD_INTERCHANGE_ENABLED=true` on the
+Interchange is disabled by default. Set `BRAID_MFD_INTERCHANGE_ENABLED=true` on the
 server to enable its API with the configured real Docker or Ferrule-service
 runner. Revision ingestion and revision report reads must also be enabled, with
 their existing private storage and database configurations. The inspection-only
@@ -133,7 +131,7 @@ storage, conversion and download. Review snapshots remain original-actor private
 | Download reviewed export | `POST /mappings/{mappingId}/revisions/{revisionId}/mfd-exports/{reviewId}/download` |
 
 `GET /api/v1/catalog/interchange` returns availability and package limits. Import
-review bodies use `application/vnd.weft.mfd-package.v1` and canonical framing.
+review bodies use `application/vnd.braid.mfd-package.v1` and canonical framing.
 Their route-specific Kestrel limits permit the bounded 16 MiB-content package
 without changing global or native-upload limits. Unknown-length bodies are read
 with a one-byte overflow probe. Compression and media parameters are refused.
@@ -176,40 +174,3 @@ recovered or its recovery is explicitly forgotten with acknowledgement.
 Forgetting recovery after a confirmation attempt requires an explicit acknowledgement that
 it cannot cancel or undo a saved revision. The
 revision view exposes export warning review before download when enabled.
-
-## Command-line workflow
-
-The authenticated `weft mfd` commands use the same reviews and confirmation routes.
-An import command only prepares a review; it never publishes implicitly:
-
-```sh
-weft mfd import --project PROJECT --name Orders orders.mfd \
-  --design-path maps/orders.mfd --asset maps/orders-source.xsd=orders-source.xsd
-weft mfd review --project PROJECT REVIEW_ID
-weft mfd confirm --project PROJECT REVIEW_ID --review-digest REVIEW_DIGEST \
-  --acknowledge-warnings --wait
-```
-
-For an append, replace `--name` with `--mapping MAPPING --expected-head REVISION`.
-Only the design can come from stdin (`-`, with an explicit `--design-path`).
-Every referenced file is explicitly selected; no directory scan or filesystem
-fallback supplies omitted assets. The package uses the same file/path/total bounds
-and canonical encoding as the HTTP and browser workflows.
-
-Confirmation re-reads the original actor's review, requires the exact reviewed
-digest and explicit warning consent, then uses the review ID as its only
-idempotency key. `--wait` retries only that confirmation while work is pending;
-without it, repeat the same confirm command to recover an uncertain operation.
-
-```sh
-weft mfd export --project PROJECT --mapping MAPPING --revision REVISION
-weft mfd download --project PROJECT --mapping MAPPING --revision REVISION \
-  REVIEW_ID --review-digest REVIEW_DIGEST --acknowledge-warnings --output mapping.zip
-```
-
-Export prints the complete review before a separate download. Download verifies
-the bounded body and its SHA-256 before emitting stdout or atomically publishing
-a new output file; it never overwrites an existing destination. `--output -`
-writes only verified binary bytes to stdout. `weft mfd capabilities` reports
-server availability and limits; `--json` on review commands preserves their
-structured response.

@@ -61,7 +61,7 @@ case $url in
     ;;
   https://*/api/auth/session) answer 200 application/json '{"mode":"session","state":"anonymous"}' ;;
   https://*/catalog)
-    answer 200 'text/html; charset=utf-8' '<!doctype html><html><head><script src="/main.js" type="module"></script></head><body><weft-root></weft-root></body></html>'
+    answer 200 'text/html; charset=utf-8' '<!doctype html><html><head><script src="/main.js" type="module"></script></head><body><braid-root></braid-root></body></html>'
     ;;
   *) echo "Unexpected fake curl request $url" >&2 && exit 2 ;;
 esac

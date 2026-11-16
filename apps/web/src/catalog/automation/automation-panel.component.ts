@@ -35,7 +35,7 @@ import {
 } from "./automation-api";
 
 @Component({
-  selector: "weft-automation-panel",
+  selector: "braid-automation-panel",
   imports: [FormsModule, RouterLink, DatePipe],
   templateUrl: "./automation-panel.component.html",
   styles: [

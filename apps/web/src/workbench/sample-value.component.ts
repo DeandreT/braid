@@ -2,7 +2,7 @@ import { Component, input } from "@angular/core";
 import type { SampleObservation } from "./workbench-sample";
 
 @Component({
-  selector: "weft-sample-value",
+  selector: "braid-sample-value",
   template: `@let item = value();
     @if (item.kind === "observed") {
       @for (value of item.values; track $index) {

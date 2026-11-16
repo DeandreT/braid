@@ -16,7 +16,7 @@ use ferrule_mapping::{
 };
 use serde_json::Value;
 use support::*;
-use weft_ferrule_host::protocol::Limits;
+use braid_ferrule_host::protocol::Limits;
 
 const OWNED: &[u8] = include_bytes!("fixtures/projection-owned-context.json");
 
@@ -784,13 +784,13 @@ fn scalar(value: ScalarValue) -> Instance {
 
 fn projected(project: &Project) -> (Value, Vec<u8>) {
     let bytes = project_file::encode_pretty(project).unwrap().into_bytes();
-    let decoded = weft_ferrule_host::decode::decode_native(&bytes).unwrap();
+    let decoded = braid_ferrule_host::decode::decode_native(&bytes).unwrap();
     let limits = Limits {
         maximum_diagnostics: 128,
         maximum_items: 8192,
         maximum_text_bytes: 2048,
     };
-    let projection = weft_ferrule_host::projection::project(
+    let projection = braid_ferrule_host::projection::project(
         &decoded.project,
         "entry.native.json",
         &decoded.document_prefix,

@@ -11,10 +11,10 @@ const [moduleDirectory, nativePath, report, ...fixtures] =
   process.argv.slice(2);
 assert.ok(moduleDirectory && nativePath && report && fixtures.length);
 const wasm = readFileSync(
-  resolve(moduleDirectory, "weft_ferrule_edit_wasm_bg.wasm"),
+  resolve(moduleDirectory, "braid_ferrule_edit_wasm_bg.wasm"),
 );
 const glue = readFileSync(
-  resolve(moduleDirectory, "weft_ferrule_edit_wasm.js"),
+  resolve(moduleDirectory, "braid_ferrule_edit_wasm.js"),
 );
 const sri = `sha256-${createHash("sha256").update(wasm).digest("base64")}`;
 const attempted = [];
@@ -74,7 +74,7 @@ const checks = [];
 try {
   browser = await chromium.launch({
     headless: false,
-    executablePath: process.env.WEFT_CHROMIUM_EXECUTABLE,
+    executablePath: process.env.BRAID_CHROMIUM_EXECUTABLE,
     args: ["--ozone-platform=x11", "--disable-dev-shm-usage"],
   });
   const page = await browser.newPage();
@@ -198,7 +198,7 @@ function checkpoint(native, operations) {
     return Buffer.concat([size, bytes]);
   };
   const request = {
-    protocolVersion: "weft.ferrule-edit.v1",
+    protocolVersion: "braid.ferrule-edit.v1",
     requestId: "11111111-1111-4111-8111-111111111111",
     operation: "edit",
     revision: {

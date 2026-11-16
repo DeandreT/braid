@@ -27,7 +27,7 @@ import {
   type MappingMetadataPatchResponse,
 } from "./mapping-metadata-types";
 
-const mediaType = "application/vnd.weft.mapping-metadata-edit.v1+json";
+const mediaType = "application/vnd.braid.mapping-metadata-edit.v1+json";
 type Admitted = {
   readonly mode: CatalogContext["mode"];
   readonly scope: CatalogMappingScope;

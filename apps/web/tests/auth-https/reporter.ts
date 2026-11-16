@@ -8,8 +8,8 @@ export default class CategoricalReporter implements Reporter {
   onEnd(result: FullResult): void {
     process.stdout.write(
       result.status === "passed"
-        ? "WeftAuthBrowserPassed\n"
-        : "WeftAuthBrowserFailed\n",
+        ? "BraidAuthBrowserPassed\n"
+        : "BraidAuthBrowserFailed\n",
     );
   }
   onError(): void {

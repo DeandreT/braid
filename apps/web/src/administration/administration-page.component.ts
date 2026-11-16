@@ -38,7 +38,7 @@ const formKinds: AdministrationForm[] = [
 ];
 
 @Component({
-  selector: "weft-administration-page",
+  selector: "braid-administration-page",
   imports: [FormsModule, DatePipe, JsonPipe],
   templateUrl: "./administration-page.component.html",
   styleUrl: "./administration-page.component.css",

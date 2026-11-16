@@ -52,8 +52,8 @@ const succeeded = run("completed", {
     confirmed: true,
     engineRevision: "238369bf0071ee8ea097d8c54fa5061f433807fb",
     backendBuild: "sha256:" + "c".repeat(64),
-    adapterBuild: "weft.ferrule-preview-adapter.v1",
-    profile: "weft.ferrule-json-preview.v1",
+    adapterBuild: "braid.ferrule-preview-adapter.v1",
+    profile: "braid.ferrule-json-preview.v1",
   },
   outputs: [
     {
@@ -180,8 +180,8 @@ test("XML preview is explicit, escaped and read only without DOM resource fetchi
       recordsWritten: "1",
       provenance: {
         ...succeeded.provenance!,
-        profile: "weft.ferrule-xml-preview.v1",
-        adapterBuild: "weft.ferrule-xml-preview-adapter.v1",
+        profile: "braid.ferrule-xml-preview.v1",
+        adapterBuild: "braid.ferrule-xml-preview-adapter.v1",
       },
       outputs: [
         {
@@ -192,8 +192,8 @@ test("XML preview is explicit, escaped and read only without DOM resource fetchi
           byteCount: Buffer.byteLength(bytes),
           sha256: createHash("sha256").update(bytes).digest("hex"),
           xmlMetadata: {
-            schema: "weft.xml-boundary.v1",
-            safetyProfile: "weft.xml-safe.v1",
+            schema: "braid.xml-boundary.v1",
+            safetyProfile: "braid.xml-safe.v1",
             schemaHints: {
               noNamespaceLocation: "https://never-fetch.invalid/schema",
               locations: [],
@@ -213,7 +213,7 @@ test("XML preview is explicit, escaped and read only without DOM resource fetchi
     .click();
   await region.getByRole("button", { name: "Show Order", exact: true }).click();
   expect(previews.submissions[0]!.body.profile).toBe(
-    "weft.ferrule-xml-preview.v1",
+    "braid.ferrule-xml-preview.v1",
   );
   await expect(
     documentView(page).getByRole("list", {
@@ -309,7 +309,7 @@ for (const [reason, kind, observed, limit, phrase] of [
     expect(
       await page.evaluate(() =>
         Object.keys(sessionStorage).filter((key) =>
-          key.startsWith("weft.preview.v1/"),
+          key.startsWith("braid.preview.v1/"),
         ),
       ),
     ).toHaveLength(0);
@@ -323,8 +323,8 @@ for (const family of ["x12", "edifact"] as const) {
     const previews = new Previews(page);
     const bytes =
       family === "x12"
-        ? "ISA*00*          *00*          *ZZ*WEFTSENDER     *ZZ*WEFTRECEIVER   *261024*1200*^*00501*000000330*0*T*:~GS*PO*WEFTSENDER*WEFTRECEIVER*20261024*1200*330*X*005010~ST*850*0330~BEG*00*SA*WEFT-330~SE*3*0330~GE*1*330~IEA*1*000000330~"
-        : "UNH+330+ORDERS:D:96A:UN'BGM+220+WEFT?'330'UNT+3+330'";
+        ? "ISA*00*          *00*          *ZZ*BRAIDSENDER    *ZZ*BRAIDRECEIVER  *261024*1200*^*00501*000000330*0*T*:~GS*PO*BRAIDSENDER*BRAIDRECEIVER*20261024*1200*330*X*005010~ST*850*0330~BEG*00*SA*BRAID-330~SE*3*0330~GE*1*330~IEA*1*000000330~"
+        : "UNH+330+ORDERS:D:96A:UN'BGM+220+BRAID?'330'UNT+3+330'";
     const media =
       family === "x12" ? "application/edi-x12" : "application/edifact";
     previews.outputBytes = bytes;
@@ -334,8 +334,8 @@ for (const family of ["x12", "edifact"] as const) {
         ...succeeded,
         provenance: {
           ...succeeded.provenance!,
-          profile: "weft.ferrule-document-preview.v1",
-          adapterBuild: "weft.ferrule-document-preview-adapter.v1",
+          profile: "braid.ferrule-document-preview.v1",
+          adapterBuild: "braid.ferrule-document-preview-adapter.v1",
         },
         outputs: [
           {
@@ -359,7 +359,7 @@ for (const family of ["x12", "edifact"] as const) {
       region.getByRole("button", { name: "Show Primary output" }),
     ).toBeVisible();
     expect(previews.submissions[0]!.body.profile).toBe(
-      "weft.ferrule-document-preview.v1",
+      "braid.ferrule-document-preview.v1",
     );
     expect(
       Buffer.from(
@@ -373,9 +373,9 @@ for (const family of ["x12", "edifact"] as const) {
         .getByRole("list", { name: "EDI segments" })
         .getByRole("listitem"),
     ).toHaveCount(family === "x12" ? 7 : 3);
-    if (process.env.WEFT_EDI_SCREENSHOT_ROOT) {
+    if (process.env.BRAID_EDI_SCREENSHOT_ROOT) {
       await documentView(page).screenshot({
-        path: `${process.env.WEFT_EDI_SCREENSHOT_ROOT}/preview-${family}.png`,
+        path: `${process.env.BRAID_EDI_SCREENSHOT_ROOT}/preview-${family}.png`,
       });
     }
     const downloaded = page.waitForEvent("download");
@@ -413,8 +413,8 @@ test("headerless custom X12 stays raw without guessed boundaries", async ({
       ...succeeded,
       provenance: {
         ...succeeded.provenance!,
-        profile: "weft.ferrule-document-preview.v1",
-        adapterBuild: "weft.ferrule-document-preview-adapter.v1",
+        profile: "braid.ferrule-document-preview.v1",
+        adapterBuild: "braid.ferrule-document-preview-adapter.v1",
       },
       outputs: [
         {
@@ -436,9 +436,9 @@ test("headerless custom X12 stays raw without guessed boundaries", async ({
     .click();
   await region.getByRole("button", { name: "Show Primary output" }).click();
   await expect(documentView(page)).toBeVisible();
-  if (process.env.WEFT_EDI_SCREENSHOT_ROOT) {
+  if (process.env.BRAID_EDI_SCREENSHOT_ROOT) {
     await documentView(page).screenshot({
-      path: `${process.env.WEFT_EDI_SCREENSHOT_ROOT}/preview-headerless-x12.png`,
+      path: `${process.env.BRAID_EDI_SCREENSHOT_ROOT}/preview-headerless-x12.png`,
     });
   }
   await expect(
@@ -460,7 +460,7 @@ test("mixed X12 output keeps each interchange declaration and both business reco
   page,
 }) => {
   const first =
-    "ISA*00*          *00*          *ZZ*WEFTSENDER     *ZZ*WEFTRECEIVER   *261024*1200*^*00501*000000330*0*T*:~GS*PO*S*R*20261024*1200*330*X*005010~ST*850*1~BEG*ONE*A:B^C:D~SE*3*1~GE*1*330~IEA*1*000000330~";
+    "ISA*00*          *00*          *ZZ*BRAIDSENDER    *ZZ*BRAIDRECEIVER  *261024*1200*^*00501*000000330*0*T*:~GS*PO*S*R*20261024*1200*330*X*005010~ST*850*1~BEG*ONE*A:B^C:D~SE*3*1~GE*1*330~IEA*1*000000330~";
   const second = [...first.replace("ONE", "TWO")]
     .map(
       (value) =>
@@ -495,9 +495,9 @@ test("mixed X12 output keeps each interchange declaration and both business reco
     .click();
   await region.getByRole("button", { name: "Show Primary output" }).click();
   await expect(documentView(page)).toBeVisible();
-  if (process.env.WEFT_EDI_SCREENSHOT_ROOT)
+  if (process.env.BRAID_EDI_SCREENSHOT_ROOT)
     await documentView(page).screenshot({
-      path: `${process.env.WEFT_EDI_SCREENSHOT_ROOT}/mixed-x12.png`,
+      path: `${process.env.BRAID_EDI_SCREENSHOT_ROOT}/mixed-x12.png`,
     });
   const segments = documentView(page)
     .getByRole("list", { name: "EDI segments" })
@@ -523,8 +523,8 @@ test("mixed EDIFACT advice stays local in the Result viewer and raw download", a
       ...succeeded,
       provenance: {
         ...succeeded.provenance!,
-        profile: "weft.ferrule-document-preview.v1",
-        adapterBuild: "weft.ferrule-document-preview-adapter.v1",
+        profile: "braid.ferrule-document-preview.v1",
+        adapterBuild: "braid.ferrule-document-preview-adapter.v1",
       },
       outputs: [
         {
@@ -631,9 +631,9 @@ test("a preview runs, shows its outputs and downloads their exact bytes", async 
   await previews.install();
   await open(page);
   const region = panel(page);
-  if (process.env.WEFT_EDI_SCREENSHOT_ROOT) {
+  if (process.env.BRAID_EDI_SCREENSHOT_ROOT) {
     await region.screenshot({
-      path: `${process.env.WEFT_EDI_SCREENSHOT_ROOT}/preview-default.png`,
+      path: `${process.env.BRAID_EDI_SCREENSHOT_ROOT}/preview-default.png`,
     });
   }
   await region.getByLabel("Primary input (JSON)").fill('{"id":"SO-1"}');

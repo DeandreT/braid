@@ -1,5 +1,5 @@
 import { defineConfig } from "@playwright/test";
-const origin = process.env.WEFT_WORKSPACE_CHAT_ORIGIN;
+const origin = process.env.BRAID_WORKSPACE_CHAT_ORIGIN;
 if (!origin || !/^http:\/\/127\.0\.0\.1:[0-9]+$/.test(origin))
   throw new Error("An owned chat test origin is required.");
 export default defineConfig({
@@ -8,11 +8,11 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   timeout: 180000,
-  outputDir: process.env.WEFT_WORKSPACE_CHAT_OUTPUT,
+  outputDir: process.env.BRAID_WORKSPACE_CHAT_OUTPUT,
   use: {
     baseURL: origin,
     headless: true,
-    launchOptions: { executablePath: process.env.WEFT_CHROMIUM_EXECUTABLE },
+    launchOptions: { executablePath: process.env.BRAID_CHROMIUM_EXECUTABLE },
     trace: "off",
     screenshot: "off",
   },

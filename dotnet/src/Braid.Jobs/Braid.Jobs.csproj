@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <!-- The worker-side inspection transport listens with Kestrel. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="../Braid.WorkerTransport/Braid.WorkerTransport.csproj" />
+    <ProjectReference Include="../Braid.Deployment/Braid.Deployment.csproj" />
+    <ProjectReference Include="../Braid.MappingBackends/Braid.MappingBackends.csproj" />
+    <PackageReference Include="WolverineFx.Postgresql" Version="6.51.1" />
+    <!-- Wolverine 6 compiles its generated handler and outbox code at startup only through this package. -->
+    <PackageReference Include="WolverineFx.RuntimeCompilation" Version="6.51.1" />
+    <ProjectReference Include="../Braid.Application/Braid.Application.csproj" />
+    <ProjectReference Include="../Braid.Persistence.Postgres/Braid.Persistence.Postgres.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Braid.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

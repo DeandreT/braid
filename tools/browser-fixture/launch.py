@@ -21,9 +21,9 @@ DESKTOP_VARIABLES = (
 
 
 def launch_arguments(arguments, environment, display_from_env=False):
-    display = environment.get("WEFT_XVFB_SERVER_NUM", "") if display_from_env else ""
+    display = environment.get("BRAID_XVFB_SERVER_NUM", "") if display_from_env else ""
     if display and not re.fullmatch(r"[0-9]+", display):
-        raise ValueError("WEFT_XVFB_SERVER_NUM must be a nonnegative decimal display number")
+        raise ValueError("BRAID_XVFB_SERVER_NUM must be a nonnegative decimal display number")
     return [
         "xvfb-run",
         "--server-num=" + display if display else "-a",
@@ -31,7 +31,7 @@ def launch_arguments(arguments, environment, display_from_env=False):
         "10",
         "npm",
         "--workspace",
-        "@weft/web",
+        "@braid/web",
         "run",
         "test:e2e",
         *(["--", *arguments] if arguments else []),
@@ -41,7 +41,7 @@ def launch_arguments(arguments, environment, display_from_env=False):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--display-from-env", action="store_true",
-                        help="honor WEFT_XVFB_SERVER_NUM (HTTPS auth route only)")
+                        help="honor BRAID_XVFB_SERVER_NUM (HTTPS auth route only)")
     parser.add_argument("--no-core-dumps", action="store_true",
                         help="disable core dumps before launching the HTTPS auth route")
     parser.add_argument("arguments", nargs=argparse.REMAINDER,

@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Braid.Application/Braid.Application.csproj" />
+    <ProjectReference Include="../../src/Braid.Jobs/Braid.Jobs.csproj" />
+    <ProjectReference Include="../../src/Braid.MappingBackends/Braid.MappingBackends.csproj" />
+    <ProjectReference Include="../../src/Braid.MappingBackends.AzureSessions/Braid.MappingBackends.AzureSessions.csproj" />
+    <ProjectReference Include="../../src/Braid.Persistence.Postgres/Braid.Persistence.Postgres.csproj" />
+    <ProjectReference Include="../../src/Braid.Storage.FileSystem/Braid.Storage.FileSystem.csproj" />
+    <ProjectReference Include="../../src/Braid.Storage.Hosting/Braid.Storage.Hosting.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Braid.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

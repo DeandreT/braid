@@ -26,7 +26,7 @@ export interface CreationCounts {
   readonly workersCreated: 0;
 }
 export interface ProjectCreationManifest {
-  readonly schemaVersion: "weft.project-creation-browser-fixture.v1";
+  readonly schemaVersion: "braid.project-creation-browser-fixture.v1";
   readonly fixtureId: string;
   readonly source: { readonly commit: string; readonly tree: string };
   readonly readOrigin: string;
@@ -59,7 +59,7 @@ export type CreationCommand =
       projectId: string;
     };
 type AckBase = {
-  schemaVersion: "weft.project-creation-browser-control.v1";
+  schemaVersion: "braid.project-creation-browser-control.v1";
   requestNonce: string;
   fixtureId: string;
 };
@@ -154,7 +154,7 @@ function manifest(value: unknown, origin: string): ProjectCreationManifest {
     "seedProject",
   ]);
   requireCreation(
-    row.schemaVersion === "weft.project-creation-browser-fixture.v1" &&
+    row.schemaVersion === "braid.project-creation-browser-fixture.v1" &&
       canonicalId(row.fixtureId) &&
       row.readOrigin === origin &&
       row.initialReadProfile === "creator" &&
@@ -297,7 +297,7 @@ export class ProjectCreationOwner {
       "profile",
     ]);
     requireCreation(
-      ready.schemaVersion === "weft.project-creation-browser-ready.v1" &&
+      ready.schemaVersion === "braid.project-creation-browser-ready.v1" &&
         ready.profile === "creator",
       "incompatible ready response",
     );
@@ -365,7 +365,7 @@ export class ProjectCreationOwner {
       ];
       const row = value as Record<string, unknown>;
       requireCreation(
-        row.schemaVersion === "weft.project-creation-browser-control.v1" &&
+        row.schemaVersion === "braid.project-creation-browser-control.v1" &&
           row.fixtureId === envelope.fixtureId &&
           row.requestNonce === envelope.requestNonce &&
           row.action === command.action,
@@ -525,11 +525,11 @@ export const test = base.extend<
 >({
   projectCreationOwner: [
     async ({}, use) => {
-      const operator = process.env.WEFT_PROJECT_CREATION_BROWSER_OPERATOR;
+      const operator = process.env.BRAID_PROJECT_CREATION_BROWSER_OPERATOR;
       const configuration =
-        process.env.WEFT_PROJECT_CREATION_BROWSER_OPERATOR_CONFIG;
-      const path = process.env.WEFT_PROJECT_CREATION_BROWSER_MANIFEST;
-      const origin = process.env.WEFT_PROJECT_CREATION_BASE_URL;
+        process.env.BRAID_PROJECT_CREATION_BROWSER_OPERATOR_CONFIG;
+      const path = process.env.BRAID_PROJECT_CREATION_BROWSER_MANIFEST;
+      const origin = process.env.BRAID_PROJECT_CREATION_BASE_URL;
       requireCreation(
         operator && configuration && path && origin && isAbsolute(operator),
         "explicit packaged origin/operator/private configuration/manifest are required",

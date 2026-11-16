@@ -8,15 +8,15 @@ param namePrefix string
 param environmentName string
 param identityId string
 param registryServer string
-@description('Endpoint image reference in the registry, such as weft-mapping-endpoint:<tag>.')
+@description('Endpoint image reference in the registry, such as braid-mapping-endpoint:<tag>.')
 param endpointImage string
-@description('Weft image reference in the registry, for the grant job.')
-param weftImage string
+@description('Braid image reference in the registry, for the grant job.')
+param braidImage string
 param vaultUri string
 param organizationId string
 @description('One entry per registered target: name, projectId, mappingId, environmentId, environmentVersion, targetId, and optional concurrency (1-4), maxReplicas and callers ([{ grantId, objectId }]).')
 param endpoints array
-@description('Weft principal ID of the project administrator who grants the callers; it only fills the grant commands output.')
+@description('Braid principal ID of the project administrator who grants the callers; it only fills the grant commands output.')
 param grantAdministratorId string
 @description('Entra tenant whose app-only access tokens the endpoints accept.')
 param tenantId string
@@ -64,26 +64,26 @@ var logins = [
 // The release tool's logins: the release writer and qualification reader for activation, and the
 // qualification writer with its readers for qualifying a build.
 var releaseLogins = [
-  { key: 'release-writer', setting: 'WEFT_RELEASE_WRITER_CONNECTION_STRING' }
-  { key: 'qualification-reader', setting: 'WEFT_QUALIFICATION_READER_CONNECTION_STRING' }
-  { key: 'qualification-writer', setting: 'WEFT_QUALIFICATION_WRITER_CONNECTION_STRING' }
-  { key: 'build-reader', setting: 'WEFT_QUALIFICATION_BUILD_READER_CONNECTION_STRING' }
-  { key: 'build-run-reader', setting: 'WEFT_QUALIFICATION_BUILD_RUN_READER_CONNECTION_STRING' }
-  { key: 'runtime', setting: 'WEFT_QUALIFICATION_ACCESS_CONNECTION_STRING' }
-  { key: 'report', setting: 'WEFT_QUALIFICATION_REPORT_READER_CONNECTION_STRING' }
-  { key: 'run-reader', setting: 'WEFT_QUALIFICATION_RUN_READER_CONNECTION_STRING' }
-  { key: 'case-reader', setting: 'WEFT_QUALIFICATION_CASE_READER_CONNECTION_STRING' }
+  { key: 'release-writer', setting: 'BRAID_RELEASE_WRITER_CONNECTION_STRING' }
+  { key: 'qualification-reader', setting: 'BRAID_QUALIFICATION_READER_CONNECTION_STRING' }
+  { key: 'qualification-writer', setting: 'BRAID_QUALIFICATION_WRITER_CONNECTION_STRING' }
+  { key: 'build-reader', setting: 'BRAID_QUALIFICATION_BUILD_READER_CONNECTION_STRING' }
+  { key: 'build-run-reader', setting: 'BRAID_QUALIFICATION_BUILD_RUN_READER_CONNECTION_STRING' }
+  { key: 'runtime', setting: 'BRAID_QUALIFICATION_ACCESS_CONNECTION_STRING' }
+  { key: 'report', setting: 'BRAID_QUALIFICATION_REPORT_READER_CONNECTION_STRING' }
+  { key: 'run-reader', setting: 'BRAID_QUALIFICATION_RUN_READER_CONNECTION_STRING' }
+  { key: 'case-reader', setting: 'BRAID_QUALIFICATION_CASE_READER_CONNECTION_STRING' }
 ]
 
 // The compiled runtime: the Ferrule service's execute profile with this host's own client certificate.
 var runtimeEnvironment = [
-  { name: 'WEFT_FERRULE_RUNNER', value: 'service' }
-  { name: 'WEFT_FERRULE_SERVICE_URL', value: ferruleServiceUrl }
-  { name: 'WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256', value: ferruleServiceCertificateSha256 }
-  { name: 'WEFT_FERRULE_WORKER_IMAGE', value: ferruleServiceIdentity }
-  { name: 'WEFT_FERRULE_COMPILE_TOOLCHAIN', value: compileToolchain }
-  { name: 'WEFT_COMPILED_RUNTIME_IMAGE', value: compiledRuntimeIdentity }
-  { name: 'WEFT_DELIVER_FERRULE_SERVICE_CLIENT_PEM', secretRef: 'ferrule-endpoint-client-pem' }
+  { name: 'BRAID_FERRULE_RUNNER', value: 'service' }
+  { name: 'BRAID_FERRULE_SERVICE_URL', value: ferruleServiceUrl }
+  { name: 'BRAID_FERRULE_SERVICE_CERTIFICATE_SHA256', value: ferruleServiceCertificateSha256 }
+  { name: 'BRAID_FERRULE_WORKER_IMAGE', value: ferruleServiceIdentity }
+  { name: 'BRAID_FERRULE_COMPILE_TOOLCHAIN', value: compileToolchain }
+  { name: 'BRAID_COMPILED_RUNTIME_IMAGE', value: compiledRuntimeIdentity }
+  { name: 'BRAID_DELIVER_FERRULE_SERVICE_CLIENT_PEM', secretRef: 'ferrule-endpoint-client-pem' }
 ]
 
 var healthReady = {
@@ -116,7 +116,7 @@ resource endpointApps 'Microsoft.App/containerApps@2024-03-01' = [for endpoint i
       registries: registries
       secrets: concat(map(logins, login => vaultSecret(vaultUri, identityId, '${login.key}-connection', 'pg-${login.key}-connection')), [
         // A Key Vault certificate's secret is its PEM bundle: the private key and the certificate.
-        vaultSecret(vaultUri, identityId, 'ferrule-endpoint-client-pem', 'weft-ferrule-endpoint-client')
+        vaultSecret(vaultUri, identityId, 'ferrule-endpoint-client-pem', 'braid-ferrule-endpoint-client')
       ])
     }
     template: {
@@ -129,20 +129,20 @@ resource endpointApps 'Microsoft.App/containerApps@2024-03-01' = [for endpoint i
           args: ['endpoint']
           // Each login reaches the host only as a protected private file written by the entrypoint.
           env: concat([
-            { name: 'WEFT_ENDPOINT_LISTEN_ADDR', value: '0.0.0.0:8080' }
-            { name: 'WEFT_ENDPOINT_TRANSPORT', value: 'platformIngress' }
-            { name: 'WEFT_ENDPOINT_ORGANIZATION_ID', value: organizationId }
-            { name: 'WEFT_ENDPOINT_PROJECT_ID', value: endpoint.projectId }
-            { name: 'WEFT_ENDPOINT_MAPPING_ID', value: endpoint.mappingId }
-            { name: 'WEFT_ENDPOINT_ENVIRONMENT_ID', value: endpoint.environmentId }
-            { name: 'WEFT_ENDPOINT_ENVIRONMENT_VERSION', value: string(endpoint.environmentVersion) }
-            { name: 'WEFT_ENDPOINT_TARGET_ID', value: endpoint.targetId }
-            { name: 'WEFT_ENDPOINT_ENTRA_TENANT_ID', value: tenantId }
-            { name: 'WEFT_ENDPOINT_ENTRA_AUDIENCE', value: audience }
-            { name: 'WEFT_ENDPOINT_CONCURRENCY', value: string(endpoint.?concurrency ?? 4) }
+            { name: 'BRAID_ENDPOINT_LISTEN_ADDR', value: '0.0.0.0:8080' }
+            { name: 'BRAID_ENDPOINT_TRANSPORT', value: 'platformIngress' }
+            { name: 'BRAID_ENDPOINT_ORGANIZATION_ID', value: organizationId }
+            { name: 'BRAID_ENDPOINT_PROJECT_ID', value: endpoint.projectId }
+            { name: 'BRAID_ENDPOINT_MAPPING_ID', value: endpoint.mappingId }
+            { name: 'BRAID_ENDPOINT_ENVIRONMENT_ID', value: endpoint.environmentId }
+            { name: 'BRAID_ENDPOINT_ENVIRONMENT_VERSION', value: string(endpoint.environmentVersion) }
+            { name: 'BRAID_ENDPOINT_TARGET_ID', value: endpoint.targetId }
+            { name: 'BRAID_ENDPOINT_ENTRA_TENANT_ID', value: tenantId }
+            { name: 'BRAID_ENDPOINT_ENTRA_AUDIENCE', value: audience }
+            { name: 'BRAID_ENDPOINT_CONCURRENCY', value: string(endpoint.?concurrency ?? 4) }
           ], runtimeEnvironment, flatten(map(logins, login => [
-            { name: 'WEFT_DELIVER_FILE_ENDPOINT_${login.setting}', secretRef: '${login.key}-connection' }
-            { name: 'WEFT_ENDPOINT_${login.setting}_CONNECTION_STRING_FILE', value: '/run/weft/secrets/endpoint-${toLower(replace(login.setting, '_', '-'))}' }
+            { name: 'BRAID_DELIVER_FILE_ENDPOINT_${login.setting}', secretRef: '${login.key}-connection' }
+            { name: 'BRAID_ENDPOINT_${login.setting}_CONNECTION_STRING_FILE', value: '/run/braid/secrets/endpoint-${toLower(replace(login.setting, '_', '-'))}' }
           ])))
           resources: {
             cpu: json('0.5')
@@ -216,7 +216,7 @@ var jobResources = {
   memory: '1Gi'
 }
 
-// Invocation grants with Weft.DatabaseTool as a named project administrator; supply the grant command as
+// Invocation grants with Braid.DatabaseTool as a named project administrator; supply the grant command as
 // arguments when starting an execution, for example `database grant-machine-invocation ADMIN ORG ...`.
 resource grants 'Microsoft.App/jobs@2024-03-01' = {
   name: '${namePrefix}-endpoint-grants'
@@ -233,10 +233,10 @@ resource grants 'Microsoft.App/jobs@2024-03-01' = {
       containers: [
         {
           name: 'grants'
-          image: '${registryServer}/${weftImage}'
+          image: '${registryServer}/${braidImage}'
           args: ['database']
           env: [
-            { name: 'WEFT_INVOCATION_GRANT_WRITER_CONNECTION_STRING', secretRef: 'invocation-grant-writer-connection' }
+            { name: 'BRAID_INVOCATION_GRANT_WRITER_CONNECTION_STRING', secretRef: 'invocation-grant-writer-connection' }
           ]
           resources: jobResources
         }
@@ -245,7 +245,7 @@ resource grants 'Microsoft.App/jobs@2024-03-01' = {
   }
 }
 
-// Release operations with Weft.ReleaseTool as a named principal: qualify a completed build through the
+// Release operations with Braid.ReleaseTool as a named principal: qualify a completed build through the
 // service's execute profile, register a target, activate or roll back. Supply `release COMMAND ...`.
 resource release 'Microsoft.App/jobs@2024-03-01' = {
   name: '${namePrefix}-endpoint-release'
@@ -257,7 +257,7 @@ resource release 'Microsoft.App/jobs@2024-03-01' = {
     workloadProfileName: 'Consumption'
     configuration: union(jobConfiguration, {
       secrets: concat(map(releaseLogins, login => vaultSecret(vaultUri, identityId, '${login.key}-connection', 'pg-${login.key}-connection')), [
-        vaultSecret(vaultUri, identityId, 'ferrule-endpoint-client-pem', 'weft-ferrule-endpoint-client')
+        vaultSecret(vaultUri, identityId, 'ferrule-endpoint-client-pem', 'braid-ferrule-endpoint-client')
       ])
     })
     template: {

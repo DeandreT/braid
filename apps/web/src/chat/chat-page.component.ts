@@ -28,7 +28,7 @@ import { WorkspaceConversation } from "../workbench/workspace-conversation";
 import { isWorkspace, type AnyConversation } from "./workspace-chat-types";
 
 @Component({
-  selector: "weft-chat-page",
+  selector: "braid-chat-page",
   imports: [CatalogStatusComponent],
   template: ` <section class="workspace-chat-page">
     <header>
@@ -112,7 +112,7 @@ import { isWorkspace, type AnyConversation } from "./workspace-chat-types";
             </ul>
           }
         } @else {
-          <weft-catalog-status [kind]="state.kind" (retry)="read.retry()" />
+          <braid-catalog-status [kind]="state.kind" (retry)="read.retry()" />
         }
       }
     }

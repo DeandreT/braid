@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><AssemblyName>braid-build-worker</AssemblyName><InvariantGlobalization>true</InvariantGlobalization></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../../src/Braid.Deployment/Braid.Deployment.csproj" /></ItemGroup>
+</Project>

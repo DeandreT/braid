@@ -1,4 +1,4 @@
-// The Weft.Worker `runs` host: previews, the regression runs that execute them and approved builds, through
+// The Braid.Worker `runs` host: previews, the regression runs that execute them and approved builds, through
 // the Ferrule service (container app or dynamic sessions) with its own credentials. No ingress, Docker or
 // published port; it only claims durable work from PostgreSQL and reads native objects from the private
 // container. See docs/azure-deployment.md and deploy/compose/compose.features.yml.
@@ -11,7 +11,7 @@ param identityId string
 param workerIdentityId string
 param workerIdentityClientId string
 param registryServer string
-@description('Worker image reference in the registry, such as weft-worker:<tag>.')
+@description('Worker image reference in the registry, such as braid-worker:<tag>.')
 param image string
 param vaultUri string
 @allowed(['service', 'sessions'])
@@ -40,50 +40,50 @@ func vaultSecret(vaultUri string, identityId string, name string, secret string)
 // Each worker login: Key Vault login key, worker setting and private file name. The entrypoint writes each
 // delivery to an owner-only file, and the worker reads only that file.
 var logins = [
-  { key: 'preview-writer', setting: 'WEFT_PREVIEW_WRITER_CONNECTION_STRING', file: 'preview-writer' }
-  { key: 'run-writer', setting: 'WEFT_REGRESSION_RUN_WRITER_CONNECTION_STRING', file: 'run-writer' }
-  { key: 'comparison', setting: 'WEFT_AUTOMATION_COMPARISON_CONNECTION_STRING', file: 'comparison' }
-  { key: 'case-reader', setting: 'WEFT_REGRESSION_CASE_READER_CONNECTION_STRING', file: 'case-reader' }
-  { key: 'runtime', setting: 'WEFT_REGRESSION_ACCESS_CONNECTION_STRING', file: 'regression-access' }
-  { key: 'report', setting: 'WEFT_REGRESSION_REPORT_READER_CONNECTION_STRING', file: 'regression-report' }
-  { key: 'build-dispatcher', setting: 'WEFT_BUILD_DISPATCHER_CONNECTION_STRING', file: 'build-dispatcher' }
-  { key: 'build-writer', setting: 'WEFT_BUILD_WRITER_CONNECTION_STRING', file: 'build-writer' }
-  { key: 'runtime', setting: 'WEFT_BUILD_ACCESS_CONNECTION_STRING', file: 'build-access' }
-  { key: 'report', setting: 'WEFT_BUILD_REPORT_READER_CONNECTION_STRING', file: 'build-report' }
-  { key: 'run-reader', setting: 'WEFT_BUILD_REGRESSION_RUN_READER_CONNECTION_STRING', file: 'build-evidence' }
-  { key: 'case-reader', setting: 'WEFT_BUILD_CASE_READER_CONNECTION_STRING', file: 'build-case-reader' }
+  { key: 'preview-writer', setting: 'BRAID_PREVIEW_WRITER_CONNECTION_STRING', file: 'preview-writer' }
+  { key: 'run-writer', setting: 'BRAID_REGRESSION_RUN_WRITER_CONNECTION_STRING', file: 'run-writer' }
+  { key: 'comparison', setting: 'BRAID_AUTOMATION_COMPARISON_CONNECTION_STRING', file: 'comparison' }
+  { key: 'case-reader', setting: 'BRAID_REGRESSION_CASE_READER_CONNECTION_STRING', file: 'case-reader' }
+  { key: 'runtime', setting: 'BRAID_REGRESSION_ACCESS_CONNECTION_STRING', file: 'regression-access' }
+  { key: 'report', setting: 'BRAID_REGRESSION_REPORT_READER_CONNECTION_STRING', file: 'regression-report' }
+  { key: 'build-dispatcher', setting: 'BRAID_BUILD_DISPATCHER_CONNECTION_STRING', file: 'build-dispatcher' }
+  { key: 'build-writer', setting: 'BRAID_BUILD_WRITER_CONNECTION_STRING', file: 'build-writer' }
+  { key: 'runtime', setting: 'BRAID_BUILD_ACCESS_CONNECTION_STRING', file: 'build-access' }
+  { key: 'report', setting: 'BRAID_BUILD_REPORT_READER_CONNECTION_STRING', file: 'build-report' }
+  { key: 'run-reader', setting: 'BRAID_BUILD_REGRESSION_RUN_READER_CONNECTION_STRING', file: 'build-evidence' }
+  { key: 'case-reader', setting: 'BRAID_BUILD_CASE_READER_CONNECTION_STRING', file: 'build-case-reader' }
 ]
 var loginKeys = union(map(logins, login => login.key), [])
 
 var runnerEnvironment = ferruleRunner == 'service' ? [
   // The Ferrule service in this environment, pinned in both directions with the worker's own client certificate.
-  { name: 'WEFT_FERRULE_RUNNER', value: 'service' }
-  { name: 'WEFT_FERRULE_SERVICE_URL', value: ferruleServiceUrl }
-  { name: 'WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256', value: ferruleServiceCertificateSha256 }
-  { name: 'WEFT_DELIVER_FERRULE_SERVICE_CLIENT_PEM', secretRef: 'ferrule-worker-client-pem' }
+  { name: 'BRAID_FERRULE_RUNNER', value: 'service' }
+  { name: 'BRAID_FERRULE_SERVICE_URL', value: ferruleServiceUrl }
+  { name: 'BRAID_FERRULE_SERVICE_CERTIFICATE_SHA256', value: ferruleServiceCertificateSha256 }
+  { name: 'BRAID_DELIVER_FERRULE_SERVICE_CLIENT_PEM', secretRef: 'ferrule-worker-client-pem' }
 ] : [
   // Dynamic sessions with the worker's own identity, which holds the Session Executor role on the pool.
-  { name: 'WEFT_FERRULE_RUNNER', value: 'azureContainerAppsSessions' }
-  { name: 'WEFT_FERRULE_SESSIONS_POOL_ENDPOINT', value: ferruleSessionsEndpoint }
-  { name: 'WEFT_FERRULE_SESSIONS_MANAGED_IDENTITY_CLIENT_ID', value: workerIdentityClientId }
+  { name: 'BRAID_FERRULE_RUNNER', value: 'azureContainerAppsSessions' }
+  { name: 'BRAID_FERRULE_SESSIONS_POOL_ENDPOINT', value: ferruleSessionsEndpoint }
+  { name: 'BRAID_FERRULE_SESSIONS_MANAGED_IDENTITY_CLIENT_ID', value: workerIdentityClientId }
 ]
 
 // Every setting the worker reads; credentials arrive only as private files or Key Vault references.
 var workerEnvironment = concat([
-  { name: 'WEFT_PREVIEW_WORKER_ENABLED', value: 'true' }
-  { name: 'WEFT_REGRESSION_WORKER_ENABLED', value: 'true' }
-  { name: 'WEFT_BUILD_WORKER_ENABLED', value: 'true' }
-  { name: 'WEFT_FERRULE_WORKER_IMAGE', value: ferruleServiceIdentity }
-  { name: 'WEFT_FERRULE_COMPILE_TOOLCHAIN', value: compileToolchain }
+  { name: 'BRAID_PREVIEW_WORKER_ENABLED', value: 'true' }
+  { name: 'BRAID_REGRESSION_WORKER_ENABLED', value: 'true' }
+  { name: 'BRAID_BUILD_WORKER_ENABLED', value: 'true' }
+  { name: 'BRAID_FERRULE_WORKER_IMAGE', value: ferruleServiceIdentity }
+  { name: 'BRAID_FERRULE_COMPILE_TOOLCHAIN', value: compileToolchain }
   // Native objects come from the private container through the worker's own identity.
-  { name: 'WEFT_PRIVATE_STORAGE_KIND', value: 'azure-blob' }
-  { name: 'WEFT_PRIVATE_STORAGE_BLOB_ENDPOINT', value: privateObjectsEndpoint }
-  { name: 'WEFT_PRIVATE_STORAGE_BLOB_CONTAINER', value: privateObjectsContainer }
-  { name: 'WEFT_PRIVATE_STORAGE_BLOB_CREDENTIAL', value: 'managed-identity' }
-  { name: 'WEFT_PRIVATE_STORAGE_BLOB_CLIENT_ID', value: workerIdentityClientId }
+  { name: 'BRAID_PRIVATE_STORAGE_KIND', value: 'azure-blob' }
+  { name: 'BRAID_PRIVATE_STORAGE_BLOB_ENDPOINT', value: privateObjectsEndpoint }
+  { name: 'BRAID_PRIVATE_STORAGE_BLOB_CONTAINER', value: privateObjectsContainer }
+  { name: 'BRAID_PRIVATE_STORAGE_BLOB_CREDENTIAL', value: 'managed-identity' }
+  { name: 'BRAID_PRIVATE_STORAGE_BLOB_CLIENT_ID', value: workerIdentityClientId }
 ], runnerEnvironment, flatten(map(logins, login => [
-  { name: 'WEFT_DELIVER_FILE_${toUpper(replace(login.file, '-', '_'))}', secretRef: '${login.key}-connection' }
-  { name: '${login.setting}_FILE', value: '/run/weft/secrets/${login.file}' }
+  { name: 'BRAID_DELIVER_FILE_${toUpper(replace(login.file, '-', '_'))}', secretRef: '${login.key}-connection' }
+  { name: '${login.setting}_FILE', value: '/run/braid/secrets/${login.file}' }
 ])))
 
 resource worker 'Microsoft.App/containerApps@2025-07-01' = {
@@ -122,7 +122,7 @@ resource worker 'Microsoft.App/containerApps@2025-07-01' = {
       secrets: concat(map(loginKeys, key => vaultSecret(vaultUri, identityId, '${key}-connection', 'pg-${key}-connection')),
         ferruleRunner == 'service' ? [
           // A Key Vault certificate's secret is its PEM bundle: the private key and the certificate.
-          vaultSecret(vaultUri, identityId, 'ferrule-worker-client-pem', 'weft-ferrule-worker-client')
+          vaultSecret(vaultUri, identityId, 'ferrule-worker-client-pem', 'braid-ferrule-worker-client')
         ] : [])
     }
     template: {

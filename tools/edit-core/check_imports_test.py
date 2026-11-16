@@ -24,9 +24,9 @@ def text(value):
 
 class ImportAllowlistTests(unittest.TestCase):
     def check(self, field, body, kind=0):
-        with tempfile.TemporaryDirectory(prefix="weft-edit-imports-") as directory:
+        with tempfile.TemporaryDirectory(prefix="braid-edit-imports-") as directory:
             path = pathlib.Path(directory) / "module_bg.wasm"
-            imports = leb(1) + text("./weft_ferrule_edit_wasm_bg.js") + text(field) + bytes([kind, 0])
+            imports = leb(1) + text("./braid_ferrule_edit_wasm_bg.js") + text(field) + bytes([kind, 0])
             path.write_bytes(b"\0asm\x01\0\0\0" + bytes([2]) + leb(len(imports)) + imports)
             path.with_name("module.js").write_text(f"{field}: function(arg0, arg1) {{ {body} }}")
             return checker.check(path)

@@ -1,8 +1,7 @@
 # Qualified release metadata
 
-Release qualification and activation are separate from producing a build artifact.
-These application contracts do not themselves persist a record, register an
-endpoint or invoke an Azure API.
+Release qualification compares a compiled build's output with its saved regression
+evidence before release activation.
 
 ## Qualification candidate
 
@@ -19,7 +18,7 @@ flag or most-recent preview output is accepted as a baseline. Missing baselines,
 changed bytes, unsuccessful runs or different actors/revisions/runtime provenance
 cannot qualify a build.
 
-The first whole-artifact policy requires an `All` target replay, the complete
+The whole-artifact policy requires an `All` target replay, the complete
 declared static input set and expected outputs for every primary/named target. A
 successful selected-target case does not qualify unexecuted targets. The original
 clock, parameters, input hashes and limits are bound through the replay identity.
@@ -35,11 +34,9 @@ and must not appear in logs or metadata-only responses.
 ## Private PostgreSQL evidence
 
 Migration `0021_build_qualification.sql` adds immutable qualification records.
-`weft_qualification_reader` and `weft_qualification_writer` are separate
+`braid_qualification_reader` and `braid_qualification_writer` are separate
 CONNECT-only logins provisioned before migration; neither receives direct table
-access. Existing local installations use the explicit administrator step in
-`deploy/local/postgres-add-qualification-roles.sh`. Host composition does not
-automatically enable qualification or run this provisioning step.
+access. Host composition does not provision database roles.
 
 The writer retains the canonical proof and private compiled completion bytes.
 Its database function locks the original build authority, checks the confirmed
@@ -69,7 +66,7 @@ configuration identities.
 
 An ordinary activation has no rollback source. Rollback requires both a retained
 prior release and a nonempty expected-current pointer; it reuses a qualified
-artifact rather than recompiling it. This first policy does not silently cross
+artifact rather than recompiling it. This policy does not silently cross
 environment versions or adopt another actor's qualification. An environment change
 requires new explicit qualification and release admission, not a rewritten build
 intent.

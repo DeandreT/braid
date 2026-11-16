@@ -1,13 +1,5 @@
 # External identity bindings
 
-Status: P4a [#91](https://github.com/DeandreT/weft/issues/91) is qualified and merged
-in [PR #98](https://github.com/DeandreT/weft/pull/98). Its P3g prerequisite is
-complete: revision append is qualified and merged through
-[PR #96](https://github.com/DeandreT/weft/pull/96), after all 140 fresh browser cases
-passed with no retries or skips, completing
-[#19](https://github.com/DeandreT/weft/issues/19). This foundation does not enable
-Entra sign-in, browser sessions or production-payload access.
-
 ## Identity without implicit permissions
 
 A provider-neutral exact `(provider, authority, subject)` key binds to one existing
@@ -16,8 +8,7 @@ with a letter and continuing with letters, digits, `.`, `_` or `-`. Authority an
 subject are nonempty valid Unicode, limited to 1,024 and 512 UTF-8 bytes. Control
 characters and NUL are rejected. Case, spaces and Unicode composition are
 preserved exactly: there is no trimming, URL normalization or email-based join.
-The future provider adapter must verify authentication before constructing its
-key; this storage foundation does not validate a token or configure Entra.
+The provider adapter verifies authentication before constructing its key.
 
 Each binding has an immutable ID, key, internal owner and UTC creation time.
 Creation starts enabled at version 1. Disabling compares that exact key, owner
@@ -31,8 +22,8 @@ Binding or resolving a key never creates an organization, principal, membership,
 project role, project-creation capability or production-payload grant. Separate
 owner preparation can create only its explicitly named missing principal or
 organization-admission row. Neither preparation command reactivates an inactive
-fact. Project authority remains the existing fresh database check; a future
-payload read also needs its separately managed explicit grant and ownership policy.
+fact. Project authority uses fresh database checks; payload reads also need a
+separately managed explicit grant and ownership policy.
 Azure RBAC and directory roles are not application grants.
 
 ## Restricted fresh reads
@@ -45,40 +36,29 @@ schema/integrity failures and cancellation remain failures rather than invented
 unknown identities. A resolved binding is an observation, not a permission lease;
 a later session/request must check current facts again.
 
-The separate `weft_identity_reader` login has only schema usage, the exact binding
+The separate `braid_identity_reader` login has only schema usage, the exact binding
 columns and principal `id`/`active` SELECT. It cannot write, read project/grant or
 artifact tables, administer roles, bypass RLS, create schema objects or execute
-application helper functions. Owner operations use the separate `weft_migrator`
+application helper functions. Owner operations use the separate `braid_migrator`
 profile and current schema/role guards, never a web runtime reader credential.
 Neither reader nor owner ports are registered as a browser login/bootstrap path.
 
-## Installation and upgrade
+## Installation
 
-The already selected migration is `0008_external_identity_bindings.sql`; prior
-migration bodies/checksums remain unchanged. Follow [project ownership
-setup](project-ownership.md#migrations-and-local-setup) and all earlier role
-prerequisites. Fresh local initialization includes `weft_identity_reader` with its
-separate `WEFT_LOCAL_IDENTITY_PASSWORD`. For an existing seven-migration database,
-the database administrator explicitly runs
-`deploy/local/postgres-add-identity-role.sh` with that password and the local
-`POSTGRES_USER`/`POSTGRES_DB` environment before the coordinated stop/migrate/start
-upgrade. The script creates a CONNECT-only login and refuses an existing role;
-it does not rotate a password or grant data access. Changing an environment file
-does not rerun initialization on an existing volume.
-
-The ordinary `migrate` command applies 0008 with the dedicated migration login;
-that migration supplies only the narrow reader grants. It creates no application
-principals or admissions. Do not pass migration credentials to the server or use
-Development provisioning as an external-account binding mechanism.
+Follow [project ownership setup](project-ownership.md#migrations-and-local-setup).
+Local initialization provisions `braid_identity_reader` with its separate
+`BRAID_LOCAL_IDENTITY_PASSWORD`; the migration tool installs the schema and narrow
+reader grants. Do not pass migration credentials to the server or use Development
+provisioning as an external-account binding mechanism.
 
 ## Explicit owner commands
 
-Set `WEFT_MIGRATION_CONNECTION_STRING` privately for the separate owner process.
+Set `BRAID_MIGRATION_CONNECTION_STRING` privately for the separate owner process.
 These commands use the existing DatabaseTool entry point; for a source checkout,
 prefix each argument list below with:
 
 ```sh
-dotnet run --configuration Release --project dotnet/tools/Weft.DatabaseTool --
+dotnet run --configuration Release --project dotnet/tools/Braid.DatabaseTool --
 ```
 
 | Arguments after `--` | Explicit effect |
@@ -123,7 +103,7 @@ disabled identity was enabled or given application access.
 | 1 | stderr `persistenceFailure`; no raw exception, SQL, key or credential is printed. An ambiguous commit is not reported as success. |
 | 130 | stderr `canceled` for handled cancellation; do not infer rollback after a dispatched commit. |
 
-The legacy `provision-development-identity` and
+The `provision-development-identity` and
 `set-project-creation-capability` commands remain separate. Login, binding replay
 and these preparation commands never invoke a project/payload-grant operation.
 No CLI result enables the Development identity provider in a hosted environment.
@@ -140,54 +120,7 @@ principal across client applications. The per-application pairwise `sub` is chec
 but never used as a key, because a token issued to another client application
 carries a different `sub` for the same person. [Bearer access](api-authentication.md)
 resolves a delegated access token's `(tid, oid)` through the same binding, so one
-`bind-entra-user` admits a person in the browser and in the CLI alike.
+`bind-entra-user` admits a person through both browser sessions and delegated API access.
 
-Earlier versions keyed browser sign-in on `("entra", issuer, sub)`. Those bindings
-remain in the database, unchanged, and nothing constructs that key any more, so they
-never match anyone. The distinct `entra.oid` provider guarantees that no retired
-key equals a tenant-stable one, whatever text either contains, because keys compare
-exactly on all three components. `bind-external-identity` refuses both Entra
-providers: tenant-stable keys are bound only through `bind-entra-user`, which fixes
-their canonical form, and retired keys can only be disabled.
-
-### Upgrading an installation with `sub` bindings
-
-There is no automatic migration: a pairwise `sub` cannot be converted to an object
-ID, so each binding is replaced explicitly by the owner.
-
-1. Before upgrading, find each bound user's object ID in their tenant: the Entra
-   admin center's user **Object ID**, or the `id` returned by Microsoft Graph for
-   that user. Confirm the tenant is the configured `WEFT_ENTRA_TENANT_ID`.
-2. For each user, run `bind-entra-user PRINCIPAL_ID` with
-   `{"tenantId":"<tenant>","objectId":"<object id>"}` on stdin, using the principal
-   of their existing binding. The new binding is enabled at version 1; the old one is
-   untouched.
-3. Upgrade the Session host. Signing in now resolves only the new binding. Existing
-   browser sessions issued from an old binding stay valid until they expire or
-   their binding is disabled.
-4. Disable each old binding with `disable-external-identity PRINCIPAL_ID
-   EXPECTED_VERSION` and its exact old key on stdin. This ends any session still
-   issued from it; the user signs in again through the new binding.
-
-A user without a new binding cannot sign in after step 3. Skipping step 4 leaves
-inert rows that never match, but keeps their old sessions alive until expiry.
-
-## Verification boundary and later work
-
-All 60 new cases passed: 34 pure, 18 actual-PostgreSQL and 8 compiled-CLI cases.
-The clean container completed locked restore, formatting, builds and ordinary publication;
-the Linux host then executed its exact exported test binaries. The full backend
-regression passed 2,895 cases with no failures or skips. All 140 existing catalog
-browser cases passed across six fresh migration-8 fixtures.
-
-The database/tool cases cover fresh and populated seven-to-eight upgrades, old
-data/definitions/ACL and effective-right conservation, direct least-privilege
-refusal, current binding/principal changes, collision/disable concurrency,
-durable restart and the actual compiled command's private-safe outcomes.
-Synthetic policy facts remain separate from those database/tool checks.
-
-This increment adds no OIDC callback, provider credentials, cookie/session,
-HTTP authentication route, claims-to-role synchronization, payload access or
-Angular sign-in control. Existing catalog Development identity and ordinary
-project authorization remain unchanged. Payload permission, server sessions,
-Entra integration and frontend authentication retain their separate scopes.
+Use `bind-entra-user` for Entra keys; `bind-external-identity` refuses Entra
+providers so their canonical form stays fixed.

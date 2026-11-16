@@ -341,7 +341,7 @@ function wrapper(
         ? [...wrapperKeys, "projectionDerivationId"]
         : wrapperKeys,
     ) ||
-    value["schemaVersion"] !== "weft.catalog-revision-report.v1" ||
+    value["schemaVersion"] !== "braid.catalog-revision-report.v1" ||
     value["operation"] !== operation ||
     !scope(value["revision"], expected.scope) ||
     !oneOf(value["readOutcome"], outcomes) ||
@@ -505,7 +505,7 @@ function projection(
   const document = value["document"];
   if (
     !object(document) ||
-    document["schemaVersion"] !== "weft.mapping-projection.v1" ||
+    document["schemaVersion"] !== "braid.mapping-projection.v1" ||
     !provenance(document["provenance"], expected, false) ||
     !object(value["provenance"]) ||
     !object(document["provenance"]) ||

@@ -1,9 +1,8 @@
 # Revision report metadata
 
-This increment adds durable metadata for projection and validation reports of an
-immutable catalog revision. It does not generate, store, decode, or serve report
-payloads. Native derivation and the persisted-report API follow in separate
-increments; the existing example viewer continues to use its current routes.
+PostgreSQL stores metadata for projection and validation reports of an immutable
+catalog revision. [The report workflow](revision-report-workflow.md) coordinates
+derivation and stored report bytes.
 
 ## Identity and permissions
 
@@ -15,8 +14,8 @@ fingerprints. A fingerprint locates a candidate; every restored field and the
 full committed source tuple must still match.
 
 The reader and derivation writer use separate restricted database logins.
-`weft_report_reader` can read the seven ownership/catalog source tables and two
-report tables. `weft_deriver` adds only the named report INSERT/UPDATE columns.
+`braid_report_reader` can read the seven ownership/catalog source tables and two
+report tables. `braid_deriver` adds only the named report INSERT/UPDATE columns.
 Neither profile can change the native revision, ingestion history, membership,
 mapping metadata, or project-creation capabilities.
 
@@ -49,25 +48,14 @@ different. Nullable validity, failed operations, actual issue counts, and
 projection coverage retain their meanings; a valid=false validation report can
 be usable.
 
-## Installation and upgrade
+## Installation
 
 Migration `0006_revision_derivations.sql` adds two tables, their constraints,
 policies and transition guards, and one standalone unique index on the native
-source tuple. The five predecessor migration files remain unchanged. Dedicated
-roles must exist with CONNECT-only provisioning before this migration runs.
-Both new runtime pools validate the accepted schema, checks, transition bodies,
+source tuple. Dedicated roles must exist with CONNECT-only provisioning before
+the schema is applied. Both runtime pools validate the accepted schema, checks, transition bodies,
 privileges, session settings, and full source index on every lease.
 
-New local Compose installations provision both logins from separate
-`WEFT_LOCAL_REPORT_PASSWORD` and `WEFT_LOCAL_DERIVATION_PASSWORD` values. An
-existing installation needs an explicit administrator step before the
-coordinated stop/migrate/start upgrade: run
-`deploy/local/postgres-add-report-roles.sh` inside its PostgreSQL container with
-both new passwords supplied in the environment. The script creates both roles
-and grants CONNECT in one transaction. Existing role names cause failure and
-rollback; the script does not adopt or rotate existing credentials.
-
-Metadata qualification uses actual PostgreSQL transitions and independently
-reopened pools/processes. Report completion facts and owner-controlled clock or
-counter setup in these tests are explicitly synthetic. They do not qualify
-report object bytes, the report codec, Ferrule derivation, or report HTTP routes.
+Local Compose installations provision both logins from separate
+`BRAID_LOCAL_REPORT_PASSWORD` and `BRAID_LOCAL_DERIVATION_PASSWORD` values. Apply the
+schema before opening either runtime pool.

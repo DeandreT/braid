@@ -21,8 +21,8 @@ Audio/Paint module graphs preserve distinct destinations, JSON/text remain refus
 non-window CSS modules and worklet dynamic imports reject. Qualification launch disables
 AnimationWorklet,CSSLayoutAPI,SharedStorageAPI,AdInterestGroupAPI,Fledge,Parakeet using
 the supported disable-blink-features switch. Audio/Paint stay enabled; ordinary worker/
-frame CSP and service-worker blocking remain. Exact binary/flag behavior requires actual
-qualification; no constructor patch or global profile/trust change is used.
+frame CSP and service-worker blocking remain. No constructor patch or global
+profile/trust change is used.
 
 Actual response headers pass the outermost OnStarting gate before write. Only the real
 callback303 '/' redirects normally. Named private transport adversaries may mutate one

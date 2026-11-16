@@ -8,7 +8,7 @@ async function install(page: Page): Promise<void> {
       return route.fulfill({ json: { version: 1, mode: "development" } });
     if (path === "/api/v1/health")
       return route.fulfill({
-        json: { status: "ok", service: "weft-api", apiVersion: "v1" },
+        json: { status: "ok", service: "braid-api", apiVersion: "v1" },
       });
     if (path === "/api/v1/help/sections")
       return route.fulfill({ json: { sections: [] } });
@@ -77,7 +77,7 @@ test("the menu switches the theme from the keyboard and the choice persists", as
 
   await (await appearance(page)).getByRole("radio", { name: "System" }).check();
   expect(
-    await page.evaluate(() => localStorage.getItem("weft.theme.v1")),
+    await page.evaluate(() => localStorage.getItem("braid.theme.v1")),
   ).toBeNull();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 });
@@ -87,7 +87,7 @@ test("a saved dark choice is applied before the first frame", async ({
 }) => {
   await install(page);
   await page.addInitScript(() => {
-    localStorage.setItem("weft.theme.v1", "dark");
+    localStorage.setItem("braid.theme.v1", "dark");
     // Rendering is blocked until head scripts and styles load, so the first
     // animation frame shows what the first paint shows.
     requestAnimationFrame(() => {

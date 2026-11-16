@@ -10,91 +10,91 @@ x-hardened: &hardened
   security_opt: [no-new-privileges:true]
   tmpfs:
     - /tmp:size=64m,mode=1777
-    - /run/weft/secrets:uid=1654,gid=1654,mode=0700,size=1m
+    - /run/braid/secrets:uid=1654,gid=1654,mode=0700,size=1m
 
 x-runtime: &runtime
   # The execution identity the target registers: the Docker runtime image ID or the service's runtime identity.
-  WEFT_COMPILED_RUNTIME_IMAGE: ${WEFT_COMPILED_RUNTIME_IMAGE:?Set the registered compiled runtime identity}
+  BRAID_COMPILED_RUNTIME_IMAGE: ${BRAID_COMPILED_RUNTIME_IMAGE:?Set the registered compiled runtime identity}
 
 services:
   endpoint:
     <<: *hardened
-    image: ${WEFT_ENDPOINT_IMAGE:-weft-mapping-endpoint:local}
+    image: ${BRAID_ENDPOINT_IMAGE:-braid-mapping-endpoint:local}
     restart: unless-stopped
     # A stop drains calls for up to their 90-second deadline, then joins every runtime container.
     stop_grace_period: 100s
     environment:
       <<: *runtime
-      WEFT_ENDPOINT_LISTEN_ADDR: 0.0.0.0:8080
-      WEFT_ENDPOINT_TRANSPORT: platformIngress
-      WEFT_ENDPOINT_ORGANIZATION_ID: ${WEFT_ENDPOINT_ORGANIZATION_ID:?Set the target's organization ID}
-      WEFT_ENDPOINT_PROJECT_ID: ${WEFT_ENDPOINT_PROJECT_ID:?Set the target's project ID}
-      WEFT_ENDPOINT_MAPPING_ID: ${WEFT_ENDPOINT_MAPPING_ID:?Set the target's mapping ID}
-      WEFT_ENDPOINT_ENVIRONMENT_ID: ${WEFT_ENDPOINT_ENVIRONMENT_ID:?Set the target's environment ID}
-      WEFT_ENDPOINT_ENVIRONMENT_VERSION: ${WEFT_ENDPOINT_ENVIRONMENT_VERSION:?Set the target's environment version}
-      WEFT_ENDPOINT_TARGET_ID: ${WEFT_ENDPOINT_TARGET_ID:?Set the registered target ID}
-      WEFT_ENDPOINT_ENTRA_TENANT_ID: ${WEFT_ENDPOINT_ENTRA_TENANT_ID:?Set the callers' Entra tenant ID}
-      WEFT_ENDPOINT_ENTRA_AUDIENCE: ${WEFT_ENDPOINT_ENTRA_AUDIENCE:?Set the endpoint app registration's client ID}
-      WEFT_ENDPOINT_CONCURRENCY: ${WEFT_ENDPOINT_CONCURRENCY:-4}
-      WEFT_ENDPOINT_INVOCATION_WRITER_CONNECTION_STRING_FILE: /run/weft/secrets/endpoint-invocation-writer
-      WEFT_DELIVER_FILE_ENDPOINT_INVOCATION_WRITER: Host=postgres;Database=weft;Username=weft_invocation_writer;Password=${WEFT_LOCAL_INVOCATION_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_ENDPOINT_RELEASE_READER_CONNECTION_STRING_FILE: /run/weft/secrets/endpoint-release-reader
-      WEFT_DELIVER_FILE_ENDPOINT_RELEASE_READER: Host=postgres;Database=weft;Username=weft_release_reader;Password=${WEFT_LOCAL_RELEASE_READER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_ENDPOINT_BUILD_READER_CONNECTION_STRING_FILE: /run/weft/secrets/endpoint-build-reader
-      WEFT_DELIVER_FILE_ENDPOINT_BUILD_READER: Host=postgres;Database=weft;Username=weft_build_reader;Password=${WEFT_LOCAL_BUILD_READER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_ENDPOINT_BUILD_RUN_READER_CONNECTION_STRING_FILE: /run/weft/secrets/endpoint-build-run-reader
-      WEFT_DELIVER_FILE_ENDPOINT_BUILD_RUN_READER: Host=postgres;Database=weft;Username=weft_build_run_reader;Password=${WEFT_LOCAL_BUILD_RUN_READER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_ENDPOINT_ACCESS_CONNECTION_STRING_FILE: /run/weft/secrets/endpoint-access
-      WEFT_DELIVER_FILE_ENDPOINT_ACCESS: Host=postgres;Database=weft;Username=weft_runtime;Password=${WEFT_LOCAL_RUNTIME_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_ENDPOINT_REPORT_READER_CONNECTION_STRING_FILE: /run/weft/secrets/endpoint-report-reader
-      WEFT_DELIVER_FILE_ENDPOINT_REPORT_READER: Host=postgres;Database=weft;Username=weft_report_reader;Password=${WEFT_LOCAL_REPORT_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_ENDPOINT_RUN_READER_CONNECTION_STRING_FILE: /run/weft/secrets/endpoint-run-reader
-      WEFT_DELIVER_FILE_ENDPOINT_RUN_READER: Host=postgres;Database=weft;Username=weft_run_reader;Password=${WEFT_LOCAL_RUN_READER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_ENDPOINT_CASE_READER_CONNECTION_STRING_FILE: /run/weft/secrets/endpoint-case-reader
-      WEFT_DELIVER_FILE_ENDPOINT_CASE_READER: Host=postgres;Database=weft;Username=weft_case_reader;Password=${WEFT_LOCAL_CASE_READER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_ENDPOINT_LISTEN_ADDR: 0.0.0.0:8080
+      BRAID_ENDPOINT_TRANSPORT: platformIngress
+      BRAID_ENDPOINT_ORGANIZATION_ID: ${BRAID_ENDPOINT_ORGANIZATION_ID:?Set the target's organization ID}
+      BRAID_ENDPOINT_PROJECT_ID: ${BRAID_ENDPOINT_PROJECT_ID:?Set the target's project ID}
+      BRAID_ENDPOINT_MAPPING_ID: ${BRAID_ENDPOINT_MAPPING_ID:?Set the target's mapping ID}
+      BRAID_ENDPOINT_ENVIRONMENT_ID: ${BRAID_ENDPOINT_ENVIRONMENT_ID:?Set the target's environment ID}
+      BRAID_ENDPOINT_ENVIRONMENT_VERSION: ${BRAID_ENDPOINT_ENVIRONMENT_VERSION:?Set the target's environment version}
+      BRAID_ENDPOINT_TARGET_ID: ${BRAID_ENDPOINT_TARGET_ID:?Set the registered target ID}
+      BRAID_ENDPOINT_ENTRA_TENANT_ID: ${BRAID_ENDPOINT_ENTRA_TENANT_ID:?Set the callers' Entra tenant ID}
+      BRAID_ENDPOINT_ENTRA_AUDIENCE: ${BRAID_ENDPOINT_ENTRA_AUDIENCE:?Set the endpoint app registration's client ID}
+      BRAID_ENDPOINT_CONCURRENCY: ${BRAID_ENDPOINT_CONCURRENCY:-4}
+      BRAID_ENDPOINT_INVOCATION_WRITER_CONNECTION_STRING_FILE: /run/braid/secrets/endpoint-invocation-writer
+      BRAID_DELIVER_FILE_ENDPOINT_INVOCATION_WRITER: Host=postgres;Database=braid;Username=braid_invocation_writer;Password=${BRAID_LOCAL_INVOCATION_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_ENDPOINT_RELEASE_READER_CONNECTION_STRING_FILE: /run/braid/secrets/endpoint-release-reader
+      BRAID_DELIVER_FILE_ENDPOINT_RELEASE_READER: Host=postgres;Database=braid;Username=braid_release_reader;Password=${BRAID_LOCAL_RELEASE_READER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_ENDPOINT_BUILD_READER_CONNECTION_STRING_FILE: /run/braid/secrets/endpoint-build-reader
+      BRAID_DELIVER_FILE_ENDPOINT_BUILD_READER: Host=postgres;Database=braid;Username=braid_build_reader;Password=${BRAID_LOCAL_BUILD_READER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_ENDPOINT_BUILD_RUN_READER_CONNECTION_STRING_FILE: /run/braid/secrets/endpoint-build-run-reader
+      BRAID_DELIVER_FILE_ENDPOINT_BUILD_RUN_READER: Host=postgres;Database=braid;Username=braid_build_run_reader;Password=${BRAID_LOCAL_BUILD_RUN_READER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_ENDPOINT_ACCESS_CONNECTION_STRING_FILE: /run/braid/secrets/endpoint-access
+      BRAID_DELIVER_FILE_ENDPOINT_ACCESS: Host=postgres;Database=braid;Username=braid_runtime;Password=${BRAID_LOCAL_RUNTIME_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_ENDPOINT_REPORT_READER_CONNECTION_STRING_FILE: /run/braid/secrets/endpoint-report-reader
+      BRAID_DELIVER_FILE_ENDPOINT_REPORT_READER: Host=postgres;Database=braid;Username=braid_report_reader;Password=${BRAID_LOCAL_REPORT_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_ENDPOINT_RUN_READER_CONNECTION_STRING_FILE: /run/braid/secrets/endpoint-run-reader
+      BRAID_DELIVER_FILE_ENDPOINT_RUN_READER: Host=postgres;Database=braid;Username=braid_run_reader;Password=${BRAID_LOCAL_RUN_READER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_ENDPOINT_CASE_READER_CONNECTION_STRING_FILE: /run/braid/secrets/endpoint-case-reader
+      BRAID_DELIVER_FILE_ENDPOINT_CASE_READER: Host=postgres;Database=braid;Username=braid_case_reader;Password=${BRAID_LOCAL_CASE_READER_PASSWORD:?};GSS Encryption Mode=Disable
     # Plain HTTP on loopback only, for a local TLS-terminating ingress (the platformIngress transport).
     ports:
-      - 127.0.0.1:${WEFT_ENDPOINT_PORT:-8490}:8080
+      - 127.0.0.1:${BRAID_ENDPOINT_PORT:-8490}:8080
     networks: [database, egress]
     depends_on:
       migrate: {condition: service_completed_successfully}
     # The host's own probe; it bypasses the entrypoint, so no private file is delivered again.
     healthcheck:
-      test: ["CMD", "/usr/bin/dotnet", "/app/endpoint/weft-mapping-endpoint.dll", "probe", "ready"]
+      test: ["CMD", "/usr/bin/dotnet", "/app/endpoint/braid-mapping-endpoint.dll", "probe", "ready"]
       interval: 5s
       timeout: 5s
       retries: 24
 
-  # One-shot grant administration with Weft.DatabaseTool, as a named project administrator, for example
+  # One-shot grant administration with Braid.DatabaseTool, as a named project administrator, for example
   #   docker compose ... run --rm endpoint-grants grant-machine-invocation ADMIN ORG PROJECT MAPPING ENVIRONMENT VERSION TARGET GRANT TENANT OBJECT
   endpoint-grants:
     <<: *hardened
-    image: ${WEFT_IMAGE:-weft:local}
+    image: ${BRAID_IMAGE:-braid:local}
     profiles: [operator]
     restart: "no"
-    entrypoint: ["/app/bin/weft-entrypoint", "database"]
+    entrypoint: ["/app/bin/braid-entrypoint", "database"]
     environment:
-      WEFT_INVOCATION_GRANT_WRITER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_invocation_grant_writer;Password=${WEFT_LOCAL_INVOCATION_GRANT_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_INVOCATION_GRANT_WRITER_CONNECTION_STRING: Host=postgres;Database=braid;Username=braid_invocation_grant_writer;Password=${BRAID_LOCAL_INVOCATION_GRANT_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
     networks: [database]
 
-  # One-shot release operations with Weft.ReleaseTool, as a named publisher or administrator: qualify a
+  # One-shot release operations with Braid.ReleaseTool, as a named publisher or administrator: qualify a
   # completed build by executing it through the endpoint's compiled runtime, register the target, activate
   # or roll back.
   endpoint-release:
     <<: *hardened
-    image: ${WEFT_ENDPOINT_IMAGE:-weft-mapping-endpoint:local}
+    image: ${BRAID_ENDPOINT_IMAGE:-braid-mapping-endpoint:local}
     profiles: [operator]
     restart: "no"
-    entrypoint: ["/app/bin/weft-entrypoint", "release"]
+    entrypoint: ["/app/bin/braid-entrypoint", "release"]
     environment:
       <<: *runtime
-      WEFT_RELEASE_WRITER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_release_writer;Password=${WEFT_LOCAL_RELEASE_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_QUALIFICATION_READER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_qualification_reader;Password=${WEFT_LOCAL_QUALIFICATION_READER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_QUALIFICATION_WRITER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_qualification_writer;Password=${WEFT_LOCAL_QUALIFICATION_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_QUALIFICATION_BUILD_READER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_build_reader;Password=${WEFT_LOCAL_BUILD_READER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_QUALIFICATION_BUILD_RUN_READER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_build_run_reader;Password=${WEFT_LOCAL_BUILD_RUN_READER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_QUALIFICATION_ACCESS_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_runtime;Password=${WEFT_LOCAL_RUNTIME_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_QUALIFICATION_REPORT_READER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_report_reader;Password=${WEFT_LOCAL_REPORT_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_QUALIFICATION_RUN_READER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_run_reader;Password=${WEFT_LOCAL_RUN_READER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_QUALIFICATION_CASE_READER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_case_reader;Password=${WEFT_LOCAL_CASE_READER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_RELEASE_WRITER_CONNECTION_STRING: Host=postgres;Database=braid;Username=braid_release_writer;Password=${BRAID_LOCAL_RELEASE_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_QUALIFICATION_READER_CONNECTION_STRING: Host=postgres;Database=braid;Username=braid_qualification_reader;Password=${BRAID_LOCAL_QUALIFICATION_READER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_QUALIFICATION_WRITER_CONNECTION_STRING: Host=postgres;Database=braid;Username=braid_qualification_writer;Password=${BRAID_LOCAL_QUALIFICATION_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_QUALIFICATION_BUILD_READER_CONNECTION_STRING: Host=postgres;Database=braid;Username=braid_build_reader;Password=${BRAID_LOCAL_BUILD_READER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_QUALIFICATION_BUILD_RUN_READER_CONNECTION_STRING: Host=postgres;Database=braid;Username=braid_build_run_reader;Password=${BRAID_LOCAL_BUILD_RUN_READER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_QUALIFICATION_ACCESS_CONNECTION_STRING: Host=postgres;Database=braid;Username=braid_runtime;Password=${BRAID_LOCAL_RUNTIME_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_QUALIFICATION_REPORT_READER_CONNECTION_STRING: Host=postgres;Database=braid;Username=braid_report_reader;Password=${BRAID_LOCAL_REPORT_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_QUALIFICATION_RUN_READER_CONNECTION_STRING: Host=postgres;Database=braid;Username=braid_run_reader;Password=${BRAID_LOCAL_RUN_READER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_QUALIFICATION_CASE_READER_CONNECTION_STRING: Host=postgres;Database=braid;Username=braid_case_reader;Password=${BRAID_LOCAL_CASE_READER_PASSWORD:?};GSS Encryption Mode=Disable
     networks: [database]

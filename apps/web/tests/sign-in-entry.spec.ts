@@ -60,7 +60,7 @@ async function install(page: Page, development = false) {
         });
       case "/api/v1/health":
         return route.fulfill({
-          json: { status: "ok", service: "weft-api", apiVersion: "v1" },
+          json: { status: "ok", service: "braid-api", apiVersion: "v1" },
         });
       case "/api/v1/catalog/context":
         ++fixture.contextReads;

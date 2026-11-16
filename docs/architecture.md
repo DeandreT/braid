@@ -1,14 +1,8 @@
 # braid architecture
 
 This document describes the application's source boundaries and design contracts.
-The catalog, workbench, chat, editing, creation and execution paths exist in source;
-they are not all enabled on every host. Each capability still needs its own
-permissions, configuration and runtime admission. Verification applies only to
-the environment and operations actually checked.
 
-The [delivery plan](../ROADMAP.md) owns current priorities and acceptance gates.
-The real-provider creation demonstration and Azure acceptance remain user-deferred;
-source, local verification and deployment templates do not establish hosted readiness.
+The [delivery plan](../ROADMAP.md) owns current priorities.
 
 ## Product purpose
 
@@ -27,8 +21,6 @@ and Entra sign-in. Opt-in editing uses private drafts and a separate **Save**.
 Creation from specifications uses retained proposals, sample review and explicit
 **Approve and save this mapping**. Chat edits likewise require approval of the
 exact reviewed proposal; a model cannot approve or save its own proposal.
-Full visual authoring, automatic production changes, billing and arbitrary
-connector execution are not implied by these capabilities.
 
 ## Architectural decisions
 
@@ -65,7 +57,7 @@ flowchart TB
         edge["Edge: TLS and HSTS"]
         server["braid server (Session host): /api/v1 and /api/auth"]
         endpoint["Mapping endpoint host: /v1/invocations"]
-        worker["Weft.Worker runs: previews, regression runs, builds"]
+        worker["Braid.Worker runs: previews, regression runs, builds"]
     end
     subgraph external [External services]
         direction LR
@@ -128,8 +120,8 @@ sequenceDiagram
 sequenceDiagram
     participant B as Browser
     participant S as braid server
-    participant W as Weft.Worker runs
-    participant R as Weft.ReleaseTool
+    participant W as Braid.Worker runs
+    participant R as Braid.ReleaseTool
     participant P as PostgreSQL
     participant F as Ferrule service
     participant E as Mapping endpoint
@@ -157,38 +149,34 @@ There are four independent extension boundaries: mapping backend, identity
 provider, model provider, and deployment target. Adding one must not require
 changing the contracts of the others.
 
-## Proposed source ownership
-
-These existing paths define source ownership. The heading is retained for older
-links; this is not a list of modules still waiting to be created.
+## Source ownership
 
 | Path | Owns | Must not own |
 | --- | --- | --- |
 | `apps/web/` | Catalog, viewer, chat window, preview forms, generated API client | Ferrule semantics, provider credentials, authorization decisions |
-| `dotnet/src/Weft.Domain/` | IDs, revisions, memberships, runs, conversations, capabilities | Framework types and third-party engine/provider types |
-| `dotnet/src/Weft.Api/` | HTTP admission, authenticated request boundaries, application composition and chat event streams | Mapping execution and model-specific wire formats |
-| `dotnet/src/Weft.MappingBackends/` | Mapping adapter contract and Ferrule implementation | User sessions, deployment credentials, universal mapping execution |
-| `dotnet/src/Weft.Ai/` | Provider adapters, tool contracts, model profiles and bounded conversation processing | Bypassing API permissions or executing arbitrary model-supplied code |
-| `dotnet/apps/Weft.Worker/` | Durable preview, regression and build job hosting | Public authentication and unrestricted host I/O |
-| `dotnet/src/Weft.Deployment/` | Build, qualification, release and runtime contracts/adapters | Reimplementing a mapping engine |
-| `deploy/azure/` | Azure infrastructure templates and operator procedures; actual Azure acceptance is separate | Cloud types in domain contracts |
+| `dotnet/src/Braid.Domain/` | IDs, revisions, memberships, runs, conversations, capabilities | Framework types and third-party engine/provider types |
+| `dotnet/src/Braid.Api/` | HTTP admission, authenticated request boundaries, application composition and chat event streams | Mapping execution and model-specific wire formats |
+| `dotnet/src/Braid.MappingBackends/` | Mapping adapter contract and Ferrule implementation | User sessions, deployment credentials, universal mapping execution |
+| `dotnet/src/Braid.Ai/` | Provider adapters, tool contracts, model profiles and bounded conversation processing | Bypassing API permissions or executing arbitrary model-supplied code |
+| `dotnet/apps/Braid.Worker/` | Durable preview, regression and build job hosting | Public authentication and unrestricted host I/O |
+| `dotnet/src/Braid.Deployment/` | Build, qualification, release and runtime contracts/adapters | Reimplementing a mapping engine |
+| `deploy/azure/` | Azure infrastructure templates and operator procedures | Cloud types in domain contracts |
 
 Keep Ferrule dependency declarations confined to its adapter and worker wiring.
 braid's public API and database schema must not expose Ferrule's Rust types.
-`dotnet/src/Weft.Contracts/` owns public wire models;
-`dotnet/src/Weft.Application/` owns commands and policies, and
-`dotnet/src/Weft.Persistence.Postgres/` owns scoped transactions and migrations.
-`dotnet/apps/Weft.Server/` is the executable host. Identity adapters live in
-`dotnet/src/Weft.Identity/`; durable job handlers live in `dotnet/src/Weft.Jobs/`.
+`dotnet/src/Braid.Contracts/` owns public wire models;
+`dotnet/src/Braid.Application/` owns commands and policies, and
+`dotnet/src/Braid.Persistence.Postgres/` owns scoped transactions and migrations.
+`dotnet/apps/Braid.Server/` is the executable host. Identity adapters live in
+`dotnet/src/Braid.Identity/`; durable job handlers live in `dotnet/src/Braid.Jobs/`.
 `engines/ferrule-host/` uses Ferrule's Rust libraries behind a versioned
 request/result protocol. It is an engine adapter, not the application backend.
 
 ## Domain and persistence
 
 All resource ownership is explicit: organization, project, mapping, then
-revision. Start with one configured organization and Entra tenant, but retain
-organization IDs in queries and storage references from the first persistence
-increment. Multi-organization onboarding is a separate milestone.
+revision. Queries and storage references include organization IDs. Each host
+uses one configured organization and Entra tenant.
 
 | Entity | Important contents |
 | --- | --- |
@@ -220,7 +208,7 @@ rebuilt without changing a revision's artifact bytes.
 
 ## HTTP and browser boundary
 
-Use versioned `/api/v1` routes and the published [OpenAPI contract](../contracts/weft-v1.json).
+Use versioned `/api/v1` routes and the published [OpenAPI contract](../contracts/braid-v1.json).
 Generate browser types from that contract rather than copying C#
 models by hand. Resource IDs and backend node locators use strings in the public
 API to avoid JavaScript integer precision loss.
@@ -249,7 +237,7 @@ The browser receives a secure, HttpOnly, SameSite session cookie. Sessions are
 stored server-side, rotate on login, have bounded lifetimes, and can be revoked.
 State-changing requests require CSRF/origin protection. The SPA and API use one
 origin in production; development origins are explicitly configured. Signed-in
-CLI bearer access and app-only mapping endpoint tokens are validated separately
+API bearer access and app-only mapping endpoint tokens are validated separately
 from browser sessions; see [API authentication](api-authentication.md) and
 [machine authorization](machine-authorization.md).
 
@@ -305,16 +293,13 @@ memory, input/output, trace, artifact-count, and concurrency limits. A timeout
 must terminate the worker, not just stop awaiting an in-process task. Worker
 credentials cannot administer memberships, model profiles, or deployments.
 
-The first preview supports explicitly supplied in-memory documents and typed
+Preview supports explicitly supplied in-memory documents and typed
 parameters. It rejects unresolved resources, stateful database operations,
 update-existing files, and unapproved outbound connections before execution.
 Capabilities are checked for the exact revision, target, format, and requested
 operation. A backend's maximum sizes are ceilings; braid can impose smaller limits.
 
-Historical sizing proposals were 8 MiB per artifact/input document,
-32 MiB combined inputs and combined outputs independently, 128 output artifacts,
-30 seconds per preview, and 512 MiB per worker. These are tuning proposals,
-not current defaults or measured throughput claims. Use the admitted limits in
+Use the limits in
 [preview runs](preview-runs.md), [Ferrule worker](ferrule-worker.md) and the exact
 operation's contract. The implementation must also limit projection
 nodes, JSON depth, diagnostics, chat tool results, and trace bytes. Exceeding a
@@ -338,8 +323,7 @@ Configure durable endpoints explicitly. braid's run/deployment records remain th
 source of user-visible status and immutable attempt evidence; Wolverine envelopes
 are delivery infrastructure. Handler retries and duplicate delivery must use the
 same business operation identity and must not duplicate published outputs or
-external deployment effects. Qualify process failure, replay, and cancellation
-against an isolated database before claiming durability.
+external deployment effects.
 
 Keep chat's live response stream and ordinary reads in ASP.NET Core. Do not retry
 paid model turns through a generic background-message policy. Longer AI actions
@@ -354,18 +338,11 @@ session advisory locks, independently of application connection pooling.
 Local development uses a static frontend, one API process, an isolated worker,
 PostgreSQL, and local private object storage. A local-only development identity
 mode must be explicit, bind to loopback, and fail startup in hosted configuration.
-No hosted release is admitted before its real authentication and authorization pass.
-
-Initial Azure candidate: static frontend hosting, containerized API/workers on
-Container Apps, PostgreSQL, private Blob storage, and managed identities. HTTP
-instances can scale to zero where latency requirements allow; stored jobs,
-sessions, and conversation state must survive instance loss. Queued work has
-leases, recovery, and bounded attempts rather than relying on one HTTP request.
 
 The Azure templates, in [Azure deployment](azure-deployment.md), describe the
 API container on Container Apps serving the built frontend from the same origin,
 with private PostgreSQL Flexible Server, Key Vault and a managed identity. The API uses one
-instance; scale-out needs the session key ring and private storage qualified for it.
+instance with persistent session keys and private storage.
 With native work enabled, a separate worker app executes previews, regression runs and
 builds through the Ferrule service below, with its own identity and database logins.
 
@@ -386,22 +363,10 @@ same-ID retries replay the retained outcome instead of executing again. Transfor
 with external side effects still require their own idempotency contract rather than
 blind replay.
 
-Azure Functions isolated .NET workers are another candidate for HTTP or event
-workloads. Cloud selection is a deployment decision, not part of the mapping
+Cloud selection is a deployment decision, not part of the mapping
 model. Generated mappings are supported only when their backend accepts the
 exact graph and physical format; interpreter support does not imply generator
-support. These templates do not establish an accepted Azure deployment or authorize
-resource creation. Provider/cloud acceptance remains deferred.
-
-## Decisions still open
-
-- First model provider and the hosted/local profiles available at launch.
-- Whether organizations permit native mapping text to leave their network;
-  model-profile policy must support an explicit allowed destination.
-- Measured preview limits and whether longer jobs need a separate service class.
-- Initial Azure region, tenant, and operational budget.
-- Whether browser-local WASM preview merits an additional runtime after the
-  hosted viewer and worker path are qualified.
+support.
 
 ## References
 

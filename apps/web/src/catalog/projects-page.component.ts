@@ -8,7 +8,7 @@ import {
 import type { CatalogProjectPage } from "./catalog-types";
 
 @Component({
-  selector: "weft-projects-page",
+  selector: "braid-projects-page",
   imports: [DatePipe, RouterLink, CatalogStatusComponent],
   templateUrl: "./projects-page.component.html",
 })

@@ -69,14 +69,14 @@ def prepare(args):
         raise RuntimeError("The pinned offline compiler/reference installation is absent.")
     source = Path(__file__).with_name("PrivacyProbe.cs")
     options = ["-target:exe", "-nologo", "-nostdlib+", "-langversion:14", "-nullable:enable",
-               "-deterministic+", "-unsafe-", "-debug-", f"-out:{directory / 'weft-privacy-probe.dll'}"]
+               "-deterministic+", "-unsafe-", "-debug-", f"-out:{directory / 'braid-privacy-probe.dll'}"]
     options += [f"-reference:{path}" for path in sorted(references.glob("*.dll"))] + [str(directory / source.name)]
     if any(any(character in value for character in ('"', "\n", "\r")) for value in options):
         raise RuntimeError("A fixture path contains an unsupported response-file character.")
     directory.mkdir(mode=0o700)
     (directory / source.name).write_bytes(source.read_bytes())
     (directory / "compiler.rsp").write_text("\n".join(f'"{value}"' for value in options) + "\n", encoding="utf-8")
-    (directory / "weft-privacy-probe.runtimeconfig.json").write_text(json.dumps({"runtimeOptions": {
+    (directory / "braid-privacy-probe.runtimeconfig.json").write_text(json.dumps({"runtimeOptions": {
         "tfm": "net10.0", "rollForward": "Disable", "framework": {"name": "Microsoft.NETCore.App", "version": RUNTIME},
     }}) + "\n", encoding="utf-8")
     print(json.dumps({"compile_command": [str(root / "dotnet"), "exec", str(compiler), "-noconfig", "@" + str(directory / "compiler.rsp")]}))
@@ -157,8 +157,8 @@ def observe(libc, child, report, expected_exe, parent, deadline):
     return result
 
 
-def managed_image(root, initial_command, marker):
-    return root / "dotnet" if marker == b"WFC1" else Path(initial_command)
+def managed_image(initial_command):
+    return Path(initial_command)
 
 
 def sample(command, root, directory, libc, marker, parent, deadline, owned):
@@ -185,7 +185,7 @@ def sample(command, root, directory, libc, marker, parent, deadline, owned):
         report = json.loads(output.receive())
         if report.get("phase") != phase:
             raise RuntimeError("The target did not report the expected managed checkpoint.")
-        expected_exe = managed_image(root, command[0], marker)
+        expected_exe = managed_image(command[0])
         results.append(observe(libc, child, report, expected_exe, parent, deadline))
         child.stdin.write(b"M\n" if phase == "managed-start" else b"Q\n")
     child.stdin.close()
@@ -245,23 +245,20 @@ def run(args):
     libc.process_vm_readv.restype = ctypes.c_ssize_t
     libc.process_vm_readv.argtypes = [ctypes.c_int, ctypes.POINTER(Iovec), ctypes.c_ulong, ctypes.POINTER(Iovec), ctypes.c_ulong, ctypes.c_ulong]
     root, probe, launcher = (path.resolve(strict=True) for path in (args.dotnet_root, args.probe_assembly, args.launcher))
-    if probe.name != "weft-privacy-probe.dll":
+    if probe.name != "braid-privacy-probe.dll":
         raise RuntimeError("Only the named synthetic fixture is admitted.")
     files = [provenance(path) for path in (launcher, root / "dotnet", probe, probe.with_suffix(".runtimeconfig.json"), root / f"host/fxr/{RUNTIME}/libhostfxr.so")]
-    directory = Path(tempfile.mkdtemp(prefix="weft-privacy-", dir=args.work_root.resolve(strict=True)))
+    directory = Path(tempfile.mkdtemp(prefix="braid-privacy-", dir=args.work_root.resolve(strict=True)))
     owned = []
     try:
         control = sample([str(root / "dotnet"), str(probe), "control"], root, directory, libc, None, parent, deadline, owned)
         if not all(value["self"]["dump"] == 1 and access(value, True) for value in control):
             raise RuntimeError("Positive control blocked: INCONCLUSIVE. Do not grant tracing or change policy.")
         command = [str(launcher), "--cpu-seconds=30", "--memory-bytes=3221225472", "--open-files=128", "--file-bytes=1048576"]
-        if args.contract == "current":
-            command += [f"--dotnet-root={root}", "--profile=runtime", f"--runtime-assembly={probe}"]
+        command += [f"--dotnet-root={root}", "--profile=runtime", f"--runtime-assembly={probe}"]
         read = [root, probe.parent] + [Path(path) for path in ("/lib", "/lib64", "/usr/lib", "/usr/lib64", "/dev/urandom") if Path(path).exists()]
         command += [f"--read={path}" for path in dict.fromkeys(read)]
-        if args.contract == "legacy":
-            command += ["--execute=/lib64/ld-linux-x86-64.so.2", "--", str(root / "dotnet"), str(probe)]
-        target = sample(command, root, directory, libc, b"WFC2" if args.contract == "current" else b"WFC1", parent, deadline, owned)
+        target = sample(command, root, directory, libc, b"BFC2", parent, deadline, owned)
         protected = all(value["self"]["dump"] == 0 and access(value, False) and
                         all(value[name]["errno"] in (errno.EPERM, errno.EACCES) for name in ("attach", "environ", "maps", "mem", "memory")) for value in target)
         mutations = target[-1]["self"]["mutations"]
@@ -289,7 +286,6 @@ def main():
     probe = commands.add_parser("run")
     for option in ("launcher", "dotnet-root", "probe-assembly", "work-root"):
         probe.add_argument("--" + option, type=Path, required=True)
-    probe.add_argument("--contract", choices=("legacy", "current"), default="current")
     probe.add_argument("--expect", choices=("protected", "vulnerable"), default="protected")
     probe.set_defaults(action=run)
     args = parser.parse_args(); args.action(args)

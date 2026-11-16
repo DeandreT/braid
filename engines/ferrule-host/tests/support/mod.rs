@@ -4,7 +4,7 @@ use std::io::Cursor;
 
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use weft_ferrule_host::protocol::{Limits, PROTOCOL_VERSION, RequestHeader, Revision};
+use braid_ferrule_host::protocol::{Limits, PROTOCOL_VERSION, RequestHeader, Revision};
 
 pub const BASIC: &[u8] = include_bytes!("../fixtures/valid-basic.json");
 pub const INVALID: &[u8] = include_bytes!("../fixtures/invalid-graph.json");
@@ -132,7 +132,7 @@ pub fn digest(bytes: &[u8]) -> String {
 }
 
 pub fn process(header: &RequestHeader, native: &[u8]) -> Value {
-    serde_json::to_value(weft_ferrule_host::process_request(header, native)).unwrap()
+    serde_json::to_value(braid_ferrule_host::process_request(header, native)).unwrap()
 }
 
 /// Gives sandboxed children only the three standard streams, as the service does. A harness such as a CI
@@ -167,7 +167,7 @@ pub fn framed_bytes(header: &[u8], native: &[u8]) -> Vec<u8> {
 
 pub fn stream(bytes: &[u8]) -> Value {
     let mut output = Vec::new();
-    weft_ferrule_host::handle_stream(&mut Cursor::new(bytes), &mut output).unwrap();
+    braid_ferrule_host::handle_stream(&mut Cursor::new(bytes), &mut output).unwrap();
     response_frame(&output)
 }
 

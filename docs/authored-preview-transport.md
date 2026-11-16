@@ -1,10 +1,9 @@
 # Project-owned authored preview transport
 
 `FerruleInspectionBackend.PreviewAuthoredAsync` executes retained native bytes and
-one sample through `weft.ferrule-authored-preview.v1`. The request binds a genuine
+one sample through `braid.ferrule-authored-preview.v1`. The request binds a genuine
 project, authoring identity, proposal fingerprint and native/sample digests. The
-compiler and preview runner use distinct fixed profiles. Approval remains a
-separate application operation.
+compiler and preview runner use distinct fixed profiles.
 
 `FerruleMappingCreationPreview` adapts verified output into the creation workflow.
 `MappingCreationPreviewService` checks current author/content authority and exact
@@ -28,29 +27,20 @@ with their corresponding formats. Format selection comes from the native
 boundaries, never a sample filename.
 
 The `authored-preview` service profile is disabled by default. Its setting is
-`WEFT_FERRULE_SERVICE_AUTHORED_PREVIEW_ENABLED=true`. Service routing rejects this
+`BRAID_FERRULE_SERVICE_AUTHORED_PREVIEW_ENABLED=true`. Service routing rejects this
 protocol on other profiles, including duplicate protocol declarations. Its fixed
 process/container policy is 512 MiB, 30 CPU seconds and 30 seconds wall time, using
-the existing hardened Ferrule process runner. Worker image/host support and actual
-Linux sandbox qualification are required before deployment activation.
+the existing hardened Ferrule process runner.
 
-## Qualification
+## Verification
 
 The portable interop fixtures launch the actual pinned Rust authoring and authored
-preview protocol executables. Configure `WEFT_AUTHORING_TEST_EXECUTABLE` and
-`WEFT_AUTHORED_PREVIEW_TEST_EXECUTABLE` to run them. They compile fresh mappings and
+preview protocol executables. Configure `BRAID_AUTHORING_TEST_EXECUTABLE` and
+`BRAID_AUTHORED_PREVIEW_TEST_EXECUTABLE` to run them. They compile fresh mappings and
 execute JSON samples into JSON, CSV, TSV and XML, checking escaped output and
 malformed-input refusals. Application-level coverage generates and previews a
 multi-binding proposal through the real adapters.
 
 Transcript tests cover identity/digest/frame/format substitution, omitted and
-duplicate fields, cancellation, byte limits and cross-profile refusal. Portable
-process interoperability is distinct from Linux process containment and hosted
-provider acceptance. The wider Rust execution matrix covers all six formats;
-its documented schema/operator restrictions remain authoritative.
-
-The focused creation/compiler/preview/service-settings/OpenAPI selection passes
-66 .NET tests with zero skips on the pinned .NET 10.0.112 toolchain, including
-the actual portable compiler and preview processes. The service contract is
-regenerated from its document host. Production Linux dispatch qualification is
-tracked separately.
+duplicate fields, cancellation, byte limits and cross-profile refusal. The Rust
+execution matrix covers all six formats under the documented schema/operator restrictions.

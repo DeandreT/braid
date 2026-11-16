@@ -4,7 +4,7 @@ import { csvDocumentLimits } from "./csv-document";
 
 /** Display only: the owning workflow retains authority, downloads and comparison policy. */
 @Component({
-  selector: "weft-document-view",
+  selector: "braid-document-view",
   template: `
     <section aria-label="Document bytes">
       @if (data().xmlMetadataText; as metadata) {

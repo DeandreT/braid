@@ -25,7 +25,7 @@ use protocol::{
     PreviewResponse, PreviewResult, PreviewTarget, PreviewValue, XML_PREVIEW_PROTOCOL_VERSION,
 };
 
-const PROJECT_ROOT: &str = "/weft";
+const PROJECT_ROOT: &str = "/braid";
 const MINIMUM_TEXT_BYTES: u32 = 64;
 
 /// A complete preview reply: the response header and its declared output bytes.
@@ -332,10 +332,10 @@ pub fn process_preview(
         .enumerate()
         .map(|(index, (input, format))| match input {
             PreviewInput::Primary { .. } => {
-                PathBuf::from(format!("/weft/input/primary.{}", format.extension()))
+                PathBuf::from(format!("/braid/input/primary.{}", format.extension()))
             }
             PreviewInput::Named { .. } => {
-                PathBuf::from(format!("/weft/input/named-{index}.{}", format.extension()))
+                PathBuf::from(format!("/braid/input/named-{index}.{}", format.extension()))
             }
         })
         .collect::<Vec<_>>();
@@ -379,14 +379,14 @@ pub fn process_preview(
                 .and_then(|index| index.parse::<usize>().ok())
             {
                 project.extra_targets[index].path = Some(format!(
-                    "/weft/output/named-{index}.{}",
+                    "/braid/output/named-{index}.{}",
                     target.format.extension()
                 ));
             }
         }
     }
     let output_path = PathBuf::from(format!(
-        "/weft/output/primary.{}",
+        "/braid/output/primary.{}",
         admission.targets[0].format.extension()
     ));
     let mut options = PayloadRunOptions::new(primary)
@@ -841,7 +841,7 @@ fn xml_output_path(
         .strip_prefix("named-output:")?
         .parse::<usize>()
         .ok()?;
-    let path = PathBuf::from(format!("/weft/output/named-{index}.xml"));
+    let path = PathBuf::from(format!("/braid/output/named-{index}.xml"));
     // Mirror the pinned CLI's stored-path resolution, including rooted Windows paths.
     Some(if path.is_absolute() {
         path
@@ -947,7 +947,7 @@ fn classify_xml(
         }
         if input.is_none()
             && !targets.is_empty()
-            && output_path == Path::new("/weft/output/primary.xml")
+            && output_path == Path::new("/braid/output/primary.xml")
             && targets.iter().all(|target| {
                 target.format == crate::document_format::DocumentFormat::Xml
                     && xml_output_path(target, header, output_path).is_some()
@@ -1086,7 +1086,7 @@ mod classification_tests {
     #[test]
     fn csv_serializer_ceiling_is_a_sanitized_resource_refusal_without_large_allocation() {
         for extension in ["csv", "tsv"] {
-            let path = PathBuf::from(format!("/weft/output/primary.{extension}"));
+            let path = PathBuf::from(format!("/braid/output/primary.{extension}"));
             let message = format!(
                 "output artifact `{}` exceeds the {} MiB per-document limit",
                 path.display(),
@@ -1117,11 +1117,11 @@ mod classification_tests {
     #[test]
     fn csv_size_classification_requires_the_exact_pinned_error_and_destination() {
         let request = header(CSV_PREVIEW_PROTOCOL_VERSION);
-        let path = Path::new("/weft/output/primary.csv");
+        let path = Path::new("/braid/output/primary.csv");
         for message in [
             "output artifact `/private/other.csv` exceeds the 64 MiB per-document limit",
-            "output artifact `/weft/output/primary.csv` exceeds the 63 MiB per-document limit",
-            "output artifact `/weft/output/primary.csv` exceeds the 64 MiB per-document limit (other error)",
+            "output artifact `/braid/output/primary.csv` exceeds the 63 MiB per-document limit",
+            "output artifact `/braid/output/primary.csv` exceeds the 64 MiB per-document limit (other error)",
             "CSV output exceeds the 67108864-byte maximum",
         ] {
             assert_eq!(
@@ -1146,7 +1146,7 @@ mod classification_tests {
     #[test]
     fn xml_execution_diagnostics_never_publish_private_values_context_or_subjects() {
         let request = header(XML_PREVIEW_PROTOCOL_VERSION);
-        let path = Path::new("/weft/output/primary.xml");
+        let path = Path::new("/braid/output/primary.xml");
         for error in [
             anyhow::Error::msg("private-sentinel raw error"),
             anyhow::Error::new(ferrule_format_xml::XmlFormatError::ScalarParse {
@@ -1190,7 +1190,7 @@ mod classification_tests {
     fn xml_typed_codec_and_engine_resource_causes_survive_private_contexts() {
         use ferrule_format_xml::XmlFormatError as Xml;
         let mut request = header(XML_PREVIEW_PROTOCOL_VERSION);
-        let path = Path::new("/weft/output/primary.xml");
+        let path = Path::new("/braid/output/primary.xml");
         let errors = [
             Xml::StructuredInputLimit {
                 budget: "private-sentinel",
@@ -1271,7 +1271,7 @@ mod classification_tests {
     #[test]
     fn xml_cli_size_refusals_require_owned_primary_or_named_destinations_and_exact_shape() {
         let mut request = header(XML_PREVIEW_PROTOCOL_VERSION);
-        let path = Path::new("/weft/output/primary.xml");
+        let path = Path::new("/braid/output/primary.xml");
         let targets = xml_targets();
         for target in &targets {
             let owned = xml_output_path(target, &request, path).unwrap();
@@ -1313,9 +1313,9 @@ mod classification_tests {
         }
         for caption in [
             "output artifact `/private/private-sentinel.xml` exceeds the 64 MiB per-document limit",
-            "output artifact `/weft/output/named-9.xml` exceeds the 64 MiB per-document limit",
-            "output artifact `/weft/output/primary.xml` exceeds the 63 MiB per-document limit",
-            "output artifact `/weft/output/primary.xml` exceeds the 64 MiB per-document limit (private-sentinel)",
+            "output artifact `/braid/output/named-9.xml` exceeds the 64 MiB per-document limit",
+            "output artifact `/braid/output/primary.xml` exceeds the 63 MiB per-document limit",
+            "output artifact `/braid/output/primary.xml` exceeds the 64 MiB per-document limit (private-sentinel)",
             "structured XML input exceeds private-sentinel limit 1",
         ] {
             assert_eq!(
@@ -1329,7 +1329,7 @@ mod classification_tests {
             );
         }
         // Even an exact-looking borrowed string is not the pinned CLI's formatted String error.
-        assert_eq!(classify_xml(&anyhow::Error::msg("output artifact `/weft/output/primary.xml` exceeds the 64 MiB per-document limit"), &request, path, &targets).0, "executionFailed");
+        assert_eq!(classify_xml(&anyhow::Error::msg("output artifact `/braid/output/primary.xml` exceeds the 64 MiB per-document limit"), &request, path, &targets).0, "executionFailed");
         request.target = PreviewTarget::Named {
             name: "copy".into(),
         };
@@ -1346,7 +1346,7 @@ mod classification_tests {
     #[test]
     fn xml_cli_aggregate_refusal_requires_exact_bare_string_and_admitted_outputs() {
         let request = header(XML_PREVIEW_PROTOCOL_VERSION);
-        let path = Path::new("/weft/output/primary.xml");
+        let path = Path::new("/braid/output/primary.xml");
         let targets = xml_targets();
         let caption = format!(
             "payload outputs exceed the {} MiB total limit",
@@ -1446,7 +1446,7 @@ mod classification_tests {
 
     #[test]
     fn xml_sanitization_does_not_change_legacy_failure_message_bytes() {
-        let path = Path::new("/weft/output/primary.json");
+        let path = Path::new("/braid/output/primary.json");
         for protocol in [
             PREVIEW_PROTOCOL_VERSION,
             DOCUMENT_PREVIEW_PROTOCOL_VERSION,

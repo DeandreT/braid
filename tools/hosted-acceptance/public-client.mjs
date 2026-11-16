@@ -1,4 +1,4 @@
-// Public-client flows of the test-owned issuer for the Weft CLI, which signs in through MSAL as a
+// Public-client flows of the test-owned issuer for the Braid CLI, which signs in through MSAL as a
 // public client application: device authorization (RFC 8628) with a test-only approval step that
 // stands in for the user entering the code, authorization code with PKCE (S256) on a loopback
 // redirect (form_post or query response mode), and refresh-token redemption. Every grant issues a
@@ -50,7 +50,7 @@ export function createPublicClients({
     )
       throw new Error("A public client needs a client ID, audience and scope.");
   if (clients.length > 0 && !id.test(user.objectId ?? ""))
-    throw new Error("The public clients require WEFT_ACCEPTANCE_OBJECT_ID.");
+    throw new Error("The public clients require BRAID_ACCEPTANCE_OBJECT_ID.");
   const registered = new Map(
     clients.map((client) => [client.clientId, client]),
   );

@@ -1,9 +1,9 @@
 import { defineConfig } from "@playwright/test";
 
 for (const name of [
-  "WEFT_PREVIEW_BROWSER_MANIFEST",
-  "WEFT_PREVIEW_BROWSER_BASE_URL",
-  "WEFT_CHROMIUM_EXECUTABLE",
+  "BRAID_PREVIEW_BROWSER_MANIFEST",
+  "BRAID_PREVIEW_BROWSER_BASE_URL",
+  "BRAID_CHROMIUM_EXECUTABLE",
 ])
   if (!process.env[name])
     throw new Error(`Actual editor browser checks require ${name}.`);
@@ -18,10 +18,10 @@ export default defineConfig({
   expect: { timeout: 180_000 },
   forbidOnly: true,
   use: {
-    baseURL: process.env.WEFT_PREVIEW_BROWSER_BASE_URL,
+    baseURL: process.env.BRAID_PREVIEW_BROWSER_BASE_URL,
     headless: false,
     launchOptions: {
-      executablePath: process.env.WEFT_CHROMIUM_EXECUTABLE,
+      executablePath: process.env.BRAID_CHROMIUM_EXECUTABLE,
       args: ["--ozone-platform=x11"],
     },
     trace: "off",

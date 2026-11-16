@@ -23,7 +23,7 @@ import {
 
 /** Header quick view of the newest notifications. It reads only when opened. */
 @Component({
-  selector: "weft-notification-popover",
+  selector: "braid-notification-popover",
   imports: [DatePipe, RouterLink],
   template: `
     <button

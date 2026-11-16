@@ -40,7 +40,7 @@ pub struct Extraction {
 impl Extraction {
     fn empty(bytes: &[u8], status: Status) -> Self {
         Self {
-            format: "weft.spec-pdf-extraction.v1",
+            format: "braid.spec-pdf-extraction.v1",
             extractor: "ferrule-pdf-dddc4dce-text.v1",
             source_sha256: format!("{:x}", Sha256::digest(bytes)),
             source_byte_count: bytes.len(),

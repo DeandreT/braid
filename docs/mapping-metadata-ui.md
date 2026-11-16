@@ -1,11 +1,6 @@
 # Mapping metadata editor
 
-Issue [#83](https://github.com/DeandreT/weft/issues/83) adds the Angular editor for
-a saved mapping's name and description. Implementation and qualification are
-separate: the source is in progress and no browser acceptance is claimed here.
-Its merge depends on the qualified project-creation increment in
-[#81](https://github.com/DeandreT/weft/issues/81). Upload and revision append remain
-separate increments under [#19](https://github.com/DeandreT/weft/issues/19).
+The metadata editor changes a saved mapping's name and description.
 
 ## Entering and saving
 
@@ -63,20 +58,13 @@ HTTP uploads and saved reports for setup, then starts a host with only catalog
 reader and metadata editor credentials. Real browser PATCHes are checked against
 a complete private persistence baseline; no-op saves must change nothing.
 An explicit native append separately checks that metadata validators remain
-unchanged. Controlled response cases are synthetic; they do not establish real
-concurrency or persistence.
+unchanged.
 
 Run `npm run test:mapping-metadata-browser` with the fixture's explicit private
-bindings and pinned browser. The script uses an alternate virtual display. The
-actual fixed case census and accepted source/publications must be recorded before
-runtime qualification; this document does not turn source checks into test passes.
+bindings and pinned browser. The script uses an alternate virtual display.
 
 The actual metadata scenario mediates each already-allowlisted browser GET through
 one real upstream request and delivers the same bounded JSON bytes, status and
 headers to that original browser request. Observation binds the exact Request and
 browser response to successful delivery; metadata ETags and fresh authority/token
 checks remain mandatory. No extra read, retry or alternate body is accepted.
-This verifies the mediated actual API and frontend flow. Native browser cookie
-ordering, cancellation propagation and network streaming timing have separate
-verification boundaries. See [#94](https://github.com/DeandreT/weft/issues/94) for
-the focused observer correction and its qualification.

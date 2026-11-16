@@ -36,7 +36,7 @@ function manifest(): ReportsBrowserManifest {
     }),
   ) as Record<Sample, { revision: typeof revision }>;
   return {
-    schemaVersion: "weft.reports-browser-fixture.v1",
+    schemaVersion: "braid.reports-browser-fixture.v1",
     fixtureId: "10000000-0000-4000-8000-000000000001",
     source: { commit: "a".repeat(40), tree: "b".repeat(40) },
     readOrigin: origin,
@@ -120,7 +120,7 @@ test("mapping viewer owner schema refuses shared mapping/revision identities and
     /distinct HTTP-created revisions/,
   );
   const wrongBackend = manifest();
-  wrongBackend.samples.functions.revision.backendId = "weft.synthetic";
+  wrongBackend.samples.functions.revision.backendId = "braid.synthetic";
   expect(() => parseReportsManifest(wrongBackend, origin)).toThrow(
     /differs from pinned artifact\/project\/backend/,
   );

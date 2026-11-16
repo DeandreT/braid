@@ -4,7 +4,7 @@ import http from "node:http";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const model = process.env.WEFT_ACCEPTANCE_CHAT_MODEL ?? "weft-fixture";
+const model = process.env.BRAID_ACCEPTANCE_CHAT_MODEL ?? "braid-fixture";
 export const createModelFixture = (observe = () => {}) =>
   http.createServer(async (request, response) => {
     if (request.method === "GET" && request.url === "/api/tags") {

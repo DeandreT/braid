@@ -3,8 +3,7 @@
 Use `deploy/local/dev-up.sh` for the full Linux development environment.
 It builds software, prepares images and local models, provisions data and starts
 services; it is not a lightweight frontend launcher. For packaged Session
-evaluation instead, see [Runtime packaging](runtime-packaging.md). A local
-Development instance does not establish provider or cloud acceptance.
+evaluation instead, see [Runtime packaging](runtime-packaging.md).
 
 Already running? Use `deploy/local/dev-status.sh` to inspect it and
 `deploy/local/dev-down.sh` to stop it without deleting its data.
@@ -16,7 +15,7 @@ see [Manual hosting and frontend development](#manual-hosting-and-frontend-devel
 - Linux with a working user systemd manager and user bus (`systemd-run`,
   `systemctl`, `busctl`). The launcher starts persistent user services.
 - A usable Docker daemon with cgroup v2 and BuildKit/buildx. It does not install
-  Docker or repair its daemon. `WEFT_DEV_BUILD_DOCKER_CONFIG` can select a private
+  Docker or repair its daemon. `BRAID_DEV_BUILD_DOCKER_CONFIG` can select a private
   Docker configuration containing buildx.
 - .NET SDK 10.0.112 (`global.json`), including ASP.NET Core 10, on `PATH` or selected
   by `DOTNET_ROOT`; Node 22.23.3 and npm 12.1.0 (`.node-version`, `package.json`).
@@ -29,7 +28,7 @@ see [Manual hosting and frontend development](#manual-hosting-and-frontend-devel
 
 Compiler-image preparation enforces the platform's storage policy in
 [`tools/build-worker/build_image.py`](../tools/build-worker/build_image.py).
-Before the first build, set `WEFT_DEV_HOME` so its `tmp` directory is on an
+Before the first build, set `BRAID_DEV_HOME` so its `tmp` directory is on an
 admitted storage volume. Native Linux currently requires writable Btrfs at
 `/mnt/example-build`, backed by `/dev/disk/by-label/example-build`. The original WSL route retains its separate
 volume-identity, compression and Windows free-space checks. The default under
@@ -51,7 +50,7 @@ chat through a local Ollama model, previews, regression cases and runs, builds, 
 the local deployment sandbox.
 It does not enable every optional capability. Session authentication, specification
 intake/document workers and specification-driven creation have separate host
-admission; this loopback setup does not qualify or activate them.
+configuration.
 
 From the repository root:
 
@@ -62,33 +61,33 @@ deploy/local/dev-up.sh
 It then:
 
 1. Generates every database password once into a private settings directory
-   (`~/.config/weft-dev`, mode 0700, files 0600). Nothing secret is printed or
+   (`~/.config/braid-dev`, mode 0700, files 0600). Nothing secret is printed or
    logged, and build and container processes do not inherit the passwords.
-2. Publishes the Release server, `Weft.Worker`, `Weft.DatabaseTool` and
-   `Weft.StorageTool` from the checkout into `~/.local/share/weft-dev/app/<commit>`,
+2. Publishes the Release server, `Braid.Worker`, `Braid.DatabaseTool` and
+   `Braid.StorageTool` from the checkout into `~/.local/share/braid-dev/app/<commit>`,
    and builds the Ferrule native image and the combined compiler image from its
-   exact image ID, tagged `weft-dev/ferrule-host:<commit>` and
-   `weft-dev/build-worker:<commit>`. The combined image's immutable ID is the one
-   `WEFT_FERRULE_WORKER_IMAGE` for inspection, previews, regression runs and builds.
-   Without a global buildx plugin, set `WEFT_DEV_BUILD_DOCKER_CONFIG` to a Docker
+   exact image ID, tagged `braid-dev/ferrule-host:<commit>` and
+   `braid-dev/build-worker:<commit>`. The combined image's immutable ID is the one
+   `BRAID_FERRULE_WORKER_IMAGE` for inspection, previews, regression runs and builds.
+   Without a global buildx plugin, set `BRAID_DEV_BUILD_DOCKER_CONFIG` to a Docker
    configuration directory that has it.
-3. Starts the `weft-dev-postgres` container with the `weft-dev-postgres-data`
+3. Starts the `braid-dev-postgres` container with the `braid-dev-postgres-data`
    volume on `127.0.0.1:55432`. On its first start, `postgres-init.sh` creates every
    restricted login. It applies the migrations, provisions the Development
    organization and principal, and grants that principal project creation.
-4. Provisions a v2 filesystem store under `~/.local/share/weft-dev/storage`.
-5. Starts the `weft-ollama` container (created with the `weft-ollama-models`
+4. Provisions a v2 filesystem store under `~/.local/share/braid-dev/storage`.
+5. Starts the `braid-ollama` container (created with the `braid-ollama-models`
    volume if absent), pulls missing models, and writes a chat profile for each
    model with `loopbackFixture` against `http://127.0.0.1:11434/api/chat`. The
    first model is the default.
 6. Starts the server on `http://127.0.0.1:4100` and the worker as the user
-   systemd units `weft-dev-server` and `weft-dev-worker`, which keep running after
+   systemd units `braid-dev-server` and `braid-dev-worker`, which keep running after
    the shell exits. Each reads its own logins from a private environment file and
-   logs to `~/.local/share/weft-dev/logs`.
+   logs to `~/.local/share/braid-dev/logs`.
 7. Creates the default project "Local project" through the product API and grants
    the principal its Administrator role.
 8. Enables the [local deployment sandbox](local-sandbox.md), with its history under
-   `~/.local/share/weft-dev/sandbox`. Each mapping's **Local sandbox** page deploys a
+   `~/.local/share/braid-dev/sandbox`. Each mapping's **Local sandbox** page deploys a
    completed build to a sandbox target and sends sample messages to its active release,
    using the combined compiler image as the Docker compiled runtime.
 
@@ -99,8 +98,8 @@ deploy/local/dev-status.sh
 deploy/local/dev-down.sh
 ```
 
-`~/.local/share/weft-dev/status.sh` reports
-the units, containers and endpoints, and `~/.local/share/weft-dev/stop.sh` stops
+`~/.local/share/braid-dev/status.sh` reports
+the units, containers and endpoints, and `~/.local/share/braid-dev/stop.sh` stops
 the units and the PostgreSQL and Ollama containers, keeping all data. Both work
 without the checkout; the repository's `deploy/local/dev-status.sh` and
 `dev-down.sh` are the same commands. `dev-down.sh --keep-ollama` leaves Ollama
@@ -118,14 +117,13 @@ script, as for any existing installation.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `WEFT_DEV_NAME` | `weft-dev` | Prefix of the containers, volume, units, image tags and directories |
-| `WEFT_DEV_PORT` / `WEFT_DEV_POSTGRES_PORT` | `4100` / `55432` | Loopback ports of the server and PostgreSQL |
-| `WEFT_DEV_HOME` / `WEFT_DEV_CONFIG` | `~/.local/share/<name>` / `~/.config/<name>` | State, logs and control scripts / private settings |
-| `WEFT_DEV_SOURCE` | this checkout | Checkout to build and run |
-| `WEFT_DEV_CHAT_MODELS` | `qwen2.5:3b qwen2.5:1.5b` | Ollama models offered in chat, default first |
-| `WEFT_DEV_OLLAMA_CONTAINER` / `WEFT_DEV_OLLAMA_URL` | `weft-ollama` / `http://127.0.0.1:11434` | Ollama container to start (empty for an externally managed one) and its loopback origin |
-| `WEFT_DEV_BUILD_DOCKER_CONFIG` | none | Docker configuration with the buildx plugin, used only for image builds |
-| `WEFT_DEV_SEED` | `0` | `1` runs `dev-seed.sh` after startup ([Demo data](#demo-data)) |
+| `BRAID_DEV_NAME` | `braid-dev` | Prefix of the containers, volume, units, image tags and directories |
+| `BRAID_DEV_PORT` / `BRAID_DEV_POSTGRES_PORT` | `4100` / `55432` | Loopback ports of the server and PostgreSQL |
+| `BRAID_DEV_HOME` / `BRAID_DEV_CONFIG` | `~/.local/share/<name>` / `~/.config/<name>` | State, logs and control scripts / private settings |
+| `BRAID_DEV_SOURCE` | this checkout | Checkout to build and run |
+| `BRAID_DEV_CHAT_MODELS` | `qwen2.5:3b qwen2.5:1.5b` | Ollama models offered in chat, default first |
+| `BRAID_DEV_OLLAMA_CONTAINER` / `BRAID_DEV_OLLAMA_URL` | `braid-ollama` / `http://127.0.0.1:11434` | Ollama container to start (empty for an externally managed one) and its loopback origin |
+| `BRAID_DEV_BUILD_DOCKER_CONFIG` | none | Docker configuration with the buildx plugin, used only for image builds |
 
 Pass the same variables to `dev-down.sh` and `dev-status.sh`. A second instance with
 its own name and ports leaves the first untouched; give it `--keep-ollama` when
@@ -146,11 +144,11 @@ worker units:
 
 | Variable | Default | Bound | Purpose |
 | --- | --- | --- | --- |
-| `WEFT_FERRULE_DOCKER_CREATE_TIMEOUT_SECONDS` | the wall budget | 1–120 | Separate budget for creating each container; the wall budget then starts after creation |
-| `WEFT_FERRULE_DOCKER_CLEANUP_TIMEOUT_SECONDS` | `2` | 1–120 | Ownership check and removal of each container, and each reaper attempt |
+| `BRAID_FERRULE_DOCKER_CREATE_TIMEOUT_SECONDS` | the wall budget | 1–120 | Separate budget for creating each container; the wall budget then starts after creation |
+| `BRAID_FERRULE_DOCKER_CLEANUP_TIMEOUT_SECONDS` | `2` | 1–120 | Ownership check and removal of each container, and each reaper attempt |
 
 ```sh
-WEFT_FERRULE_DOCKER_CREATE_TIMEOUT_SECONDS=30 WEFT_FERRULE_DOCKER_CLEANUP_TIMEOUT_SECONDS=20 deploy/local/dev-up.sh
+BRAID_FERRULE_DOCKER_CREATE_TIMEOUT_SECONDS=30 BRAID_FERRULE_DOCKER_CLEANUP_TIMEOUT_SECONDS=20 deploy/local/dev-up.sh
 ```
 
 Local server and worker units have a separate 300-second graceful-stop allowance:
@@ -171,7 +169,7 @@ it. Private environment values are never logged.
 
 The maintained unit-composition tests use stub services and synthetic private
 settings, without Docker, systemd or waits. Run them with an existing Bash (Git
-Bash on Windows; `WEFT_TEST_BASH` can select another executable):
+Bash on Windows; `BRAID_TEST_BASH` can select another executable):
 
 ```powershell
 py -3.12 -m unittest discover -s deploy/local -p test_dev_units.py -v
@@ -186,49 +184,11 @@ their private fixture directory rather than force-stop unconfirmed work:
 
 ```sh
 python3 deploy/local/test_dev_units_systemd.py --run-owned-user-units \
-  --work-root "$WEFT_TEST_WORK_ROOT" --expected-filesystem-uuid "$WEFT_TEST_FILESYSTEM_UUID"
+  --work-root "$BRAID_TEST_WORK_ROOT" --expected-filesystem-uuid "$BRAID_TEST_FILESYSTEM_UUID"
 ```
 
 Set those variables to the owned, verified Btrfs work directory and its expected
 filesystem UUID. There is no fallback to an unspecified temporary filesystem.
-
-### Demo data
-
-`deploy/local/dev-seed.sh` fills a running instance with invented demo data, or
-`WEFT_DEV_SEED=1 deploy/local/dev-up.sh` runs it after startup. Pass the same
-`WEFT_DEV_*` variables as for `dev-up.sh` to seed a second instance.
-
-```sh
-WEFT_DEV_FERRULE_EXAMPLES=../ferrule/examples deploy/local/dev-seed.sh
-```
-
-It works through the product API as the Development user, like the browser does,
-and never writes to the database directly. It creates five projects (order
-fulfilment, invoicing, shipping notices, inventory sync and partner onboarding)
-with 21 self-authored Ferrule mappings across JSON, CSV, XML, fixed-width text,
-X12 and EDIFACT. Each mapping has two or three revisions, so version history and
-comparison have something to show, and one revision is deliberately
-decoded-invalid. The seed saves each project's notification and automation
-settings, then saves projection and validation reports, runs previews, records
-regression cases (some with outdated baselines that fail), runs them, rechecks
-suites, and approves and builds JSON mappings whose cases pass. Invoicing requires
-passing regressions, so its failing cases keep its builds refused. With
-`WEFT_DEV_FERRULE_EXAMPLES` set to a Ferrule checkout's `examples` directory, it
-also uploads Ferrule's examples to "Local project". Unless `WEFT_DEV_SEED_CHAT=0`,
-it asks a few chat questions and waits a bounded time for the local model's answers.
-Release targets are registered only by the operator's `Weft.ReleaseTool`
-([Local release activation](local-releases.md#operator-commands)), so the seed
-leaves them out.
-
-Every create uses an idempotency key or resource ID derived from
-`WEFT_DEV_SEED_NAMESPACE` (default `weft-demo-v1`) and the item's name, so a rerun
-replays instead of duplicating. A step that fails is listed at the end, the rest
-still runs, and the script exits non-zero. On a busy host the server's Docker
-runner can pause while it retries an unconfirmed container cleanup; the seed then
-stops early, since each upload has a limited number of attempts. Run it again once
-the runner has reopened ([Busy Docker hosts](#busy-docker-hosts)). The catalog
-lives in `deploy/local/demo-data/catalog.mjs`;
-`node --test deploy/local/demo-data/seed.test.mjs` checks it without an instance.
 
 ## Manual hosting and frontend development
 
@@ -244,13 +204,13 @@ To build the shell and hosts from the repository root:
 npm ci
 npm ci --prefix tools/contracts-generator
 npm run build
-dotnet restore dotnet/Weft.slnx --locked-mode
-dotnet build dotnet/Weft.slnx --configuration Release --no-restore
-dotnet run --no-build --configuration Release --project dotnet/apps/Weft.Server
+dotnet restore dotnet/Braid.slnx --locked-mode
+dotnet build dotnet/Braid.slnx --configuration Release --no-restore
+dotnet run --no-build --configuration Release --project dotnet/apps/Braid.Server
 ```
 
 The built application opens on `http://127.0.0.1:4100`, starting at `/catalog`.
-`WEFT_DEV_LISTEN_ADDR` changes the API's loopback address. The unauthenticated
+`BRAID_DEV_LISTEN_ADDR` changes the API's loopback address. The unauthenticated
 shell rejects public interfaces.
 
 For frontend-only development, run `npm run dev` and open
@@ -262,12 +222,11 @@ catalog reads and qualification; the separate frontend proxy is not that origin.
 ### Configure only the capabilities you need
 
 - [Project ownership](project-ownership.md) and [catalog reads](catalog-reads.md)
-  own database/identity provisioning. The [maintenance login](private-object-maintenance-metadata.md)
-  must exist before migration 0007; existing databases need explicit role upgrades.
+  own database/identity provisioning. Provision the
+  [maintenance login](private-object-maintenance-metadata.md) before schema installation.
 - [Payload permission](project-payload-permissions.md) uses a separate reader
-  credential and migration-owner command. Preparing a grant activates neither a
-  route, authentication nor a preview worker.
-- Filesystem storage needs [offline initialization or v1 activation](private-storage-activation.md);
+  credential and migration-owner command.
+- Filesystem storage needs [initialization](private-storage-activation.md);
   server startup does neither. Azure Blob has its own [initialization and settings](private-storage-blob.md).
 - [Project creation](project-creation-ui.md), [metadata edits](mapping-metadata-ui.md),
   [native uploads](native-mapping-upload-ui.md) and [revision append](native-revision-append-ui.md)
@@ -275,17 +234,14 @@ catalog reads and qualification; the separate frontend proxy is not that origin.
   the reviewed head, and metadata edits use the actual metadata ETag.
 - [Saved reports](saved-reports.md) remain readable without a worker; deriving
   new reports requires one. For the Docker runner, use the immutable worker image
-  ID in `WEFT_FERRULE_WORKER_IMAGE`. `WEFT_FERRULE_RUNNER=service` instead selects
+  ID in `BRAID_FERRULE_WORKER_IMAGE`. `BRAID_FERRULE_RUNNER=service` instead selects
   the [Ferrule service runner](ferrule-service.md#braid-service-runner). Native
   failures never become synthetic mapping data.
 - [Chat](chat-http.md) is off unless configured, with server-owned profiles and
-  credentials. Local OpenAI-compatible and Ollama endpoints are options, not
-  proof of a real-provider deployment. [Previews](preview-runs.md),
+  credentials. It supports local OpenAI-compatible and Ollama endpoints. [Previews](preview-runs.md),
   [regressions](regression-runs.md) and [builds](build-workflow.md) each have their
   own worker and persistence settings.
-- Development-only projection fixtures are at `/api/v1/fixtures/projections/rich`
-  with `DOTNET_ENVIRONMENT=Development`; they return 404 elsewhere. `/openapi/v1.json`
-  describes the API. See [Projection v1](projection-contract.md) for fixture limits.
+- `/openapi/v1.json` describes the API.
 
 ## Updating API contracts
 
@@ -294,14 +250,14 @@ the host's build writes from its own route registrations:
 
 | Document | Host | API |
 | --- | --- | --- |
-| `contracts/weft-v1.json` | `Weft.Server` | The browser and session API under `/api` |
-| `contracts/weft-endpoint-v1.json` | `Weft.MachineEndpoint` | The [mapping endpoint](mapping-endpoint.md) |
-| `contracts/ferrule-service-v1.json` | `Weft.FerruleService` | The [Ferrule service](ferrule-service.md#api-weftferrule-servicev1) |
+| `contracts/braid-v1.json` | `Braid.Server` | The browser and session API under `/api` |
+| `contracts/braid-endpoint-v1.json` | `Braid.MachineEndpoint` | The [mapping endpoint](mapping-endpoint.md) |
+| `contracts/ferrule-service-v1.json` | `Braid.FerruleService` | The [Ferrule service](ferrule-service.md#api-braidferrule-servicev1) |
 
 Edit the C# contract or route, then build and regenerate:
 
 ```sh
-dotnet build dotnet/Weft.slnx --configuration Release --no-restore
+dotnet build dotnet/Braid.slnx --configuration Release --no-restore
 npm run contracts:generate
 npm run contracts:check
 ```
@@ -328,7 +284,7 @@ these tests.
 
 ### Generated OpenAPI and incremental builds
 
-Building `Weft.Server`, `Weft.MachineEndpoint` or `Weft.FerruleService` exports its
+Building `Braid.Server`, `Braid.MachineEndpoint` or `Braid.FerruleService` exports its
 OpenAPI document from the implementation. `dotnet/Directory.Build.targets` tracks
 resolved copy-local implementation assemblies as export dependencies. A referenced
 implementation change invalidates the SDK's document cache even if its public
@@ -336,14 +292,13 @@ reference assembly and host compilation are unchanged. An unchanged build keeps
 the export cached. `OpenApiGenerateDocuments=false` still disables generation.
 
 After an API change, build the affected host, generate the application types when
-needed, and check the committed output as described above. A successful incremental
-compile alone does not establish that generated files have been committed.
+needed, and check the committed output as described above.
 
 The existing opt-in regression exercises all three hosts in a disposable source
 copy with two build jobs, without listeners, databases, workers or browsers:
 
 ```sh
-WEFT_OPENAPI_INCREMENTAL_TESTS=1 dotnet test dotnet/tests/Weft.Tests/Weft.Tests.csproj \
+BRAID_OPENAPI_INCREMENTAL_TESTS=1 dotnet test dotnet/tests/Braid.Tests/Braid.Tests.csproj \
   --configuration Release --filter FullyQualifiedName~OpenApiIncrementalBuildTests
 ```
 
@@ -362,14 +317,14 @@ Backend tests need a restored Release build; the runner does not build it.
 
 | Task | Command | Scope |
 | --- | --- | --- |
-| Web and static checks | `npm run check` | Formatting, dependency/security and pure fixture checks, docs images, generated contracts and frontend/type builds; not the backend suite. |
+| Web and static checks | `npm run check` | Formatting, dependency/security and pure fixture checks, generated contracts and frontend/type builds. |
 | Web build | `npm run build` | Build Angular assets before publishing the server. |
 | Linux tooling checks | `npm run check:tooling` | Python 3.11+ mock suites for the backend test selector, browser launcher and compiler-image helper; no application startup, Docker access or browser execution. |
-| Small managed backend selection | `npm test` | The explicit `fast` group after a current full Release build; prints omitted groups and is not full backend or CI acceptance. |
+| Small managed backend selection | `npm test` | The explicit `fast` group after a current full Release build; prints omitted groups. |
 | Backend suite | `python3 tools/ci/run_tests.py` | Run the built solution tests; external prerequisites and opt-in lanes still apply. |
-| .NET formatting | `dotnet format dotnet/Weft.slnx --verify-no-changes --no-restore` | Check source formatting after restore. |
+| .NET formatting | `dotnet format dotnet/Braid.slnx --verify-no-changes --no-restore` | Check source formatting after restore. |
 | Generated contracts | `npm run contracts:check` | Check committed contract/type consistency; also compare generated files after host builds. |
-| Targeted backend troubleshooting | `dotnet test dotnet/tests/Weft.Tests/Weft.Tests.csproj --configuration Release --no-build --no-restore --filter FullyQualifiedName~UserGuideTests` | Select an existing class explicitly; not a replacement for full acceptance. |
+| Targeted backend troubleshooting | `dotnet test dotnet/tests/Braid.Tests/Braid.Tests.csproj --configuration Release --no-build --no-restore --filter FullyQualifiedName~UserGuideTests` | Select an existing class explicitly. |
 | Browser scenarios | `npm run test:browser` | Use the isolated browser and prerequisite setup below. |
 
 `check:tooling` is a separate Linux/Python route. It is not part of `npm run check`,
@@ -380,8 +335,7 @@ repeat `--group` to combine groups. The [test-group reference](../tools/ci/test-
 lists their exact prerequisites and limits. Missing prerequisites, unknown or
 stale class assignments, and an inexact discovered selection stop the run rather
 than silently dropping tests. Source changes require a classification review.
-The unflagged full suite and CI shards keep their existing coverage. Selecting a
-group does not approve native, browser, installed-worker or live-provider work.
+The unflagged full suite and CI shards run all groups.
 
 ### Backend test prerequisites
 
@@ -389,8 +343,8 @@ Restore and build before testing:
 
 ```sh
 export DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=false
-dotnet restore dotnet/Weft.slnx --locked-mode
-dotnet build dotnet/Weft.slnx --configuration Release --no-restore
+dotnet restore dotnet/Braid.slnx --locked-mode
+dotnet build dotnet/Braid.slnx --configuration Release --no-restore
 git diff --exit-code -- contracts apps/web/src/api/generated.ts
 ```
 
@@ -398,11 +352,11 @@ Host process tests require explicit absolute paths to fresh publications of the
 same Release build:
 
 ```sh
-weft_host_qualification="$(mktemp -d "${TMPDIR:-/tmp}/weft-host-qualification.XXXXXXXX")"
-dotnet publish dotnet/apps/Weft.Server/Weft.Server.csproj --configuration Release --no-build --no-restore --output "$weft_host_qualification/server"
-dotnet publish dotnet/tools/Weft.HostPrivacyProbe/Weft.HostPrivacyProbe.csproj --configuration Release --no-build --no-restore --output "$weft_host_qualification/probe"
-export WEFT_HOST_TEST_SERVER_PATH="$weft_host_qualification/server/Weft.Server.dll"
-export WEFT_HOST_PRIVACY_PROBE_PATH="$weft_host_qualification/probe/Weft.HostPrivacyProbe.dll"
+braid_host_qualification="$(mktemp -d "${TMPDIR:-/tmp}/braid-host-qualification.XXXXXXXX")"
+dotnet publish dotnet/apps/Braid.Server/Braid.Server.csproj --configuration Release --no-build --no-restore --output "$braid_host_qualification/server"
+dotnet publish dotnet/tools/Braid.HostPrivacyProbe/Braid.HostPrivacyProbe.csproj --configuration Release --no-build --no-restore --output "$braid_host_qualification/probe"
+export BRAID_HOST_TEST_SERVER_PATH="$braid_host_qualification/server/Braid.Server.dll"
+export BRAID_HOST_PRIVACY_PROBE_PATH="$braid_host_qualification/probe/Braid.HostPrivacyProbe.dll"
 python3 tools/ci/run_tests.py
 ```
 
@@ -410,31 +364,18 @@ The privacy probe is a qualification tool, not a deployed Server dependency;
 keep its publication separate from the shipped host. Use task-owned disk-backed
 temporary/build storage and remove disposable publications after all tests finish.
 
-There is no promise that an unconfigured suite exercises every runtime path.
-Tests with missing opt-ins can skip; an ordinary passing run does not qualify
-database, worker, installed-document, browser, provider or cloud environments.
+Tests with missing opt-ins can skip.
 `.github/workflows/ci.yml` lists the exhaustive CI preparation and shard selection.
 Use the focused prerequisite owners: [Ferrule worker](ferrule-worker.md),
 [native PostgreSQL](native-postgres-tests.md), [document worker host](spec-document-host.md),
 [authored creation qualification](creation-sandbox-qualification.md),
 [regression browser](regression-browser.md) and [hosted acceptance](hosted-acceptance.md).
-They are separate qualification routes, not automatic steps of `npm run check`.
 
 The existing `npm run test:project-creation-browser`,
 `npm run test:mapping-metadata-browser`, `npm run test:native-mapping-upload-browser`
 and `npm run test:native-revision-append-browser` aliases keep their specific
 permission and recovery scopes. Their fixture READMEs under `tools/` describe
-the required private bindings; a synthetic HTTP fixture does not qualify the
-packaged server or PostgreSQL persistence.
-
-### Documentation screenshots
-
-The README and docs embed screenshots from `docs/images`. A frontend change that
-affects a captured screen must rerun `npm run docs:screenshots`, with
-`WEFT_CHROMIUM_EXECUTABLE` set as for the browser checks, and commit the updated
-images in the same pull request. `npm run check` fails when a document references
-a missing image or the manifest disagrees with the images, the capture spec or
-the documents. See [docs/images](images/README.md).
+the required private bindings.
 
 ### Docker test networks
 
@@ -442,7 +383,7 @@ A Docker network created without a subnet takes a whole /16 or /20 from the
 daemon's default address pools, and a few concurrent test runs exhaust them. Test
 fixtures that create their own networks (the PostgreSQL test fixture and the
 browser fixture) therefore give each one an explicit /28 from
-`WEFT_TEST_SUBNET_RANGE`, by default `198.19.0.0/16`. That default is the upper
+`BRAID_TEST_SUBNET_RANGE`, by default `198.19.0.0/16`. That default is the upper
 half of the RFC 2544 benchmarking block, outside Docker's default pools
 (`172.17.0.0/16`–`172.31.0.0/16` and `192.168.0.0/16`), private LAN ranges, CGNAT
 and Tailscale (`100.64.0.0/10`) and the fake-IP range of common proxies
@@ -473,8 +414,8 @@ and configuration to restore, build and test commands. For example, in PowerShel
 
 ```powershell
 $env:DOTNET_ADD_GLOBAL_TOOLS_TO_PATH = 'false'
-dotnet restore dotnet/tests/Weft.Tests/Weft.Tests.csproj --locked-mode --artifacts-path artifacts/windows-tests
-dotnet test dotnet/tests/Weft.Tests/Weft.Tests.csproj --no-restore --configuration Release --artifacts-path artifacts/windows-tests --filter FullyQualifiedName~ChildProgramBuildOutputTests
+dotnet restore dotnet/tests/Braid.Tests/Braid.Tests.csproj --locked-mode --artifacts-path artifacts/windows-tests
+dotnet test dotnet/tests/Braid.Tests/Braid.Tests.csproj --no-restore --configuration Release --artifacts-path artifacts/windows-tests --filter FullyQualifiedName~ChildProgramBuildOutputTests
 ```
 
 The test project resolves each child program through MSBuild's `GetTargetPath`
@@ -487,7 +428,7 @@ and managed runtime dependencies. Platform-specific execution tests retain their
 own Linux, Docker, database and host-publication requirements.
 
 Azure Blob storage tests run against an owned Azurite emulator when
-`WEFT_AZURITE_IMAGE` names its pinned image
+`BRAID_AZURITE_IMAGE` names its pinned image
 (`mcr.microsoft.com/azure-storage/azurite@sha256:830430c1da1a2d537e08f3e6764dd1f5ae00cf0346bcaf625b968ec3f0971fd5`);
 otherwise they are skipped. See [Azure Blob private storage](private-storage-blob.md).
 
@@ -499,15 +440,15 @@ the publications, Node, npm, Chromium and `certutil`. Prepare a fresh record aft
 every publication, in a private directory short enough for its Unix sockets:
 
 ```sh
-weft_admission="$(mktemp -d "${TMPDIR:-/tmp}/weft-ah.XXXXXXXX")"
-export WEFT_AUTH_BROWSER_ADMISSION_ROOT="$weft_admission"
-export WEFT_AUTH_BROWSER_ADMISSION_FILE="$weft_admission/admission.json"
+braid_admission="$(mktemp -d "${TMPDIR:-/tmp}/braid-ah.XXXXXXXX")"
+export BRAID_AUTH_BROWSER_ADMISSION_ROOT="$braid_admission"
+export BRAID_AUTH_BROWSER_ADMISSION_FILE="$braid_admission/admission.json"
 node tools/auth-browser-https/admit.mjs --approved
 ```
 
 Without a record the real-browser cases are skipped locally. CI always prepares
 one, so they fail rather than skip there. The browser runs on the first free
-virtual display unless `WEFT_XVFB_SERVER_NUM` selects one.
+virtual display unless `BRAID_XVFB_SERVER_NUM` selects one.
 
 The browser harness owns API and Angular development processes on ports 4101
 and 5174, fails on occupied ports, and stops them when it exits. Build the Release
@@ -532,13 +473,13 @@ Verify the archive checksum before extracting it:
 
 ```sh
 npx playwright install-deps chromium
-weft_browser_directory="$(mktemp -d "${TMPDIR:-/tmp}/weft-chromium.XXXXXXXX")"
-curl --fail --location --retry 3 --output "$weft_browser_directory/chrome.zip" \
+braid_browser_directory="$(mktemp -d "${TMPDIR:-/tmp}/braid-chromium.XXXXXXXX")"
+curl --fail --location --retry 3 --output "$braid_browser_directory/chrome.zip" \
   https://storage.googleapis.com/chrome-for-testing-public/157.0.8090.0/linux64/chrome-linux64.zip
-printf '%s  %s\n' 3ec877f440c1ea393c4f164ce5339dc0fd6b5384184a84b38550a78721c2086c "$weft_browser_directory/chrome.zip" | sha256sum --check --status && \
-  unzip -q "$weft_browser_directory/chrome.zip" -d "$weft_browser_directory"
-WEFT_CHROMIUM_EXECUTABLE="$weft_browser_directory/chrome-linux64/chrome"
-export WEFT_CHROMIUM_EXECUTABLE
+printf '%s  %s\n' 3ec877f440c1ea393c4f164ce5339dc0fd6b5384184a84b38550a78721c2086c "$braid_browser_directory/chrome.zip" | sha256sum --check --status && \
+  unzip -q "$braid_browser_directory/chrome.zip" -d "$braid_browser_directory"
+BRAID_CHROMIUM_EXECUTABLE="$braid_browser_directory/chrome-linux64/chrome"
+export BRAID_CHROMIUM_EXECUTABLE
 npm run test:browser
 ```
 
@@ -550,9 +491,7 @@ Linux system libraries are still required; see
 [Playwright's browser setup](https://playwright.dev/docs/browsers).
 
 The harness runs the API in Development. Supply the configured immutable worker
-image for actual native viewer flows; missing configuration does not qualify
-those flows. Display-only fixtures are explicitly labelled synthetic and exercise
-generic contract states independently of native backend qualification.
+image for native viewer flows. Display-only fixtures exercise generic contract states.
 NuGet and npm lockfiles are committed. Domain/application assemblies remain
 independent of ASP.NET Core and provider SDK types, following the Wareboxes-style
 modular layout. Wolverine carries durable execution commands; its persistence and

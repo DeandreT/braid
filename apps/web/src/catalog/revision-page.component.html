@@ -1,6 +1,6 @@
 @if (data(); as view) {
   @if (editMode() && context(); as current) {
-    <weft-mapping-editor
+    <braid-mapping-editor
       [context]="context()!"
       [mapping]="view.mapping"
       [revision]="view.revision"
@@ -8,7 +8,7 @@
       (saved)="editedRevision($event)"
     />
   } @else {
-    <weft-workbench-frame
+    <braid-workbench-frame
       [attr.aria-busy]="refreshing() ? 'true' : null"
       [inspector]="inspector"
       [dock]="dock"
@@ -46,7 +46,7 @@
                 >Version {{ view.revision.sequence }}</span
               >
               @if (context(); as admission) {
-                <weft-regression-status
+                <braid-regression-status
                   [scope]="view.mapping.scope"
                   [context]="admission"
                   [revisionId]="view.revision.scope.revisionId"
@@ -136,7 +136,7 @@
           class="wb-workflow wb-mapping"
           [hidden]="workbench.selection().view !== 'mapping'"
         >
-          <weft-revision-reports
+          <braid-revision-reports
             #savedReports
             [reports]="reports"
             [revision]="view.revision"
@@ -148,14 +148,14 @@
             (entitySelected)="inspect($event)"
             (diagnosticSelected)="showDiagnostic($event)"
           />
-          <weft-mfd-export [scope]="view.revision.scope" />
+          <braid-mfd-export [scope]="view.revision.scope" />
         </div>
         @if (context(); as current) {
           <div
             class="wb-workflow"
             [hidden]="workbench.selection().view !== 'tests'"
           >
-            <weft-revision-regression
+            <braid-revision-regression
               [context]="current"
               [mapping]="view.mapping"
               [revision]="view.revision"
@@ -168,7 +168,7 @@
             class="wb-workflow"
             [hidden]="workbench.selection().view !== 'builds'"
           >
-            <weft-revision-builds
+            <braid-revision-builds
               [context]="current"
               [mapping]="view.mapping"
               [revision]="view.revision"
@@ -181,7 +181,7 @@
             [hidden]="workbench.selection().view !== 'preview'"
           >
             @if (current.features.preview) {
-              <weft-revision-preview
+              <braid-revision-preview
                 [context]="current"
                 [mapping]="view.mapping"
                 [revision]="view.revision"
@@ -258,7 +258,7 @@
                     <td>{{ admissionLabel(item.admission) }}</td>
                     <td>{{ item.originalFilename }}</td>
                     <td>
-                      <weft-metadata-value
+                      <braid-metadata-value
                         kind="time"
                         label="Saved time"
                         [value]="item.committedAtUtc"
@@ -364,7 +364,7 @@
               <h3>Prepared candidate</h3>
               <div class="wb-tile-value">
                 @if (buildView()?.selectedRun(); as run) {
-                  <weft-status-chip [status]="buildStatus(run.state)" />
+                  <braid-status-chip [status]="buildStatus(run.state)" />
                 } @else {
                   No preparation selected
                 }
@@ -422,7 +422,7 @@
             "No verified explanation"
         }}</span
       >
-    </weft-workbench-frame>
+    </braid-workbench-frame>
     <ng-template #inspector>
       @switch (workbench.selection().view) {
         @case ("tests") {
@@ -431,7 +431,7 @@
               <h3>Selected result</h3>
               <p>
                 @if (selectedRun(); as run) {
-                  <weft-status-chip
+                  <braid-status-chip
                     [status]="
                       run.comparison
                         ? comparisonStatus(
@@ -447,7 +447,7 @@
               </p>
               @if (tests.pendingRun()) {
                 <p>
-                  <weft-status-chip [status]="uncertainStatus" />
+                  <braid-status-chip [status]="uncertainStatus" />
                 </p>
                 <button
                   type="button"
@@ -566,7 +566,7 @@
                   </dd>
                   <dt>Created</dt>
                   <dd>
-                    <weft-metadata-value
+                    <braid-metadata-value
                       kind="time"
                       label="Approval time"
                       [value]="approval.createdAtUtc"
@@ -588,7 +588,7 @@
                   <dd>{{ artifact.format }}</dd>
                   <dt>Bytes</dt>
                   <dd>
-                    <weft-metadata-value
+                    <braid-metadata-value
                       kind="bytes"
                       label="Prepared file size"
                       [value]="artifact.byteCount"
@@ -629,7 +629,7 @@
               class="wb-field-inspector"
               [attr.data-inspector-tab]="workbench.selection().inspectorTab"
             >
-              <weft-workbench-entity-inspector
+              <braid-workbench-entity-inspector
                 [view]="projection"
                 [reference]="workbench.selection().entity"
                 [tab]="workbench.selection().inspectorTab"
@@ -672,7 +672,7 @@
                       item.severity
                     }}</strong>
                     {{ item.message
-                    }}<weft-native-evidence [locator]="item.nativeLocator" />
+                    }}<braid-native-evidence [locator]="item.nativeLocator" />
                     @if (item.reference; as reference) {
                       <button type="button" (click)="inspect(reference)">
                         Inspect linked {{ reference.kind }}
@@ -711,7 +711,7 @@
                 Download exact bytes
               </button>
             </div>
-            <weft-document-view [data]="item" />
+            <braid-document-view [data]="item" />
           } @else {
             <div class="wb-dock-empty">
               <h3>Select saved input evidence</h3>
@@ -748,7 +748,7 @@
                   Download exact bytes
                 </button>
               </div>
-              <weft-document-view [data]="item.display" />
+              <braid-document-view [data]="item.display" />
             } @else {
               <div class="wb-dock-empty">
                 <h3>Choose a preview output</h3>
@@ -812,7 +812,7 @@
               }
             </div>
             @if (displayedOutput(); as item) {
-              <weft-document-view [data]="item" />
+              <braid-document-view [data]="item" />
             } @else {
               <div class="wb-dock-empty">
                 <h3>No {{ regressionDocumentKind() }} regression output</h3>
@@ -869,7 +869,7 @@
                   <span aria-hidden="true">− </span>Expected · saved result
                 </h3>
                 @if (diff.expected; as expected) {
-                  <weft-document-view [data]="expected" />
+                  <braid-document-view [data]="expected" />
                 } @else {
                   <p>No expected document</p>
                 }
@@ -877,7 +877,7 @@
               <section>
                 <h3><span aria-hidden="true">+ </span>Actual · selected run</h3>
                 @if (diff.actual; as actual) {
-                  <weft-document-view [data]="actual" />
+                  <braid-document-view [data]="actual" />
                 } @else {
                   <p>No observed document</p>
                 }
@@ -987,7 +987,7 @@
     <h1 id="catalog-page-title" data-catalog-page-title tabindex="-1">
       Revision
     </h1>
-    <weft-catalog-status
+    <braid-catalog-status
       [kind]="kind()"
       [firstPage]="firstPage()"
       (retry)="retry()"

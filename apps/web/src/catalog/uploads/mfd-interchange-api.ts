@@ -37,7 +37,7 @@ export class MfdInterchangeApi {
     return this.send(
       path,
       body,
-      body ? "application/vnd.weft.mfd-package.v1" : null,
+      body ? "application/vnd.braid.mfd-package.v1" : null,
     ).pipe(map(readMfdReview));
   }
   restore(path: string) {

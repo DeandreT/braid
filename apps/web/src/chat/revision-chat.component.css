@@ -570,7 +570,7 @@ p {
 }
 .chat-menu li button,
 .chat-menu > :is(button, a),
-.chat-menu weft-help-link {
+.chat-menu braid-help-link {
   display: block;
   width: 100%;
   text-align: left;

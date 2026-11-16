@@ -31,7 +31,7 @@ retention duration. Canonical turn identity includes the conversation's complete
 scope, both exact report pins and retention deadline as well as every turn input.
 Changed original input conflicts; no new turn replaces an original request.
 
-The v1 canonical contracts and pure `Weft.Ai` bridge are specified in
+The v1 canonical contracts and pure `Braid.Ai` bridge are specified in
 [Chat persistence contract v1](chat-persistence-contract-v1.md). Selectors record
 untrusted user intent, not tool or citation authority. V1 has no payload,
 attachment, action, arbitrary URL or cross-project envelope.
@@ -118,11 +118,10 @@ provider round, authorize a tool, reopen a turn or grant dispatch permission.
 Ordinary owner operations retain fresh ACL requirements. Expired owner closure
 returns no private facts; read ports deny content at expiry.
 
-Live cancellation must be connected by the future active-turn controller to the
+Live cancellation must connect the active-turn controller to the
 same cancellation source and live `AiTurnLease`. A database terminal write alone
 does not close a remote socket or revoke a dispatch permission already handed to
-another process. There is no scheduler, background scan, Wolverine job, HTTP/UI
-activation or model call in this persistence library/bridge.
+another process.
 
 ## Bounds and diagnostics
 
@@ -130,7 +129,7 @@ Text is strict UTF-8 without NUL; instants are finite UTC microseconds. Original
 text is at most 64 KiB; the escaped original envelope is at most 512 KiB and full
 canonical turn envelope at most 1 MiB. A canonical provider-round pin allows
 2 MiB of escaped application representation, not increased provider-wire limits.
-There are at most four rounds, matching `Weft.Ai`; at most 4,096 events; 8 KiB per
+There are at most four rounds, matching `Braid.Ai`; at most 4,096 events; 8 KiB per
 ordinary text/metadata event; and a caller-supplied event-byte budget up to 4 MiB
 plus the terminal's fixed 2 KiB reserve. Pages contain at most 100 events.
 Provider time/wire/text/tool/output budgets remain separately pinned and bounded.

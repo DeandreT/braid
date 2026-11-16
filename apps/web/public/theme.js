@@ -5,7 +5,7 @@
 (function () {
   var choice = null;
   try {
-    choice = localStorage.getItem("weft.theme.v1");
+    choice = localStorage.getItem("braid.theme.v1");
   } catch (error) {}
   var dark =
     choice === "dark" ||

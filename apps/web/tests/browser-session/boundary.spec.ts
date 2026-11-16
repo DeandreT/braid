@@ -157,7 +157,7 @@ async function validMountedDraft(
       childList: true,
       subtree: true,
     });
-    Object.defineProperty(window, "__weft119Mounted", {
+    Object.defineProperty(window, "__braid119Mounted", {
       configurable: true,
       value: {
         inspect: () => {
@@ -188,7 +188,7 @@ async function validMountedDraft(
   }, inputIds[feature]);
 }
 type Mounted = {
-  __weft119Mounted: {
+  __braid119Mounted: {
     inspect(): {
       same: boolean;
       value: boolean;
@@ -212,7 +212,7 @@ async function retainedMountedDraft(
 ): Promise<void> {
   const witness = await app.page.evaluate(
     ({ submit, presentation }) => {
-      const witness = (window as unknown as Mounted).__weft119Mounted;
+      const witness = (window as unknown as Mounted).__braid119Mounted;
       const result = witness.inspect();
       const focus =
         presentation === "hidden"
@@ -252,7 +252,7 @@ async function restoredMountedDraft(
     await app.page.evaluate(() => {
       const value = (
         window as unknown as {
-          __weft119Mounted: {
+          __braid119Mounted: {
             inspect(): {
               same: boolean;
               value: boolean;
@@ -262,7 +262,7 @@ async function restoredMountedDraft(
             };
           };
         }
-      ).__weft119Mounted.inspect();
+      ).__braid119Mounted.inspect();
       return (
         value.same &&
         value.value &&
@@ -719,7 +719,7 @@ test("a routine re-read keeps the catalog page attached, visible and focus-stabl
         subtree: true,
       });
       title.focus();
-      Object.defineProperty(window, "__weft324Page", {
+      Object.defineProperty(window, "__braid324Page", {
         configurable: true,
         value: () =>
           !detached &&
@@ -736,7 +736,7 @@ test("a routine re-read keeps the catalog page attached, visible and focus-stabl
     });
     const stable = () =>
       page.evaluate(() =>
-        (window as unknown as { __weft324Page(): boolean }).__weft324Page(),
+        (window as unknown as { __braid324Page(): boolean }).__braid324Page(),
       );
     expect(await stable()).toBe(true);
     const contexts = app.count("context");
@@ -907,9 +907,9 @@ test("protected persistence uses no browser storage and reloading loses tab-only
     const storage = await page.evaluate(() =>
       (
         window as unknown as {
-          __weft119StorageCounts(): Record<string, number>;
+          __braid119StorageCounts(): Record<string, number>;
         }
-      ).__weft119StorageCounts(),
+      ).__braid119StorageCounts(),
     );
     expect(Object.values(storage).every((value) => value === 0)).toBe(true);
     expect(

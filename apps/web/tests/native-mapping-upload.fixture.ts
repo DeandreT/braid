@@ -38,7 +38,7 @@ export interface UploadCounts {
   readonly workersCreated: number;
 }
 export interface NativeMappingUploadManifest {
-  readonly schemaVersion: "weft.native-mapping-upload-browser-fixture.v1";
+  readonly schemaVersion: "braid.native-mapping-upload-browser-fixture.v1";
   readonly fixtureId: string;
   readonly source: { readonly commit: string; readonly tree: string };
   readonly readOrigin: string;
@@ -77,7 +77,7 @@ export type UploadCommand =
         | "shutdown";
     };
 type AckBase = {
-  schemaVersion: "weft.native-mapping-upload-browser-control.v1";
+  schemaVersion: "braid.native-mapping-upload-browser-control.v1";
   requestNonce: string;
   fixtureId: string;
 };
@@ -173,7 +173,7 @@ function manifest(value: unknown, origin: string): NativeMappingUploadManifest {
     "protected",
   ]);
   requireUpload(
-    row.schemaVersion === "weft.native-mapping-upload-browser-fixture.v1" &&
+    row.schemaVersion === "braid.native-mapping-upload-browser-fixture.v1" &&
       canonicalId(row.fixtureId) &&
       row.readOrigin === origin &&
       row.initialReadProfile === "publisher" &&
@@ -406,7 +406,7 @@ export class NativeMappingUploadOwner {
       "profile",
     ]);
     requireUpload(
-      ready.schemaVersion === "weft.native-mapping-upload-browser-ready.v1" &&
+      ready.schemaVersion === "braid.native-mapping-upload-browser-ready.v1" &&
         ready.profile === "publisher" &&
         typeof ready.manifestSha256 === "string" &&
         /^[0-9a-f]{64}$/.test(ready.manifestSha256),
@@ -484,7 +484,8 @@ export class NativeMappingUploadOwner {
           "outcome",
         ];
       requireUpload(
-        row.schemaVersion === "weft.native-mapping-upload-browser-control.v1" &&
+        row.schemaVersion ===
+          "braid.native-mapping-upload-browser-control.v1" &&
           row.fixtureId === envelope.fixtureId &&
           row.requestNonce === nonce &&
           row.action === command.action,
@@ -653,11 +654,11 @@ export const test = base.extend<
 >({
   nativeMappingUploadOwner: [
     async ({}, use) => {
-      const operator = process.env.WEFT_NATIVE_MAPPING_UPLOAD_BROWSER_OPERATOR,
+      const operator = process.env.BRAID_NATIVE_MAPPING_UPLOAD_BROWSER_OPERATOR,
         configuration =
-          process.env.WEFT_NATIVE_MAPPING_UPLOAD_BROWSER_OPERATOR_CONFIG,
-        path = process.env.WEFT_NATIVE_MAPPING_UPLOAD_BROWSER_MANIFEST,
-        origin = process.env.WEFT_NATIVE_MAPPING_UPLOAD_BASE_URL;
+          process.env.BRAID_NATIVE_MAPPING_UPLOAD_BROWSER_OPERATOR_CONFIG,
+        path = process.env.BRAID_NATIVE_MAPPING_UPLOAD_BROWSER_MANIFEST,
+        origin = process.env.BRAID_NATIVE_MAPPING_UPLOAD_BASE_URL;
       requireUpload(
         operator && configuration && path && origin && isAbsolute(operator),
         "explicit packaged origin/operator/private configuration/manifest are required",

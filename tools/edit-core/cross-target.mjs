@@ -44,7 +44,7 @@ const frame = (bytes) => {
 function nativeCheckpoint(native, operations) {
   const log = Buffer.from(JSON.stringify(operations));
   const request = {
-    protocolVersion: "weft.ferrule-edit.v1",
+    protocolVersion: "braid.ferrule-edit.v1",
     requestId: "11111111-1111-4111-8111-111111111111",
     operation: "edit",
     revision: {

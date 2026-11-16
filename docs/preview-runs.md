@@ -18,7 +18,7 @@ the server's `PreviewRunOptions.Limits`, then stores it with a server-assigned
 execution clock. The clock is captured once at submission so every attempt of a
 run evaluates with the same value.
 
-The admitted request is a canonical UTF-8 JSON document (`weft.preview-request.v1`)
+The admitted request is a canonical UTF-8 JSON document (`braid.preview-request.v1`)
 with the revision scope, target selection, typed parameters, input names, byte
 lengths and SHA-256 digests, and the effective limits. Its SHA-256 is the request
 fingerprint. A submitter's request key is unique: resubmitting the same key with
@@ -26,11 +26,10 @@ an identical fingerprint and revision returns the original run (`Replayed`); any
 difference returns `Conflict` and stores nothing.
 
 The optional HTTP `profile` selects admission, not a codec override. Omission,
-null or `weft.ferrule-json-preview.v1` preserves the original JSON request grammar
-and fingerprint bytes. `weft.ferrule-document-preview.v1` uses canonical schema
-`weft.document-preview-request.v1`; changing profiles with the same request key
+null or `braid.ferrule-json-preview.v1` selects JSON. `braid.ferrule-document-preview.v1` uses canonical schema
+`braid.document-preview-request.v1`; changing profiles with the same request key
 is a conflict. The queued request carries this selection through retries and
-worker restarts. Existing saved JSON runs are not rewritten or reinterpreted.
+worker restarts.
 
 Document previews require explicit native JSON, X12 or EDIFACT boundary options
 and bounded embedded schemas. Neither uploaded filenames nor content types
@@ -57,16 +56,13 @@ Document-profile limits apply before input parsing and before any output is
 published: EDI documents are at most 2 MiB, 32,768 segments, and 16 KiB per segment;
 JSON nesting is at most 64. Boundary schemas have at most 8,192 nodes and depth
 64. These limits are additional to the shared input/output totals and sandbox
-ceilings, and do not change legacy JSON admission. EDIFACT release characters
+ceilings. EDIFACT release characters
 and self-describing UNA/ISA separators are respected while counting segments.
 
 Output metadata and the authenticated output route preserve the recorded
 `application/json`, `application/edi-x12` or `application/edifact` media type.
 The route streams the exact retained bytes with digest, attachment and nosniff
-headers. Migration `0034_document_previews.sql` extends only the admitted output
-media constraint, preserving existing rows and function contracts. This preview
-profile does not qualify EDI regression policies, compiled builds or mapping
-endpoints; those surfaces retain their own capability checks.
+headers.
 
 Only an active principal with active organization and project memberships whose
 project role is runner, publisher or administrator can submit. The revision must
@@ -112,31 +108,31 @@ listeners or node agents).
 Wolverine generates its handler and outbox code and compiles it when a host
 starts (`WolverineFx.RuntimeCompilation`).
 
-`dotnet/apps/Weft.Worker` is the preview worker host (`PreviewJobRole.Worker`,
+`dotnet/apps/Braid.Worker` is the preview worker host (`PreviewJobRole.Worker`,
 Wolverine `Solo` durability). It listens with a durable inbox and one message at
 a time, because the restricted runner admits one container. A delivery calls
 `PreviewRunExecutor.ExecuteAsync`; a released attempt or a busy run is rescheduled
 after the retry delay. Redelivery and duplicate delivery are safe because the run
 lease fences every attempt and a finished run is never executed again. On restart
 the worker reclaims every persisted envelope; an attempt interrupted by a process
-kill is claimed again after its lease expires. P7 runs a single worker host;
+kill is claimed again after its lease expires. The configured `Solo` mode runs a single worker host;
 several hosts need Wolverine's balanced durability mode.
 
 The worker reads its configuration from the environment:
-`WEFT_PREVIEW_WRITER_CONNECTION_STRING` (or `WEFT_PREVIEW_WRITER_CONNECTION_STRING_FILE`,
+`BRAID_PREVIEW_WRITER_CONNECTION_STRING` (or `BRAID_PREVIEW_WRITER_CONNECTION_STRING_FILE`,
 a [protected private file](runtime-packaging.md#private-delivery)),
 the [private storage selection](private-storage-blob.md#host-selection)
-(`WEFT_PRIVATE_STORAGE_ROOT` for an existing v2 root, or the Azure Blob settings;
+(`BRAID_PRIVATE_STORAGE_ROOT` for an existing v2 root, or the Azure Blob settings;
 opened read-only),
-`WEFT_FERRULE_WORKER_IMAGE`, optional `WEFT_DOCKER_EXECUTABLE` and optional
-`WEFT_PREVIEW_LEASE_SECONDS` (35–600). With `WEFT_FERRULE_RUNNER=service` it runs
+`BRAID_FERRULE_WORKER_IMAGE`, optional `BRAID_DOCKER_EXECUTABLE` and optional
+`BRAID_PREVIEW_LEASE_SECONDS` (35–600). With `BRAID_FERRULE_RUNNER=service` it runs
 previews through the [Ferrule service](ferrule-service.md#braid-service-runner) instead of
 Docker. With a filesystem root it runs as the same operating-system user that owns
 the root. A worker that only serves
 [hosted inspection](ferrule-worker.md#worker-inspection-service) sets
-`WEFT_PREVIEW_WORKER_ENABLED=false` and needs none of the preview settings.
+`BRAID_PREVIEW_WORKER_ENABLED=false` and needs none of the preview settings.
 
-Migration `0013_preview_messages.sql` creates the `weft_messages` schema and grants
+Migration `0013_preview_messages.sql` creates the `braid_messages` schema and grants
 the preview writer `USAGE` and `CREATE` on it only. Wolverine creates and owns its
 envelope, queue and node tables there on startup; braid tables and grants are not
 affected. The writer connection must be direct or session pooled, because
@@ -175,9 +171,9 @@ Preview routes are default-off and require an enabled catalog. Every response is
   outcome `canceled`, `requested` (the run is executing) or `finished`, with the
   current run.
 
-The Development host enables the routes with `WEFT_PREVIEWS_ENABLED=true` and the
-two preview database logins in `WEFT_POSTGRES_PREVIEW_WRITER_CONNECTION_STRING`
-and `WEFT_POSTGRES_PREVIEW_READER_CONNECTION_STRING`. The Session host takes the
+The Development host enables the routes with `BRAID_PREVIEWS_ENABLED=true` and the
+two preview database logins in `BRAID_POSTGRES_PREVIEW_WRITER_CONNECTION_STRING`
+and `BRAID_POSTGRES_PREVIEW_READER_CONNECTION_STRING`. The Session host takes the
 same flag and reads only the two `_FILE` forms of those settings through its
 [protected connection delivery](session-host.md); a plain connection-string setting,
 a missing or unprotected file, or one login delivered for both profiles refuses
@@ -202,7 +198,7 @@ It checks the policy's input, name and parameter bounds before submitting.
 *Try sample: the preview form and a successful run's output in the Result tab.*
 
 `tools/preview-browser/run.mjs` qualifies this panel end to end against the actual
-API, database, `Weft.Worker` host and Ferrule worker image; see its
+API, database, `Braid.Worker` host and Ferrule worker image; see its
 [README](../tools/preview-browser/README.md).
 
 Each submission uses a new idempotency key. The tab keeps only that key and the
@@ -218,26 +214,24 @@ recorded byte count and SHA-256 before use.
 
 Interactive preview payloads are bounded (8 MiB of inputs and 8 MiB of outputs)
 and short-lived, so inputs and outputs are stored as `bytea` rows in
-`weft.preview_documents` beside their run. This keeps the terminal transition and
+`braid.preview_documents` beside their run. This keeps the terminal transition and
 its outputs atomic. Each row is checked against its SHA-256 and byte count by the
 database. Runs carry an expiry (24 hours by default, at most seven days).
 Persistent regression fixtures use separate storage with their own retention.
 
 ## Database profiles
 
-Migration `0012_preview_runs.sql` adds `weft.preview_runs`,
-`weft.preview_documents` and owner-defined `SECURITY DEFINER` functions. Neither
+Migration `0012_preview_runs.sql` adds `braid.preview_runs`,
+`braid.preview_documents` and owner-defined `SECURITY DEFINER` functions. Neither
 runtime profile has table privileges:
 
-- `weft_preview_writer` executes submit, claim, inputs, observe, complete, release
+- `braid_preview_writer` executes submit, claim, inputs, observe, complete, release
   and cancel.
-- `weft_preview_reader` executes run, output-list and output reads.
+- `braid_preview_reader` executes run, output-list and output reads.
 
 Both logins must exist with CONNECT-only provisioning before the migration runs.
 New local Compose installations create them from independent
-`WEFT_LOCAL_PREVIEW_READER_PASSWORD` and `WEFT_LOCAL_PREVIEW_WRITER_PASSWORD`
-values. An existing installation runs
-`deploy/local/postgres-add-preview-roles.sh` inside its PostgreSQL container with
-both passwords before the coordinated stop/migrate/start upgrade.
+`BRAID_LOCAL_PREVIEW_READER_PASSWORD` and `BRAID_LOCAL_PREVIEW_WRITER_PASSWORD`
+values.
 `PostgresPreviewDatabase` verifies the exact restricted session identity on every
 transaction.

@@ -23,7 +23,7 @@ import { AppendRevisionPageComponent } from "../../src/catalog/uploads/append-re
 import { RevisionPageComponent } from "../../src/catalog/revision-page.component";
 
 @Component({
-  selector: "weft119-probe",
+  selector: "braid119-probe",
   imports: [AppComponent],
   template: `<aside aria-label="Nonshipped session test controls">
       <button id="probe-observe" (click)="observe()">Observe</button>
@@ -45,7 +45,7 @@ import { RevisionPageComponent } from "../../src/catalog/revision-page.component
       <output id="probe-result">{{ result() }}</output>
     </aside>
     @if (mounted()) {
-      <weft-root />
+      <braid-root />
     }`,
 })
 export class BrowserSessionPublicProbe {
@@ -64,7 +64,7 @@ export class BrowserSessionPublicProbe {
   private requestedSamples = 0;
   private foreignActions = 0;
   private notice: Subscription | null = null;
-  readonly mounted = signal(location.pathname !== "/__weft119_probe/__state");
+  readonly mounted = signal(location.pathname !== "/__braid119_probe/__state");
   readonly result = signal("{}");
   constructor() {
     inject(DestroyRef).onDestroy(() => {
@@ -474,7 +474,7 @@ export class BrowserSessionPublicProbe {
 bootstrapApplication(BrowserSessionPublicProbe, {
   providers: [
     provideHttpClient(),
-    { provide: APP_BASE_HREF, useValue: "/__weft119_probe/" },
+    { provide: APP_BASE_HREF, useValue: "/__braid119_probe/" },
     provideRouter(
       routes,
       withInMemoryScrolling({ scrollPositionRestoration: "enabled" }),

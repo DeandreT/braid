@@ -12,7 +12,7 @@ use std::fmt;
 
 pub const FLAG: &str = "--service-sandbox";
 /// Written once to standard output after every control is in force and before any input is read.
-pub const READY_MARKER: [u8; 4] = *b"WFS1";
+pub const READY_MARKER: [u8; 4] = *b"BFS1";
 
 const CPU_SECONDS: std::ops::RangeInclusive<u64> = 1..=600;
 const MEMORY_BYTES: std::ops::RangeInclusive<u64> = (16 << 20)..=(8 << 30);

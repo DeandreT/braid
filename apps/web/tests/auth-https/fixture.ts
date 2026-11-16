@@ -257,7 +257,7 @@ export class HttpsFixture {
     this.nativeAdmitted = true;
     ++this.native;
     const transient = (await this.context!.cookies(this.cfg.origin)).filter(
-      (cookie) => cookie.name.startsWith("__Host-Weft.Entra."),
+      (cookie) => cookie.name.startsWith("__Host-Braid.Entra."),
     );
     requireOwned(
       transient.length === 2 &&
@@ -279,7 +279,7 @@ export class HttpsFixture {
     requireOwned(reply.status === 303 && reply.callbackUrl);
     if (this.cfg.scenario === "correlation")
       await this.context!.clearCookies({
-        name: /^__Host-Weft\.Entra\.Correlation\./,
+        name: /^__Host-Braid\.Entra\.Correlation\./,
       });
     return { callback: reply.callbackUrl };
   }
@@ -310,7 +310,7 @@ export class HttpsFixture {
     if (key !== "POST /api/auth/login" && key !== "POST /api/auth/logout")
       return { headers, negative: null };
     if (key === "POST /api/auth/login") {
-      const target = headers["x-weft-return-to"] ?? "/";
+      const target = headers["x-braid-return-to"] ?? "/";
       requireOwned(
         [
           "/",
@@ -328,9 +328,9 @@ export class HttpsFixture {
         headers["content-type"] === undefined &&
         headers["origin"] === this.cfg.origin &&
         headers[
-          key === "POST /api/auth/login" ? "x-weft-login" : "x-weft-logout"
+          key === "POST /api/auth/login" ? "x-braid-login" : "x-braid-logout"
         ] === "1" &&
-        headers["x-weft-auth-token"] === status.authActionRequestToken,
+        headers["x-braid-auth-token"] === status.authActionRequestToken,
     );
     requireOwned(
       headers["x-xsrf-token"] ===
@@ -348,10 +348,10 @@ export class HttpsFixture {
       changed = { ...headers };
     if (negative) {
       requireOwned(status.state === "authenticated");
-      if (negative === "missingAction") delete changed["x-weft-auth-token"];
+      if (negative === "missingAction") delete changed["x-braid-auth-token"];
       if (negative === "missingEpoch") delete changed["x-xsrf-token"];
       if (negative === "crossPurpose") {
-        changed["x-weft-auth-token"] = status.requestToken!;
+        changed["x-braid-auth-token"] = status.requestToken!;
         changed["x-xsrf-token"] = status.authActionRequestToken;
       }
       if (negative === "staleEpoch") {
@@ -435,7 +435,7 @@ export class HttpsFixture {
     );
     const cookies = await this.context!.cookies(this.cfg.origin);
     const session = cookies.filter(
-      (cookie) => cookie.name === "__Host-Weft.Session",
+      (cookie) => cookie.name === "__Host-Braid.Session",
     );
     requireOwned(
       session.length === 1 &&
@@ -450,7 +450,7 @@ export class HttpsFixture {
         ),
     );
     const af = cookies.filter((cookie) =>
-      ["__Host-Weft.AuthAction", "__Host-Weft.Antiforgery"].includes(
+      ["__Host-Braid.AuthAction", "__Host-Braid.Antiforgery"].includes(
         cookie.name,
       ),
     );
@@ -465,14 +465,14 @@ export class HttpsFixture {
         ),
     );
     requireOwned(
-      !cookies.some((cookie) => cookie.name.startsWith("__Host-Weft.Entra.")),
+      !cookies.some((cookie) => cookie.name.startsWith("__Host-Braid.Entra.")),
     );
     requireOwned(
       await this.page!.evaluate(
         () =>
           !document.cookie
             .split(";")
-            .some((pair) => /^\s*__Host-Weft\./.test(pair)),
+            .some((pair) => /^\s*__Host-Braid\./.test(pair)),
       ),
     );
     ++this.sessionCookies;
@@ -526,7 +526,7 @@ export class HttpsFixture {
     await this.rejectedCallbackDocument();
     requireOwned(
       !(await this.context!.cookies(this.cfg.origin)).some(
-        (cookie) => cookie.name === "__Host-Weft.Session",
+        (cookie) => cookie.name === "__Host-Braid.Session",
       ),
     );
     const counts = await this.control.call("counts");
@@ -607,7 +607,7 @@ export class HttpsFixture {
   }
   async restartAndRefresh(): Promise<void> {
     const carrier = (await this.context!.cookies(this.cfg.origin)).find(
-      (cookie) => cookie.name === "__Host-Weft.Session",
+      (cookie) => cookie.name === "__Host-Braid.Session",
     )?.value;
     requireOwned(carrier);
     this.boundary.reloading();
@@ -615,7 +615,7 @@ export class HttpsFixture {
     await this.authenticated();
     requireOwned(
       (await this.context!.cookies(this.cfg.origin)).find(
-        (cookie) => cookie.name === "__Host-Weft.Session",
+        (cookie) => cookie.name === "__Host-Braid.Session",
       )?.value === carrier,
     );
     await this.boundary.settleRequests();
@@ -633,7 +633,7 @@ export class HttpsFixture {
     await this.authenticated();
     requireOwned(
       (await this.context!.cookies(this.cfg.origin)).find(
-        (cookie) => cookie.name === "__Host-Weft.Session",
+        (cookie) => cookie.name === "__Host-Braid.Session",
       )?.value === carrier,
     );
     const after = await this.counts();
@@ -664,7 +664,7 @@ export class HttpsFixture {
     );
     requireOwned(
       !(await this.context!.cookies(this.cfg.origin)).some(
-        (cookie) => cookie.name === "__Host-Weft.Session",
+        (cookie) => cookie.name === "__Host-Braid.Session",
       ),
     );
     await this.activate(

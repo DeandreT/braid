@@ -6,13 +6,12 @@ exact revision, runtime selection, inputs, parameters and expected outputs.
 The envelope format and replay boundary are described in
 [Regression cases](regression-cases.md).
 
-Document-runtime cases use `weft.document-regression-case.v1`, retaining explicit
+Document-runtime cases use `braid.document-regression-case.v1`, retaining explicit
 expected-output media and comparison choices in the immutable case identity.
-Legacy `weft.regression-case.v1` envelopes omit those fields and retain their
-original canonical bytes. Both use the existing opaque PostgreSQL envelope
+JSON `braid.regression-case.v1` envelopes omit those fields. Both use opaque PostgreSQL envelope
 storage. Run completions retain non-JSON output media; reopening recomputes
 comparison from the pinned case policy/options and retained bytes rather than
-trusting a stored verdict. Legacy JSON completions omit the media extension.
+trusting a stored verdict. JSON completions omit the media extension.
 
 ## Publication and access
 
@@ -56,16 +55,13 @@ a shared all-or-nothing operation. An ambiguous commit remains an exception;
 retrying the same case/version and exact envelope resolves it without duplicate
 publication.
 
-## Retention and activation
+## Retention and installation
 
 Saved case versions do not inherit temporary preview expiry. The store exposes
-no delete operation; immutable versions remain until an explicit, separately
-authorized retirement workflow is supplied. That future workflow must preserve
-the references needed by retained regression runs and deployment evidence.
+no delete operation. A retirement workflow must preserve references needed by
+retained regression runs and deployment evidence.
 
 The schema is applied only by the migration owner after its declared
 prerequisites. Migration `0014_regression_cases.sql` follows preview migrations
 0012/0013; migration 0015 adds the durable run ledger. Application hosts must never install them, grant roles or elevate
-their own credentials on demand. Source preparation, isolated schema checks,
-the complete ordered upgrade, and public API/worker activation are distinct
-qualification boundaries.
+their own credentials on demand.

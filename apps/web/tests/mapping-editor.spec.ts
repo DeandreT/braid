@@ -153,7 +153,7 @@ test("real edit wasm: keyboard mapping, exact values, autosave, undo and accessi
   test.setTimeout(90_000);
   const { state, mapping, scope } = await editorFixture(page);
   await page.goto(revisionPath(scope));
-  if (process.env.WEFT_EDIT_SHELL_DLL) {
+  if (process.env.BRAID_EDIT_SHELL_DLL) {
     expect(
       await page.evaluate(async () => {
         try {
@@ -197,7 +197,7 @@ test("real edit wasm: keyboard mapping, exact values, autosave, undo and accessi
   await expect.poll(() => state.writes).toBe(3);
   expect(JSON.stringify(state.operations)).toContain("9007199254740993");
   const accessibility = await new AxeBuilder({ page })
-    .include("weft-mapping-editor")
+    .include("braid-mapping-editor")
     .analyze();
   expect(accessibility.violations).toEqual([]);
   // A hung dedicated worker is terminated, and a restart replays only retained intent.
@@ -211,11 +211,11 @@ test("real edit wasm: keyboard mapping, exact values, autosave, undo and accessi
     await expect(showInspector).toBeVisible();
     await expect(showInspector).toHaveAttribute("aria-expanded", "false");
     await expect(
-      page.locator("weft-mapping-editor #wb-main-panel"),
+      page.locator("braid-mapping-editor #wb-main-panel"),
     ).toBeVisible();
     await expect(field).toBeVisible();
     await expect(field).toBeFocused();
-    const dock = page.locator("weft-mapping-editor #wb-dock-panel");
+    const dock = page.locator("braid-mapping-editor #wb-dock-panel");
     await expect(dock).toHaveCount(1);
     await expect(dock).toBeHidden();
   } else {

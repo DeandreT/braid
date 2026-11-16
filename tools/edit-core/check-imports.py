@@ -49,7 +49,7 @@ def check(path):
                 _, cursor = unsigned(data, cursor)
                 # wasm-bindgen hashes intrinsic names as its implementation changes.
                 # Match the full intrinsic stem, not general JS imports.
-                if module != "./weft_ferrule_edit_wasm_bg.js":
+                if module != "./braid_ferrule_edit_wasm_bg.js":
                     raise ValueError(f"Forbidden import: {module}.{field}")
                 function = re.search(re.escape(field) + r": function\(arg0, arg1\) \{([^}]+)\}", glue)
                 body = " ".join(function.group(1).split()) if function else None

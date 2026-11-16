@@ -1,7 +1,7 @@
-# Private chat persistence security and local upgrade
+# Private chat persistence security
 
-Chat metadata uses independent `weft_chat_reader`, `weft_chat_writer` and
-`weft_chat_lifecycle` logins and resetting pools. No login is an API, model-provider or authentication
+Chat metadata uses independent `braid_chat_reader`, `braid_chat_writer` and
+`braid_chat_lifecycle` logins and resetting pools. No login is an API, model-provider or authentication
 session credential. The Server registers the reader and writer stores only when
 chat is configured ([Chat turn HTTP API](chat-http.md)); it does not use the
 lifecycle login.
@@ -15,7 +15,7 @@ refusals. Each login is CONNECT-only before installation, LOGIN/NOINHERIT,
 NOSUPERUSER/NOBYPASSRLS/NOCREATEDB/NOCREATEROLE/NOREPLICATION, with no membership,
 role settings, expiration, parameter rights, sequence rights or default grants.
 Installation refuses missing or pre-broadened profiles rather than repairing or
-adopting them. No older role or guard is broadened.
+adopting them.
 
 The migration grants only named columns, conversation DELETE for the writer,
 schema USAGE, and exact named semantic routines. The lifecycle login receives
@@ -106,61 +106,23 @@ automatically expire or authorize identity reuse.
 ## New local database
 
 Use the existing pinned `deploy/local/postgres.compose.yml` flow and private
-`.env` file. Supply **independent** `WEFT_LOCAL_CHAT_READER_PASSWORD`,
-`WEFT_LOCAL_CHAT_WRITER_PASSWORD` and `WEFT_LOCAL_CHAT_LIFECYCLE_PASSWORD` along with the existing role passwords. The new
+`.env` file. Supply **independent** `BRAID_LOCAL_CHAT_READER_PASSWORD`,
+`BRAID_LOCAL_CHAT_WRITER_PASSWORD` and `BRAID_LOCAL_CHAT_LIFECYCLE_PASSWORD` along with the existing role passwords. The new
 volume initializer creates all three restricted logins with CONNECT only. The explicit
 migration owner subsequently installs schema and named grants.
 
-Chat routines pin `weft.organization_id` and `weft.chat_principal_id` in function
+Chat routines pin `braid.organization_id` and `braid.chat_principal_id` in function
 `SET` clauses. PostgreSQL lets a non-superuser owner declare custom settings there
 only with `SET` privilege on them, so the administrator grants
-`SET ON PARAMETER weft.organization_id, weft.chat_principal_id` to `weft_migrator`
-before migration. The initializer and the existing-volume script both do this.
+`SET ON PARAMETER braid.organization_id, braid.chat_principal_id` to `braid_migrator`
+before migration. The initializer supplies this grant.
 A managed host must allow its administrator to grant that privilege.
 
 Do not put passwords or connection strings in source control. The three passwords
-must not be equal or reused from another role. There is no public host setting,
-provider registration, browser route or DI activation in this persistence source.
+must not be equal or reused from another role. Do not enable shell tracing or
+print environment, connection or password values into logs.
 
-## Existing local volume: explicit operator step
-
-Back up the database, stop all consumers and use the existing database
-administrator to run the additive script once **before** the new migration.
-First update the existing private `deploy/local/.env` with all three independent chat
-passwords and all existing required values. An already running container retains
-its old environment: `compose --env-file ... exec` does not forward newly added
-`.env` values into it. Recreate **only** the database service with the same compose
-file, project identity and existing named `postgres-data` volume, wait for health,
-then execute the script:
-
-```sh
-docker compose --env-file deploy/local/.env -f deploy/local/postgres.compose.yml \
-  up -d --no-deps --force-recreate --wait postgres &&
-docker compose --env-file deploy/local/.env -f deploy/local/postgres.compose.yml \
-  exec -T postgres bash -s < deploy/local/postgres-add-chat-roles.sh
-```
-
-This replaces the container, not its volume; the existing database is preserved
-and the new-volume initializer does not rerun. Keep consumers stopped until the
-coordinated migration and verification finish. Stop if recreation or health fails.
-Do not change the compose project
-name, remove/reinitialize the volume, or use `down --volumes`. Passwords are read
-from the private environment by the existing compose definition and `psql`
-`\getenv`, not placed in command arguments. Do not enable shell tracing or print
-`compose config`, container inspection, environment or password values into logs.
-This is an explicit local operator procedure, never application-startup behavior.
-
-The script targets the local `weft` database and creates all three logins plus CONNECT
-in one transaction. It fails if any role already exists; it never rotates a
-password, resets another role, widens authority or silently repairs a failed
-installation. Have the owner inspect any pre-existing profile and resolve it
-through a separate approved procedure instead of rerunning with broader grants.
-
-Then apply migrations using the existing migration tool and migration-owner
-credential, verify exact admission using independent reader/writer/lifecycle connections,
-and restart only the explicitly approved consumers. Never run provisioning from
-application startup. An old volume does not rerun `postgres-init.sh`.
-
-`ChatSchemaContract` binds the `0011_private_chat` checksum and the expected
-migration prefix. Correct the schema with a new migration; never rewrite applied
-migrations, adopt live definitions, or broaden old expected grants.
+Apply migrations with the migration-owner credential, then verify admission using
+independent reader/writer/lifecycle connections. Provisioning is separate from
+application startup. `ChatSchemaContract` checks the installed checksum and schema
+against the application's embedded contract.

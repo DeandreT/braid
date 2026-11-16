@@ -68,7 +68,7 @@ export class EditCore {
       throw new EditCoreError("integrity");
     this.worker = new Worker(editAssets.worker, {
       type: "module",
-      name: "weft-mapping-editor",
+      name: "braid-mapping-editor",
     });
     this.worker.onmessage = (event: MessageEvent<unknown>) =>
       this.receive(event.data);

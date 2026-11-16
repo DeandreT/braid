@@ -1,11 +1,8 @@
 # Scoped ingestion metadata
 
-P3c1 supplies the trusted server metadata boundary for immutable revision
-ingestion. Implementation and qualification are tracked in
-[#23](https://github.com/DeandreT/weft/issues/23). The
-[ingestion plan](catalog-ingestion-plan.md) separates this PostgreSQL foundation
-from P3c2's actual storage/native workflow. This library adds no HTTP identity,
-client evidence input, or native execution.
+PostgreSQL stores immutable revision ingestion metadata. The
+[ingestion service](native-revision-ingestion.md) coordinates storage and native
+validation around this metadata.
 
 ## Authority and immutable publication
 
@@ -33,7 +30,7 @@ evidence; it locks the reservation/mapping, allocates committed order, inserts
 the revision, changes the head once and finalizes the receipt. CTEs communicate
 through `RETURNING`. Revocation committed before that statement prevents
 publication; an already-running statement retains its snapshot. External I/O
-belongs to P3c2 and never runs with a metadata transaction open.
+never runs with a metadata transaction open.
 
 ## Requests, leases and evidence
 
@@ -52,34 +49,28 @@ Defensive versioned evidence retains scope/digest/profile, status, confirmation,
 nullable validity, counts and bounded derived diagnostics. Database-normalized
 evidence overflow is an explicit policy rejection with no invented validator
 result. Eligibility is not inferred from diagnostic counts. Only exact matched
-confirmed valid/decoded-invalid results can produce revisions. P3c1 tests use
-explicitly synthetic admission evidence; P3c2 proves real object/native admission.
+confirmed valid/decoded-invalid results can produce revisions.
 
-## Local provisioning and upgrade
+## Local provisioning
 
 New Compose databases provision three separate logins: migrator, reader and
 ingestion. Copy the updated `.env.example` and set four private passwords.
 Bootstrap reads passwords inside `psql`; arguments contain no password. The
-owner-only migration tool preserves `0001` and its exact checksum.
+owner-only migration tool applies the database schema.
 Compose readiness checks the final TCP listener, so its temporary initialization
 server cannot satisfy `up --wait` before role provisioning finishes.
 
-For an existing ownership-only database, add the ingestion password to the
-private environment file, supply it to the service, then explicitly provision
-the login before applying the new migration:
+Supply the passwords in the private environment file, start PostgreSQL and
+apply the schema:
 
 ```sh
 docker compose --env-file deploy/local/.env -f deploy/local/postgres.compose.yml up -d --wait
-docker compose --env-file deploy/local/.env -f deploy/local/postgres.compose.yml exec -T postgres bash < deploy/local/postgres-add-ingest.sh
-dotnet run --configuration Release --project dotnet/tools/Weft.DatabaseTool -- migrate
+dotnet run --configuration Release --project dotnet/tools/Braid.DatabaseTool -- migrate
 ```
 
-The tool uses `WEFT_MIGRATION_CONNECTION_STRING`. The one-shot script creates
-only the new login/CONNECT grant and never changes existing passwords/roles.
-Do not rerun it when the login already exists. Migrations use a no-CREATEROLE
+The tool uses `BRAID_MIGRATION_CONNECTION_STRING`. Migrations use a no-CREATEROLE
 owner, and ordinary web startup does not configure ingestion or a default actor.
 
 Actual PostgreSQL gates cover fresh/upgrade/concurrent/restart migrations,
 privilege/policy/guard tampering, immutable ancestry, scoped retries, lease
 fencing, head ordering, original-actor authority and pooled-state reset.
-Exact-source local/clean evidence is linked in the scoped PR before merge.

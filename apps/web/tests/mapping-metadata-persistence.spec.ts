@@ -886,7 +886,7 @@ class MetadataWire {
           typeof token === "string" &&
           token.length > 0 &&
           headers["content-type"] ===
-            "application/vnd.weft.mapping-metadata-edit.v1+json" &&
+            "application/vnd.braid.mapping-metadata-edit.v1+json" &&
           headers["origin"] === origin &&
           ![
             "if-none-match",
@@ -1455,7 +1455,7 @@ class MetadataWire {
   ): Promise<"written" | "unavailable"> {
     if (readDiagnosticAttempted) return "unavailable";
     readDiagnosticAttempted = true;
-    const config = process.env.WEFT_MAPPING_METADATA_BROWSER_OPERATOR_CONFIG;
+    const config = process.env.BRAID_MAPPING_METADATA_BROWSER_OPERATOR_CONFIG;
     if (!config || !isAbsolute(config)) return "unavailable";
     const deadline = performance.now() + 1000;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -1467,7 +1467,7 @@ class MetadataWire {
         ]);
         if (performance.now() >= deadline) return "unavailable";
         let serialized = JSON.stringify({
-          schemaVersion: "weft.metadata-delivery-diagnostic.v2",
+          schemaVersion: "braid.metadata-delivery-diagnostic.v2",
           wires: results.map((result, index) => ({
             wire: index === 0 ? "primary" : "secondary",
             ...(result.status === "fulfilled"
@@ -1477,7 +1477,7 @@ class MetadataWire {
         });
         if (Buffer.byteLength(serialized, "utf8") > 8192)
           serialized = JSON.stringify({
-            schemaVersion: "weft.metadata-delivery-diagnostic.v2",
+            schemaVersion: "braid.metadata-delivery-diagnostic.v2",
             collection: "unavailable",
             category: "sizeLimit",
           });

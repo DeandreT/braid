@@ -13,7 +13,7 @@ qualification host; the reader and marker primitives are portable.
 `<root>/<captureId>/` is created exclusively under an owned `0700` root. The
 capture ID is a fresh UUID.
 
-- `header.json`: schema `weft.qualification-capture.v1`, capture ID, creation time,
+- `header.json`: schema `braid.qualification-capture.v1`, capture ID, creation time,
   deadline, exact driver argv, runtime identity and the trusted-code inventory.
 - `evidence/`: an empty `0700` directory passed to the driver as `--output`.
 - `driver.stdout`: the driver's standard output, bounded to 1 MiB.
@@ -97,7 +97,7 @@ that has not settled becomes `outputDidNotSettle` rather than blocking the termi
 The owner uses no native library or FFI runtime. It never stores descriptors in a
 narrow field or blocks the main thread on a native call.
 
-## Historical reader
+## Replay reader
 
 `read_capture(path, golden=None)` (CLI: `capture.py read <capture> [--golden <file>]`)
 replays a recorded capture:
@@ -117,19 +117,19 @@ replays a recorded capture:
    then reported as an invalid capture.
 
 Any inconsistency raises `CaptureInvalid` with a category; unreadable files are
-`unreadableCapture`. The frozen historical captures under
+`unreadableCapture`. The fixed capture fixtures under
 `tools/qualification-capture/fixtures/` are replayed against their golden files in
 CI. They are excluded from Prettier and Git text conversion so their bytes stay
 exact.
 
 ## Observation driver
 
-The first driver is an existing observer, for example:
+Use an observer as the driver, for example:
 
 ```sh
-python3.12 tools/qualification-capture/capture.py run --root /var/lib/weft-qualification \
-  --deadline-seconds 900 --trusted /opt/weft/tools/catalog-browser/observe-host.py -- \
-  /usr/bin/python3.12 /opt/weft/tools/catalog-browser/observe-host.py --fixture-id <UUID>
+python3.12 tools/qualification-capture/capture.py run --root /var/lib/braid-qualification \
+  --deadline-seconds 900 --trusted /opt/braid/tools/catalog-browser/observe-host.py -- \
+  /usr/bin/python3.12 /opt/braid/tools/catalog-browser/observe-host.py --fixture-id <UUID>
 ```
 
 The owner appends `--output <capture>/evidence`, which already satisfies the
@@ -139,26 +139,10 @@ The driver's standard error is discarded, consistent with categorical host outpu
 The owner prints one JSON line with the capture ID and outcome. It exits 0 only for
 `passed`, 1 for a revoked capture and 2 for a refusal or an uncertain terminal record.
 
-## Gates
-
-- **Accepted socket descriptor range and native library provenance/ABI:** these do
-  not apply because the owner uses no native library, FFI runtime or event-loop
-  descriptor encoding. Adding one requires a new range proof and provenance/ABI
-  evidence before that library is first opened.
-- **Trusted-code inventory:** recorded by preflight in every header. The operator must
-  still compare those digests with reviewed source before accepting a capture.
-- **Host fit:** preflight checks runtime type, platform, root ownership and mode, and
-  trusted-file ownership. Running in the exclusive Docker window, as root, with the
-  observer's own host checks, remains an operator gate. No privileged installation or
-  activation is part of this tool.
-- **Non-dumpability:** captures make no non-dumpability claim; see issue #396.
-
 ## Operator steps
 
-These steps are run by the operator; the tool does not perform them.
-
 1. Install the reviewed `capture.py` and the observer as root-owned `0644` files, for
-   example under `/opt/weft/tools/`, with a root-owned `/usr/bin/python3.12`.
+   example under `/opt/braid/tools/`, with a root-owned `/usr/bin/python3.12`.
 2. Create the capture root as root, `0700`, outside the checkout.
 3. Run the owner as root in the exclusive window with the observer as its driver.
    Send `finish` to its standard input after operator cleanup has settled.

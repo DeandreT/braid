@@ -204,8 +204,8 @@
         <section aria-labelledby="sandbox-outbox-title">
           <h2 id="sandbox-outbox-title">Outbox</h2>
           @if (history().length) {
-            <div class="weft-table-wrap">
-              <table class="weft-table" aria-label="Sandbox messages">
+            <div class="braid-table-wrap">
+              <table class="braid-table" aria-label="Sandbox messages">
                 <thead>
                   <tr>
                     <th scope="col">Sent</th>
@@ -240,7 +240,7 @@
                           (change)="toggleCompare(item.messageId)"
                         />
                       </td>
-                      <td class="weft-table-actions">
+                      <td class="braid-table-actions">
                         <button class="catalog-button" (click)="open(item)">
                           View
                         </button>
@@ -309,8 +309,8 @@
           </p>
           @for (row of differences(pair); track row.name) {
             <h3>{{ row.name }}: {{ row.same ? "identical" : "different" }}</h3>
-            <div class="weft-table-wrap">
-              <table class="weft-table" [attr.aria-label]="row.name">
+            <div class="braid-table-wrap">
+              <table class="braid-table" [attr.aria-label]="row.name">
                 <tbody>
                   <tr>
                     <td>

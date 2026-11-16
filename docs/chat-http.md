@@ -11,7 +11,7 @@ are private to their creator; project administrators cannot read them.
 
 ## Configuration
 
-Chat is off unless `WEFT_CHAT_ENABLED=true`. When it is off, chat routes answer
+Chat is off unless `BRAID_CHAT_ENABLED=true`. When it is off, chat routes answer
 `404 {"code":"unavailable"}`, the catalog context reports `features.chat=false`,
 and no profile file, credential, pool or provider client is opened. Enabling chat
 requires the catalog and revision report reads, because conversations pin the
@@ -19,10 +19,10 @@ revision's verified reports; an inconsistent profile fails host startup.
 
 | Setting | Value |
 | --- | --- |
-| `WEFT_CHAT_ENABLED` | `true` or `false` (case-sensitive). |
-| `WEFT_CHAT_PROFILES_FILE` | Canonical absolute path of a private profile document (owned by the effective user, mode 0600, at most 64 KiB, protected ancestors). |
-| `WEFT_CHAT_READER_CONNECTION_STRING` / `WEFT_CHAT_WRITER_CONNECTION_STRING` / `WEFT_CHAT_APPROVER_CONNECTION_STRING` | Required, independently credentialed `weft_chat_reader`, `weft_chat_writer`, and `weft_chat_approver` logins to the same database. Pools open lazily. The Session host reads only the corresponding `_FILE` forms through its [protected connection delivery](session-host.md); a plain connection-string setting refuses Session startup. Missing approver configuration has no writer fallback. See [exact approval composition](chat-edit-approval-composition.md). |
-| `WEFT_CHAT_PAYLOAD_PERMISSION_CONNECTION_STRING` | Optional. The restricted `weft_payload_permission_reader` login (see [payload permission](project-payload-permissions.md)), distinct from both chat logins. Without it no workspace payload tool exists. The Session host reads only `WEFT_CHAT_PAYLOAD_PERMISSION_CONNECTION_STRING_FILE`. |
+| `BRAID_CHAT_ENABLED` | `true` or `false` (case-sensitive). |
+| `BRAID_CHAT_PROFILES_FILE` | Canonical absolute path of a private profile document (owned by the effective user, mode 0600, at most 64 KiB, protected ancestors). |
+| `BRAID_CHAT_READER_CONNECTION_STRING` / `BRAID_CHAT_WRITER_CONNECTION_STRING` / `BRAID_CHAT_APPROVER_CONNECTION_STRING` | Required, independently credentialed `braid_chat_reader`, `braid_chat_writer`, and `braid_chat_approver` logins to the same database. Pools open lazily. The Session host reads only the corresponding `_FILE` forms through its [protected connection delivery](session-host.md); a plain connection-string setting refuses Session startup. Missing approver configuration has no writer fallback. See [exact approval composition](chat-edit-approval-composition.md). |
+| `BRAID_CHAT_PAYLOAD_PERMISSION_CONNECTION_STRING` | Optional. The restricted `braid_payload_permission_reader` login (see [payload permission](project-payload-permissions.md)), distinct from both chat logins. Without it no workspace payload tool exists. The Session host reads only `BRAID_CHAT_PAYLOAD_PERMISSION_CONNECTION_STRING_FILE`. |
 
 The Compose feature profile and Azure chat template deliver that existing
 payload-permission reader through an owner-only file. Delivering the reader does
@@ -51,7 +51,7 @@ The profile document is strict JSON; unknown or duplicate properties are refused
       "metadataPolicy": { "id": "mapping-metadata", "version": 1, "mappingMetadataAllowed": true }
     }
   ],
-  "credentials": [{ "reference": "hosted-key", "file": "/etc/weft/private/hosted-key" }]
+  "credentials": [{ "reference": "hosted-key", "file": "/etc/braid/private/hosted-key" }]
 }
 ```
 
@@ -137,7 +137,7 @@ turns. Payload reads additionally require the destination policy and a freshly
 observed project-specific payload-read grant; profile availability alone never
 grants payload access. See [workspace chat](workspace-chat.md).
 
-The organization listing also returns legacy revision-pinned conversations.
+The organization listing also returns revision-pinned conversations.
 Those retain `kind: "revision"` and their pinned revision and continue through
 the revision routes below; the workspace detail/turn routes do not reinterpret
 them as workspace conversations.
@@ -268,7 +268,7 @@ server path as a hosted profile:
    `"credentialReference": null` and capabilities `["text","functionTools"]`,
    with an empty `credentials` list.
 3. Run the Server with Development identity, catalog reads, project creation,
-   revision ingestion with `WEFT_FERRULE_WORKER_IMAGE`, report reads and
+   revision ingestion with `BRAID_FERRULE_WORKER_IMAGE`, report reads and
    derivation, and chat with its reader and writer logins.
 4. Through product HTTP or the browser, create a project, upload a native
    mapping and ensure its projection and validation reports. Then ask a question

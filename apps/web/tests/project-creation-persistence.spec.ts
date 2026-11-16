@@ -227,7 +227,7 @@ class ActualCreationWire {
       );
       requireCreation(
         headers["content-type"] ===
-          "application/vnd.weft.project-create.v1+json" &&
+          "application/vnd.braid.project-create.v1+json" &&
           headers["origin"] === origin &&
           ![
             "if-match",

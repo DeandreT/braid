@@ -58,8 +58,8 @@
     }
     @if (data(); as page) {
       @if (page.items.length) {
-        <div class="weft-table-wrap ops-table">
-          <table class="weft-table" aria-label="Operations records">
+        <div class="braid-table-wrap ops-table">
+          <table class="braid-table" aria-label="Operations records">
             <thead>
               <tr>
                 @for (key of columns(page.items); track key) {
@@ -77,7 +77,7 @@
                     <td class="catalog-code">{{ cell(row, key) }}</td>
                   }
                   @if (row.kind === "target") {
-                    <td class="weft-table-actions">
+                    <td class="braid-table-actions">
                       <button class="catalog-button" (click)="select(row)">
                         Operate this target
                       </button>

@@ -1,65 +1,65 @@
-name: weft-ownership-dev
+name: braid-ownership-dev
 
 services:
   postgres:
     image: docker.io/library/postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc
     platform: linux/amd64
     environment:
-      POSTGRES_DB: weft
+      POSTGRES_DB: braid
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${WEFT_LOCAL_POSTGRES_ADMIN_PASSWORD:?Set a local database admin password}
-      WEFT_LOCAL_MIGRATOR_PASSWORD: ${WEFT_LOCAL_MIGRATOR_PASSWORD:?Set a separate migration password}
-      WEFT_LOCAL_RUNTIME_PASSWORD: ${WEFT_LOCAL_RUNTIME_PASSWORD:?Set a separate runtime password}
-      WEFT_LOCAL_INGEST_PASSWORD: ${WEFT_LOCAL_INGEST_PASSWORD:?Set a separate ingestion password}
-      WEFT_LOCAL_CATALOG_PASSWORD: ${WEFT_LOCAL_CATALOG_PASSWORD:?Set a separate catalog reader password}
-      WEFT_LOCAL_METADATA_PASSWORD: ${WEFT_LOCAL_METADATA_PASSWORD:?Set a separate mapping metadata editor password}
-      WEFT_LOCAL_CREATOR_PASSWORD: ${WEFT_LOCAL_CREATOR_PASSWORD:?Set a separate project creator password}
-      WEFT_LOCAL_REPORT_PASSWORD: ${WEFT_LOCAL_REPORT_PASSWORD:?Set a separate report reader password}
-      WEFT_LOCAL_DERIVATION_PASSWORD: ${WEFT_LOCAL_DERIVATION_PASSWORD:?Set a separate report derivation password}
-      WEFT_LOCAL_MAINTENANCE_PASSWORD: ${WEFT_LOCAL_MAINTENANCE_PASSWORD:?Set a separate maintenance password}
-      WEFT_LOCAL_IDENTITY_PASSWORD: ${WEFT_LOCAL_IDENTITY_PASSWORD:?Set a separate identity reader password}
-      WEFT_LOCAL_PAYLOAD_PERMISSION_PASSWORD: ${WEFT_LOCAL_PAYLOAD_PERMISSION_PASSWORD:?Set a separate payload permission reader password}
-      WEFT_LOCAL_SESSION_READER_PASSWORD: ${WEFT_LOCAL_SESSION_READER_PASSWORD:?Set a separate session reader password}
-      WEFT_LOCAL_SESSION_WRITER_PASSWORD: ${WEFT_LOCAL_SESSION_WRITER_PASSWORD:?Set a separate session writer password}
-      WEFT_LOCAL_CHAT_READER_PASSWORD: ${WEFT_LOCAL_CHAT_READER_PASSWORD:?Set a separate chat reader password}
-      WEFT_LOCAL_CHAT_WRITER_PASSWORD: ${WEFT_LOCAL_CHAT_WRITER_PASSWORD:?Set a separate chat writer password}
-      WEFT_LOCAL_CHAT_APPROVER_PASSWORD: ${WEFT_LOCAL_CHAT_APPROVER_PASSWORD:?Set a separate chat approver password}
-      WEFT_LOCAL_SPEC_READER_PASSWORD: ${WEFT_LOCAL_SPEC_READER_PASSWORD:-}
-      WEFT_LOCAL_SPEC_WRITER_PASSWORD: ${WEFT_LOCAL_SPEC_WRITER_PASSWORD:-}
-      WEFT_LOCAL_SPEC_MAINTENANCE_PASSWORD: ${WEFT_LOCAL_SPEC_MAINTENANCE_PASSWORD:-}
-      WEFT_LOCAL_CREATION_READER_PASSWORD: ${WEFT_LOCAL_CREATION_READER_PASSWORD:-}
-      WEFT_LOCAL_CREATION_WRITER_PASSWORD: ${WEFT_LOCAL_CREATION_WRITER_PASSWORD:-}
-      WEFT_LOCAL_CREATION_APPROVER_PASSWORD: ${WEFT_LOCAL_CREATION_APPROVER_PASSWORD:-}
-      WEFT_LOCAL_CHAT_LIFECYCLE_PASSWORD: ${WEFT_LOCAL_CHAT_LIFECYCLE_PASSWORD:?Set a separate chat lifecycle password}
-      WEFT_LOCAL_PREVIEW_READER_PASSWORD: ${WEFT_LOCAL_PREVIEW_READER_PASSWORD:?Set a separate preview reader password}
-      WEFT_LOCAL_PREVIEW_WRITER_PASSWORD: ${WEFT_LOCAL_PREVIEW_WRITER_PASSWORD:?Set a separate preview writer password}
-      WEFT_LOCAL_CASE_READER_PASSWORD: ${WEFT_LOCAL_CASE_READER_PASSWORD:?Set a separate case reader password}
-      WEFT_LOCAL_CASE_WRITER_PASSWORD: ${WEFT_LOCAL_CASE_WRITER_PASSWORD:?Set a separate case writer password}
-      WEFT_LOCAL_RUN_READER_PASSWORD: ${WEFT_LOCAL_RUN_READER_PASSWORD:?Set a separate run reader password}
-      WEFT_LOCAL_BUILD_READER_PASSWORD: ${WEFT_LOCAL_BUILD_READER_PASSWORD:?Set a separate build reader password}
-      WEFT_LOCAL_BUILD_WRITER_PASSWORD: ${WEFT_LOCAL_BUILD_WRITER_PASSWORD:?Set a separate build writer password}
-      WEFT_LOCAL_BUILD_RUN_READER_PASSWORD: ${WEFT_LOCAL_BUILD_RUN_READER_PASSWORD:?Set a separate build run reader password}
-      WEFT_LOCAL_BUILD_RUN_WRITER_PASSWORD: ${WEFT_LOCAL_BUILD_RUN_WRITER_PASSWORD:?Set a separate build run writer password}
-      WEFT_LOCAL_BUILD_DISPATCHER_PASSWORD: ${WEFT_LOCAL_BUILD_DISPATCHER_PASSWORD:?Set a separate build dispatcher password}
-      WEFT_LOCAL_BUILD_METADATA_PASSWORD: ${WEFT_LOCAL_BUILD_METADATA_PASSWORD:?Set a separate build metadata reader password}
-      WEFT_LOCAL_QUALIFICATION_READER_PASSWORD: ${WEFT_LOCAL_QUALIFICATION_READER_PASSWORD:?Set a separate qualification reader password}
-      WEFT_LOCAL_QUALIFICATION_WRITER_PASSWORD: ${WEFT_LOCAL_QUALIFICATION_WRITER_PASSWORD:?Set a separate qualification writer password}
-      WEFT_LOCAL_RELEASE_READER_PASSWORD: ${WEFT_LOCAL_RELEASE_READER_PASSWORD:?Set a separate release reader password}
-      WEFT_LOCAL_RELEASE_WRITER_PASSWORD: ${WEFT_LOCAL_RELEASE_WRITER_PASSWORD:?Set a separate release writer password}
-      WEFT_LOCAL_INVOCATION_GRANT_WRITER_PASSWORD: ${WEFT_LOCAL_INVOCATION_GRANT_WRITER_PASSWORD:?Set a separate invocation grant writer password}
-      WEFT_LOCAL_INVOCATION_WRITER_PASSWORD: ${WEFT_LOCAL_INVOCATION_WRITER_PASSWORD:?Set a separate invocation writer password}
-      WEFT_LOCAL_RUN_WRITER_PASSWORD: ${WEFT_LOCAL_RUN_WRITER_PASSWORD:?Set a separate run writer password}
-      WEFT_LOCAL_COMPARISON_PASSWORD: ${WEFT_LOCAL_COMPARISON_PASSWORD:?Set a separate trusted comparison password}
-      WEFT_LOCAL_API_AUDIT_WRITER_PASSWORD: ${WEFT_LOCAL_API_AUDIT_WRITER_PASSWORD:?Set a separate API audit writer password}
-      WEFT_LOCAL_DRAFT_READER_PASSWORD: ${WEFT_LOCAL_DRAFT_READER_PASSWORD:?Set a separate draft reader password}
-      WEFT_LOCAL_DRAFT_WRITER_PASSWORD: ${WEFT_LOCAL_DRAFT_WRITER_PASSWORD:?Set a separate draft writer password}
+      POSTGRES_PASSWORD: ${BRAID_LOCAL_POSTGRES_ADMIN_PASSWORD:?Set a local database admin password}
+      BRAID_LOCAL_MIGRATOR_PASSWORD: ${BRAID_LOCAL_MIGRATOR_PASSWORD:?Set a separate migration password}
+      BRAID_LOCAL_RUNTIME_PASSWORD: ${BRAID_LOCAL_RUNTIME_PASSWORD:?Set a separate runtime password}
+      BRAID_LOCAL_INGEST_PASSWORD: ${BRAID_LOCAL_INGEST_PASSWORD:?Set a separate ingestion password}
+      BRAID_LOCAL_CATALOG_PASSWORD: ${BRAID_LOCAL_CATALOG_PASSWORD:?Set a separate catalog reader password}
+      BRAID_LOCAL_METADATA_PASSWORD: ${BRAID_LOCAL_METADATA_PASSWORD:?Set a separate mapping metadata editor password}
+      BRAID_LOCAL_CREATOR_PASSWORD: ${BRAID_LOCAL_CREATOR_PASSWORD:?Set a separate project creator password}
+      BRAID_LOCAL_REPORT_PASSWORD: ${BRAID_LOCAL_REPORT_PASSWORD:?Set a separate report reader password}
+      BRAID_LOCAL_DERIVATION_PASSWORD: ${BRAID_LOCAL_DERIVATION_PASSWORD:?Set a separate report derivation password}
+      BRAID_LOCAL_MAINTENANCE_PASSWORD: ${BRAID_LOCAL_MAINTENANCE_PASSWORD:?Set a separate maintenance password}
+      BRAID_LOCAL_IDENTITY_PASSWORD: ${BRAID_LOCAL_IDENTITY_PASSWORD:?Set a separate identity reader password}
+      BRAID_LOCAL_PAYLOAD_PERMISSION_PASSWORD: ${BRAID_LOCAL_PAYLOAD_PERMISSION_PASSWORD:?Set a separate payload permission reader password}
+      BRAID_LOCAL_SESSION_READER_PASSWORD: ${BRAID_LOCAL_SESSION_READER_PASSWORD:?Set a separate session reader password}
+      BRAID_LOCAL_SESSION_WRITER_PASSWORD: ${BRAID_LOCAL_SESSION_WRITER_PASSWORD:?Set a separate session writer password}
+      BRAID_LOCAL_CHAT_READER_PASSWORD: ${BRAID_LOCAL_CHAT_READER_PASSWORD:?Set a separate chat reader password}
+      BRAID_LOCAL_CHAT_WRITER_PASSWORD: ${BRAID_LOCAL_CHAT_WRITER_PASSWORD:?Set a separate chat writer password}
+      BRAID_LOCAL_CHAT_APPROVER_PASSWORD: ${BRAID_LOCAL_CHAT_APPROVER_PASSWORD:?Set a separate chat approver password}
+      BRAID_LOCAL_SPEC_READER_PASSWORD: ${BRAID_LOCAL_SPEC_READER_PASSWORD:-}
+      BRAID_LOCAL_SPEC_WRITER_PASSWORD: ${BRAID_LOCAL_SPEC_WRITER_PASSWORD:-}
+      BRAID_LOCAL_SPEC_MAINTENANCE_PASSWORD: ${BRAID_LOCAL_SPEC_MAINTENANCE_PASSWORD:-}
+      BRAID_LOCAL_CREATION_READER_PASSWORD: ${BRAID_LOCAL_CREATION_READER_PASSWORD:-}
+      BRAID_LOCAL_CREATION_WRITER_PASSWORD: ${BRAID_LOCAL_CREATION_WRITER_PASSWORD:-}
+      BRAID_LOCAL_CREATION_APPROVER_PASSWORD: ${BRAID_LOCAL_CREATION_APPROVER_PASSWORD:-}
+      BRAID_LOCAL_CHAT_LIFECYCLE_PASSWORD: ${BRAID_LOCAL_CHAT_LIFECYCLE_PASSWORD:?Set a separate chat lifecycle password}
+      BRAID_LOCAL_PREVIEW_READER_PASSWORD: ${BRAID_LOCAL_PREVIEW_READER_PASSWORD:?Set a separate preview reader password}
+      BRAID_LOCAL_PREVIEW_WRITER_PASSWORD: ${BRAID_LOCAL_PREVIEW_WRITER_PASSWORD:?Set a separate preview writer password}
+      BRAID_LOCAL_CASE_READER_PASSWORD: ${BRAID_LOCAL_CASE_READER_PASSWORD:?Set a separate case reader password}
+      BRAID_LOCAL_CASE_WRITER_PASSWORD: ${BRAID_LOCAL_CASE_WRITER_PASSWORD:?Set a separate case writer password}
+      BRAID_LOCAL_RUN_READER_PASSWORD: ${BRAID_LOCAL_RUN_READER_PASSWORD:?Set a separate run reader password}
+      BRAID_LOCAL_BUILD_READER_PASSWORD: ${BRAID_LOCAL_BUILD_READER_PASSWORD:?Set a separate build reader password}
+      BRAID_LOCAL_BUILD_WRITER_PASSWORD: ${BRAID_LOCAL_BUILD_WRITER_PASSWORD:?Set a separate build writer password}
+      BRAID_LOCAL_BUILD_RUN_READER_PASSWORD: ${BRAID_LOCAL_BUILD_RUN_READER_PASSWORD:?Set a separate build run reader password}
+      BRAID_LOCAL_BUILD_RUN_WRITER_PASSWORD: ${BRAID_LOCAL_BUILD_RUN_WRITER_PASSWORD:?Set a separate build run writer password}
+      BRAID_LOCAL_BUILD_DISPATCHER_PASSWORD: ${BRAID_LOCAL_BUILD_DISPATCHER_PASSWORD:?Set a separate build dispatcher password}
+      BRAID_LOCAL_BUILD_METADATA_PASSWORD: ${BRAID_LOCAL_BUILD_METADATA_PASSWORD:?Set a separate build metadata reader password}
+      BRAID_LOCAL_QUALIFICATION_READER_PASSWORD: ${BRAID_LOCAL_QUALIFICATION_READER_PASSWORD:?Set a separate qualification reader password}
+      BRAID_LOCAL_QUALIFICATION_WRITER_PASSWORD: ${BRAID_LOCAL_QUALIFICATION_WRITER_PASSWORD:?Set a separate qualification writer password}
+      BRAID_LOCAL_RELEASE_READER_PASSWORD: ${BRAID_LOCAL_RELEASE_READER_PASSWORD:?Set a separate release reader password}
+      BRAID_LOCAL_RELEASE_WRITER_PASSWORD: ${BRAID_LOCAL_RELEASE_WRITER_PASSWORD:?Set a separate release writer password}
+      BRAID_LOCAL_INVOCATION_GRANT_WRITER_PASSWORD: ${BRAID_LOCAL_INVOCATION_GRANT_WRITER_PASSWORD:?Set a separate invocation grant writer password}
+      BRAID_LOCAL_INVOCATION_WRITER_PASSWORD: ${BRAID_LOCAL_INVOCATION_WRITER_PASSWORD:?Set a separate invocation writer password}
+      BRAID_LOCAL_RUN_WRITER_PASSWORD: ${BRAID_LOCAL_RUN_WRITER_PASSWORD:?Set a separate run writer password}
+      BRAID_LOCAL_COMPARISON_PASSWORD: ${BRAID_LOCAL_COMPARISON_PASSWORD:?Set a separate trusted comparison password}
+      BRAID_LOCAL_API_AUDIT_WRITER_PASSWORD: ${BRAID_LOCAL_API_AUDIT_WRITER_PASSWORD:?Set a separate API audit writer password}
+      BRAID_LOCAL_DRAFT_READER_PASSWORD: ${BRAID_LOCAL_DRAFT_READER_PASSWORD:?Set a separate draft reader password}
+      BRAID_LOCAL_DRAFT_WRITER_PASSWORD: ${BRAID_LOCAL_DRAFT_WRITER_PASSWORD:?Set a separate draft writer password}
     ports:
       - "127.0.0.1:54329:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./postgres-init.sh:/docker-entrypoint-initdb.d/01-weft-roles.sh:ro
+      - ./postgres-init.sh:/docker-entrypoint-initdb.d/01-braid-roles.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d weft"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d braid"]
       interval: 2s
       timeout: 2s
       retries: 30

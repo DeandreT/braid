@@ -225,7 +225,7 @@ await runBrowserFixture({
         );
         check(
           fx.jsonSql(
-            "SELECT to_json(get_byte(artifact_body,0)=77 AND get_byte(artifact_body,1)=90) FROM weft.build_publications WHERE organization_id='" +
+            "SELECT to_json(get_byte(artifact_body,0)=77 AND get_byte(artifact_body,1)=90) FROM braid.build_publications WHERE organization_id='" +
               guid(revision.organizationId) +
               "' AND build_id='" +
               buildId +
@@ -300,7 +300,7 @@ await runBrowserFixture({
             {
               method: "PUT",
               body,
-              media: "application/vnd.weft.regression-case.v1+json",
+              media: "application/vnd.braid.regression-case.v1+json",
               unsafe: true,
             },
           )
@@ -315,7 +315,7 @@ await runBrowserFixture({
             {
               method: "PUT",
               body: Buffer.from(JSON.stringify({ caseId, version: "1" })),
-              media: "application/vnd.weft.regression-run.v1+json",
+              media: "application/vnd.braid.regression-run.v1+json",
               unsafe: true,
             },
           )
@@ -401,7 +401,7 @@ await runBrowserFixture({
         await start("administrator");
         original = snapshot();
         return {
-          schemaVersion: "weft.build-browser-fixture.v1",
+          schemaVersion: "braid.build-browser-fixture.v1",
           fixtureId,
           source: { commit: cfg.source.commit, tree: cfg.source.tree },
           readOrigin: cfg.readOrigin,

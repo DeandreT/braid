@@ -456,7 +456,7 @@
   margin: 4px 0 0;
   overflow-wrap: anywhere;
 }
-.weft-pill {
+.braid-pill {
   --pill-text: var(--wb-evidence-text);
   --pill-tint: var(--wb-evidence-tint);
   display: inline-flex;
@@ -472,38 +472,38 @@
   line-height: 1.5;
   white-space: nowrap;
 }
-.weft-pill::before {
+.braid-pill::before {
   content: "";
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: currentColor;
 }
-.weft-pill[data-tone="success"] {
+.braid-pill[data-tone="success"] {
   --pill-text: var(--wb-success-text);
   --pill-tint: var(--wb-success-tint);
 }
-.weft-pill[data-tone="failure"] {
+.braid-pill[data-tone="failure"] {
   --pill-text: var(--wb-failure-text);
   --pill-tint: var(--wb-failure-tint);
 }
-.weft-pill[data-tone="attention"] {
+.braid-pill[data-tone="attention"] {
   --pill-text: var(--wb-attention-text);
   --pill-tint: var(--wb-attention-tint);
 }
-.weft-pill[data-tone="running"] {
+.braid-pill[data-tone="running"] {
   --pill-text: var(--wb-running-text);
   --pill-tint: var(--wb-running-tint);
 }
-.weft-table-wrap {
+.braid-table-wrap {
   overflow-x: auto;
 }
-.weft-table {
+.braid-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.8125rem;
 }
-.weft-table th {
+.braid-table th {
   text-align: left;
   font-weight: 600;
   color: var(--text-muted);
@@ -512,16 +512,16 @@
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
-.weft-table td {
+.braid-table td {
   padding: 8px 16px;
   border-bottom: 1px solid var(--border);
   vertical-align: middle;
   overflow-wrap: anywhere;
 }
-.weft-table tbody tr:hover td {
+.braid-table tbody tr:hover td {
   background: var(--surface-subtle-2);
 }
-.weft-table-actions {
+.braid-table-actions {
   text-align: right;
   white-space: nowrap;
 }
@@ -782,15 +782,15 @@
   }
 }
 /* One full-page state: what happened, one sentence, and the next action. */
-.weft-state {
+.braid-state {
   max-width: 32rem;
   margin: 48px auto;
   padding: 0 16px;
   text-align: center;
 }
-.app-workbench main .weft-state h1,
-.weft-state h1,
-.weft-state h2 {
+.app-workbench main .braid-state h1,
+.braid-state h1,
+.braid-state h2 {
   font:
     600 1.25rem "Manrope",
     system-ui,
@@ -798,20 +798,20 @@
   letter-spacing: -0.02em;
   margin: 0 0 8px;
 }
-.weft-state p {
+.braid-state p {
   color: var(--text-muted);
   font-size: 0.875rem;
   line-height: 1.6;
   margin: 0 0 16px;
 }
-.weft-state .weft-state-code {
+.braid-state .braid-state-code {
   color: var(--text-muted);
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.02em;
   margin: 0 0 6px;
 }
-.weft-state-actions {
+.braid-state-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;

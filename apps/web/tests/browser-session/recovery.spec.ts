@@ -592,7 +592,7 @@ for (const feature of ["creation", "upload", "append"] as const)
               : "append-status";
         await page.evaluate((id) => {
           const counts = { saved: 0 };
-          Object.defineProperty(window, "__weft119SavedFocus", {
+          Object.defineProperty(window, "__braid119SavedFocus", {
             value: counts,
           });
           document.addEventListener("focusin", (event) => {
@@ -603,8 +603,8 @@ for (const feature of ["creation", "upload", "append"] as const)
         const focusedCount = () =>
           page.evaluate(
             () =>
-              (window as unknown as { __weft119SavedFocus: { saved: number } })
-                .__weft119SavedFocus.saved,
+              (window as unknown as { __braid119SavedFocus: { saved: number } })
+                .__braid119SavedFocus.saved,
           );
         const write = app.hold(
           feature,
@@ -784,7 +784,7 @@ for (const stage of ["file", "hash"] as const)
             crypto.subtle.digest = originalDigest;
             open();
           };
-          Object.defineProperty(window, "__weft119FileGate", {
+          Object.defineProperty(window, "__braid119FileGate", {
             configurable: true,
             value: {
               entered: () => entered,
@@ -817,9 +817,9 @@ for (const stage of ["file", "hash"] as const)
             page.evaluate(() =>
               (
                 window as unknown as {
-                  __weft119FileGate: { entered(): boolean };
+                  __braid119FileGate: { entered(): boolean };
                 }
-              ).__weft119FileGate.entered(),
+              ).__braid119FileGate.entered(),
             ),
           )
           .toBe(true);
@@ -827,8 +827,8 @@ for (const stage of ["file", "hash"] as const)
         await app.outsideRetry();
         await page.evaluate(() =>
           (
-            window as unknown as { __weft119FileGate: { open(): void } }
-          ).__weft119FileGate.open(),
+            window as unknown as { __braid119FileGate: { open(): void } }
+          ).__braid119FileGate.open(),
         );
         await expect.poll(sample(app, "preparingFile")).toBe(false);
         await expect
@@ -836,9 +836,9 @@ for (const stage of ["file", "hash"] as const)
             page.evaluate(() =>
               (
                 window as unknown as {
-                  __weft119FileGate: { settled(): boolean };
+                  __braid119FileGate: { settled(): boolean };
                 }
-              ).__weft119FileGate.settled(),
+              ).__braid119FileGate.settled(),
             ),
           )
           .toBe(true);
@@ -846,15 +846,15 @@ for (const stage of ["file", "hash"] as const)
           await page.evaluate(() =>
             (
               window as unknown as {
-                __weft119FileGate: { drain(): Promise<boolean> };
+                __braid119FileGate: { drain(): Promise<boolean> };
               }
-            ).__weft119FileGate.drain(),
+            ).__braid119FileGate.drain(),
           ),
         ).toBe(true);
         await page.evaluate(() =>
           (
-            window as unknown as { __weft119FileGate: { restore(): void } }
-          ).__weft119FileGate.restore(),
+            window as unknown as { __braid119FileGate: { restore(): void } }
+          ).__braid119FileGate.restore(),
         );
         const settled = await app.snapshot();
         expect(settled["actualOwner"]).toBe(true);
@@ -900,9 +900,9 @@ for (const stage of ["file", "hash"] as const)
           await page.evaluate(() =>
             (
               window as unknown as {
-                __weft119FileGate: { drain(): Promise<boolean> };
+                __braid119FileGate: { drain(): Promise<boolean> };
               }
-            ).__weft119FileGate.drain(),
+            ).__braid119FileGate.drain(),
           ),
         ).toBe(true);
         expect((await app.snapshot())["currentFile"]).toBe(true);
@@ -1681,9 +1681,9 @@ test("reloading loses a tab-only unknown original without resending it", async (
     const before = await page.evaluate(() =>
       (
         window as unknown as {
-          __weft119StorageCounts(): Record<string, number>;
+          __braid119StorageCounts(): Record<string, number>;
         }
-      ).__weft119StorageCounts(),
+      ).__braid119StorageCounts(),
     );
     expect(Object.values(before).every((value) => value === 0)).toBe(true);
     page.once("dialog", (dialog) => {

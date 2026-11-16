@@ -44,7 +44,7 @@
                 >Location is available in native evidence.</span
               >
             }
-            <weft-native-evidence [locator]="gap.nativeLocator" />
+            <braid-native-evidence [locator]="gap.nativeLocator" />
           </li>
         }
       </ul>
@@ -206,7 +206,7 @@
               >
                 <summary>Expand rule explanation</summary>
                 @if (expandedRows().has(row.key)) {
-                  <weft-mapping-details
+                  <braid-mapping-details
                     [details]="rule.details"
                     [view]="view()"
                     (navigate)="navigate($event)"
@@ -220,7 +220,7 @@
                       {{ control.kind }}: {{ control.summary }}
                     </button>
                   }
-                  <weft-native-evidence [locator]="rule.nativeLocator" />
+                  <braid-native-evidence [locator]="rule.nativeLocator" />
                 }
               </details>
             } @else {
@@ -304,7 +304,7 @@
     tabindex="-1"
     aria-label="Mapping details"
   >
-    <weft-mapping-entity
+    <braid-mapping-entity
       [reference]="location"
       [view]="view()"
       (navigate)="navigate($event)"
@@ -369,7 +369,7 @@
                 >No unique location in this view. Review native evidence.</span
               >
             }
-            <weft-native-evidence
+            <braid-native-evidence
               [locator]="diagnostic.nativeLocator"
               [owner]="diagnostic.owner"
             />
@@ -411,7 +411,7 @@
               Show notice {{ location.kind }}
             </button>
           }
-          <weft-native-evidence [locator]="diagnostic.nativeLocator" />
+          <braid-native-evidence [locator]="diagnostic.nativeLocator" />
         </li>
       }
     </ul>

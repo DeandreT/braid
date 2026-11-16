@@ -371,7 +371,7 @@ test("late proposal response from the old actor stays hidden after a shared cont
           }
         ).ng;
         const component = debug.getComponent(
-          document.querySelector("weft-creation-library")!,
+          document.querySelector("braid-creation-library")!,
         );
         component.contexts
           .refresh()
@@ -548,7 +548,7 @@ test("feedback carries only exact identity and prepares an unsent editable quest
     grant: true,
   });
   const planJson = JSON.stringify({
-    schema: "weft.creation-plan.v1",
+    schema: "braid.creation-plan.v1",
     format: "json-record",
     source: [{ Name: "code", Type: 1, Required: true }],
     target: [{ Name: "item", Type: 1, Required: true }],

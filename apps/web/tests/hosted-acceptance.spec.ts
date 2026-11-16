@@ -32,13 +32,13 @@ function setting(name: string): string {
   if (!value) throw new Error(`Hosted acceptance requires ${name}.`);
   return value;
 }
-const organization = setting("WEFT_SESSION_ORGANIZATION_ID");
-const work = setting("WEFT_ACCEPTANCE_WORK");
-const fixtures = setting("WEFT_ACCEPTANCE_FIXTURES");
+const organization = setting("BRAID_SESSION_ORGANIZATION_ID");
+const work = setting("BRAID_ACCEPTANCE_WORK");
+const fixtures = setting("BRAID_ACCEPTANCE_FIXTURES");
 
 /** One docker compose command against the run's own project; output is never secret. */
 function stack(...args: string[]): string {
-  const files = setting("WEFT_ACCEPTANCE_COMPOSE_FILES")
+  const files = setting("BRAID_ACCEPTANCE_COMPOSE_FILES")
     .split(":")
     .flatMap((file) => ["--file", file]);
   return execFileSync(
@@ -46,7 +46,7 @@ function stack(...args: string[]): string {
     [
       "compose",
       "--project-name",
-      setting("WEFT_ACCEPTANCE_COMPOSE_PROJECT"),
+      setting("BRAID_ACCEPTANCE_COMPOSE_PROJECT"),
       ...files,
       "--profile",
       "operator",
@@ -65,7 +65,7 @@ function sql(query: string): string[] {
     "-U",
     "postgres",
     "-d",
-    "weft",
+    "braid",
     "-At",
     "-c",
     query,
@@ -183,7 +183,7 @@ async function read<T>(target: Page, path: string): Promise<T> {
   for (let attempt = 1; ; attempt++) {
     const [status, body] = await target.evaluate(async (url) => {
       const response = await fetch(url, {
-        headers: { Accept: "application/json", "X-Weft-Session": "1" },
+        headers: { Accept: "application/json", "X-Braid-Session": "1" },
       });
       return [response.status, await response.text()] as const;
     }, path);
@@ -281,7 +281,7 @@ const pageErrors: string[] = [];
 
 async function openBrowser(browser: Browser): Promise<void> {
   context = await browser.newContext({
-    baseURL: setting("WEFT_ACCEPTANCE_BASE_URL"),
+    baseURL: setting("BRAID_ACCEPTANCE_BASE_URL"),
     ignoreHTTPSErrors: false,
     serviceWorkers: "block",
   });
@@ -301,7 +301,7 @@ test.afterAll(async () => {
       recoveries,
       chatAttempts,
       buildAttempt,
-      modelFixture: process.env.WEFT_ACCEPTANCE_MODEL_FIXTURE === "true",
+      modelFixture: process.env.BRAID_ACCEPTANCE_MODEL_FIXTURE === "true",
     }),
   );
   expect(pageErrors).toEqual([]);
@@ -328,8 +328,8 @@ test("signs in through the Session host's Microsoft sign-in", async () => {
     await page
       .getByRole("button", { name: "Sign in as the acceptance user" })
       .click();
-    await page.waitForURL(/^https:\/\/weft\.example\.test\//);
-    // The callback page offers "Return to Weft" when sign-in was temporarily unavailable.
+    await page.waitForURL(/^https:\/\/braid\.example\.test\//);
+    // The callback page offers "Return to Braid" when sign-in was temporarily unavailable.
     const unavailable = page.getByRole("heading", {
       name: "Sign-in is temporarily unavailable",
     });
@@ -342,7 +342,7 @@ test("signs in through the Session host's Microsoft sign-in", async () => {
     if (!(await unavailable.isVisible())) break;
     expect(attempt).toBeLessThan(3);
     recoveries.push("sign-in");
-    await page.getByRole("link", { name: "Return to Weft" }).click();
+    await page.getByRole("link", { name: "Return to Braid" }).click();
     // "/" opens the catalog, which sends a signed-out browser back to sign-in.
     await page.waitForURL((url) => url.pathname === "/sign-in");
     returnTo = "/catalog";
@@ -414,9 +414,9 @@ test("uploads a native mapping through the Ferrule service into Blob storage", a
   // fixed Blob profile identity rather than a filesystem boot ID.
   expect(
     sql(
-      `select object_class, linux_boot_id from weft.private_object_publications where project_id = '${projectId}'`,
+      `select object_class, linux_boot_id from braid.private_object_publications where project_id = '${projectId}'`,
     ),
-  ).toEqual(["native|57656674-426c-6f62-0001-000000000001"]);
+  ).toEqual(["native|42726169-6442-6c6f-6200-010000000001"]);
 });
 
 /** The report controls sit in a disclosure that closes again when the reports re-render. */
@@ -626,7 +626,7 @@ test("runs a preview of sample JSON through the worker and the Ferrule service",
 
 test("standalone workspace chat gates payload bytes by both profile and fresh project permission", async () => {
   test.skip(
-    process.env.WEFT_ACCEPTANCE_MODEL_FIXTURE !== "true",
+    process.env.BRAID_ACCEPTANCE_MODEL_FIXTURE !== "true",
     "Exact policy assertions use the owned deterministic provider; live model coverage is separate.",
   );
   test.setTimeout(900_000);
@@ -642,7 +642,9 @@ test("standalone workspace chat gates payload bytes by both profile and fresh pr
   expect(actor.actorPrincipalId).toMatch(/^[0-9a-f-]{36}$/);
   const grant = `organization_id='${organization}' and project_id='${projectId}' and principal_id='${actor.actorPrincipalId}'`;
   expect(
-    sql(`select count(*) from weft.project_payload_read_grants where ${grant}`),
+    sql(
+      `select count(*) from braid.project_payload_read_grants where ${grant}`,
+    ),
   ).toEqual(["0"]);
   const observations: Record<string, unknown>[] = [];
   function recordPolicyEvidence() {
@@ -653,7 +655,7 @@ test("standalone workspace chat gates payload bytes by both profile and fresh pr
         JSON.parse(line.slice(line.indexOf("fixture-policy ") + 15)),
       );
     writeFileSync(
-      `${process.env.WEFT_ACCEPTANCE_LOG_DIRECTORY ?? work}/payload-policy.json`,
+      `${process.env.BRAID_ACCEPTANCE_LOG_DIRECTORY ?? work}/payload-policy.json`,
       JSON.stringify({ observations, provider }, null, 2),
     );
   }
@@ -669,7 +671,7 @@ test("standalone workspace chat gates payload bytes by both profile and fresh pr
       expectShared: shared,
       advertisedPayloadsAllowed: advertised?.payloadsAllowed,
       grantActive: sql(
-        `select active from weft.project_payload_read_grants where ${grant}`,
+        `select active from braid.project_payload_read_grants where ${grant}`,
       ),
     };
     observations.push(proof);
@@ -764,18 +766,18 @@ test("standalone workspace chat gates payload bytes by both profile and fresh pr
   }
   await ask("local-acceptance", false);
   await ask("local-acceptance-payloads", false);
-  sql(`insert into weft.project_payload_read_grants(organization_id,project_id,principal_id)
+  sql(`insert into braid.project_payload_read_grants(organization_id,project_id,principal_id)
        values('${organization}','${projectId}','${actor.actorPrincipalId}')`);
   try {
     await ask("local-acceptance", false);
     await ask("local-acceptance-payloads", true);
     expect(
-      sql(`select byte_count from weft.chat_payload_audit where creator_id='${actor.actorPrincipalId}'
+      sql(`select byte_count from braid.chat_payload_audit where creator_id='${actor.actorPrincipalId}'
       and project_id='${projectId}' and subject_id='${previewRunId}' and profile_id='local-acceptance-payloads'`),
     ).toEqual([String(Buffer.byteLength(order))]);
   } finally {
     sql(
-      `update weft.project_payload_read_grants set active=false,version=version+1 where ${grant} and active`,
+      `update braid.project_payload_read_grants set active=false,version=version+1 where ${grant} and active`,
     );
   }
   await ask("local-acceptance-payloads", false);
@@ -1251,7 +1253,7 @@ test("prepares and completes a build through the Ferrule service", async () => {
   // The published private body is exactly the artifact the run reports, for this approval.
   expect(
     sql(
-      `select artifact_digest, octet_length(artifact_body), approval_id, state from weft.build_publications where build_id = '${buildId}'`,
+      `select artifact_digest, octet_length(artifact_body), approval_id, state from braid.build_publications where build_id = '${buildId}'`,
     ),
   ).toEqual([
     `${artifact!.sha256}|${artifact!.byteCount}|${approval.approvalId}|2`,
@@ -1360,7 +1362,7 @@ test("recovers retained work across a server restart and Ferrule service scaling
       stack("stop", "--timeout", "30", "edge", "server-relay");
       const inFlight =
         sql(
-          `select phase = 1 or finished_at >= '${stopping}' from weft.chat_turns where turn_id = '${turnId}'`,
+          `select phase = 1 or finished_at >= '${stopping}' from braid.chat_turns where turn_id = '${turnId}'`,
         )[0] === "t";
       startServer();
       if (inFlight) break;
@@ -1375,7 +1377,7 @@ test("recovers retained work across a server restart and Ferrule service scaling
       await chooseSavedConversation(chat, conversationId);
     }
     const roundsAfterRestart = sql(
-      `select count(*) from weft.chat_rounds where turn_id = '${turnId}'`,
+      `select count(*) from braid.chat_rounds where turn_id = '${turnId}'`,
     );
     const modelCallsAfterRestart = count(
       stack("logs", "--no-color", "model"),
@@ -1445,10 +1447,12 @@ test("recovers retained work across a server restart and Ferrule service scaling
       },
     );
     expect(
-      sql(`select phase <> 1 from weft.chat_turns where turn_id = '${turnId}'`),
+      sql(
+        `select phase <> 1 from braid.chat_turns where turn_id = '${turnId}'`,
+      ),
     ).toEqual(["t"]);
     expect(
-      sql(`select count(*) from weft.chat_rounds where turn_id = '${turnId}'`),
+      sql(`select count(*) from braid.chat_rounds where turn_id = '${turnId}'`),
     ).toEqual(roundsAfterRestart);
     expect(
       count(stack("logs", "--no-color", "model"), /POST\s+"\/api\/chat"/),
@@ -1499,7 +1503,7 @@ test("recovers retained work across a server restart and Ferrule service scaling
     // Each queued preview ran exactly once.
     expect(
       sql(
-        `select count(*), min(attempt), max(attempt) from weft.preview_runs where run_id in (${queued.map((id) => `'${id}'`).join(",")})`,
+        `select count(*), min(attempt), max(attempt) from braid.preview_runs where run_id in (${queued.map((id) => `'${id}'`).join(",")})`,
       ),
     ).toEqual(["3|1|1"]);
 
@@ -1523,7 +1527,7 @@ test("recovers retained work across a server restart and Ferrule service scaling
     );
     expect(
       sql(
-        `select count(*) from weft.regression_runs where run_id in (${caseRuns.map((id) => `'${id}'`).join(",")}) and attempt = 1`,
+        `select count(*) from braid.regression_runs where run_id in (${caseRuns.map((id) => `'${id}'`).join(",")}) and attempt = 1`,
       ),
     ).toEqual([String(caseRuns.length)]);
   } finally {

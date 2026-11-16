@@ -1,5 +1,5 @@
 @if (admitted()) {
-  <weft-workbench-frame
+  <braid-workbench-frame
     [viewOptions]="['mapping']"
     [inspector]="inspector"
     [dock]="dock"
@@ -9,7 +9,7 @@
   >
     <div workbench-context class="editor-toolbar">
       <h1>Editing {{ mapping().name }}</h1>
-      <weft-status-chip [status]="status()" />
+      <braid-status-chip [status]="status()" />
       <span
         >Private draft · based on version
         {{ draft()?.base?.sequence ?? revision().sequence }}</span
@@ -104,7 +104,7 @@
         </details>
       }
       @if (projection(); as projection) {
-        <weft-workbench-mapping-table
+        <braid-workbench-mapping-table
           [view]="projection"
           [selected]="selected()"
           (inspect)="inspect($event)"
@@ -115,7 +115,7 @@
         </button>
       }
     </section>
-  </weft-workbench-frame>
+  </braid-workbench-frame>
 
   <ng-template #inspector>
     <section aria-label="Edit selected mapping" [attr.aria-busy]="busy()">

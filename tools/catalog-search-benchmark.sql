@@ -1,4 +1,4 @@
--- Run only in a disposable PostgreSQL 16 database after Weft migrations.
+-- Run only in a disposable PostgreSQL 16 database after Braid migrations.
 -- Every synthetic relation is transaction-local and is rolled back.
 BEGIN;
 CREATE TEMP TABLE search_benchmark_mappings AS
@@ -7,7 +7,7 @@ SELECT n AS id, n % 250 AS project_id,
     'Inbound purchase orders from supplier ' || n % 1000 AS description, 'ferrule'::text AS backend_id
 FROM generate_series(1,10000) n;
 CREATE INDEX search_benchmark_mapping_trgm ON search_benchmark_mappings USING gin
-    ((lower((name || E'\n' || description || E'\n' || backend_id) COLLATE "C")) weft_search_extensions.gin_trgm_ops);
+    ((lower((name || E'\n' || description || E'\n' || backend_id) COLLATE "C")) braid_search_extensions.gin_trgm_ops);
 CREATE TEMP TABLE search_benchmark_reports AS
 SELECT n AS revision_id, n % 250 AS project_id,
     jsonb_agg(jsonb_build_object('kind',4,'id','field-' || f,
@@ -16,7 +16,7 @@ SELECT n AS revision_id, n % 250 AS project_id,
     string_agg(CASE WHEN f = 32 AND n = 5521 THEN 'SpecialTracking5521' ELSE 'TrackingNumber' || f END || E'\nOrders:/shipment/items/' || f, E'\n') AS search_text
 FROM generate_series(1,10000) n CROSS JOIN generate_series(1,64) f GROUP BY n;
 CREATE INDEX search_benchmark_reports_trgm ON search_benchmark_reports USING gin
-    ((lower(search_text COLLATE "C")) weft_search_extensions.gin_trgm_ops);
+    ((lower(search_text COLLATE "C")) braid_search_extensions.gin_trgm_ops);
 ANALYZE search_benchmark_mappings;
 ANALYZE search_benchmark_reports;
 

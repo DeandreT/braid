@@ -13,7 +13,7 @@ from pathlib import Path
 # Includes test/helper/attribute initializers, linked probe sources, production
 # dependencies and build inputs. A changed source needs a classification audit,
 # not an automatic fingerprint refresh. See test-groups.md.
-AUDITED_SOURCE_SHA256 = "ab8f9e5452f707943747c021a793c2da0ec1f63b97d92627e5e3e009a2d26829"
+AUDITED_SOURCE_SHA256 = "3cd60eff4a7ee2ed9271656d1845d6a080478204172bfa99af214daa47386901"
 
 GROUP_CLASSES = {
     "fast": """
@@ -39,7 +39,7 @@ SpecDocumentInstalledResourceProbeTests SpecDocumentInstalledSharedProfileProbeT
 AdministrationContractTests AdministrationEnrollmentHttpsTests AdministrationHttpTests
 AdministrationPersistenceTests ApiRequestAuditPersistenceTests AuthHttpCompositionTests AuthHttpContractTests
 AuthHttpDevelopmentModeTests AuthHttpDisabledModeTests AuthHttpDisplayMetadataTests AuthHttpIntegrationTests
-AuthenticationOpenApiTests AutomationBuildGateTests AutomationComparisonSettlementTests AutomationEventTests
+AuthenticatedMfdHttpTests AuthenticationOpenApiTests AutomationBuildGateTests AutomationComparisonSettlementTests AutomationEventTests
 AutomationMigrationContractTests AutomationNativeTests AutomationPersistenceTests AutomationReviewFixTests
 AutomationSchemaAdmissionTests AzureQualificationHarnessTests AzureSecretInitializationTests
 AzureSessionsConnectorTests AzuriteEndpointTests BearerHostConfigurationTests BearerHttpIntegrationTests
@@ -70,12 +70,8 @@ ChatManagedIdentityCredentialTests ChatMappingEditApprovalTests ChatMappingEditP
 ChatMappingWriteAdmissionTests ChatMappingWriteRecoveryTests ChatMappingWriteTests ChatOrchestrationAdmissionTests
 ChatOrchestrationBoundTests ChatOrchestrationEventTests ChatOrchestrationLifetimeTests ChatOrchestrationToolTests
 ChatProposalHostCompositionTests ChatProposalRuntimeHttpTests ChatSemanticSuccessorTests ChatTurnPolicyTests
-ChatWorkspaceHttpTests ChildProgramBuildOutputTests Cli.CliAdministrationTests Cli.CliAutomationCommandTests
-Cli.CliCatalogCommandTests Cli.CliChatCommandTests Cli.CliContractDriftTests Cli.CliDocumentCommandTests
-Cli.CliEdiSessionHostTests Cli.CliHealthCommandTests Cli.CliHttpDeadlineTests Cli.CliMfdCommandTests
-Cli.CliMfdSessionHostTests Cli.CliOperationsCommandTests Cli.CliOperationsSessionHostTests Cli.CliSessionHostTests
-Cli.CliSignInTests Cli.CliUnitTests Cli.CliWorkflowCommandTests Cli.CliWorkspaceHttpCommandTests
-CliWorkspaceCommandTests CompileWorkerIdentityTests CompiledBuildExecutionTests CompiledRuntimeCsvTests
+ChatWorkspaceHttpTests ChildProgramBuildOutputTests
+CompileWorkerIdentityTests CompiledBuildExecutionTests CompiledRuntimeCsvTests
 CompiledRuntimeLiveTests CompiledRuntimeProtocolTests CreationCapabilitiesTests CreationEvidenceGenerationTests
 CreationEvidenceStorageTests CreationFeedbackToolTests CreationHostConfigurationTests CreationProviderContractTests
 CreationRuntimeHttpTests CreationRuntimeToolTests CreationSandboxQualificationTests CsvBuildHostConfigurationTests
@@ -147,7 +143,7 @@ PostgresRevisionDerivationPersistenceTests PostgresRevisionDerivationSecurityTes
 PostgresRevisionDerivationTransactionTests PostgresRevisionDerivationWorkflowTests
 PostgresServerSessionAcknowledgementTests PostgresServerSessionBehaviorTests PostgresServerSessionSecurityTests
 PostgresServerSessionTicketStoreTests PostgresServerSessionTransactionTests PostgresServerSessionUpgradeTests
-PostgresSpecRegistryTests PostgresTransactionTests PostgresWorkspaceCaseMetadataTests
+PostgresSchemaPinSourceTests PostgresSpecRegistryTests PostgresTransactionTests PostgresWorkspaceCaseMetadataTests
 PostgresWorkspaceChatStoreTests PostgresWorkspaceChatUpgradeTests PostgresWorkspacePayloadTests
 PostgresWorkspaceReadsTests PreviewRequestDocumentTests PrivateFileSystemStorageTests PrivateObjectContractTests
 PrivateObjectMaintenanceContractTests PrivateObjectMaintenanceObservationContractTests
@@ -196,7 +192,7 @@ XmlPreviewManagedHttpTests XmlPreviewPersistenceTests XmlPreviewWorkflowTests Xm
 
 
 def class_groups() -> dict[str, tuple[str, ...]]:
-    return {group: tuple("Weft.Tests." + name for name in names.split()) for group, names in GROUP_CLASSES.items()}
+    return {group: tuple("Braid.Tests." + name for name in names.split()) for group, names in GROUP_CLASSES.items()}
 
 
 def source_fingerprint(root: Path) -> str:
@@ -210,7 +206,7 @@ def source_fingerprint(root: Path) -> str:
     suffixes = {".cs", ".csproj", ".props", ".targets", ".slnx"}
     sources = {path for path in (root / "dotnet").rglob("*")
                if path.suffix in suffixes and not {"bin", "obj"}.intersection(path.relative_to(root).parts)}
-    project = root / "dotnet/tests/Weft.Tests/Weft.Tests.csproj"
+    project = root / "dotnet/tests/Braid.Tests/Braid.Tests.csproj"
     for entry in ET.parse(project).iter("Compile"):
         if "Include" in entry.attrib:
             path = (project.parent / entry.attrib["Include"]).resolve()

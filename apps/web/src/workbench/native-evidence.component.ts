@@ -3,7 +3,7 @@ import type { components } from "../api/generated";
 import { type NativeLocator, nativeText } from "./projection-view";
 
 @Component({
-  selector: "weft-native-evidence",
+  selector: "braid-native-evidence",
   template: `
     @if (locator() || owner()) {
       <details class="native-evidence">

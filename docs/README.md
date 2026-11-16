@@ -1,9 +1,7 @@
 # Documentation
 
-Choose a starting point for your task. The [project README](../README.md)
-introduces braid; the [roadmap](../ROADMAP.md) owns current priorities and links
-to acceptance work. A feature being implemented does not mean it is enabled or
-verified in your installation.
+Find instructions for using, developing and running braid. Start with the
+[project README](../README.md) or see the [roadmap](../ROADMAP.md) for priorities.
 
 ## Use braid
 
@@ -12,10 +10,8 @@ verified in your installation.
   review a proposal, try samples, give feedback and explicitly save.
 - [Chat](user-guide/chat.md): ask questions, review edits and recover an uncertain save.
 - [Unconfirmed results](user-guide/unconfirmed-results.md): check the original request before retrying.
-- [Command-line tasks](user-guide/cli.md): use `weft` as the signed-in user.
 
-The user guide also ships in the app under **Help & guide**. Its availability
-instructions apply to the server you are using, not every possible deployment.
+The user guide is also available in the app under **Help & guide**.
 
 ## Develop braid
 
@@ -28,15 +24,14 @@ instructions apply to the server you are using, not every possible deployment.
 ## Operate an installation
 
 - [Runtime packaging](runtime-packaging.md): start with the Compose Session stack
-  and Ferrule service for packaged evaluation; optional lanes stay separate.
+  and Ferrule service.
 - [Session host](session-host.md): authentication, protected settings and operator setup.
 - [Release operations](release-operations.md): inspect targets, change releases and recover safely.
 - [Hosted acceptance](hosted-acceptance.md) and [release qualification](release-qualification.md):
-  verify the stated environment before relying on it.
-- [Azure deployment](azure-deployment.md): cloud prerequisites and procedures;
-  cloud acceptance is not established by local checks.
+  deployment and release checks.
+- [Azure deployment](azure-deployment.md): cloud setup and operation.
 - [Document worker host](spec-document-host.md): optional Office/PDF installation
-  admission and its separate qualification requirements.
+  and configuration.
 
 ## Reference
 
@@ -53,20 +48,11 @@ instructions apply to the server you are using, not every possible deployment.
   and [creation feedback](creation-feedback-api.md).
 - **Execution:** [previews](preview-runs.md), [regression runs](regression-runs.md),
   [build workflow](build-workflow.md) and [Ferrule service](ferrule-service.md).
-- **Interfaces:** [full CLI reference](cli.md) and generated [browser/session](../contracts/weft-v1.json),
-  [machine endpoint](../contracts/weft-endpoint-v1.json) and [Ferrule service](../contracts/ferrule-service-v1.json)
+- **Interfaces:** generated [browser/session](../contracts/braid-v1.json),
+  [machine endpoint](../contracts/braid-endpoint-v1.json) and [Ferrule service](../contracts/ferrule-service-v1.json)
   OpenAPI documents.
 
-## Plans and history
+## Design references
 
-Use the [roadmap](../ROADMAP.md) for priorities, not old implementation checklists.
 [Archive/deletion](archive-deletion-design.md), [organization switching](organization-switching-design.md)
-and [trigger destinations](trigger-destination-design.md) are design references,
-not setup procedures. The [catalog persistence](catalog-persistence-plan.md),
-[API](catalog-api-plan.md) and [ingestion](catalog-ingestion-plan.md) plans retain
-their original requirements and links to current contract owners.
-
-[v1 integration](v1-integration.md), [CSV port](v1-csv-port.md),
-[XML port](v1-xml-port.md) and [chat browser qualification](chat-browser-qualification.md)
-retain evidence from their stated runs. Read their environment limits and deferred
-acceptance gates; historical results do not qualify another installation or provider.
+and [trigger destinations](trigger-destination-design.md) describe planned extensions.

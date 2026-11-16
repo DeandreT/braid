@@ -2,7 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 
 test("capture authorized operations in the shared shell", async ({ page }) => {
-  const directory = process.env.WEFT_UI_CAPTURE_DIR;
+  const directory = process.env.BRAID_UI_CAPTURE_DIR;
   test.skip(!directory, "Optional sanitized UI captures");
   await fixture(page);
   await mkdir(directory!, { recursive: true });
@@ -13,7 +13,7 @@ test("capture authorized operations in the shared shell", async ({ page }) => {
     ).toBeVisible();
     expect(
       await page
-        .locator("weft-operations-page dt")
+        .locator("braid-operations-page dt")
         .evaluateAll((terms) =>
           terms.every((term) => term.scrollWidth <= term.clientWidth),
         ),
@@ -62,7 +62,7 @@ async function fixture(page: Page, session = false) {
     route.fulfill({
       json: {
         status: "ok",
-        service: "weft-api",
+        service: "braid-api",
         version: "0.1.0",
         apiVersion: "v1",
       },

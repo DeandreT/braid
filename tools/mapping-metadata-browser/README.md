@@ -1,44 +1,39 @@
 # Mapping metadata browser fixture
 
-This Node-core fixture supplies the real packaged-host scenario for the mapping
-metadata editor. It imports only the shared browser-fixture runtime. All metadata
-PATCH requests originate in the browser. No product test endpoint, generic owner
-SQL, operator PATCH, successful SQL seed or browser-visible credentials are added.
+This Node-core fixture tests the mapping metadata editor against the packaged
+host. It imports the shared browser-fixture runtime. All metadata PATCH requests
+originate in the browser.
 
-Root owns execution, final source/product bindings and alternate-display browser
-runs. Build Angular and ordinarily publish Server, DatabaseTool and StorageTool
-from the same committed source. Admit every source body/mode and actual published
-file/asset by SHA256 before setting private runtime/release booleans true. Private
-configuration/release/manifest/ledger stay0600 in an owned0700 directory outside
-repositories and publications. Failures and prior qualification records remain
-retained; source authoring is not runtime acceptance.
+Build Angular and publish Server, DatabaseTool and StorageTool from the same
+committed source. Bind every source body/mode and published file/asset by SHA256.
+Private configuration/release/manifest/ledger stay0600 in an owned0700 directory
+outside repositories and publications. Run the browser on an isolated display.
 
 Reuse `../catalog-browser/observe-host.py` unchanged, in an exclusive worker
 window. Open its real GET200 event admission BEFORE the operator; bind that file
 and fixture UUID into private configuration. Send its `finish` only after operator
 children, automatic worker cleanup and owned PG/network/volume teardown settle.
-It must capture positive actual worker profiles/destruction and exact404 evidence.
-C's zero-worker observer is inappropriate here and remains unchanged.
+It must capture worker profiles/destruction and exact404 evidence.
 
 Use the catalog fixture's documented configuration and release fields, with
-schema prefixes `weft.mapping-metadata-browser-operator-config.v1` and
-`weft.mapping-metadata-browser-release.v1`. Require the same immutable worker/PG
+schema prefixes `braid.mapping-metadata-browser-operator-config.v1` and
+`braid.mapping-metadata-browser-release.v1`. Require the same immutable worker/PG
 pins and exact daemon. Its source manifest must include this operator and shared
 runtime; `operatorSha256` binds this entrypoint. All three ordinary publication
 maps are required. Choose two distinct concrete loopback origins once; no fallback
-or retarget. Node-only variables are `WEFT_MAPPING_METADATA_BROWSER_OPERATOR`,
-`WEFT_MAPPING_METADATA_BROWSER_OPERATOR_CONFIG`,
-`WEFT_MAPPING_METADATA_BROWSER_MANIFEST`, `WEFT_MAPPING_METADATA_BASE_URL`.
+or retarget. Node-only variables are `BRAID_MAPPING_METADATA_BROWSER_OPERATOR`,
+`BRAID_MAPPING_METADATA_BROWSER_OPERATOR_CONFIG`,
+`BRAID_MAPPING_METADATA_BROWSER_MANIFEST`, `BRAID_MAPPING_METADATA_BASE_URL`.
 The last two equal private config. The browser owner spawns
 `node [absoluteOperator, '--config', privateConfig]` with private pipes.
 
-Setup provisions real Administrator/Publisher/Runner/Viewer project roles,
-initializes strict v2 storage and genuinely uploads a primary basic mapping and
+Setup provisions Administrator/Publisher/Runner/Viewer project roles,
+initializes strict v2 storage and uploads a primary basic mapping and
 an unrelated versioned-exact mapping through product HTTP/native workers. It
 creates one actual saved projection and validation via ordinary Ensure, verifies
 usable payloads and Bound publications, and settles the private setup host and
-workers before the browser begins. No successful native/report/claim is authored
-through owner SQL. Source fixture checksums are fixed in the admitted operator.
+workers before the browser begins. Source fixture checksums are fixed in the
+operator.
 
 The read/edit API receives ONLY catalog-reader and restricted metadata-editor
 credentials. Metadata editing is independently enabled; creator/ingestion/reports/
@@ -49,7 +44,7 @@ actors; Viewer/Runner can read while EditMetadata remains denied. Native setup
 and the one explicit append use a separate private mutation host.
 
 The public atomic immutable manifest is
-`weft.mapping-metadata-browser-fixture.v1`, with fixture/source/origin/organization,
+`braid.mapping-metadata-browser-fixture.v1`, with fixture/source/origin/organization,
 initial profile `publisher`, four profiles (actorPrincipalId,
 allowedOrganizationId,primaryRole), project{scope}, primary{scope,initialRevision},
 unrelated{scope}, reports{projectionDerivationId,validationDerivationId}.
@@ -57,12 +52,12 @@ Primary/unrelated scope is the three-field CatalogMappingScope; initialRevision
 is the complete actual CatalogRevision. Result IDs are public report identities,
 not private object/lease references. Metadata and its actual strong tag are read
 through ordinary GET, never synthesized from manifest or ordinary mapping state.
-Ready is `weft.mapping-metadata-browser-ready.v1`, fixtureId,manifestSha256,profile.
+Ready is `braid.mapping-metadata-browser-ready.v1`, fixtureId,manifestSha256,profile.
 
 Every control is a serialized closed JSON envelope
 `{requestNonce,fixtureId,action,...}`. Canonical UUID nonces replay identical ACKs;
 changed content refuses. Limits remain1024-byte commands,4096-byte ACKs,64 nonces.
-ACK base is schemaVersion `weft.mapping-metadata-browser-control.v1`, requestNonce,
+ACK base is schemaVersion `braid.mapping-metadata-browser-control.v1`, requestNonce,
 fixtureId,action. Exact actions/additional fields:
 
 - api-stop: outcome stopped|alreadyStopped.
@@ -111,14 +106,13 @@ on the primary mapping. Actual metadata body+ETag/name/description/version remai
 identical. Every old row/report/file remains exact; new files are restricted to
 the one returned native blob, object gate and that publication's temp gate/four
 complete seals. No extra stage, fence, unrelated private file or row is admitted.
-Subsequent PATCH must preserve this new head too. No physical deletion is claimed.
+Subsequent PATCH must preserve this new head too.
 
 The fixed publisher-role owner seam accepts no arbitrary scope/principal/SQL.
 It requires the originally captured active membership and exact prior role/version,
 applies Publisher↔Viewer/version+1, and compares all unrelated rows. The scenario
 also compares the entire full snapshot minus only that expected membership row,
-including credentials/ACLs/journal/files, before advancing. A/B/C hooks, defaults,
-entrypoints and observers keep their original behavior and snapshot fields.
+including credentials/ACLs/journal/files, before advancing.
 
 Two browser contexts loaded at one actual tag prove the second CAS412, retained
 draft and explicit Review latest/resubmit; no automatic PATCH. For final authority
@@ -130,6 +124,5 @@ reconciles through deliberate GET only; matching current values are not an edit
 acknowledgement or receipt. This is browser delivery loss, not DB COMMIT-ACK loss.
 
 Normal API/same-volume PG restart must preserve the full baseline and original
-revision link. Controlled mocked boundary cases remain synthetic and use no owner
-controls; they do not prove real CAS/persistence. No Rust/schema-upgrade/native
-rederivation gate is added merely to edit metadata.
+revision link. Controlled boundary cases use mocked responses and no owner
+controls.

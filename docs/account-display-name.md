@@ -29,18 +29,17 @@ dispatching sign-out or another sign-in.
 the strict status shape must be deployed with the matching generated contract.
 Non-session status remains the two-field mode response.
 
-## Optional delivery and upgrades
+## Configuration
 
-When `WEFT_ACCOUNT_DISPLAY_CONNECTION_STRING_FILE` is absent, Session mode does
-not create the metadata pool and always returns null labels. This is the safe
-default for existing deployments and the current Azure templates. No credentials
+When `BRAID_ACCOUNT_DISPLAY_CONNECTION_STRING_FILE` is absent, Session mode does
+not create the metadata pool and always returns null labels. No credentials
 are borrowed from the identity reader, session writer or migration owner.
 
 To enable labels, install the metadata migration, provision the dedicated
-`weft_account_display` login, and deliver its connection string as a protected
-private file through `WEFT_ACCOUNT_DISPLAY_CONNECTION_STRING_FILE`. The same
+`braid_account_display` login, and deliver its connection string as a protected
+private file through `BRAID_ACCOUNT_DISPLAY_CONNECTION_STRING_FILE`. The same
 private-file, explicit password and no-ambient-credential checks as other Session
-connections apply. A plain `WEFT_ACCOUNT_DISPLAY_CONNECTION_STRING` is refused;
+connections apply. A plain `BRAID_ACCOUNT_DISPLAY_CONNECTION_STRING` is refused;
 a configured but missing/unreadable file is not treated as absence. The role is
 admitted on every metadata operation; configured storage failure returns the
 closed unavailable authentication error rather than pretending persistence or
@@ -49,7 +48,7 @@ revocation succeeded.
 For local databases, explicitly run
 `deploy/local/postgres-add-account-display-role.sh` as the database administrator
 with `POSTGRES_USER`, `POSTGRES_DB` and a separately delivered
-`WEFT_LOCAL_ACCOUNT_DISPLAY_PASSWORD`. The installer refuses an existing role
+`BRAID_LOCAL_ACCOUNT_DISPLAY_PASSWORD`. The installer refuses an existing role
 instead of rotating credentials. It supports installation before or after the
 metadata migration. For another deployment platform, use its established secret
 delivery and database administrator process to apply the same role and column

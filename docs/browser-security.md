@@ -1,6 +1,6 @@
 # Browser security policy
 
-The Server installs `Weft.Api.BrowserSecurityHeaders` before admission, static files
+The Server installs `Braid.Api.BrowserSecurityHeaders` before admission, static files
 and routing in both its Development/disabled and Session pipelines. Packaged images
 run those same pipelines. The policy is an HTTP response header, not a meta tag:
 
@@ -36,8 +36,7 @@ All responses also carry `X-Content-Type-Options: nosniff`,
 `Referrer-Policy: no-referrer`, `Cross-Origin-Opener-Policy: same-origin` and
 `Cross-Origin-Resource-Policy: same-origin`. These prevent MIME sniffing, suppress
 referrer disclosure and separate cross-origin windows and resource embedding.
-Microsoft sign-in is a top-level redirect flow, not a popup or embedded frame;
-these headers do not grant access to a provider or loosen authentication checks.
+Microsoft sign-in is a top-level redirect flow, not a popup or embedded frame.
 The inert authentication failure document keeps its stricter existing CSP. Its
 no-store headers and the Session transport's HTTPS policy remain in force.
 The outer helper restores missing headers even when an inner error handler clears
@@ -48,7 +47,7 @@ The mapping editor's dedicated worker has a separate policy on the shipped
 compilation only inside that worker and confines script imports to the same
 origin's `/edit/` directory. The shell never receives `wasm-unsafe-eval`.
 The development builder serves those files through its own middleware rather
-than Angular's earlier static middleware. Missing editor assets return 404
+than Angular's general static middleware. Missing editor assets return 404
 instead of the HTML shell.
 
 ## Checks
@@ -70,7 +69,5 @@ instead of the HTML shell.
 - `tools/browser-fixture/editor-dev-server.test.mjs` checks the development
   worker policy, exact file allowlist, host/origin restrictions and refusals.
 
-Browser suites do not collect CSP violation reports. A collector that can prove
-every violation was delivered needs native browser support that current Chromium
-and Playwright do not provide; that work is tracked separately. Do not silently
-weaken the policy to make an incompatible feature pass.
+Browser suites do not collect CSP violation reports: current Chromium and
+Playwright cannot confirm delivery of every violation.

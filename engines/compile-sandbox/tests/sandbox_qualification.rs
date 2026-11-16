@@ -11,10 +11,10 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
-use weft_compile_sandbox::{self as sandbox, FILTERS, GO, MINIMUM_LANDLOCK_ABI, READY_MARKER};
+use braid_compile_sandbox::{self as sandbox, FILTERS, GO, MINIMUM_LANDLOCK_ABI, READY_MARKER};
 
-const HELPER: &str = "WEFT_COMPILE_SANDBOX_QUALIFICATION_HELPER";
-const VICTIM: &str = "WEFT_COMPILE_SANDBOX_QUALIFICATION_VICTIM";
+const HELPER: &str = "BRAID_COMPILE_SANDBOX_QUALIFICATION_HELPER";
+const VICTIM: &str = "BRAID_COMPILE_SANDBOX_QUALIFICATION_VICTIM";
 const MEMORY_BYTES: u64 = 1 << 30;
 const FILE_BYTES: u64 = 1 << 20;
 /// The kernel's own Landlock ABI, then every admitted ABI before 6, the first that scopes signals and abstract unix
@@ -194,7 +194,7 @@ impl Drop for Private {
 
 fn private_directory() -> Private {
     let parent = std::env::temp_dir().join(format!(
-        "weft-compile-sandbox-{}-{}",
+        "braid-compile-sandbox-{}-{}",
         std::process::id(),
         random_suffix()
     ));
@@ -864,7 +864,7 @@ fn missing_grant_refuses_the_launch() {
         launch_arguments(
             10,
             MEMORY_BYTES,
-            &["--read=/nonexistent-weft-grant".to_string()],
+            &["--read=/nonexistent-braid-grant".to_string()],
         ),
     ] {
         let mut child = launcher("report", &directory, &arguments);
@@ -1223,7 +1223,7 @@ fn probe() {
     );
     // The newer *at and attribute calls and the inode-flag ioctls also need only a read-only descriptor.
     let empty = CString::new("").unwrap();
-    let attribute = CString::new("user.weft").unwrap();
+    let attribute = CString::new("user.braid").unwrap();
     // struct xattr_args { u64 value; u32 size; u32 flags; }
     let value = *b"x";
     let attribute_value: [u64; 2] = [value.as_ptr() as u64, 1];
@@ -1661,7 +1661,7 @@ fn cross_process_probe() {
         libc::syscall(
             libc::SYS_add_key,
             c"user".as_ptr(),
-            c"weft".as_ptr(),
+            c"braid".as_ptr(),
             (&raw const character).cast::<libc::c_void>(),
             1,
             KEY_SPEC_USER_KEYRING,

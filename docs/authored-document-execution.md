@@ -1,19 +1,18 @@
 # Authored-document execution foundation
 
-`weft_ferrule_core::authored_document::execute(native, sample, limits)` executes
+`braid_ferrule_core::authored_document::execute(native, sample, limits)` executes
 an unsaved native proposal entirely in memory. Both inputs are exact byte slices.
 The return value contains validated output bytes, effective output dialect metadata,
 the pinned engine revision, and SHA-256 digests of the native, sample and output bytes.
 There is no revision identity or requirement to save the proposal first.
 
 Implementation: `engines/ferrule-host/core/src/authored_document/`.
-Ferrule revision: `238369bf0071ee8ea097d8c54fa5061f433807fb`. The four direct format
-dependencies reuse packages already in the host lockfile; no dependency was upgraded.
+Ferrule revision: `238369bf0071ee8ea097d8c54fa5061f433807fb`.
 
 ## Executable boundaries
 
-Every source/target pairing of **JSON, XML, CSV, TSV, X12 and EDIFACT** is exercised
-by real execution fixtures: 36 pairings. Each fixture changes an input value and
+Execution fixtures cover every source/target pairing of **JSON, XML, CSV, TSV, X12 and EDIFACT**.
+Each fixture changes an input value and
 asserts that value at the correct output field after reparsing. This includes
 JSON→CSV and JSON→XML. EDI fixtures contain complete interchanges, message/group
 trailers and controls; element names deliberately differ from their wire positions.
@@ -94,7 +93,7 @@ The restricted engine policy has no roots, no origins and zero join-row authorit
   surround stages, successful node evaluation and target writes, and follow digest
   calculation. This is **cooperative**: a running codec cannot be forcibly interrupted.
   Limits bound admitted work/data, not process RSS or a hard process wall clock.
-  A later production worker still needs its external resource/time boundary.
+  The process host supplies hard resource and time limits.
 
 No bytes or metadata are returned on failure. The output is reparsed, envelopes
 checked, and the complete result admitted before publication to the caller.
@@ -118,8 +117,8 @@ eventual serialized output would have been smaller.
 Run from `engines/ferrule-host` on Windows with the pinned installed toolchain:
 
 ```text
-cargo +1.98.1 test --locked --offline -p weft-ferrule-core
-cargo +1.98.1 clippy --locked --offline -p weft-ferrule-core --all-targets -- -D warnings
+cargo +1.98.1 test --locked --offline -p braid-ferrule-core
+cargo +1.98.1 clippy --locked --offline -p braid-ferrule-core --all-targets -- -D warnings
 ```
 
 Fixtures cover the 36-pair matrix, digest binding without saved identity, JSON/XML
@@ -127,26 +126,24 @@ escaping, namespace mismatch and DTD refusal, CSV quoting/BOM/empty strings/zero
 row positions, real EDI positions/envelopes/version checks/release escaping, invalid
 controls, refused capabilities and input/output/work/deadline/expansion limits.
 
-Existing saved-profile admission and its same-format restrictions are unchanged.
-
 ## Portable authored-preview wire boundary
 
 `authored_document::transport::serve(reader, writer)` implements the standalone
-stream; `handle(header, reader, writer)` accepts an already-framed header for later
+stream; `handle(header, reader, writer)` accepts an already-framed header for
 host dispatch. `core/examples/authored_preview_protocol.rs` provides the portable
-stdin/stdout qualification process. The integrated host now selects this protocol
+stdin/stdout test process. The integrated host selects this protocol
 through `src/authored_preview.rs` before the saved-profile parsers. Its handler
 owns the native/sample frame limits and EOF requirement. The header dispatch cap
 is the maximum of the independent caps, with the original cap enforced again
-before any legacy parser; both caps are currently 16 KiB.
+before the saved-profile parser; both caps are currently 16 KiB.
 
 Build it with:
 
 ```text
-cargo +1.98.1 build --locked --offline -p weft-ferrule-core --example authored_preview_protocol
+cargo +1.98.1 build --locked --offline -p braid-ferrule-core --example authored_preview_protocol
 ```
 
-Protocol: `weft.ferrule-authored-preview.v1`; operation: `previewAuthored`.
+Protocol: `braid.ferrule-authored-preview.v1`; operation: `previewAuthored`.
 The request has exactly these fields:
 
 ```text
@@ -168,7 +165,7 @@ Response header:
 
 ```json
 {
-  "protocolVersion": "weft.ferrule-authored-preview.v1",
+  "protocolVersion": "braid.ferrule-authored-preview.v1",
   "request": "exact parsed request object, or null if unavailable",
   "engineRevision": "238369bf0071ee8ea097d8c54fa5061f433807fb",
   "result": "null or {outputDigest, outputByteCount, format, mediaType}",
@@ -202,21 +199,5 @@ The closed wire failure codes and their core mappings are:
 - `executionFailed`: `ExecutionFailed`, `InvalidOutput`.
 - `resourceLimit`: all core limit categories, including `DeadlineExceeded`.
 
-Failures carry only `code`, never an upstream error string. Waiting for stdin EOF
-and blocked I/O require the later process host's deadline. The portable process
-is qualification tooling, not a Linux resource-sandbox qualification.
-
-Portable qualification currently passes 20 Rust tests: 13 core tests (including
-the 36-pair matrix) and seven wire tests. Wire coverage includes every truncated
-prefix of a valid request, surplus bytes/frames, oversized declarations before
-allocation, strict headers, both digest checks, echoed project context, categorical
-failure framing, a bounded fallback header and a zero-byte successful CSV output.
-
-After integrating primary `3e45ebfb`, all 28 core tests (including eight authoring
-tests) and three host-route integration tests pass with locked offline dependencies.
-`core/tests/authored_preview_dispatch.rs` compiles the actual host
-route in a portable harness and exercises compiler-generated native JSON→CSV,
-untouched legacy protocol streams, duplicate-protocol refusal, and independent
-header/native/EOF bounds. This does not compile or qualify the complete Linux host
-or its resource sandbox. The coordinator separately reported 26 passing C# checks,
-including actual interoperability; those C# checks were not rerun in this worktree.
+Failures carry only `code`, never an upstream error string. The process host must
+enforce a deadline on stdin EOF and blocked I/O.

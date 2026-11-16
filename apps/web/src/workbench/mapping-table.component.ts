@@ -32,7 +32,7 @@ import { LayoutPreferencesStore } from "./layout-preferences-store";
 import { columnRole } from "./presentation";
 
 @Component({
-  selector: "weft-workbench-mapping-table",
+  selector: "braid-workbench-mapping-table",
   imports: [ResizeHandleComponent, SampleValueComponent],
   templateUrl: "./mapping-table.component.html",
   styleUrl: "./mapping-table.component.css",

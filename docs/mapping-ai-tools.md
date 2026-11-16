@@ -1,6 +1,6 @@
 # Mapping explanation tools
 
-`Weft.Application.MappingTools` supplies the five read-only tools a private chat
+`Braid.Application.MappingTools` supplies the five read-only tools a private chat
 turn may call and the citation check used before final answer delivery. It reads
 one conversation's immutable revision and exact retained projection/validation
 reports. It has no ASP.NET, storage, worker, derivation, payload or provider
@@ -110,7 +110,7 @@ native bytes: the typed projection is the entire available evidence.
 
 ## Results and limits
 
-The envelope is `weft.mapping-tool-result.v1`, with `outcome`,
+The envelope is `braid.mapping-tool-result.v1`, with `outcome`,
 `evidence: "explanationOnly"`, nullable `coverage`, typed `data` and
 `citations`. Null coverage means unknown, never complete; partial coverage and
 gaps are returned unchanged. An absent field or rule ID returns `unknown`, not a

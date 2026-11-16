@@ -232,7 +232,7 @@ export class NetworkCaseOwner {
             await fetch(target, {
               mode: "cors",
               credentials: "omit",
-              headers: { "X-Weft-Preflight-Vector": "1" },
+              headers: { "X-Braid-Preflight-Vector": "1" },
             });
           } catch {
             rejected = true;

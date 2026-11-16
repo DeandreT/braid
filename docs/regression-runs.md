@@ -7,7 +7,7 @@ retained output and recomputes comparison against the original saved baseline.
 
 Migration `0015_regression_runs.sql` follows the saved-case schema in the ordered
 manifest. It requires explicit CONNECT-only
-`weft_run_reader` / `weft_run_writer` logins. It does not provision its own roles,
+`braid_run_reader` / `braid_run_writer` logins. It does not provision its own roles,
 activate an HTTP endpoint, or start a worker.
 
 ## Request and result identity
@@ -91,14 +91,14 @@ the exact case and checks its submitter's current authority, native source and
 runtime. Failures leave the durable row available for the appropriate retry;
 they do not acknowledge another case or block the rest of the page.
 
-The worker is off by default. Set `WEFT_REGRESSION_WORKER_ENABLED=true` and
+The worker is off by default. Set `BRAID_REGRESSION_WORKER_ENABLED=true` and
 provide four explicit restricted connection strings:
 
-- `WEFT_REGRESSION_RUN_WRITER_CONNECTION_STRING`: `weft_run_writer`.
-- `WEFT_REGRESSION_CASE_READER_CONNECTION_STRING`: `weft_case_reader`.
-- `WEFT_REGRESSION_ACCESS_CONNECTION_STRING`: the existing `weft_runtime`
+- `BRAID_REGRESSION_RUN_WRITER_CONNECTION_STRING`: `braid_run_writer`.
+- `BRAID_REGRESSION_CASE_READER_CONNECTION_STRING`: `braid_case_reader`.
+- `BRAID_REGRESSION_ACCESS_CONNECTION_STRING`: the existing `braid_runtime`
   project-access reader.
-- `WEFT_REGRESSION_REPORT_READER_CONNECTION_STRING`: `weft_report_reader`, for
+- `BRAID_REGRESSION_REPORT_READER_CONNECTION_STRING`: `braid_report_reader`, for
   trusted native-object references.
 
 Each can instead be supplied as `<NAME>_FILE`, a
@@ -118,15 +118,8 @@ require an explicit policy.
 
 Fresh local and Azure provisioning creates the four regression logins before
 running the ordered manifest. Local deployments require distinct
-`WEFT_LOCAL_CASE_READER_PASSWORD`, `WEFT_LOCAL_CASE_WRITER_PASSWORD`,
-`WEFT_LOCAL_RUN_READER_PASSWORD` and `WEFT_LOCAL_RUN_WRITER_PASSWORD` inputs.
-Azure's provisioning job receives the corresponding `WEFT_*` inputs through
+`BRAID_LOCAL_CASE_READER_PASSWORD`, `BRAID_LOCAL_CASE_WRITER_PASSWORD`,
+`BRAID_LOCAL_RUN_READER_PASSWORD` and `BRAID_LOCAL_RUN_WRITER_PASSWORD` inputs.
+Azure's provisioning job receives the corresponding `BRAID_*` inputs through
 its Key Vault-backed role list. Application containers receive none of these
 credentials until their regression features are explicitly composed.
-
-For an existing local database volume, use the administrator-only
-`deploy/local/postgres-add-regression-roles.sh` before migration. It creates all
-four roles and CONNECT grants atomically, refuses existing roles, and does not
-rotate credentials or widen an application role. Do not rerun the fresh-install
-script against an existing Azure database; use its authorized administrator
-workflow for the additional roles before migrating.

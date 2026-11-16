@@ -13,9 +13,9 @@ use serde::{Deserialize, Deserializer, Serialize};
 mod safety;
 pub use safety::{DocumentStats, Safety};
 
-pub const CAPABILITY: &str = "weft.xml.structured-document.v1";
-pub const METADATA_SCHEMA: &str = "weft.xml-boundary.v1";
-pub const SAFETY_PROFILE: &str = "weft.xml-safe.v1";
+pub const CAPABILITY: &str = "braid.xml.structured-document.v1";
+pub const METADATA_SCHEMA: &str = "braid.xml-boundary.v1";
+pub const SAFETY_PROFILE: &str = "braid.xml-safe.v1";
 pub const MAX_DOCUMENT_BYTES: usize = 8 * 1024 * 1024;
 pub const MAX_METADATA_BYTES: usize = 32 * 1024;
 pub const MAX_DEPTH: usize = 64;
@@ -295,7 +295,7 @@ impl Metadata {
 }
 
 // Exact string-escaping policy of the pinned .NET metadata codec, also used by
-// weft.build_json_text for its admitted noncontrol strings. This is a counting
+// braid.build_json_text for its admitted noncontrol strings. This is a counting
 // formatter only, not a replacement wire encoding or a general .NET serializer.
 // Default permits printable ASCII except JSON/HTML-sensitive characters,
 // plus signs and backticks; backslashes use their short JSON escape. It

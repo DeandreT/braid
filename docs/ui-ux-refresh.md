@@ -1,15 +1,8 @@
 # braid workspace layout
 
-The approved workspace refresh keeps the existing routes, application behavior
-and permission checks. It changes how the catalog, revision workbench and exact
-creation review are presented; it does not replace them with the static design
-prototype.
-
-This page owns layout and navigation behavior, not another implementation backlog.
-[Creation review](creation-review-ui.md) owns approval/recovery semantics and
-[catalog browser](catalog-browser.md) owns catalog workflows. Use [ROADMAP](../ROADMAP.md)
-for future priorities; static captures and historical run records do not establish
-provider, native execution or hosted acceptance.
+The workspace shares a shell across the catalog, revision workbench and creation
+review. See [Creation review](creation-review-ui.md) for saving and recovery, and
+[catalog browser](catalog-browser.md) for catalog workflows.
 
 ## Shared shell and catalog
 
@@ -53,26 +46,7 @@ carries the proposal identity, while samples and output remain on the review
 page. Uncertain saves still require checking the original save status rather
 than guessing that another save is safe.
 
-## Verification boundaries
+## Tests
 
-Static before/after design captures document the approved direction, not
-application behavior. Qualification of the implemented layout uses the built
-Angular application, authored API fixtures, existing behavioral suites and the
-focused `apps/web/tests/ux-layout.spec.ts` regression selection. These checks are
-separate from real-provider, native execution and deployed-environment acceptance.
-
-## Historical layout qualification checkpoint
-
-The following records the integrated-07 run. Counts and environment observations
-are historical evidence, not current setup instructions or a rolling readiness claim.
-
-The refreshed layout is implemented in Angular. Integrated-07 passed 667 fixtures
-with four approved optional captures skipped, all 88 UX executions, 17 production
-smoke cases and the separate four-case published-shell editor selection.
-Twelve documentation captures were regenerated with provenance. Results,
-preserved failed attempts and bounded visual-evidence limits are recorded in the
-[integration qualification record](v1-integration.md#ui-implementation-qualification).
-Final formatting, contracts, browser TypeScript, documentation-image and diff
-checks passed. Frozen inputs and the unrelated served demo were preserved, and
-owned validation processes settled. Live-provider and Azure acceptance remain
-user-deferred.
+Layout checks use the built Angular application, authored API fixtures and the
+focused `apps/web/tests/ux-layout.spec.ts` regression selection.

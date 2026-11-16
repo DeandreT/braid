@@ -1,0 +1,48 @@
+<Solution>
+  <Folder Name="/apps/">
+    <Project Path="apps/Braid.BuildWorker/Braid.BuildWorker.csproj" />
+    <Project Path="apps/Braid.CompiledRuntime/Braid.CompiledRuntime.csproj" />
+    <Project Path="apps/Braid.DocumentWorker/Braid.DocumentWorker.csproj" />
+    <Project Path="apps/Braid.FerruleService/Braid.FerruleService.csproj" />
+    <Project Path="apps/Braid.MachineEndpoint/Braid.MachineEndpoint.csproj" />
+    <Project Path="apps/Braid.Server/Braid.Server.csproj" />
+    <Project Path="apps/Braid.Worker/Braid.Worker.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Braid.Ai/Braid.Ai.csproj" />
+    <Project Path="src/Braid.Api/Braid.Api.csproj" />
+    <Project Path="src/Braid.Application/Braid.Application.csproj" />
+    <Project Path="src/Braid.Contracts/Braid.Contracts.csproj" />
+    <Project Path="src/Braid.Deployment/Braid.Deployment.csproj" />
+    <Project Path="src/Braid.Domain/Braid.Domain.csproj" />
+    <Project Path="src/Braid.Identity/Braid.Identity.csproj" />
+    <Project Path="src/Braid.Jobs/Braid.Jobs.csproj" />
+    <Project Path="src/Braid.MappingBackends/Braid.MappingBackends.csproj" />
+    <Project Path="src/Braid.MappingBackends.AzureSessions/Braid.MappingBackends.AzureSessions.csproj" />
+    <Project Path="src/Braid.Persistence.Postgres/Braid.Persistence.Postgres.csproj" />
+    <Project Path="src/Braid.Storage.Blob/Braid.Storage.Blob.csproj" />
+    <Project Path="src/Braid.Storage.FileSystem/Braid.Storage.FileSystem.csproj" />
+    <Project Path="src/Braid.Storage.Hosting/Braid.Storage.Hosting.csproj" />
+    <Project Path="src/Braid.WorkerTransport/Braid.WorkerTransport.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Braid.Tests/Braid.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Braid.CompiledSandboxProbe/Braid.CompiledSandboxProbe.csproj" />
+    <Project Path="tools/Braid.DatabaseTool/Braid.DatabaseTool.csproj" />
+    <Project Path="tools/Braid.HostPrivacyProbe/Braid.HostPrivacyProbe.csproj" />
+    <Project Path="tools/Braid.IngestionProbe/Braid.IngestionProbe.csproj" />
+    <Project Path="tools/Braid.MaintenanceProbe/Braid.MaintenanceProbe.csproj" />
+    <Project Path="tools/Braid.MaintenanceTool/Braid.MaintenanceTool.csproj" />
+    <Project Path="tools/Braid.ReleaseTool/Braid.ReleaseTool.csproj" />
+    <Project Path="tools/Braid.RevisionReportMetadataProbe/Braid.RevisionReportMetadataProbe.csproj" />
+    <Project Path="tools/Braid.RevisionReportWorkflowProbe/Braid.RevisionReportWorkflowProbe.csproj" />
+    <Project Path="tools/Braid.SessionKeyTool/Braid.SessionKeyTool.csproj" />
+    <Project Path="tools/Braid.SessionTicketProcessProbe/Braid.SessionTicketProcessProbe.csproj" />
+    <Project Path="tools/Braid.StorageProbe/Braid.StorageProbe.csproj" />
+    <Project Path="tools/Braid.StorageProtocolProbe/Braid.StorageProtocolProbe.csproj" />
+    <Project Path="tools/Braid.StorageTool/Braid.StorageTool.csproj" />
+    <Project Path="tools/Braid.WorkerShutdownProbe/Braid.WorkerShutdownProbe.csproj" />
+  </Folder>
+</Solution>

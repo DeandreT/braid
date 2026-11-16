@@ -3,7 +3,7 @@
 This page owns the exact-proposal review UI contract. [Creation runtime](mapping-creation-runtime.md)
 owns authenticated operations, [proposal library](creation-proposal-library.md)
 owns discovery and [creation host composition](creation-host-composition.md) owns
-activation. Their boundaries are separate from the historical UI checkpoint below.
+configuration.
 
 The lazy-loaded review route is
 `/catalog/organizations/{organization}/projects/{project}/creation/{proposal}?fingerprint={fingerprint}`.
@@ -40,22 +40,4 @@ so a second refresh cannot replace previously observed facts under one fingerpri
 
 `apps/web/playwright.creation-review.config.ts` runs strict parser and actual
 Chromium fixtures for exact approval, recovery, preview substitution, access
-revocation, owner replacement, inert rendering and accessibility. These HTTP
-fixtures validate the UI boundary; PostgreSQL, provider-backed generation and
-production worker containment are qualified separately.
-
-## Historical UI qualification checkpoint
-
-The following is the original focused UI record, including its then-pending chat
-discovery integration. It is not current setup or a new execution claim. Later
-combined evidence is retained in [v1 integration](v1-integration.md).
-
-The focused suite passes 28 tests with zero skips, including 11 actual Chromium
-cases. Full `npm run check`, browser TypeScript checks and production build pass
-on pinned Node 22.23.3/npm 12.1.0. The production initial bundle is 672.15 kB
-against the existing 500 kB warning budget. Independent review
-findings on retryability, immutable-state retention, receipt substitution and
-Unicode scalar limits were corrected and re-reviewed without findings.
-
-The authenticated API contract is implemented in the separate creation-runtime
-unit. Reliable proposal discovery from the chat turn is being connected there.
+revocation, owner replacement, inert rendering and accessibility.

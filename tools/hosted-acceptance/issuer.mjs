@@ -1,13 +1,13 @@
 // Test-owned OpenID Connect issuer for the fixed Microsoft organizational endpoints. The
 // acceptance stack resolves login.microsoftonline.com to this container and trusts its
 // test certificate authority; the Session host's identity code and validation are unchanged.
-// It implements only what the Weft Entra client uses: discovery, signing keys, an
+// It implements only what the Braid Entra client uses: discovery, signing keys, an
 // authorization page with one sign-in button, and code redemption with a PS256 certificate
 // assertion, PKCE (S256), single-use codes and RS256 ID tokens. The ID token carries the user's
-// pairwise subject and, for the requested profile scope, the tenant-stable object ID that Weft
+// pairwise subject and, for the requested profile scope, the tenant-stable object ID that Braid
 // binds. For mapping endpoint callers
 // it also issues app-only v2 access tokens to registered machine clients (client credentials).
-// The Weft CLI's public-client flows are in public-client.mjs. It logs one fixed event name per
+// The Braid CLI's public-client flows are in public-client.mjs. It logs one fixed event name per
 // protocol step and never logs codes, tokens, assertions, secrets or keys.
 import {
   createHash,
@@ -30,26 +30,26 @@ const take = (name) => {
   delete process.env[name];
   return value;
 };
-const tenant = take("WEFT_ACCEPTANCE_TENANT_ID");
-const client = take("WEFT_ACCEPTANCE_CLIENT_ID");
-const subject = take("WEFT_ACCEPTANCE_SUBJECT");
-const objectId = take("WEFT_ACCEPTANCE_OBJECT_ID");
-const callback = take("WEFT_ACCEPTANCE_CALLBACK");
-const tlsBundle = take("WEFT_ACCEPTANCE_ISSUER_PEM");
+const tenant = take("BRAID_ACCEPTANCE_TENANT_ID");
+const client = take("BRAID_ACCEPTANCE_CLIENT_ID");
+const subject = take("BRAID_ACCEPTANCE_SUBJECT");
+const objectId = take("BRAID_ACCEPTANCE_OBJECT_ID");
+const callback = take("BRAID_ACCEPTANCE_CALLBACK");
+const tlsBundle = take("BRAID_ACCEPTANCE_ISSUER_PEM");
 const clientCertificate = new X509Certificate(
-  take("WEFT_ACCEPTANCE_CLIENT_CERTIFICATE"),
+  take("BRAID_ACCEPTANCE_CLIENT_CERTIFICATE"),
 );
 // The run's ID-token signing key, stable across issuer restarts so cached keys stay valid.
-const signingKey = createPrivateKey(take("WEFT_ACCEPTANCE_SIGNING_KEY"));
+const signingKey = createPrivateKey(take("BRAID_ACCEPTANCE_SIGNING_KEY"));
 const tokenLifetimeSeconds = 3600;
 // Optional machine clients: [{clientId, objectId, secretSha256, lifetimeSeconds}], each a client
 // application with its service principal's object ID and the SHA-256 of its client secret.
 const machineClients = new Map(
-  JSON.parse(process.env.WEFT_ACCEPTANCE_MACHINE_CLIENTS || "[]").map(
+  JSON.parse(process.env.BRAID_ACCEPTANCE_MACHINE_CLIENTS || "[]").map(
     (machine) => [machine.clientId, machine],
   ),
 );
-delete process.env.WEFT_ACCEPTANCE_MACHINE_CLIENTS;
+delete process.env.BRAID_ACCEPTANCE_MACHINE_CLIENTS;
 
 const issuer = `https://${host}/${tenant}/v2.0`;
 const paths = {
@@ -67,24 +67,24 @@ const clientDigest = base64url(
   createHash("sha256").update(clientCertificate.raw).digest(),
 );
 // Optional public clients for the CLI acceptance stage: [{clientId, scope}], each the CLI's
-// application ID and the delegated scope of its access tokens for this run's Weft application.
+// application ID and the delegated scope of its access tokens for this run's Braid application.
 const publicClients = createPublicClients({
   host,
   tenant,
   issuer,
-  clients: JSON.parse(process.env.WEFT_ACCEPTANCE_PUBLIC_CLIENTS || "[]").map(
+  clients: JSON.parse(process.env.BRAID_ACCEPTANCE_PUBLIC_CLIENTS || "[]").map(
     (registration) => ({ ...registration, audience: client }),
   ),
   user: {
     objectId,
     subject,
-    username: "acceptance.user@weft.example.test",
+    username: "acceptance.user@braid.example.test",
   },
   signed,
   event,
   lifetimeSeconds: tokenLifetimeSeconds,
 });
-delete process.env.WEFT_ACCEPTANCE_PUBLIC_CLIENTS;
+delete process.env.BRAID_ACCEPTANCE_PUBLIC_CLIENTS;
 const pending = new Map(); // transaction -> authorization request, until the button is pressed
 const codes = new Map(); // code -> issued authorization, single use
 const assertionIds = new Set();
@@ -190,7 +190,7 @@ function authorize(url, response) {
   response.writeHead(200, {
     "Content-Type": "text/html; charset=utf-8",
     "Cache-Control": "no-store",
-    // form-action is left open: the approval redirects to the Weft callback.
+    // form-action is left open: the approval redirects to the Braid callback.
     "Content-Security-Policy": "default-src 'none'",
   });
   response.end(page);
@@ -293,7 +293,7 @@ function idToken(nonce) {
     sub: subject,
     oid: objectId,
     name: "Acceptance user",
-    preferred_username: "acceptance.user@weft.example.test",
+    preferred_username: "acceptance.user@braid.example.test",
     iat: now - 1,
     nbf: now - 1,
     exp: now + tokenLifetimeSeconds,

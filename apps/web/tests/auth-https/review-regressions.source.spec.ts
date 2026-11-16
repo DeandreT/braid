@@ -87,61 +87,61 @@ test("review header arguments: exact bootstrap and logout markers", () => {
   const bootstrap = requestHeaders(
     new URL(origin + "/api/auth/session"),
     "GET",
-    [["X-Weft-Session", "1"]],
+    [["X-Braid-Session", "1"]],
     false,
   );
   const logout = requestHeaders(
     new URL(origin + "/api/auth/logout"),
     "POST",
     [
-      ["X-Weft-Logout", "1"],
-      ["X-Weft-Auth-Token", "inert-action"],
+      ["X-Braid-Logout", "1"],
+      ["X-Braid-Auth-Token", "inert-action"],
       ["X-XSRF-TOKEN", "inert-epoch"],
     ],
     false,
   );
   requireOwned(
-    bootstrap["x-weft-session"] === "1" &&
-      logout["x-weft-logout"] === "1" &&
-      logout["x-weft-auth-token"] === "inert-action",
+    bootstrap["x-braid-session"] === "1" &&
+      logout["x-braid-logout"] === "1" &&
+      logout["x-braid-auth-token"] === "inert-action",
   );
 });
 test("review header arguments: closed missing duplicate value route method and names", () => {
   for (const [path, method, entries] of [
     ["/api/auth/session", "GET", []],
-    ["/api/auth/logout", "POST", [["X-Weft-Auth-Token", "inert-action"]]],
+    ["/api/auth/logout", "POST", [["X-Braid-Auth-Token", "inert-action"]]],
     [
       "/api/auth/session",
       "GET",
       [
-        ["X-Weft-Session", "1"],
-        ["x-weft-session", "1"],
+        ["X-Braid-Session", "1"],
+        ["x-braid-session", "1"],
       ],
     ],
     [
       "/api/auth/logout",
       "POST",
       [
-        ["X-Weft-Logout", "1"],
-        ["X-Weft-Logout", "1"],
+        ["X-Braid-Logout", "1"],
+        ["X-Braid-Logout", "1"],
       ],
     ],
-    ["/api/auth/session", "GET", [["X-Weft-Session", "2"]]],
-    ["/api/auth/logout", "POST", [["X-Weft-Logout", "1,1"]]],
-    ["/sign-in", "GET", [["X-Weft-Session", "1"]]],
-    ["/api/auth/login", "POST", [["X-Weft-Logout", "1"]]],
-    ["/api/auth/session", "POST", [["X-Weft-Session", "1"]]],
-    ["/api/auth/logout", "GET", [["X-Weft-Logout", "1"]]],
-    ["/api/auth/session?unexpected=1", "GET", [["X-Weft-Session", "1"]]],
+    ["/api/auth/session", "GET", [["X-Braid-Session", "2"]]],
+    ["/api/auth/logout", "POST", [["X-Braid-Logout", "1,1"]]],
+    ["/sign-in", "GET", [["X-Braid-Session", "1"]]],
+    ["/api/auth/login", "POST", [["X-Braid-Logout", "1"]]],
+    ["/api/auth/session", "POST", [["X-Braid-Session", "1"]]],
+    ["/api/auth/logout", "GET", [["X-Braid-Logout", "1"]]],
+    ["/api/auth/session?unexpected=1", "GET", [["X-Braid-Session", "1"]]],
     [
       "/api/auth/session",
       "GET",
       [
-        ["X-Weft-Session", "1"],
-        ["X-Weft-Unknown", "1"],
+        ["X-Braid-Session", "1"],
+        ["X-Braid-Unknown", "1"],
       ],
     ],
-    ["/api/auth/session", "GET", [["X-Weft-Session", "1\t"]]],
+    ["/api/auth/session", "GET", [["X-Braid-Session", "1\t"]]],
   ] as Array<[string, string, Array<[string, string]>]>)
     refused(() =>
       requestHeaders(new URL(origin + path), method, entries, false),
@@ -149,8 +149,8 @@ test("review header arguments: closed missing duplicate value route method and n
 });
 test("review return header: only a single canonical login target is admitted", () => {
   const login: Array<[string, string]> = [
-    ["X-Weft-Login", "1"],
-    ["X-Weft-Auth-Token", "inert-action"],
+    ["X-Braid-Login", "1"],
+    ["X-Braid-Auth-Token", "inert-action"],
   ];
   for (const target of [
     "/catalog",
@@ -160,9 +160,9 @@ test("review return header: only a single canonical login target is admitted", (
       requestHeaders(
         new URL(origin + "/api/auth/login"),
         "POST",
-        [...login, ["X-Weft-Return-To", target]],
+        [...login, ["X-Braid-Return-To", target]],
         false,
-      )["x-weft-return-to"] === target,
+      )["x-braid-return-to"] === target,
     );
   for (const target of [
     "",
@@ -177,7 +177,7 @@ test("review return header: only a single canonical login target is admitted", (
       requestHeaders(
         new URL(origin + "/api/auth/login"),
         "POST",
-        [...login, ["X-Weft-Return-To", target]],
+        [...login, ["X-Braid-Return-To", target]],
         false,
       ),
     );
@@ -187,8 +187,8 @@ test("review return header: only a single canonical login target is admitted", (
       "POST",
       [
         ...login,
-        ["X-Weft-Return-To", "/catalog"],
-        ["x-weft-return-to", "/catalog"],
+        ["X-Braid-Return-To", "/catalog"],
+        ["x-braid-return-to", "/catalog"],
       ],
       false,
     ),
@@ -198,9 +198,9 @@ test("review return header: only a single canonical login target is admitted", (
       new URL(origin + "/api/auth/logout"),
       "POST",
       [
-        ["X-Weft-Logout", "1"],
-        ["X-Weft-Auth-Token", "inert-action"],
-        ["X-Weft-Return-To", "/catalog"],
+        ["X-Braid-Logout", "1"],
+        ["X-Braid-Auth-Token", "inert-action"],
+        ["X-Braid-Return-To", "/catalog"],
       ],
       false,
     ),
@@ -351,7 +351,7 @@ for (const phase of [
         if (method === "Fetch.fulfillRequest") fulfills++;
         if (method === "Fetch.continueRequest") {
           const marker =
-            phase === "continue-claimed" ? "x-weft-logout" : "x-weft-session";
+            phase === "continue-claimed" ? "x-braid-logout" : "x-braid-session";
           requireOwned(
             params?.headers?.some(
               (header) => header.name === marker && header.value === "1",
@@ -448,12 +448,12 @@ for (const phase of [
             ? {}
             : phase === "continue-claimed"
               ? {
-                  "X-Weft-Logout": "1",
-                  "X-Weft-Auth-Token": "inert-action",
+                  "X-Braid-Logout": "1",
+                  "X-Braid-Auth-Token": "inert-action",
                   "X-XSRF-TOKEN": "inert-epoch",
                   Origin: origin,
                 }
-              : { "X-Weft-Session": "1" },
+              : { "X-Braid-Session": "1" },
       },
     });
     if (phase === "before-ack" || phase === "before-native-fulfill")

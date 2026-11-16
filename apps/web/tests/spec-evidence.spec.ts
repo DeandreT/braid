@@ -23,7 +23,7 @@ const v2 = (
   text = "café 東京",
   formula: unknown = null,
 ) => [
-  "weft.spec-evidence.v2",
+  "braid.spec-evidence.v2",
   "office-body-text-only",
   [0, text, locator, formula],
 ];
@@ -50,7 +50,11 @@ function objectFor(
 
 test("v1 and v2 dispatch preserve coordinates, formulas and empty cache distinctions", () => {
   expect(
-    evidence(["weft.spec-evidence.v1", "complete", [0, "é", "/a", 5, 2, 2, 2]]),
+    evidence([
+      "braid.spec-evidence.v1",
+      "complete",
+      [0, "é", "/a", 5, 2, 2, 2],
+    ]),
   ).toEqual({
     version: 1,
     code: "complete",
@@ -175,15 +179,15 @@ for (const [name, location] of [
 
 test("version and tuple mismatches, extra fields, surrogate text and invented formula states fail closed", () => {
   for (const value of [
-    ["weft.spec-evidence.v3", "complete"],
-    ["weft.spec-evidence.v1", "complete", [0, "text", word, null]],
-    ["weft.spec-evidence.v2", "complete", [0, "text", null, 0, 4, 1, 1]],
+    ["braid.spec-evidence.v3", "complete"],
+    ["braid.spec-evidence.v1", "complete", [0, "text", word, null]],
+    ["braid.spec-evidence.v2", "complete", [0, "text", null, 0, 4, 1, 1]],
     [
-      "weft.spec-evidence.v2",
+      "braid.spec-evidence.v2",
       "complete",
       [0, "text", word, null, { missingText: false }],
     ],
-    ["weft.spec-evidence.v2", "complete", [1, "text", word, null]],
+    ["braid.spec-evidence.v2", "complete", [1, "text", word, null]],
     v2(word, "\ud800"),
     v2(word, "text", "=1+2"),
     v2(cell, "result", "1+2"),
@@ -196,7 +200,7 @@ test("version and tuple mismatches, extra fields, surrogate text and invented fo
 
 test("PDF tuple preserves canonical missing-text facts and blank pages", () => {
   const parsed = evidence([
-    "weft.spec-evidence.v2",
+    "braid.spec-evidence.v2",
     "pdf-page-text-only",
     [0, "first", ["pdf-page", 1], null, false],
     [1, "", ["pdf-page", 2], null, true],
@@ -208,7 +212,7 @@ test("PDF tuple preserves canonical missing-text facts and blank pages", () => {
   expect(parsed.chunks[1]!.missingText).toBe(true);
   expect(() =>
     evidence({
-      format: "weft.spec-pdf-extraction.v1",
+      format: "braid.spec-pdf-extraction.v1",
       status: "needsOcr",
       pages: [],
     }),
@@ -222,7 +226,7 @@ test("PDF status and missing-text facts must agree with retained evidence", asyn
     outcome: SpecObject["outcome"],
   ) => {
     const bytes = bytesOf(
-      JSON.stringify(["weft.spec-evidence.v2", code, ...chunks]),
+      JSON.stringify(["braid.spec-evidence.v2", code, ...chunks]),
     );
     return readEvidence(bytes, objectFor(bytes, { format: "Pdf", outcome }));
   };
@@ -298,7 +302,7 @@ test("source format, outcome and evidence version must agree", async () => {
       readEvidence(bytes, objectFor(bytes, overrides)),
     ).rejects.toThrow();
   const legacy = bytesOf(
-    JSON.stringify(["weft.spec-evidence.v1", "office-body-text-only"]),
+    JSON.stringify(["braid.spec-evidence.v1", "office-body-text-only"]),
   );
   await expect(readEvidence(legacy, objectFor(legacy))).rejects.toThrow();
   const pdf = bytesOf(JSON.stringify(v2(["pdf-page", 1])));

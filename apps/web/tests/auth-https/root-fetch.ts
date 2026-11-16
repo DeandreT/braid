@@ -55,7 +55,7 @@ type MutationResult = {
   headers: Record<string, string>;
   negative: string | null;
 };
-const proofHeader = "x-weft-qualification-admission";
+const proofHeader = "x-braid-qualification-admission";
 
 export class BrowserRootFetch {
   readonly vector: TransportVector;
@@ -508,7 +508,7 @@ export class BrowserRootFetch {
         requireOwned(
           event.resourceType === "Fetch" &&
             request.method === "GET" &&
-            headers["x-weft-preflight-vector"] === "1",
+            headers["x-braid-preflight-vector"] === "1",
         );
       const mutation = vector
         ? { headers, negative: null }
@@ -521,7 +521,7 @@ export class BrowserRootFetch {
         proof = randomBytes(32).toString("hex");
       const returnTarget =
         key === "POST /api/auth/login"
-          ? (mutation.headers["x-weft-return-to"] ?? "/")
+          ? (mutation.headers["x-braid-return-to"] ?? "/")
           : undefined;
       requireOwned(
         returnTarget === undefined ||

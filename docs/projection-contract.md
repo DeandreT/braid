@@ -1,12 +1,12 @@
 # Mapping projection v1
 
-`weft.mapping-projection.v1` is a revision-specific explanation of a mapping.
-The native file remains authoritative. `Weft.Domain.NativeArtifact` owns an exact
+`braid.mapping-projection.v1` is a revision-specific explanation of a mapping.
+The native file remains authoritative. `Braid.Domain.NativeArtifact` owns an exact
 copy of admitted bytes and computes their SHA-256; reading or projecting the
 artifact cannot rewrite formatting, unknown metadata, or numeric values.
 
-`Weft.Contracts.Projections` contains only provider-independent data. The C#
-records generate `contracts/weft-v1.json` during a server build; pinned
+`Braid.Contracts.Projections` contains only provider-independent data. The C#
+records generate `contracts/braid-v1.json` during a server build; pinned
 tooling derives `apps/web/src/api/generated.ts` from that schema. Browser code
 uses the generated discriminated unions rather than a second hand-written model.
 
@@ -65,23 +65,7 @@ operation reports `supported`, `unsupported`, `conditional`, or `notQualified`,
 with profile, boundary scope, and conditions. UI actions must check their own
 operation's admission rules rather than infer support from visible fields.
 
-## Development fixtures and versioning
+## Versioning
 
-With `DOTNET_ENVIRONMENT=Development`, the loopback server exposes
-`GET /api/v1/fixtures/projections/{fixtureId}` for `direct`, `rich`, `partial`,
-and `unavailable`, and `/openapi/v1.json`. The fixture backend is explicitly
-`weft.synthetic`; these are self-authored examples, not Ferrule inspection or a
-persistent catalog. Unknown fixtures and non-development environments return an
-empty 404. No native artifact contents are exposed by this endpoint.
-
-The fixtures exercise typed paths, exact values, multiple boundaries, parameters,
-controls, resolvable diagnostics, and coverage separate from capability. They are
-deterministic and project fresh collections so callers cannot corrupt later
-reads. Serialization and Angular compile checks exercise union narrowing and
-reject numeric identity/literal assignments.
-
-Keep v1 meanings stable. New union variants or incompatible semantics require an
-explicit contract review and matching browser changes; JSON deserialization
-rejects unknown discriminator kinds. Add a new schema version for a breaking
-change. Production upload admission and backend-specific validation belong to
-their later increments.
+New union variants require matching browser changes; JSON deserialization rejects
+unknown discriminator kinds.

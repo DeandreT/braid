@@ -1,13 +1,8 @@
-# Dormant Entra browser client
+# Entra browser client
 
-The P4d1 adapter in [#116](https://github.com/DeandreT/weft/issues/116) completes
-the standard OpenID Connect protocol for one configured Microsoft organizational
-tenant and client. Protocol and deployment qualification are separate gates. The local HTTPS
-fixture does not establish a configured live tenant or a deployment.
-
-The Server does not register this adapter or expose login/callback routes. Existing
-disabled and Development behavior is preserved. P4d2 owns dormant HTTP and binding
-orchestration; P4d3 owns explicit host activation; P4e owns Angular sign-in.
+The adapter implements OpenID Connect for one configured Microsoft organizational
+tenant and client. See [Browser authentication HTTP](browser-authentication-http.md)
+for routes and [Session host](session-host.md) for host configuration.
 
 ## Trusted composition and public API
 
@@ -20,14 +15,14 @@ The trusted composition root supplies an already admitted durable session-key
 profile and an explicit RSA client certificate:
 
 ```csharp
-services.AddWeftEntraClient(
+services.AddBraidEntraClient(
     new EntraClientOptions(configuredTenant, configuredClient, configuredOrigin),
     admittedSessionProfile,
     entraClientCertificate);
 ```
 
 This registration adds a lazy `EntraBrowserClient`, the reserved private
-`Weft.Entra` handler and a refusing sign-in sink. It adds no authentication default
+`Braid.Entra` handler and a refusing sign-in sink. It adds no authentication default
 or application cookie and builds no service provider. There is no public generic
 provider, event, token-validator, transport or protect/unprotect override.
 
@@ -35,7 +30,7 @@ The facade has two request-bound operations, both requiring a cancellation token
 
 | Operation | Result and responsibility |
 | --- | --- |
-| `BeginLoginAsync(HttpContext, CancellationToken)` | Runs the fixed standard challenge and returns `EntraLoginChallenge.AuthorizationUrl`. A later HTTP layer deliberately maps that bounded server-generated URL to its navigation DTO. |
+| `BeginLoginAsync(HttpContext, CancellationToken)` | Runs the fixed standard challenge and returns `EntraLoginChallenge.AuthorizationUrl`. The HTTP layer maps that bounded server-generated URL to its navigation DTO. |
 | `VerifyCallbackAsync(HttpContext, CancellationToken)` | Runs the actual standard callback and returns internally constructed `EntraVerifiedLogin` with fixed organization, exact `ExternalIdentityKey` and verified ID-token expiry. |
 
 Results are sealed immutable objects with internal constructors, private
@@ -43,7 +38,7 @@ current-request provenance, redacted `ToString` and `JsonIgnore` accessors. Defa
 JSON serialization exposes no subject, state, nonce, token or authorization URL.
 There is no public API accepting caller-provided facts as verified evidence.
 Reuse or overlap in the same request is refused. Direct middleware callback work
-requires the facade's private operation marker; the later HTTP layer must route
+requires the facade's private operation marker; the HTTP layer must route
 and gate the callback explicitly.
 
 Admission expects bodyless `POST /api/auth/login` or `GET /api/auth/callback/entra`,
@@ -63,7 +58,7 @@ The package profile pins ASP.NET Core OpenID Connect **10.0.12** and
 Microsoft.IdentityModel.Protocols.OpenIdConnect **8.19.2**, with the IdentityModel
 8.19.2 dependency closure retained in the NuGet lockfiles.
 Microsoft.Identity.Web, MSAL and downstream token acquisition/cache
-are not part of this increment.
+are not used by this adapter.
 
 For configured tenant `T`, all logical destinations are fixed:
 
@@ -113,10 +108,8 @@ correlation and nonce. `select_account` does not promise password re-entry. PKCE
 is server-controlled; its verifier may travel through the browser inside protected
 state. SaveTokens, UserInfo, token refresh and claim mapping are disabled.
 
-Pushed authorization requests are disabled for the initial Entra profile.
-Unexpected nonempty, required or malformed PAR metadata is refused; no PAR
-interoperability is claimed. Future PAR support needs an explicit policy increment.
-Microsoft documents the initial Entra limitation in its
+Pushed authorization requests are disabled. Unexpected nonempty, required or malformed
+PAR metadata is refused. Microsoft documents the Entra limitation in its
 [OIDC guidance](https://learn.microsoft.com/en-us/aspnet/core/blazor/security/blazor-web-app-with-oidc?view=aspnetcore-10.0).
 
 Confidential-client redemption uses standard short-lived **PS256** certificate
@@ -155,55 +148,34 @@ The caller owns the durable profile and Entra certificate through runtime shutdo
 and in-flight drain. The adapter borrows and never disposes them. Credential,
 Data Protection and TLS certificate delivery/rotation remain separate operator
 responsibilities. Existing ring admission requires the qualified Linux private
-filesystem/statx profile. No Blob repository, Azure Functions, ephemeral disk or
-serverless deployment is qualified by this component.
+filesystem/statx profile.
 
 DI owns runtime options/handlers, constrained HTTP and request/retrieval/send work.
 `DisposeAsync` stops admission, cancels and drains whole owned operations and HTTP
 body reads, then releases owned resources. Standard configuration-manager refresh
 uses a private task without a public join/dispose API. Entire owned retrievals and
 sends are drained; a later queued refresh fails its closed gate before HTTP.
-Remaining private validation/update work uses managed policy/configuration/keys.
-It is not claimed to be joined, or to release every captured execution-context
-reference synchronously. Borrowed profile/certificates and released HTTP are not
-called by that continuation.
+Remaining private validation/update work uses managed policy/configuration/keys;
+it can retain execution-context references after disposal. Borrowed profiles,
+certificates and released HTTP are not called by that continuation.
 
-## Qualification and later increments
+## Verification
 
 Independent test source uses an internal fixed-policy, owned HTTPS fixture with
 real standard certificate/code/PKCE/state/nonce paths. Its only transport seam
 connects admitted Microsoft logical URLs to one loopback listener with normal TLS
 name checks and borrowed custom-root trust. A bounded method/path-only attempt
 ledger exists only for that fixture. There is no production transport override.
-Source review does not replace executing the fixture.
 
-Integration must qualify the restored/locked package closure, formatting/build,
-registered handlers/defaults and effective policy, real HTTPS protocol/crypto,
-hostile metadata/key scope, rollover/last-known-good behavior, denial/expiry,
-cancellation/header cleanup and cross-instance protected-flow completion. Mocks
-do not qualify a configured live tenant, certificate delivery, consent, Conditional
-Access or deployment environment.
+Test the locked package closure, registered handlers/defaults and effective policy,
+HTTPS protocol/crypto, hostile metadata/key scope, rollover/last-known-good behavior,
+denial/expiry, cancellation/header cleanup and cross-instance protected-flow completion.
 
-P4d2 will own exact Origin/header/antiforgery admission and cache/error policy,
-fresh external-binding/principal reads, then trusted session issuance. A fresh
-same-actor login must acknowledge old local revocation before storing the new
-session; failures do not restore or silently retry the old operation. Binding
-absence never provisions an account or grant.
-
-P4d3 will explicitly select the hosted profile and qualify proxy/HTTPS, secrets,
-durable ring, listener and diagnostics. Silent handler logging alone does not
-suppress IdentityModel global diagnostics, HTTP instrumentation or edge query
-logs; the library changes no global logging static. P4e owns Angular navigation,
-pending-operation recovery and noncredential identity-change signals. Live tenant
-configuration belongs at the later activation gate and does not block dormant
-source work. See [Browser sessions](browser-server-sessions.md),
-[External identity bindings](external-identity-bindings.md) and
-[Server sessions](server-sessions.md) for the separate authority contracts.
+## Diagnostics
 
 The owned `SocketsHttpHandler` fixes `ActivityHeadersPropagator = null` before
 first use. In the pinned .NET 10.0.12 implementation, this omits that client's
 `DiagnosticsHandler`, its raw request/response/exception `DiagnosticSource`
 payloads and associated outgoing request Activities and trace propagation. Other
-HTTP EventSource/metrics and global IdentityModel channels remain separate; this
-per-client source mechanism is not executed privacy qualification. Approved-sink,
-host/edge query and credential privacy controls still require P4d3 qualification.
+HTTP EventSource/metrics, global IdentityModel channels and host/edge query logs
+need their own privacy controls; this per-client setting does not suppress them.

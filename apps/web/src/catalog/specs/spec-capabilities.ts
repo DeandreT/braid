@@ -39,7 +39,7 @@ export function capabilities(value: unknown): IntakeCapabilities {
       f.maximumSourceBytes < 1 ||
       f.maximumSourceBytes > (f.format === "pdf" ? 8388608 : 10485760) ||
       f.extractorVersion !== version ||
-      f.evidenceFormat !== `weft.spec-evidence.v${version === 2 ? 1 : 2}`
+      f.evidenceFormat !== `braid.spec-evidence.v${version === 2 ? 1 : 2}`
     )
       throw new Error("Invalid intake format");
     seen.add(f.format);

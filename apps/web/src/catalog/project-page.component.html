@@ -97,7 +97,10 @@
           <dd>{{ view.project.access.role }}</dd>
         </div>
       </dl>
-      <weft-creation-entry [scope]="view.project.scope" [context]="context()" />
+      <braid-creation-entry
+        [scope]="view.project.scope"
+        [context]="context()"
+      />
       <section aria-label="Specification intake">
         <h2>Specification documents</h2>
         <p>
@@ -197,7 +200,7 @@
                 }}</span>
               }
               @if (context(); as admission) {
-                <weft-regression-status
+                <braid-regression-status
                   [scope]="mapping.scope"
                   [context]="admission"
                   [revisionId]="mapping.head.scope.revisionId"
@@ -234,7 +237,7 @@
       }
     </nav>
   } @else {
-    <weft-catalog-status
+    <braid-catalog-status
       [kind]="kind()"
       [firstPage]="firstPage()"
       (retry)="retry()"

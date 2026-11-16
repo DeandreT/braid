@@ -3,16 +3,16 @@
 The workbench edits Ferrule mappings through `ferrule.edit.v1` operations. Ferrule's
 headless `edit-ops` library owns the edits and command-based undo history. The same
 core runs in a browser worker and in the authoritative server worker. Neither
-Angular, the CLI nor C# decodes, patches or serializes native project JSON.
+Angular nor C# decodes, patches or serializes native project JSON.
 
 ## Drafts and authority
 
-`WEFT_MAPPING_EDITING_ENABLED` is off by default. Enabling it requires catalog
+`BRAID_MAPPING_EDITING_ENABLED` is off by default. Enabling it requires catalog
 reads, revision ingestion, report derivation, an edit-capable Ferrule runner and
-separate `WEFT_POSTGRES_DRAFT_READER_CONNECTION_STRING` and
-`WEFT_POSTGRES_DRAFT_WRITER_CONNECTION_STRING` credentials. Session mode uses
-their protected `_FILE` delivery counterparts. Provision `weft_draft_reader`
-and `weft_draft_writer` as CONNECT-only logins before applying the ordered
+separate `BRAID_POSTGRES_DRAFT_READER_CONNECTION_STRING` and
+`BRAID_POSTGRES_DRAFT_WRITER_CONNECTION_STRING` credentials. Session mode uses
+their protected `_FILE` delivery counterparts. Provision `braid_draft_reader`
+and `braid_draft_writer` as CONNECT-only logins before applying the ordered
 draft migrations. They receive function execution, not direct table access.
 
 Publishers and administrators have `EditMapping`. A draft belongs to one author
@@ -84,7 +84,7 @@ immutable ingestion receipt and writes the revision's edit provenance idempotent
 then deletes checkpoint bytes. A crash between ingestion and reconciliation does
 not lose the operation log or create another revision on retry.
 
-## HTTP and CLI
+## HTTP API
 
 Under `/api/v1/organizations/{org}/projects/{project}/mappings/{mapping}/drafts`:
 
@@ -105,11 +105,6 @@ Under `/api/v1/organizations/{org}/projects/{project}/mappings/{mapping}/drafts`
 All responses use `no-store`; unsafe methods use normal catalog origin/request-token
 admission. Checkpoint, rebase and save share a two-permit local gate and return 503
 when busy. Worker timeout, isolation and protocol failures remain distinct.
-
-The CLI exposes `drafts create|list|show|discard`, `drafts ops get|put`, and
-`drafts checkpoint|compare|preview|save|rebase`. Commands take `--project` and
-`--mapping`; creation takes `--base-revision`. Use `--request-id` for recoverable
-create/save intent and `--if-match` to supply a previously reviewed ETag.
 
 ## Browser isolation and packaging
 

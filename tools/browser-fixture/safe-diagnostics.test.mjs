@@ -62,7 +62,7 @@ test("known stack namespaces become fixed categories without method names or pat
   const summary = hostFailureSummary();
   summary.write(
     Buffer.from(
-      "   at Weft.Worker.SecretMethod(private-data) in /private/file:line 2\n   at Weft.Jobs.PrivateMethod()\n   at Wolverine.SecretMethod()\n   at Customer.SecretMethod()\n",
+      "   at Braid.Worker.SecretMethod(private-data) in /private/file:line 2\n   at Braid.Jobs.PrivateMethod()\n   at Wolverine.SecretMethod()\n   at Customer.SecretMethod()\n",
     ),
   );
   assert.deepEqual(summary.snapshot(), [

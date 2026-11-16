@@ -131,7 +131,7 @@ for (const kind of ["centre", "project", "deliveries", "cases"] as const) {
           ? page.locator("article.automation-event")
           : kind === "deliveries"
             ? page.locator("details.automation-event")
-            : page.locator("weft-regression-status li");
+            : page.locator("braid-regression-status li");
     await expect(rows).toHaveCount(20);
     if (kind === "centre")
       await page
@@ -164,7 +164,7 @@ test("baseline before automation shows the original project view", async ({
   page,
 }, info) => {
   test.skip(
-    !process.env.WEFT_AUTOMATION_BASELINE_ROOT,
+    !process.env.BRAID_AUTOMATION_BASELINE_ROOT,
     "Only the archived original UI is a before screenshot.",
   );
   await syntheticCatalog(page);
@@ -232,7 +232,7 @@ async function fixture(page: Page, admin = true) {
   await syntheticCatalog(page, {
     "/api/v1/health": {
       status: "ok",
-      service: "weft-api",
+      service: "braid-api",
       version: "test",
       apiVersion: "v1",
     },

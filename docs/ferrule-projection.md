@@ -9,9 +9,8 @@ design-time resources. The C# adapter checks the result before returning it.
 
 The frontend consumes the same provider-independent contract as synthetic or
 future engine adapters. No Ferrule JSON parser, native graph type, or engine
-execution code belongs in Angular. Development native examples now feed the
-[mapping viewer](mapping-viewer.md). Native uploads and persistence follow with
-the catalog increment.
+execution code belongs in Angular. The [mapping viewer](mapping-viewer.md)
+renders these projection documents.
 
 ## Frontend presentation
 
@@ -31,10 +30,9 @@ retains possible references in details without field-dependency edges.
 Validation is a separate operation backed by Ferrule's validator. Its typed
 native owners can navigate to a projected item only when the emitted native
 origin identifies that item unambiguously. Native evidence remains available
-when no unique projected item exists. Viewing an explanation does not qualify
-sample execution or deployment.
+when no unique projected item exists.
 
-## Qualified semantics
+## Projection semantics
 
 - Paths preserve field names as individual segments, including dots, slashes,
   tildes, empty names, and Unicode. Repetition uses `anyItem`; XML attributes and
@@ -83,4 +81,4 @@ that interpreter is test-only and is not included as an application operation.
 Live Docker tests exercise the actual Rust-to-C# projection boundary and verify
 that the original artifact bytes remain unchanged. See
 [Ferrule worker](ferrule-worker.md) for toolchains, image construction, and test
-configuration. Azure transports, preview, and build/deploy remain unqualified.
+configuration.

@@ -108,7 +108,7 @@ class AdmissionTests(unittest.TestCase):
         self.assertEqual(self.mount.call_args.args[0][3], '/mnt/example-build/build/real-root')
 
     def test_native_windows_keeps_existing_path_admission_without_linux_commands(self):
-        self.root.__str__.return_value = 'C:\\example\\weft-work'
+        self.root.__str__.return_value = 'C:\\example\\braid-work'
         with patch.object(build_image.sys, 'platform', 'win32'):
             self.assertIs(build_image.admit_work_root(self.root), self.root)
             with self.assertRaises(RuntimeError):
@@ -123,7 +123,7 @@ class CleanupTests(unittest.TestCase):
 
     def metadata(self, owner='owner'):
         return {'Image': self.image, 'Id': self.identity, 'Name': '/owned',
-                'Config': {'Labels': {'io.weft.compiler.source-owner': owner}}}
+                'Config': {'Labels': {'io.braid.compiler.source-owner': owner}}}
 
     def test_lost_create_acknowledgement_is_recovered_by_independent_ownership(self):
         inspect = subprocess.CompletedProcess([], 0, json.dumps([self.metadata()]), '')
@@ -331,8 +331,8 @@ class PreparationTests(unittest.TestCase):
         cp, = self.commands('docker', 'cp')
         self.assertEqual(cp[0][2], self.docker.identity + ':/ferrule-host')
         build, = self.commands('docker', 'build')
-        self.assertIn('WEFT_NATIVE_IMAGE=' + self.docker.reference, build[0])
-        self.assertIn('WEFT_NATIVE_BINARY_SHA256=' + hashlib.sha256(self.binary_bytes).hexdigest(), build[0])
+        self.assertIn('BRAID_NATIVE_IMAGE=' + self.docker.reference, build[0])
+        self.assertIn('BRAID_NATIVE_BINARY_SHA256=' + hashlib.sha256(self.binary_bytes).hexdigest(), build[0])
         self.assertEqual(build[0][-3:], ['--file', 'engines/build-worker/Dockerfile', '.'])
         self.assertEqual(build[1]['cwd'], Path(build_image.__file__).resolve().parents[2])
         self.assertEqual(self.docker.reference_checks, 2)
@@ -420,7 +420,7 @@ class PreparationTests(unittest.TestCase):
                 self.print.assert_not_called()
 
     def test_preexisting_reference_is_never_overwritten_even_if_it_has_the_same_image(self):
-        reference = 'weft-compiler-source:' + self.docker.image[7:] + '-' + 'd' * 32
+        reference = 'braid-compiler-source:' + self.docker.image[7:] + '-' + 'd' * 32
         for image in (self.docker.foreign_image, self.docker.image):
             with self.subTest(image=image):
                 self.docker.images[reference] = image
@@ -433,7 +433,7 @@ class PreparationTests(unittest.TestCase):
                 self.assert_foreign_untouched()
 
     def test_preexisting_foreign_container_with_generated_name_is_never_removed(self):
-        name = 'weft-build-source-' + 'd' * 32
+        name = 'braid-build-source-' + 'd' * 32
         foreign = {'Id': 'e' * 64, 'Image': self.docker.foreign_image, 'Name': '/' + name,
                    'Config': {'Labels': {build_image.OWNER_LABEL: 'foreign'}}}
         self.docker.containers[name] = foreign.copy()
@@ -581,14 +581,14 @@ class EntrypointTests(unittest.TestCase):
         image_block = source.split('# ---- Ferrule images:', 1)[1].split('# ---- PostgreSQL:', 1)[0]
         self.assertIn('python3 "$source_root/tools/build-worker/build_image.py"', image_block)
         self.assertIn('--native-image "$native_id" --tag "$compiler_tag" --work-root "$dev_home/tmp"', image_block)
-        self.assertIn('compiler_build_options+=(--build-docker-config "$WEFT_DEV_BUILD_DOCKER_CONFIG")', image_block)
+        self.assertIn('compiler_build_options+=(--build-docker-config "$BRAID_DEV_BUILD_DOCKER_CONFIG")', image_block)
         self.assertIn('DOCKER_BUILDKIT=1 python3', image_block)
         self.assertIn('"${compiler_build_options[@]}" >>"$build_log" 2>&1 || fail', image_block)
         self.assertIn('build_docker build --progress=plain --tag "$native_tag"', image_block)
         self.assertIn('|| $build_key == *-dirty', image_block)
         self.assertNotIn('docker cp', image_block)
         self.assertNotIn('docker container create', image_block)
-        self.assertNotIn('WEFT_NATIVE_BINARY_SHA256=', image_block)
+        self.assertNotIn('BRAID_NATIVE_BINARY_SHA256=', image_block)
 
 
 if __name__ == '__main__':

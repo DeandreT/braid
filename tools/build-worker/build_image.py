@@ -11,7 +11,7 @@ import tempfile
 import uuid
 
 
-OWNER_LABEL = 'io.weft.compiler.source-owner'
+OWNER_LABEL = 'io.braid.compiler.source-owner'
 
 
 def admit_work_root(work_root, policy=None):
@@ -90,8 +90,8 @@ def prepare_image(native_image, tag, work_root, policy=None, build_docker_config
         return subprocess.check_output(['docker', *command], text=True).strip()
     if output('image', 'inspect', '--format', '{{.Id}}', native_image) != native_image:
         raise RuntimeError('Native image identity mismatch.')
-    reference = 'weft-compiler-source:' + native_image[7:] + '-' + uuid.uuid4().hex
-    name = 'weft-build-source-' + uuid.uuid4().hex
+    reference = 'braid-compiler-source:' + native_image[7:] + '-' + uuid.uuid4().hex
+    name = 'braid-build-source-' + uuid.uuid4().hex
     ownership = uuid.uuid4().hex
     existing = subprocess.run(['docker', 'image', 'inspect', '--format', '{{.Id}}', reference],
                               text=True, capture_output=True)
@@ -135,8 +135,8 @@ def prepare_image(native_image, tag, work_root, policy=None, build_docker_config
                 # Preserve the caller's path before building from the repository root.
                 build_env['DOCKER_CONFIG'] = str(Path(build_env['DOCKER_CONFIG']).absolute())
             subprocess.run(['docker', 'build', '--progress=plain', '--tag', tag,
-                            '--build-arg', 'WEFT_NATIVE_IMAGE=' + reference,
-                            '--build-arg', 'WEFT_NATIVE_BINARY_SHA256=' + digest,
+                            '--build-arg', 'BRAID_NATIVE_IMAGE=' + reference,
+                            '--build-arg', 'BRAID_NATIVE_BINARY_SHA256=' + digest,
                             '--file', 'engines/build-worker/Dockerfile', '.'], cwd=root, env=build_env, check=True)
             if output('image', 'inspect', '--format', '{{.Id}}', reference) != native_image:
                 raise RuntimeError('Native source reference changed during compilation.')

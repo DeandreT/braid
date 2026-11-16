@@ -18,7 +18,7 @@ import {
 import type { InspectorTab } from "./workbench-model";
 
 @Component({
-  selector: "weft-workbench-entity-inspector",
+  selector: "braid-workbench-entity-inspector",
   imports: [
     MappingDetailsComponent,
     MappingEntityComponent,
@@ -53,7 +53,7 @@ import type { InspectorTab } from "./workbench-model";
             <dt>Detail coverage</dt>
             <dd>{{ view().document.coverage.status }}</dd>
           </dl>
-          <weft-native-evidence [locator]="locator()" />
+          <braid-native-evidence [locator]="locator()" />
           <details>
             <summary>Technical details</summary>
             <dl>
@@ -154,7 +154,7 @@ import type { InspectorTab } from "./workbench-model";
         }
         @if (ref.kind !== "field") {
           <section class="inspector-card" [attr.data-role]="referenceRole(ref)">
-            <weft-mapping-entity
+            <braid-mapping-entity
               [view]="view()"
               [reference]="ref"
               (navigate)="navigate.emit($event)"
@@ -214,7 +214,7 @@ import type { InspectorTab } from "./workbench-model";
                     >
                       Inspect rule
                     </button>
-                    <weft-mapping-details
+                    <braid-mapping-details
                       [view]="view()"
                       [details]="rule.details"
                       (navigate)="navigate.emit($event)"
@@ -263,7 +263,7 @@ import type { InspectorTab } from "./workbench-model";
               </section>
               <section class="inspector-card" data-role="rule">
                 <p class="card-label">Transformation rule</p>
-                <weft-mapping-details
+                <braid-mapping-details
                   [view]="view()"
                   [details]="rule.details"
                   (navigate)="navigate.emit($event)"
@@ -273,7 +273,7 @@ import type { InspectorTab } from "./workbench-model";
           }
         } @else {
           <section class="inspector-card" [attr.data-role]="referenceRole(ref)">
-            <weft-mapping-entity
+            <braid-mapping-entity
               [view]="view()"
               [reference]="ref"
               (navigate)="navigate.emit($event)"
@@ -301,7 +301,7 @@ import type { InspectorTab } from "./workbench-model";
         </summary>
         @for (gap of view().document.coverage.gaps; track $index) {
           <p>{{ gap.message }}</p>
-          <weft-native-evidence [locator]="gap.nativeLocator" />
+          <braid-native-evidence [locator]="gap.nativeLocator" />
         }
       </details>
     }

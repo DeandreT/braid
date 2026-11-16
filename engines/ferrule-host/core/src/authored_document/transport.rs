@@ -4,7 +4,7 @@ use super::{Failure, Limits};
 use serde::{Deserialize, Serialize};
 use std::io::{self, Read, Write};
 
-pub const PROTOCOL: &str = "weft.ferrule-authored-preview.v1";
+pub const PROTOCOL: &str = "braid.ferrule-authored-preview.v1";
 pub const OPERATION: &str = "previewAuthored";
 pub const MAX_HEADER_BYTES: usize = 16 * 1024;
 pub const MAX_NATIVE_BYTES: usize = crate::protocol::MAX_NATIVE_BYTES;

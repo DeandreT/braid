@@ -10,7 +10,7 @@ export default defineConfig({
   forbidOnly: true,
   use: {
     headless: true,
-    launchOptions: { executablePath: process.env.WEFT_CHROMIUM_EXECUTABLE },
+    launchOptions: { executablePath: process.env.BRAID_CHROMIUM_EXECUTABLE },
     trace: "off",
     screenshot: "off",
     video: "off",

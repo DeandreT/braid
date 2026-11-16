@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <_SpecPredecessor42 Include="../../../migrations/postgres/0042_*.sql" />
+    <_SpecPredecessor43 Include="../../../migrations/postgres/0043_*.sql" />
+    <PackageReference Include="Npgsql" Version="10.0.3" />
+    <ProjectReference Include="../Braid.Application/Braid.Application.csproj" />
+    <ProjectReference Include="../Braid.Domain/Braid.Domain.csproj" />
+    <ProjectReference Include="../Braid.Deployment/Braid.Deployment.csproj" />
+    <EmbeddedResource Include="../../../migrations/postgres/*.sql" Exclude="../../../migrations/postgres/0044_spec_bundles.sql"
+                      LogicalName="Braid.Persistence.Postgres.Migrations.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../../../migrations/postgres/0044_spec_bundles.sql"
+                      Condition="'@(_SpecPredecessor42)' != '' And '@(_SpecPredecessor43)' != ''"
+                      LogicalName="Braid.Persistence.Postgres.Migrations.0044_spec_bundles.sql" />
+    <EmbeddedResource Include="../../../migrations/postgres/0044_spec_bundles.sql"
+                      Condition="'@(_SpecPredecessor42)' == '' Or '@(_SpecPredecessor43)' == ''"
+                      LogicalName="Braid.Persistence.Postgres.PendingMigrations.0044_spec_bundles.sql" />
+  </ItemGroup>
+</Project>

@@ -2,7 +2,7 @@
 //! not assert that preview/compiled XML or native/generated parity is qualified.
 use ferrule_mapping::FormatOptions;
 use serde_json::{Value, json};
-use weft_ferrule_host::xml_document::{
+use braid_ferrule_host::xml_document::{
     self as xml, Error, Metadata, Resource, Role, Safety, SchemaHints, SchemaLocation,
 };
 
@@ -47,7 +47,7 @@ fn native_with_named_xml_boundaries() -> Value {
 }
 fn admit(
     value: &Value,
-) -> Result<(weft_ferrule_host::decode::DecodedProject, xml::Admission), Error> {
+) -> Result<(braid_ferrule_host::decode::DecodedProject, xml::Admission), Error> {
     xml::admit_native(&serde_json::to_vec(value).unwrap())
 }
 fn options(value: Value, role: Role) -> Result<Metadata, Error> {
@@ -541,7 +541,7 @@ fn raw_guard_handles_bare_and_actual_versioned_native_envelopes() {
     assert!(xml::validate_raw_options(&serde_json::to_vec(&wrapped).unwrap()).is_ok());
     assert!(admit(&wrapped).is_ok());
     let actual = ferrule_mapping::project_file::encode_pretty(
-        &weft_ferrule_host::decode::decode_native(NATIVE)
+        &braid_ferrule_host::decode::decode_native(NATIVE)
             .unwrap()
             .project,
     )
@@ -592,7 +592,7 @@ fn metadata_is_closed_versioned_role_correct_and_explicitly_nullable() {
     let wire = serde_json::to_value(&metadata).unwrap();
     assert_eq!(
         wire,
-        json!({"schema":"weft.xml-boundary.v1","safetyProfile":"weft.xml-safe.v1","schemaHints":null})
+        json!({"schema":"braid.xml-boundary.v1","safetyProfile":"braid.xml-safe.v1","schemaHints":null})
     );
     assert_eq!(
         serde_json::from_value::<Metadata>(wire.clone()).unwrap(),
@@ -616,9 +616,9 @@ fn metadata_is_closed_versioned_role_correct_and_explicitly_nullable() {
 
 #[test]
 fn metadata_records_require_objects_at_every_level() {
-    let top_array = r#"["weft.xml-boundary.v1","weft.xml-safe.v1",null]"#;
-    let hints_array = r#"{"schema":"weft.xml-boundary.v1","safetyProfile":"weft.xml-safe.v1","schemaHints":[null,[]]}"#;
-    let pair_array = r#"{"schema":"weft.xml-boundary.v1","safetyProfile":"weft.xml-safe.v1","schemaHints":{"noNamespaceLocation":null,"locations":[["urn:one","one.xsd"]]}}"#;
+    let top_array = r#"["braid.xml-boundary.v1","braid.xml-safe.v1",null]"#;
+    let hints_array = r#"{"schema":"braid.xml-boundary.v1","safetyProfile":"braid.xml-safe.v1","schemaHints":[null,[]]}"#;
+    let pair_array = r#"{"schema":"braid.xml-boundary.v1","safetyProfile":"braid.xml-safe.v1","schemaHints":{"noNamespaceLocation":null,"locations":[["urn:one","one.xsd"]]}}"#;
     for encoded in [top_array, hints_array, pair_array] {
         assert!(
             serde_json::from_str::<Metadata>(encoded).is_err(),
@@ -636,7 +636,7 @@ fn metadata_records_require_objects_at_every_level() {
     for encoded in ["[]", r#"["urn:one","one.xsd"]"#] {
         assert!(serde_json::from_str::<SchemaLocation>(encoded).is_err());
     }
-    let valid = r#"{"schema":"weft.xml-boundary.v1","safetyProfile":"weft.xml-safe.v1","schemaHints":{"noNamespaceLocation":null,"locations":[{"namespace":"urn:one","location":"one.xsd"}]}}"#;
+    let valid = r#"{"schema":"braid.xml-boundary.v1","safetyProfile":"braid.xml-safe.v1","schemaHints":{"noNamespaceLocation":null,"locations":[{"namespace":"urn:one","location":"one.xsd"}]}}"#;
     let metadata = serde_json::from_str::<Metadata>(valid).unwrap();
     metadata.validate(Role::Output).unwrap();
     assert_eq!(
@@ -664,10 +664,10 @@ fn metadata_records_require_objects_at_every_level() {
 #[test]
 fn object_only_metadata_preserves_required_null_unknown_and_duplicate_checks() {
     for encoded in [
-        r#"{"schema":"weft.xml-boundary.v1","schema":"weft.xml-boundary.v1","safetyProfile":"weft.xml-safe.v1","schemaHints":null}"#,
-        r#"{"schema":"weft.xml-boundary.v1","safetyProfile":"weft.xml-safe.v1","schemaHints":null,"schemaHints":null}"#,
-        r#"{"schema":"weft.xml-boundary.v1","safetyProfile":"weft.xml-safe.v1","schemaHints":null,"other":null}"#,
-        r#"{"schema":"weft.xml-boundary.v1","safetyProfile":"weft.xml-safe.v1"}"#,
+        r#"{"schema":"braid.xml-boundary.v1","schema":"braid.xml-boundary.v1","safetyProfile":"braid.xml-safe.v1","schemaHints":null}"#,
+        r#"{"schema":"braid.xml-boundary.v1","safetyProfile":"braid.xml-safe.v1","schemaHints":null,"schemaHints":null}"#,
+        r#"{"schema":"braid.xml-boundary.v1","safetyProfile":"braid.xml-safe.v1","schemaHints":null,"other":null}"#,
+        r#"{"schema":"braid.xml-boundary.v1","safetyProfile":"braid.xml-safe.v1"}"#,
     ] {
         assert!(serde_json::from_str::<Metadata>(encoded).is_err());
     }
@@ -681,7 +681,7 @@ fn object_only_metadata_preserves_required_null_unknown_and_duplicate_checks() {
     ] {
         assert!(serde_json::from_str::<SchemaHints>(encoded).is_err());
         let nested = format!(
-            r#"{{"schema":"weft.xml-boundary.v1","safetyProfile":"weft.xml-safe.v1","schemaHints":{encoded}}}"#
+            r#"{{"schema":"braid.xml-boundary.v1","safetyProfile":"braid.xml-safe.v1","schemaHints":{encoded}}}"#
         );
         assert!(serde_json::from_str::<Metadata>(&nested).is_err());
     }
@@ -697,14 +697,14 @@ fn object_only_metadata_preserves_required_null_unknown_and_duplicate_checks() {
         assert!(serde_json::from_str::<SchemaHints>(&nested).is_err());
     }
     // Explicit null is still a valid required field, not an absent field.
-    assert_eq!(serde_json::from_str::<Metadata>(r#"{"schema":"weft.xml-boundary.v1","safetyProfile":"weft.xml-safe.v1","schemaHints":null}"#).unwrap(), input_metadata());
+    assert_eq!(serde_json::from_str::<Metadata>(r#"{"schema":"braid.xml-boundary.v1","safetyProfile":"braid.xml-safe.v1","schemaHints":null}"#).unwrap(), input_metadata());
 }
 
 #[test]
 fn metadata_reservation_uses_default_dotnet_escaping_without_changing_native_wire() {
     let metadata = hinted_metadata("https://e.invalid/\"\\<>&é😀");
     metadata.validate(Role::Output).unwrap();
-    let expected = br#""xmlMetadata":{"schema":"weft.xml-boundary.v1","safetyProfile":"weft.xml-safe.v1","schemaHints":{"noNamespaceLocation":"https://e.invalid/\"\\<>&"#;
+    let expected = br#""xmlMetadata":{"schema":"braid.xml-boundary.v1","safetyProfile":"braid.xml-safe.v1","schemaHints":{"noNamespaceLocation":"https://e.invalid/\"\\<>&"#;
     let mut encoded = Vec::new();
     let count = metadata
         .write_encoded_property(&mut encoded, xml::MAX_METADATA_BYTES)

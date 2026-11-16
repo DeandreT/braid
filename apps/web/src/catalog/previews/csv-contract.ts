@@ -1,16 +1,16 @@
 import { parseCsvDocument } from "../../workbench/csv-document";
 import type { components } from "../../api/generated";
 
-export const csvPreviewProfile = "weft.ferrule-csv-preview.v1";
-export const csvRowsPolicy = "weft.regression.csv-rows.v1";
-export const csvBuildProfile = "weft.ferrule-csharp-csv.v1";
+export const csvPreviewProfile = "braid.ferrule-csv-preview.v1";
+export const csvRowsPolicy = "braid.regression.csv-rows.v1";
+export const csvBuildProfile = "braid.ferrule-csharp-csv.v1";
 export const csvMaximumRecords = 100_000;
 export const csvMaximumColumns = 256;
 
 /** The admitted version of the generated contract; validation stays mandatory. */
 export type CsvDocumentDialect =
   components["schemas"]["CsvDocumentDialectV1"] & {
-    schema: "weft.csv-dialect.v1";
+    schema: "braid.csv-dialect.v1";
   };
 
 export function csvMedia(value: unknown): boolean {

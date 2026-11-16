@@ -2,7 +2,7 @@ import { Component, input } from "@angular/core";
 import type { PresentedStatus } from "./presentation";
 
 @Component({
-  selector: "weft-status-chip",
+  selector: "braid-status-chip",
   template: `<span class="status" [attr.data-tone]="status().tone"
     ><span aria-hidden="true">{{ status().icon }}</span>
     {{ status().label }}</span

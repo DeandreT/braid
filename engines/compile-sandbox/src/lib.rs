@@ -2,7 +2,7 @@
 //! the compiler of a compile operation.
 //!
 //! The service writes an operation's trusted inputs (for a compile: the generated sources, the compiler response
-//! file and an empty output file) into a fresh private directory, then starts `weft-compile-sandbox` there with
+//! file and an empty output file) into a fresh private directory, then starts `braid-compile-sandbox` there with
 //! fixed limits and a closed managed profile. Before the program runs, the launcher applies hard resource limits,
 //! becomes non-dumpable, sets no-new-privileges, confines the filesystem with Landlock (read-only grants and private
 //! directory, write access to at most one existing output file, no execution or TCP) and
@@ -25,7 +25,7 @@ mod hostfxr;
 mod hostfxr_abi;
 
 /// Written once to standard output after every control is in force and before the program starts.
-pub const READY_MARKER: [u8; 4] = *b"WFC2";
+pub const READY_MARKER: [u8; 4] = *b"BFC2";
 /// The one byte on standard input that starts the program; anything else stops the launcher.
 pub const GO: u8 = b'G';
 /// Landlock ABI 3 (Linux 6.2) also handles truncation, so no file outside the grants can be cut.

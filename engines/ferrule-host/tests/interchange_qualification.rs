@@ -2,8 +2,8 @@ mod support;
 
 use std::io::{Cursor, Write};
 use std::process::{Command, Stdio};
-use weft_ferrule_host::interchange::{self, Request, Response};
-use weft_ferrule_host::protocol::ENGINE_REVISION;
+use braid_ferrule_host::interchange::{self, Request, Response};
+use braid_ferrule_host::protocol::ENGINE_REVISION;
 
 fn request(operation: &str, payload: &[u8]) -> Vec<u8> {
     support::framed_bytes(
@@ -21,20 +21,20 @@ fn request(operation: &str, payload: &[u8]) -> Vec<u8> {
 }
 fn run(input: &[u8]) -> (Response, Vec<u8>) {
     let mut output = Vec::new();
-    weft_ferrule_host::handle_stream(&mut Cursor::new(input), &mut output).unwrap();
+    braid_ferrule_host::handle_stream(&mut Cursor::new(input), &mut output).unwrap();
     parse(&output)
 }
 fn parse(output: &[u8]) -> (Response, Vec<u8>) {
     let mut reader = Cursor::new(output);
     let header =
-        weft_ferrule_host::framing::read_frame(&mut reader, interchange::MAX_HEADER).unwrap();
+        braid_ferrule_host::framing::read_frame(&mut reader, interchange::MAX_HEADER).unwrap();
     let response: Response = serde_json::from_slice(&header).unwrap();
     let payload = if response.payload_bytes == 0 {
         Vec::new()
     } else {
-        weft_ferrule_host::framing::read_frame(&mut reader, interchange::MAX_PACKAGE).unwrap()
+        braid_ferrule_host::framing::read_frame(&mut reader, interchange::MAX_PACKAGE).unwrap()
     };
-    weft_ferrule_host::framing::require_eof(&mut reader).unwrap();
+    braid_ferrule_host::framing::require_eof(&mut reader).unwrap();
     if !payload.is_empty() {
         assert_eq!(response.payload_digest, Some(support::digest(&payload)));
         assert_eq!(response.payload_bytes, payload.len());
@@ -55,8 +55,8 @@ fn self_authored_native_exports_assets_and_imports_exact_package_without_io() {
     assert!(import.summary.contains("graph nodes"));
     assert!(import.summary.contains("Source"));
     assert!(import.summary.contains("Target"));
-    let original = weft_ferrule_host::decode::decode_native(support::BASIC).unwrap();
-    let roundtrip = weft_ferrule_host::decode::decode_native(&native).unwrap();
+    let original = braid_ferrule_host::decode::decode_native(support::BASIC).unwrap();
+    let roundtrip = braid_ferrule_host::decode::decode_native(&native).unwrap();
     assert_eq!(original.project.source, roundtrip.project.source);
     assert_eq!(original.project.target, roundtrip.project.target);
     use ferrule_ir::{Instance, Value};
@@ -141,7 +141,7 @@ fn maximum_aggregate_package_is_admitted_and_overflow_is_refused() {
 fn real_service_sandbox_converts_package_without_filesystem_or_network() {
     let (_, package) = run(&request("export", support::BASIC));
     support::close_inherited_descriptors_on_exec();
-    let mut child = Command::new(env!("CARGO_BIN_EXE_weft-ferrule-host"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_braid-ferrule-host"))
         .args([
             "--service-sandbox",
             "--cpu-seconds=30",
@@ -162,6 +162,6 @@ fn real_service_sandbox_converts_package_without_filesystem_or_network() {
         .unwrap();
     let output = child.wait_with_output().unwrap();
     assert!(output.status.success(), "{:?}", output.stderr);
-    assert_eq!(&output.stdout[..4], b"WFS1");
+    assert_eq!(&output.stdout[..4], b"BFS1");
     assert_eq!(parse(&output.stdout[4..]).0.status, "succeeded");
 }

@@ -1,7 +1,7 @@
 import { Component, input, output } from "@angular/core";
 
 @Component({
-  selector: "weft-resize-handle",
+  selector: "braid-resize-handle",
   template: `<div
     role="separator"
     tabindex="0"

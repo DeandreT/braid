@@ -10,7 +10,7 @@ runtime admission. Responses use `Cache-Control: no-store`.
 
 Availability comes from `CreationRuntime.AvailableAsync`. Missing or disabled runtime
 ports return `available:false`. Capability reads require metadata access independently
-of payload-sharing permission. Host admission must describe the qualified durable
+of payload-sharing permission. Host admission checks the durable
 runtime, including retained proposal reads after source retirement. The current
 admission interface is `ICreationRuntimeAdmission.VerifyAsync(CancellationToken)`.
 
@@ -72,11 +72,7 @@ bounds, disclosure ordering, and revocation before the next provider request.
 SSE regressions revoke retained-content access or substitute the fingerprint after
 disclosure acknowledgement and again after an authorized provider round; both stop
 the next request while preserving the audit of prior disclosures.
-These are orchestration tests with fake backend ports; durable storage and live
-provider qualification are separate host responsibilities.
 
 `CreationCapabilitiesTests` covers generated OpenAPI and development-identity refusal
 portably. Authenticated session/bearer cases use the existing Linux-only durable
-session fixture and must run on Linux. The feedback tests exercise the provider
-proposal-mode registry and grounding integrated from commit `374ea6a5` together
-with this handler.
+session fixture and must run on Linux.

@@ -18,7 +18,7 @@ export class WorkspaceConnection {
           "status" in body &&
           body.status === "ok" &&
           "service" in body &&
-          body.service === "weft-api" &&
+          body.service === "braid-api" &&
           "apiVersion" in body &&
           body.apiVersion === "v1"
         )

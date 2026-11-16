@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Braid.Application/Braid.Application.csproj" />
+    <ProjectReference Include="../../src/Braid.Domain/Braid.Domain.csproj" />
+    <ProjectReference Include="../../src/Braid.Persistence.Postgres/Braid.Persistence.Postgres.csproj" />
+    <ProjectReference Include="../../src/Braid.Storage.FileSystem/Braid.Storage.FileSystem.csproj" />
+  </ItemGroup>
+</Project>

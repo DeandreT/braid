@@ -14,7 +14,7 @@ import { MfdInterchangeApi } from "./mfd-interchange-api";
 import type { MfdReview } from "./mfd-interchange";
 
 @Component({
-  selector: "weft-mfd-export",
+  selector: "braid-mfd-export",
   templateUrl: "./mfd-export.component.html",
   styleUrl: "./mfd-interchange.component.css",
 })

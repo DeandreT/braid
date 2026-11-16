@@ -2,14 +2,14 @@
 // Container Apps environment, where the internal mapping endpoint is reachable. One execution sends one request:
 // `invoke CALL ORIGIN REQUEST CREDENTIAL` posts the preview-orders regression inputs to /v1/invocations with the
 // named token from the job's secrets (caller, foreign or expiring), and `ready CALL ORIGIN` reads readiness. It
-// prints one line, `weft-qualify-call` and a JSON summary with the response body, and never prints a token.
+// prints one line, `braid-qualify-call` and a JSON summary with the response body, and never prints a token.
 const { createHash } = require("node:crypto");
 
 const [mode, call, origin, requestId, credential] = process.argv.slice(1);
 const tokens = {
-  caller: process.env.WEFT_QUALIFY_CALLER_TOKEN,
-  foreign: process.env.WEFT_QUALIFY_FOREIGN_TOKEN,
-  expiring: process.env.WEFT_QUALIFY_EXPIRING_TOKEN,
+  caller: process.env.BRAID_QUALIFY_CALLER_TOKEN,
+  foreign: process.env.BRAID_QUALIFY_FOREIGN_TOKEN,
+  expiring: process.env.BRAID_QUALIFY_EXPIRING_TOKEN,
 };
 const b64 = (text) => Buffer.from(text, "utf8").toString("base64");
 const request = JSON.stringify({
@@ -22,7 +22,7 @@ const request = JSON.stringify({
     { name: "express", kind: "boolean", value: "true" },
   ],
 });
-const report = (summary) => console.log(`weft-qualify-call ${JSON.stringify({ call, requestId, ...summary })}`);
+const report = (summary) => console.log(`braid-qualify-call ${JSON.stringify({ call, requestId, ...summary })}`);
 
 async function invoke() {
   const token = tokens[credential];
@@ -36,7 +36,7 @@ async function invoke() {
       method: "POST",
       headers: {
         authorization: `Bearer ${token}`,
-        "weft-request-id": requestId,
+        "braid-request-id": requestId,
         "content-type": "application/json",
       },
       body: request,
@@ -56,7 +56,7 @@ async function invoke() {
   report({
     status: response.status,
     attempts,
-    replayed: response.headers.get("weft-invocation-replayed"),
+    replayed: response.headers.get("braid-invocation-replayed"),
     bearerChallenge: /^bearer/i.test(response.headers.get("www-authenticate") ?? ""),
     bodySha256: createHash("sha256").update(text, "utf8").digest("hex"),
     body,

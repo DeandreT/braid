@@ -168,7 +168,7 @@ await runBrowserFixture({
       }
       await startHost("read", { profile: "viewer", reportMode: "full" });
       return {
-        schemaVersion: "weft.reports-browser-fixture.v1",
+        schemaVersion: "braid.reports-browser-fixture.v1",
         fixtureId,
         source: { commit: cfg.source.commit, tree: cfg.source.tree },
         readOrigin: cfg.readOrigin,
@@ -234,7 +234,7 @@ await runBrowserFixture({
       save();
       check(
         reply.status === 200 &&
-          reply.body.schemaVersion === "weft.catalog-revision-report.v1" &&
+          reply.body.schemaVersion === "braid.catalog-revision-report.v1" &&
           reply.body.operation === operation &&
           equivalent(reply.body.revision, records[sample].scope) &&
           reply.body.state === "available" &&
@@ -275,12 +275,12 @@ await runBrowserFixture({
     function selected(sample, operation, derivationId) {
       const scope = records[sample].scope;
       const matches = jsonSql(
-        "SELECT coalesce(json_agg(row_to_json(a)),'[]'::json) FROM weft.revision_derivation_attempts a WHERE " +
+        "SELECT coalesce(json_agg(row_to_json(a)),'[]'::json) FROM braid.revision_derivation_attempts a WHERE " +
           scopeSql(scope) +
           " AND derivation_id='" +
           guid(derivationId) +
           "' AND result_usable AND completion_kind='usable' AND EXISTS (" +
-          "SELECT 1 FROM weft.revision_derivations k WHERE k.organization_id=a.organization_id AND k.project_id=a.project_id " +
+          "SELECT 1 FROM braid.revision_derivations k WHERE k.organization_id=a.organization_id AND k.project_id=a.project_id " +
           "AND k.mapping_id=a.mapping_id AND k.revision_id=a.revision_id AND k.cache_entry_id=a.cache_entry_id " +
           "AND k.operation_kind='" +
           operation +
@@ -485,7 +485,7 @@ await runBrowserFixture({
     }
     const pendingRows = () =>
       jsonSql(
-        "SELECT coalesce(json_agg(row_to_json(a)),'[]'::json) FROM weft.revision_derivation_attempts a WHERE " +
+        "SELECT coalesce(json_agg(row_to_json(a)),'[]'::json) FROM braid.revision_derivation_attempts a WHERE " +
           scopeSql(records.pending.scope),
       );
     // This independent Node-core watchdog cannot be delayed by the owner's synchronous SQL child.

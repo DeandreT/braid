@@ -5,6 +5,6 @@
 services:
   endpoint:
     environment:
-      SSL_CERT_FILE: /run/weft/secrets/acceptance-trust
-      WEFT_DELIVER_FILE_ACCEPTANCE_TRUST: ${WEFT_ACCEPTANCE_TRUST_PEM:?Set the test certificate authority}
+      SSL_CERT_FILE: /run/braid/secrets/acceptance-trust
+      BRAID_DELIVER_FILE_ACCEPTANCE_TRUST: ${BRAID_ACCEPTANCE_TRUST_PEM:?Set the test certificate authority}
     networks: [database, egress, identity]

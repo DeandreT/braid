@@ -6,7 +6,7 @@ readonly dev_unit_stop_seconds=300
 
 dev_docker_budgets() {
   local name
-  for name in WEFT_FERRULE_DOCKER_CREATE_TIMEOUT_SECONDS WEFT_FERRULE_DOCKER_CLEANUP_TIMEOUT_SECONDS; do
+  for name in BRAID_FERRULE_DOCKER_CREATE_TIMEOUT_SECONDS BRAID_FERRULE_DOCKER_CLEANUP_TIMEOUT_SECONDS; do
     if [[ -n ${!name:-} ]]; then printf '%s=%s\n' "$name" "${!name}"; fi
   done
 }
@@ -35,7 +35,7 @@ dev_unit_has_stop_grace() {
 start_unit() { # unit host-name environment-file
   local unit=$1 host=$2 environment=$3 stamp assembly=$app/$2/$2.dll
   local -a unit_arguments=(
-    --user --quiet --unit "$unit" --description "Weft local $host ($dev_name)"
+    --user --quiet --unit "$unit" --description "Braid local $host ($dev_name)"
     --property "EnvironmentFile=$environment" --property "WorkingDirectory=$app/$host"
     --property "StandardOutput=append:$dev_logs/$unit.log" --property "StandardError=append:$dev_logs/$unit.log"
     --property KillMode=mixed --property "TimeoutStopSec=$dev_unit_stop_seconds"
@@ -57,7 +57,7 @@ start_unit() { # unit host-name environment-file
     systemctl --user stop "$unit"
   fi
   systemctl --user reset-failed "$unit" >/dev/null 2>&1 || true
-  [[ $host != Weft.Server || -z $(ss -ltnH "sport = :$dev_port") ]] || fail "Port $dev_port is in use; set WEFT_DEV_PORT."
+  [[ $host != Braid.Server || -z $(ss -ltnH "sport = :$dev_port") ]] || fail "Port $dev_port is in use; set BRAID_DEV_PORT."
   install -d -m 0700 "$dev_home/tmp/$unit"
   step "Starting $unit (log: $dev_logs/$unit.log)"
   printf '\n==== %s %s %s\n' "$(date -u +%FT%TZ)" "$unit" "$build_key" >>"$dev_logs/$unit.log"

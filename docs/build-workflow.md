@@ -2,9 +2,7 @@
 
 `BuildWorkflow` consumes an immutable build intent through trusted admission,
 compiler, publication-catalog and private-object ports. It produces actual
-artifact bytes and verifies them before and after publication. The workflow is
-not registered by the server or worker until its production adapters are
-qualified.
+artifact bytes and verifies them before and after publication.
 
 ## Admission and immutable publication
 
@@ -45,14 +43,12 @@ The [PostgreSQL adapters](build-persistence.md) make approvals and first-writer
 staging durable. Their private database artifact storage is independent of
 filesystem orphan maintenance. [Durable build runs](build-runs.md) compose the
 workflow with bounded queueing, current-claim publication fencing and explicit
-worker activation. HTTP/API and deployment-target composition are separate
-application boundaries, not guarantees supplied by the pure intent contracts or
-test catalog.
+worker configuration.
 
 ## Explicit fixture compiler and target
 
-`FixtureBuildCompiler` only supports `weft-fixture`, the versioned
-`weft.fixture-artifact.v1` profile and `fixture-bytes` boundaries. It emits a
+`FixtureBuildCompiler` only supports `braid-fixture`, the versioned
+`braid.fixture-artifact.v1` profile and `fixture-bytes` boundaries. It emits a
 bounded deterministic binary envelope containing the complete intent
 fingerprint, native-source digest, exact length and native bytes. It never
 executes source or claims Ferrule code-generation support.
@@ -62,7 +58,3 @@ and records an in-memory receipt bound to the actor, deployment ID, environment
 version, intent and artifact digest. Repeating the same deployment returns its
 original receipt; a changed request conflicts. It has no cloud resources or
 external executable effects and is not a production deployment adapter.
-
-Server/API and browser composition expose approved operations separately from
-worker execution. Compiled-runtime equivalence and Azure rollout/rollback remain
-separate target qualification boundaries.

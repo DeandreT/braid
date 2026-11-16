@@ -402,7 +402,7 @@ test("a disabled chat route offers no panel action or misleading instructions", 
       "Use the shared panel to continue a conversation without leaving your work.",
     ),
   ).toHaveCount(0);
-  await expect(page.locator("weft-workspace-chat-panel")).not.toHaveClass(
+  await expect(page.locator("braid-workspace-chat-panel")).not.toHaveClass(
     /chat-open/,
   );
   await expect(page.locator("#main-content")).toBeVisible();
@@ -472,7 +472,7 @@ test("project content fits the shared shell at every supported width", async ({
   }
 });
 async function capture(page: Page, name: string) {
-  const directory = process.env.WEFT_UI_CAPTURE_DIR;
+  const directory = process.env.BRAID_UI_CAPTURE_DIR;
   if (directory) {
     await mkdir(directory, { recursive: true });
     await page.screenshot({ path: `${directory}/${name}.png`, fullPage: true });
@@ -531,7 +531,7 @@ test("one conversation and unsent draft survive route changes, resizing and hide
     "data-conversation-id",
     conversation,
   );
-  await expect(page.locator("weft-revision-chat")).toHaveCount(1);
+  await expect(page.locator("braid-revision-chat")).toHaveCount(1);
   await capture(page, "guide-shared-chat");
   await page
     .getByRole("navigation", { name: "Workspace", exact: true })

@@ -184,7 +184,7 @@ export const numericOffset: Extract<
 export const numericRevision: ScopedRevisionId["revisionId"] = 9007199254740993;
 // @ts-expect-error Projection responses declare the exact v1 schema version.
 export const wrongSchemaVersion: ProjectionDocument["schemaVersion"] =
-  "weft.mapping-projection.v2";
+  "braid.mapping-projection.v2";
 
 type FixtureGet = paths["/api/v1/fixtures/projections/{fixtureId}"]["get"];
 type FixtureResponses = FixtureGet["responses"];
@@ -385,7 +385,7 @@ export const metadataEdit = {
 } satisfies MetadataEdit;
 
 export const metadataPatchDocument = {
-  "application/vnd.weft.mapping-metadata-edit.v1+json": metadataEdit,
+  "application/vnd.braid.mapping-metadata-edit.v1+json": metadataEdit,
 } satisfies MetadataPatchBody;
 
 // @ts-expect-error Metadata edits require a description, including an explicitly empty one.
@@ -534,7 +534,7 @@ export const projectCreate = {
 } satisfies ProjectCreate;
 
 export const projectCreateDocument = {
-  "application/vnd.weft.project-create.v1+json": projectCreate,
+  "application/vnd.braid.project-create.v1+json": projectCreate,
 } satisfies ProjectCreateContent;
 
 export const projectCreationReceipt = {
@@ -655,7 +655,7 @@ export const nullableValidationProjection: CatalogValidationReport["projectionDe
 export const numericReportGeneration: CatalogReportResult["generation"] = 9007199254740993;
 // @ts-expect-error The stored report wrapper has an exact versioned schema.
 export const wrongReportSchema: CatalogProjectionReport["schemaVersion"] =
-  "weft.catalog-revision-report.v2";
+  "braid.catalog-revision-report.v2";
 // @ts-expect-error Projection and validation wrappers keep their own operation literal.
 export const wrongReportOperation: CatalogProjectionReport["operation"] =
   "validation";
@@ -813,24 +813,24 @@ export function rejectOmittedSessionFingerprint(
 }
 
 export const authReadHeaders = {
-  "X-Weft-Session": "1",
+  "X-Braid-Session": "1",
 } satisfies AuthRead["parameters"]["header"];
 export const authLoginHeaders = {
-  "X-Weft-Login": "1",
-  Origin: "https://weft.example",
-  "X-Weft-Auth-Token": "action-token",
-  "X-Weft-Return-To": "/catalog",
+  "X-Braid-Login": "1",
+  Origin: "https://braid.example",
+  "X-Braid-Auth-Token": "action-token",
+  "X-Braid-Return-To": "/catalog",
 } satisfies AuthLogin["parameters"]["header"];
 export const authLogoutHeaders = {
-  "X-Weft-Logout": "1",
-  Origin: "https://weft.example",
-  "X-Weft-Auth-Token": "action-token",
+  "X-Braid-Logout": "1",
+  Origin: "https://braid.example",
+  "X-Braid-Auth-Token": "action-token",
   "X-XSRF-TOKEN": "epoch-token",
 } satisfies AuthLogout["parameters"]["header"];
 export const authForgetHeaders = {
-  "X-Weft-Forget-Local": "1",
-  Origin: "https://weft.example",
-  "X-Weft-Auth-Token": "action-token",
+  "X-Braid-Forget-Local": "1",
+  Origin: "https://braid.example",
+  "X-Braid-Auth-Token": "action-token",
 } satisfies AuthForgetPost["parameters"]["header"];
 export const authStatusResponse: AuthRead["responses"][200]["content"] = {
   "application/json": authenticatedStatus,
@@ -845,7 +845,7 @@ export const authForgetResponse: AuthForgetPost["responses"][200]["content"] = {
   "application/json": { version: 1, outcome: "revocationUnconfirmed" },
 };
 export const callbackRefusal: AuthCallback["responses"][401]["content"] = {
-  "text/html": "<!doctype html><title>Weft sign-in</title>",
+  "text/html": "<!doctype html><title>Braid sign-in</title>",
 };
 export const callbackUnavailable: AuthCallback["responses"][503]["content"] =
   callbackRefusal;

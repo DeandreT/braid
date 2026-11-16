@@ -5,7 +5,7 @@ use std::io::{self, Read, Write};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use weft_ferrule_core::edit::{self, EditFailure, Session};
+use braid_ferrule_core::edit::{self, EditFailure, Session};
 
 use crate::{
     framing,
@@ -14,7 +14,7 @@ use crate::{
     valid_context_parts,
 };
 
-pub const PROTOCOL: &str = "weft.ferrule-edit.v1";
+pub const PROTOCOL: &str = "braid.ferrule-edit.v1";
 pub const MAX_REPLY_BYTES: usize = edit::MAX_REPORT_BYTES + MAX_NATIVE_BYTES + 8;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

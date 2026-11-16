@@ -43,5 +43,4 @@ subscription. They do not send unsolicited email, and never include the private
 invitation link. Use the original secure link to join or ask the administrator
 for one. Project visibility is checked again when you open the centre.
 
-See [Using the command line](cli.md) for the `automation` and `notifications`
-commands, or [regression tests](regression-tests.md) to create saved cases.
+See [regression tests](regression-tests.md) to create saved cases.

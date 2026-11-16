@@ -1,5 +1,5 @@
 {
-  "schema": "weft.xml-safety-cases.v1",
+  "schema": "braid.xml-safety-cases.v1",
   "description": "Small, independently authored physical-safety vectors, not a public conformance corpus or execution qualification. UTF-8 text is encoded without adding a BOM; byte arrays are passed unchanged. Expected values are public refusal categories, not parser messages. Resource boundaries remain covered by the dedicated safety tests.",
   "limits": {
     "maximumBytes": 8388608,

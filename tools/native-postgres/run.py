@@ -54,7 +54,7 @@ def validate(options: Options) -> None:
         raise QualificationError("Select the native dotnet.exe, not a shell launcher.")
     # Leave room for nested runtime dependencies copied into the test output.
     if len(str(options.work_root / "native-0123456789ab/source").encode("utf-16-le")) // 2 > 80:
-        raise QualificationError("Choose a shorter work root, for example C:/example/weft-native-checks.")
+        raise QualificationError("Choose a shorter work root, for example C:/example/braid-native-checks.")
     if not options.selection.strip() or len(options.selection) > 4096 or any(c in options.selection for c in "\0\r\n"):
         raise QualificationError("A bounded, nonempty test filter is required.")
     if not 30 <= options.phase_seconds <= 86400:
@@ -79,7 +79,7 @@ def child_environment(options: Options, run_root: Path, clusters: Path, inherite
         "DOTNET_CLI_TELEMETRY_OPTOUT": "1", "DOTNET_NOLOGO": "1", "DOTNET_PROCESSOR_COUNT": "2",
         "MSBUILDDISABLENODEREUSE": "1", "NUGET_PACKAGES": str(options.packages),
         "NUGET_HTTP_CACHE_PATH": str(run_root / "http-cache"),
-        "WEFT_POSTGRES_BIN": str(options.postgres_bin), "WEFT_POSTGRES_WORK_ROOT": str(clusters),
+        "BRAID_POSTGRES_BIN": str(options.postgres_bin), "BRAID_POSTGRES_WORK_ROOT": str(clusters),
     })
     return environment
 
@@ -252,7 +252,7 @@ def qualify(options: Options) -> tuple[int, Path]:
     identity = uuid.uuid4().hex[:12]
     work = options.work_root / ("native-" + identity)
     source = work / "source"
-    results = options.results_root / ("weft-native-" + identity)
+    results = options.results_root / ("braid-native-" + identity)
     work.mkdir()
     results.mkdir()
     marker = {"id": identity, "sourceHead": head, "source": str(source)}
@@ -284,7 +284,7 @@ def qualify(options: Options) -> tuple[int, Path]:
             raise QualificationError("The detached checkout differs from the captured source.")
         nuget = work / "NuGet.Config"
         nuget.write_text('<configuration><packageSources><clear/><add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3"/></packageSources></configuration>', encoding="utf-8")
-        project = "dotnet/tests/Weft.Tests/Weft.Tests.csproj"
+        project = "dotnet/tests/Braid.Tests/Braid.Tests.csproj"
         artifacts = str(source / "artifacts/w")
         commands = {
             "restore": [str(options.dotnet), "restore", project, "--locked-mode", "--disable-parallel", "--configfile", str(nuget), "--artifacts-path", artifacts, "-p:OpenApiGenerateDocuments=false", "-v:quiet"],
