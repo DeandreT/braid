@@ -1,12 +1,13 @@
 using System.Buffers.Binary;
 using System.Text;
 using Braid.Contracts.Projections;
+using Braid.Deployment;
 using Braid.Domain;
 
-namespace Braid.Deployment;
+namespace Braid.Tests;
 
 /// <summary>Deterministic test artifact, not an executable, Ferrule compilation, or an Azure package.</summary>
-public sealed class FixtureBuildCompiler : IBuildCompiler
+internal sealed class FixtureBuildCompiler : IBuildCompiler
 {
     public const string BackendId = "braid-fixture";
     public const string ProfileId = "braid.fixture-artifact.v1";

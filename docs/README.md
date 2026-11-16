@@ -54,5 +54,5 @@ The user guide is also available in the app under **Help & guide**.
 
 ## Design references
 
-[Archive/deletion](archive-deletion-design.md), [organization switching](organization-switching-design.md)
-and [trigger destinations](trigger-destination-design.md) describe planned extensions.
+[Archive/deletion](archive-deletion-design.md) and
+[organization switching](organization-switching-design.md) describe planned extensions.

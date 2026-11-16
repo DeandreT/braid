@@ -44,17 +44,3 @@ staging durable. Their private database artifact storage is independent of
 filesystem orphan maintenance. [Durable build runs](build-runs.md) compose the
 workflow with bounded queueing, current-claim publication fencing and explicit
 worker configuration.
-
-## Explicit fixture compiler and target
-
-`FixtureBuildCompiler` only supports `braid-fixture`, the versioned
-`braid.fixture-artifact.v1` profile and `fixture-bytes` boundaries. It emits a
-bounded deterministic binary envelope containing the complete intent
-fingerprint, native-source digest, exact length and native bytes. It never
-executes source or claims Ferrule code-generation support.
-
-`FixtureBuildTarget` reads and verifies that envelope, checks fresh admission,
-and records an in-memory receipt bound to the actor, deployment ID, environment
-version, intent and artifact digest. Repeating the same deployment returns its
-original receipt; a changed request conflicts. It has no cloud resources or
-external executable effects and is not a production deployment adapter.
