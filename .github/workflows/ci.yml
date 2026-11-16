@@ -26,8 +26,8 @@ jobs:
       CARGO_INCREMENTAL: 0
       CARGO_TARGET_DIR: target/ferrule-host
       DOTNET_ADD_GLOBAL_TOOLS_TO_PATH: "false"
-      WEFT_POSTGRES_IMAGE: docker.io/library/postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc
-      WEFT_AZURITE_IMAGE: mcr.microsoft.com/azure-storage/azurite@sha256:830430c1da1a2d537e08f3e6764dd1f5ae00cf0346bcaf625b968ec3f0971fd5
+      BRAID_POSTGRES_IMAGE: docker.io/library/postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc
+      BRAID_AZURITE_IMAGE: mcr.microsoft.com/azure-storage/azurite@sha256:830430c1da1a2d537e08f3e6764dd1f5ae00cf0346bcaf625b968ec3f0971fd5
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -53,18 +53,18 @@ jobs:
           cargo +1.98.1 clippy --manifest-path engines/ferrule-host/Cargo.toml --all-targets --locked -- -D warnings
           cargo +1.98.1 test --manifest-path engines/ferrule-host/Cargo.toml --locked
           # The creation evidence storage test requires the actual portable authoring compiler.
-          cargo +1.98.1 build --manifest-path engines/ferrule-host/Cargo.toml --package weft-ferrule-core --example authoring_protocol --example authored_preview_protocol --release --locked
-          install -m 0555 "$CARGO_TARGET_DIR/release/examples/authoring_protocol" "$RUNNER_TEMP/weft-authoring-protocol"
-          install -m 0555 "$CARGO_TARGET_DIR/release/examples/authored_preview_protocol" "$RUNNER_TEMP/weft-authored-preview-protocol"
-          printf 'WEFT_AUTHORING_TEST_EXECUTABLE=%s\n' "$RUNNER_TEMP/weft-authoring-protocol" >> "$GITHUB_ENV"
-          printf 'WEFT_AUTHORED_PREVIEW_TEST_EXECUTABLE=%s\n' "$RUNNER_TEMP/weft-authored-preview-protocol" >> "$GITHUB_ENV"
+          cargo +1.98.1 build --manifest-path engines/ferrule-host/Cargo.toml --package braid-ferrule-core --example authoring_protocol --example authored_preview_protocol --release --locked
+          install -m 0555 "$CARGO_TARGET_DIR/release/examples/authoring_protocol" "$RUNNER_TEMP/braid-authoring-protocol"
+          install -m 0555 "$CARGO_TARGET_DIR/release/examples/authored_preview_protocol" "$RUNNER_TEMP/braid-authored-preview-protocol"
+          printf 'BRAID_AUTHORING_TEST_EXECUTABLE=%s\n' "$RUNNER_TEMP/braid-authoring-protocol" >> "$GITHUB_ENV"
+          printf 'BRAID_AUTHORED_PREVIEW_TEST_EXECUTABLE=%s\n' "$RUNNER_TEMP/braid-authored-preview-protocol" >> "$GITHUB_ENV"
       - name: Verify native and wasm edit equivalence
         run: |
           CARGO_TARGET_DIR=target/edit-qualification cargo +1.98.1 build --manifest-path engines/ferrule-edit-wasm/Cargo.toml --release --target wasm32-unknown-unknown --features qualification --locked
-          wasm-bindgen --target web --out-dir artifacts/edit-qualification target/edit-qualification/wasm32-unknown-unknown/release/weft_ferrule_edit_wasm.wasm
-          node tools/edit-core/cross-target.mjs artifacts/edit-qualification/weft_ferrule_edit_wasm.js artifacts/edit-qualification/weft_ferrule_edit_wasm_bg.wasm target/ferrule-host/debug/weft-ferrule-host engines/ferrule-host/tests/fixtures
+          wasm-bindgen --target web --out-dir artifacts/edit-qualification target/edit-qualification/wasm32-unknown-unknown/release/braid_ferrule_edit_wasm.wasm
+          node tools/edit-core/cross-target.mjs artifacts/edit-qualification/braid_ferrule_edit_wasm.js artifacts/edit-qualification/braid_ferrule_edit_wasm_bg.wasm target/ferrule-host/debug/braid-ferrule-host engines/ferrule-host/tests/fixtures
           # The browser edit qualification reuses this native host; later steps use the image build, so free the runner disk.
-          install -m 0555 target/ferrule-host/debug/weft-ferrule-host "$RUNNER_TEMP/weft-edit-native-host"
+          install -m 0555 target/ferrule-host/debug/braid-ferrule-host "$RUNNER_TEMP/braid-edit-native-host"
           rm -rf "$CARGO_TARGET_DIR" target/edit-qualification
       - name: Verify the compile sandbox launcher
         env:
@@ -74,66 +74,66 @@ jobs:
           cargo +1.98.1 clippy --manifest-path engines/compile-sandbox/Cargo.toml --all-targets --locked -- -D warnings
           cargo +1.98.1 test --manifest-path engines/compile-sandbox/Cargo.toml --release --locked
           # The Ferrule service compile tests run this exact launcher around the pinned SDK's compiler.
-          install -m 0555 "$CARGO_TARGET_DIR/release/weft-compile-sandbox" "$RUNNER_TEMP/weft-compile-sandbox"
-          printf 'WEFT_COMPILE_SANDBOX_EXECUTABLE=%s\n' "$RUNNER_TEMP/weft-compile-sandbox" >> "$GITHUB_ENV"
+          install -m 0555 "$CARGO_TARGET_DIR/release/braid-compile-sandbox" "$RUNNER_TEMP/braid-compile-sandbox"
+          printf 'BRAID_COMPILE_SANDBOX_EXECUTABLE=%s\n' "$RUNNER_TEMP/braid-compile-sandbox" >> "$GITHUB_ENV"
           rm -rf "$CARGO_TARGET_DIR"
       - name: Build the native PDF test prerequisite
         env:
           CARGO_TARGET_DIR: target/spec-pdf-worker
         run: |
           cargo +1.98.1 build --manifest-path engines/spec-pdf-worker/Cargo.toml --release --locked
-          install -m 0555 "$CARGO_TARGET_DIR/release/weft-spec-pdf-worker" "$RUNNER_TEMP/weft-spec-pdf-worker"
-          printf 'WEFT_TEST_PDF_EXECUTABLE=%s\n' "$RUNNER_TEMP/weft-spec-pdf-worker" >> "$GITHUB_ENV"
+          install -m 0555 "$CARGO_TARGET_DIR/release/braid-spec-pdf-worker" "$RUNNER_TEMP/braid-spec-pdf-worker"
+          printf 'BRAID_TEST_PDF_EXECUTABLE=%s\n' "$RUNNER_TEMP/braid-spec-pdf-worker" >> "$GITHUB_ENV"
           rm -rf "$CARGO_TARGET_DIR"
       - name: Build the restricted worker image
         run: |
-          docker build --build-arg "WEFT_REVISION=$GITHUB_SHA" --iidfile "$RUNNER_TEMP/weft-worker-image-id" engines/ferrule-host
-          weft_image_id="$(cat "$RUNNER_TEMP/weft-worker-image-id")"
-          [[ "$weft_image_id" =~ ^sha256:[0-9a-f]{64}$ ]]
-          printf 'WEFT_FERRULE_WORKER_IMAGE=%s\n' "$weft_image_id" >> "$GITHUB_ENV"
+          docker build --build-arg "BRAID_REVISION=$GITHUB_SHA" --iidfile "$RUNNER_TEMP/braid-worker-image-id" engines/ferrule-host
+          braid_image_id="$(cat "$RUNNER_TEMP/braid-worker-image-id")"
+          [[ "$braid_image_id" =~ ^sha256:[0-9a-f]{64}$ ]]
+          printf 'BRAID_FERRULE_WORKER_IMAGE=%s\n' "$braid_image_id" >> "$GITHUB_ENV"
           # The Ferrule service tests run this exact worker binary as their sandboxed child.
-          weft_native_container="$(docker create "$weft_image_id")"
-          docker cp "$weft_native_container:/ferrule-host" "$RUNNER_TEMP/ferrule-host"
-          docker rm "$weft_native_container"
-          printf 'WEFT_FERRULE_HOST_EXECUTABLE=%s\n' "$RUNNER_TEMP/ferrule-host" >> "$GITHUB_ENV"
+          braid_native_container="$(docker create "$braid_image_id")"
+          docker cp "$braid_native_container:/ferrule-host" "$RUNNER_TEMP/ferrule-host"
+          docker rm "$braid_native_container"
+          printf 'BRAID_FERRULE_HOST_EXECUTABLE=%s\n' "$RUNNER_TEMP/ferrule-host" >> "$GITHUB_ENV"
           # The scratch image keeps only the worker; drop the Rust build stage cache.
           docker builder prune --all --force
       - name: Pull the pinned ownership database and blob emulator
         run: |
-          docker pull "$WEFT_POSTGRES_IMAGE"
-          docker pull "$WEFT_AZURITE_IMAGE"
-      - run: dotnet restore dotnet/Weft.slnx --locked-mode
-      - run: dotnet format dotnet/Weft.slnx --verify-no-changes --no-restore
-      - run: dotnet build dotnet/Weft.slnx --configuration Release --no-restore
+          docker pull "$BRAID_POSTGRES_IMAGE"
+          docker pull "$BRAID_AZURITE_IMAGE"
+      - run: dotnet restore dotnet/Braid.slnx --locked-mode
+      - run: dotnet format dotnet/Braid.slnx --verify-no-changes --no-restore
+      - run: dotnet build dotnet/Braid.slnx --configuration Release --no-restore
       - name: Verify generated mapping contracts
         run: |
           npm run contracts:check
           git diff --exit-code -- contracts apps/web/src/api/generated.ts
       - name: Publish exact host qualification artifacts
         run: |
-          weft_host_qualification="$RUNNER_TEMP/weft-host-qualification"
-          test ! -e "$weft_host_qualification"
-          dotnet publish dotnet/apps/Weft.Server/Weft.Server.csproj --configuration Release --no-build --no-restore --output "$weft_host_qualification/server"
-          dotnet publish dotnet/tools/Weft.HostPrivacyProbe/Weft.HostPrivacyProbe.csproj --configuration Release --no-build --no-restore --output "$weft_host_qualification/probe"
-          printf 'WEFT_HOST_TEST_SERVER_PATH=%s\n' "$weft_host_qualification/server/Weft.Server.dll" >> "$GITHUB_ENV"
-          printf 'WEFT_HOST_PRIVACY_PROBE_PATH=%s\n' "$weft_host_qualification/probe/Weft.HostPrivacyProbe.dll" >> "$GITHUB_ENV"
+          braid_host_qualification="$RUNNER_TEMP/braid-host-qualification"
+          test ! -e "$braid_host_qualification"
+          dotnet publish dotnet/apps/Braid.Server/Braid.Server.csproj --configuration Release --no-build --no-restore --output "$braid_host_qualification/server"
+          dotnet publish dotnet/tools/Braid.HostPrivacyProbe/Braid.HostPrivacyProbe.csproj --configuration Release --no-build --no-restore --output "$braid_host_qualification/probe"
+          printf 'BRAID_HOST_TEST_SERVER_PATH=%s\n' "$braid_host_qualification/server/Braid.Server.dll" >> "$GITHUB_ENV"
+          printf 'BRAID_HOST_PRIVACY_PROBE_PATH=%s\n' "$braid_host_qualification/probe/Braid.HostPrivacyProbe.dll" >> "$GITHUB_ENV"
       - name: Install isolated browser dependencies
         run: |
           npx playwright install-deps chromium
           sudo apt-get install --yes --no-install-recommends libnss3-tools
       - name: Install the pinned Chrome for Testing build
         run: |
-          weft_browser_archive="$RUNNER_TEMP/weft-chromium-157.0.8090.0.zip"
-          weft_browser_directory="$RUNNER_TEMP/weft-chromium-157.0.8090.0"
-          curl --fail --location --retry 3 --output "$weft_browser_archive" \
+          braid_browser_archive="$RUNNER_TEMP/braid-chromium-157.0.8090.0.zip"
+          braid_browser_directory="$RUNNER_TEMP/braid-chromium-157.0.8090.0"
+          curl --fail --location --retry 3 --output "$braid_browser_archive" \
             https://storage.googleapis.com/chrome-for-testing-public/157.0.8090.0/linux64/chrome-linux64.zip
-          printf '%s  %s\n' 3ec877f440c1ea393c4f164ce5339dc0fd6b5384184a84b38550a78721c2086c "$weft_browser_archive" | sha256sum --check --status
-          mkdir "$weft_browser_directory"
-          unzip -q "$weft_browser_archive" -d "$weft_browser_directory"
-          printf 'WEFT_CHROMIUM_EXECUTABLE=%s\n' "$weft_browser_directory/chrome-linux64/chrome" >> "$GITHUB_ENV"
+          printf '%s  %s\n' 3ec877f440c1ea393c4f164ce5339dc0fd6b5384184a84b38550a78721c2086c "$braid_browser_archive" | sha256sum --check --status
+          mkdir "$braid_browser_directory"
+          unzip -q "$braid_browser_archive" -d "$braid_browser_directory"
+          printf 'BRAID_CHROMIUM_EXECUTABLE=%s\n' "$braid_browser_directory/chrome-linux64/chrome" >> "$GITHUB_ENV"
       - run: npm run test:auth-https-source
       - name: Verify the isolated browser edit core
-        run: env -u WAYLAND_DISPLAY -u XDG_RUNTIME_DIR -u XDG_SESSION_TYPE -u DBUS_SESSION_BUS_ADDRESS xvfb-run -a node tools/edit-core/browser-qualification.mjs artifacts/edit-qualification "$RUNNER_TEMP/weft-edit-native-host" artifacts/edit-browser.json engines/ferrule-host/tests/fixtures
+        run: env -u WAYLAND_DISPLAY -u XDG_RUNTIME_DIR -u XDG_SESSION_TYPE -u DBUS_SESSION_BUS_ADDRESS xvfb-run -a node tools/edit-core/browser-qualification.mjs artifacts/edit-qualification "$RUNNER_TEMP/braid-edit-native-host" artifacts/edit-browser.json engines/ferrule-host/tests/fixtures
       - name: Prepare owned HTTPS browser admission
         run: node tools/auth-browser-https/admit.mjs --approved
       - name: Verify the CI test launcher
@@ -144,13 +144,13 @@ jobs:
         if: matrix.partition != 'browser'
         run: ulimit -c 0 && python3 tools/ci/run_tests.py --shard-index ${{ matrix.partition }} --shard-count 4
         env:
-          WEFT_OPENAPI_INCREMENTAL_TESTS: "1"
+          BRAID_OPENAPI_INCREMENTAL_TESTS: "1"
       - name: Browser verification on a virtual display
         if: matrix.partition == 'browser'
         run: npm run test:browser
       - name: Browser verification through the actual CSP shell
         if: matrix.partition == 'browser'
-        run: WEFT_EDIT_SHELL_DLL="$WEFT_HOST_TEST_SERVER_PATH" WEFT_EDIT_SHELL_ALL=1 env -u WAYLAND_DISPLAY -u XDG_RUNTIME_DIR -u XDG_SESSION_TYPE -u DBUS_SESSION_BUS_ADDRESS xvfb-run -a npm --workspace @weft/web run test:e2e -- --config playwright.edit-shell.config.ts
+        run: BRAID_EDIT_SHELL_DLL="$BRAID_HOST_TEST_SERVER_PATH" BRAID_EDIT_SHELL_ALL=1 env -u WAYLAND_DISPLAY -u XDG_RUNTIME_DIR -u XDG_SESSION_TYPE -u DBUS_SESSION_BUS_ADDRESS xvfb-run -a npm --workspace @braid/web run test:e2e -- --config playwright.edit-shell.config.ts
 
   # Keep the existing required check name and reject a failed or cancelled shard.
   verify:

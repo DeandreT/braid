@@ -4,14 +4,14 @@ import { expectSignedInAccount } from "./hosted-account.fixture";
 
 // Runs only on acceptance-test.sh's private Session/API/worker/PostgreSQL stack.
 // No API interception, substituted store or model endpoint is used here.
-const work = process.env.WEFT_ACCEPTANCE_WORK!;
-const organization = process.env.WEFT_SESSION_ORGANIZATION_ID!;
-const captures = process.env.WEFT_EDI_CAPTURE_DIRECTORY;
-const baseline = process.env.WEFT_EDI_CAPTURE_BASELINE === "true";
+const work = process.env.BRAID_ACCEPTANCE_WORK!;
+const organization = process.env.BRAID_SESSION_ORGANIZATION_ID!;
+const captures = process.env.BRAID_EDI_CAPTURE_DIRECTORY;
+const baseline = process.env.BRAID_EDI_CAPTURE_BASELINE === "true";
 const envelopes = {
-  x12: "ISA*00*          *00*          *ZZ*WEFTSENDER     *ZZ*WEFTRECEIVER   *261024*1200*^*00501*000000330*0*T*:~GS*PO*WEFTSENDER*WEFTRECEIVER*20261024*1200*330*X*005010~ST*850*0330~BEG*00*SA*WEFT-330~SE*3*0330~GE*1*330~IEA*1*000000330~",
+  x12: "ISA*00*          *00*          *ZZ*BRAIDSENDER    *ZZ*BRAIDRECEIVER  *261024*1200*^*00501*000000330*0*T*:~GS*PO*BRAIDSENDER*BRAIDRECEIVER*20261024*1200*330*X*005010~ST*850*0330~BEG*00*SA*BRAID-330~SE*3*0330~GE*1*330~IEA*1*000000330~",
   edifact:
-    "UNB+UNOC:3+WEFTSENDER+WEFTRECEIVER+261024:1200+330'UNH+330+ORDERS:D:96A:UN'BGM+220+WEFT-330'UNT+3+330'UNZ+1+330'",
+    "UNB+UNOC:3+BRAIDSENDER+BRAIDRECEIVER+261024:1200+330'UNH+330+ORDERS:D:96A:UN'BGM+220+BRAID-330'UNT+3+330'UNZ+1+330'",
 };
 
 function native(family: keyof typeof envelopes): Buffer {
@@ -189,13 +189,13 @@ test("declared EDI preview and saved comparison use real bytes in the authentica
       .click();
     if (baseline) {
       await expect(preview.locator(".preview-output")).toContainText(
-        "WEFT-330",
+        "BRAID-330",
       );
       await preview.locator(".preview-output").scrollIntoViewIfNeeded();
     } else {
       await expect(
         page.getByRole("region", { name: "Document bytes", exact: true }),
-      ).toContainText("WEFT-330");
+      ).toContainText("BRAID-330");
       await expect(preview.locator(".preview-output")).toHaveCount(0);
       const viewer = page.getByRole("region", {
         name: "Document bytes",
@@ -238,7 +238,7 @@ test("declared EDI preview and saved comparison use real bytes in the authentica
     });
     await cases
       .getByLabel("Comparison policy", { exact: true })
-      .selectOption("weft.regression.edi-segments.v1");
+      .selectOption("braid.regression.edi-segments.v1");
     await cases
       .getByLabel("Compare service separators", { exact: true })
       .check();
@@ -289,7 +289,7 @@ test("declared EDI preview and saved comparison use real bytes in the authentica
       await page.getByRole("tab", { name: "Result", exact: true }).click();
       await expect(
         page.getByRole("region", { name: "Document bytes", exact: true }),
-      ).toContainText("WEFT-330");
+      ).toContainText("BRAID-330");
       expect(
         await downloaded(page, () =>
           page
@@ -318,7 +318,7 @@ test("declared EDI preview and saved comparison use real bytes in the authentica
       .click();
     await expect(
       cases.getByLabel("Comparison policy", { exact: true }),
-    ).toHaveValue("weft.regression.edi-segments.v1");
+    ).toHaveValue("braid.regression.edi-segments.v1");
     await expect(
       cases.getByLabel("Compare service separators", { exact: true }),
     ).toBeChecked();

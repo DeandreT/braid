@@ -101,7 +101,7 @@ async function fixture(
   let failSend = false;
   let streamOverride: string | null = null;
   const availability = {
-    schemaVersion: "weft.chat.v1",
+    schemaVersion: "braid.chat.v1",
     revision: data.revision.scope,
     toolsEnabled: true,
     limits: { maxTextBytes: 32768, maxSelectors: 32, turnSeconds: 120 },
@@ -189,7 +189,7 @@ async function fixture(
               ? { status: 409, json: { code: "profileUnavailable" } }
               : {
                   json: {
-                    schemaVersion: "weft.chat.v1",
+                    schemaVersion: "braid.chat.v1",
                     organizationId: data.revision.scope.organizationId,
                     limits: availability.limits,
                     profiles: availability.profiles.map((profile) => ({
@@ -875,7 +875,7 @@ test("identity changes clear private chat instead of adopting another owner's co
   expect(
     await page.evaluate(() => ({
       local: Object.keys(localStorage).filter(
-        (key) => !key.startsWith("weft.chat-width.v1:"),
+        (key) => !key.startsWith("braid.chat-width.v1:"),
       ).length,
       session: sessionStorage.length,
     })),
@@ -895,7 +895,7 @@ test("a same-owner refresh that disables chat clears the open conversation", asy
     exact: true,
   });
   await refresh.click();
-  await expect(page.locator("weft-workbench-frame")).not.toHaveAttribute(
+  await expect(page.locator("braid-workbench-frame")).not.toHaveAttribute(
     "aria-busy",
     "true",
   );

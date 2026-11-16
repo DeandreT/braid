@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Actual-API preview browser qualification. This operator owns one labeled PostgreSQL
 // container migrated to the current schema, a private storage root, the published
-// Weft.Server and Weft.Worker processes and the pinned Ferrule worker image, then runs the
+// Braid.Server and Braid.Worker processes and the pinned Ferrule worker image, then runs the
 // live Playwright spec against them. No API reply or worker result is scripted.
 // Node core only. Passwords, cookies and tokens never leave this process and its children.
 import { execFileSync, spawn } from "node:child_process";
@@ -36,9 +36,9 @@ const postgresImage =
 if (
   !publications ||
   !/^sha256:[0-9a-f]{64}$/.test(workerImage ?? "") ||
-  !process.env.WEFT_CHROMIUM_EXECUTABLE
+  !process.env.BRAID_CHROMIUM_EXECUTABLE
 ) {
-  console.error(usage + " (WEFT_CHROMIUM_EXECUTABLE is required)");
+  console.error(usage + " (BRAID_CHROMIUM_EXECUTABLE is required)");
   process.exit(2);
 }
 const extraPlaywright = process.argv.includes("--playwright-args")
@@ -46,10 +46,10 @@ const extraPlaywright = process.argv.includes("--playwright-args")
   : [];
 const products = Object.fromEntries(
   [
-    ["server", "Weft.Server"],
-    ["worker", "Weft.Worker"],
-    ["database", "Weft.DatabaseTool"],
-    ["storage", "Weft.StorageTool"],
+    ["server", "Braid.Server"],
+    ["worker", "Braid.Worker"],
+    ["database", "Braid.DatabaseTool"],
+    ["storage", "Braid.StorageTool"],
   ].map(([key, assembly]) => {
     const path = join(resolve(publications), key, assembly + ".dll");
     if (!existsSync(path)) {
@@ -68,52 +68,52 @@ const dotnet = process.env.DOTNET_HOST_PATH ?? "dotnet";
 const readOrigin = "http://127.0.0.1:4120";
 const mutationOrigin = "http://127.0.0.1:4121";
 const nonce = randomBytes(6).toString("hex");
-const label = "weft.preview-browser.owner=" + nonce;
-const scratch = mkdtempSync(join(tmpdir(), "weft-preview-browser-"));
+const label = "braid.preview-browser.owner=" + nonce;
+const scratch = mkdtempSync(join(tmpdir(), "braid-preview-browser-"));
 chmodSync(scratch, 0o700);
 const storageRoot = join(scratch, "storage", "root");
 const controlToken = randomBytes(24).toString("hex");
 const roles = [
-  ["weft_migrator", "MIGRATOR"],
-  ["weft_runtime", "RUNTIME"],
-  ["weft_ingest", "INGEST"],
-  ["weft_catalog_reader", "CATALOG"],
-  ["weft_catalog_editor", "METADATA"],
-  ["weft_project_creator", "CREATOR"],
-  ["weft_report_reader", "REPORT"],
-  ["weft_deriver", "DERIVATION"],
-  ["weft_maintenance", "MAINTENANCE"],
-  ["weft_identity_reader", "IDENTITY"],
-  ["weft_payload_permission_reader", "PAYLOAD_PERMISSION"],
-  ["weft_session_reader", "SESSION_READER"],
-  ["weft_session_writer", "SESSION_WRITER"],
-  ["weft_chat_reader", "CHAT_READER"],
-  ["weft_chat_writer", "CHAT_WRITER"],
-  ["weft_chat_approver", "CHAT_APPROVER"],
-  ["weft_chat_lifecycle", "CHAT_LIFECYCLE"],
-  ["weft_preview_reader", "PREVIEW_READER"],
-  ["weft_preview_writer", "PREVIEW_WRITER"],
-  ["weft_case_reader", "CASE_READER"],
-  ["weft_case_writer", "CASE_WRITER"],
-  ["weft_run_reader", "RUN_READER"],
-  ["weft_run_writer", "RUN_WRITER"],
-  ["weft_comparison_settler", "COMPARISON"],
-  ["weft_build_reader", "BUILD_READER"],
-  ["weft_build_writer", "BUILD_WRITER"],
-  ["weft_build_run_reader", "BUILD_RUN_READER"],
-  ["weft_build_run_writer", "BUILD_RUN_WRITER"],
-  ["weft_build_dispatcher", "BUILD_DISPATCHER"],
-  ["weft_build_metadata_reader", "BUILD_METADATA"],
-  ["weft_qualification_reader", "QUALIFICATION_READER"],
-  ["weft_qualification_writer", "QUALIFICATION_WRITER"],
-  ["weft_release_reader", "RELEASE_READER"],
-  ["weft_release_writer", "RELEASE_WRITER"],
-  ["weft_invocation_grant_writer", "INVOCATION_GRANT_WRITER"],
-  ["weft_invocation_writer", "INVOCATION_WRITER"],
-  ["weft_api_audit_writer", "API_AUDIT_WRITER"],
-  ["weft_administration", "ADMINISTRATION"],
-  ["weft_draft_reader", "DRAFT_READER"],
-  ["weft_draft_writer", "DRAFT_WRITER"],
+  ["braid_migrator", "MIGRATOR"],
+  ["braid_runtime", "RUNTIME"],
+  ["braid_ingest", "INGEST"],
+  ["braid_catalog_reader", "CATALOG"],
+  ["braid_catalog_editor", "METADATA"],
+  ["braid_project_creator", "CREATOR"],
+  ["braid_report_reader", "REPORT"],
+  ["braid_deriver", "DERIVATION"],
+  ["braid_maintenance", "MAINTENANCE"],
+  ["braid_identity_reader", "IDENTITY"],
+  ["braid_payload_permission_reader", "PAYLOAD_PERMISSION"],
+  ["braid_session_reader", "SESSION_READER"],
+  ["braid_session_writer", "SESSION_WRITER"],
+  ["braid_chat_reader", "CHAT_READER"],
+  ["braid_chat_writer", "CHAT_WRITER"],
+  ["braid_chat_approver", "CHAT_APPROVER"],
+  ["braid_chat_lifecycle", "CHAT_LIFECYCLE"],
+  ["braid_preview_reader", "PREVIEW_READER"],
+  ["braid_preview_writer", "PREVIEW_WRITER"],
+  ["braid_case_reader", "CASE_READER"],
+  ["braid_case_writer", "CASE_WRITER"],
+  ["braid_run_reader", "RUN_READER"],
+  ["braid_run_writer", "RUN_WRITER"],
+  ["braid_comparison_settler", "COMPARISON"],
+  ["braid_build_reader", "BUILD_READER"],
+  ["braid_build_writer", "BUILD_WRITER"],
+  ["braid_build_run_reader", "BUILD_RUN_READER"],
+  ["braid_build_run_writer", "BUILD_RUN_WRITER"],
+  ["braid_build_dispatcher", "BUILD_DISPATCHER"],
+  ["braid_build_metadata_reader", "BUILD_METADATA"],
+  ["braid_qualification_reader", "QUALIFICATION_READER"],
+  ["braid_qualification_writer", "QUALIFICATION_WRITER"],
+  ["braid_release_reader", "RELEASE_READER"],
+  ["braid_release_writer", "RELEASE_WRITER"],
+  ["braid_invocation_grant_writer", "INVOCATION_GRANT_WRITER"],
+  ["braid_invocation_writer", "INVOCATION_WRITER"],
+  ["braid_api_audit_writer", "API_AUDIT_WRITER"],
+  ["braid_administration", "ADMINISTRATION"],
+  ["braid_draft_reader", "DRAFT_READER"],
+  ["braid_draft_writer", "DRAFT_WRITER"],
 ];
 const secrets = new Map(
   ["POSTGRES_ADMIN", ...roles.map(([, key]) => key)].map((key) => [
@@ -147,14 +147,14 @@ function docker(args, input) {
 }
 function dockerSecrets() {
   const values = {
-    POSTGRES_DB: "weft",
+    POSTGRES_DB: "braid",
     POSTGRES_USER: "postgres",
     POSTGRES_PASSWORD: secrets.get("POSTGRES_ADMIN"),
     POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=trust",
   };
   for (const [key, value] of secrets)
     if (key !== "POSTGRES_ADMIN")
-      values["WEFT_LOCAL_" + key + "_PASSWORD"] = value;
+      values["BRAID_LOCAL_" + key + "_PASSWORD"] = value;
   return values;
 }
 /** Read-only owner query; returns psql's unaligned text. */
@@ -171,8 +171,8 @@ function query(text) {
       "-X",
       "-qAt",
       "--host=127.0.0.1",
-      "--username=weft_migrator",
-      "--dbname=weft",
+      "--username=braid_migrator",
+      "--dbname=braid",
       "--set=ON_ERROR_STOP=1",
     ],
     {
@@ -192,7 +192,7 @@ function tool(args, extra = {}) {
       ...baseEnvironment,
       DOTNET_CLI_TELEMETRY_OPTOUT: "1",
       DOTNET_ADD_GLOBAL_TOOLS_TO_PATH: "false",
-      WEFT_MIGRATION_CONNECTION_STRING: connections.weft_migrator,
+      BRAID_MIGRATION_CONNECTION_STRING: connections.braid_migrator,
       ...extra,
     },
   });
@@ -205,7 +205,7 @@ async function startPostgres() {
     "--label",
     label,
     "--name",
-    "weft-preview-browser-" + nonce,
+    "braid-preview-browser-" + nonce,
     "--memory",
     "512m",
     "--publish",
@@ -216,7 +216,7 @@ async function startPostgres() {
   docker([
     "cp",
     join(repository, "deploy/local/postgres-init.sh"),
-    container + ":/docker-entrypoint-initdb.d/01-weft-roles.sh",
+    container + ":/docker-entrypoint-initdb.d/01-braid-roles.sh",
   ]);
   docker(["start", container]);
   const port = docker(["port", container, "5432/tcp"])
@@ -225,7 +225,7 @@ async function startPostgres() {
     .pop();
   for (const [role, key] of roles)
     connections[role] =
-      `Host=127.0.0.1;Port=${port};Database=weft;Username=${role};Password=${secrets.get(key)};Timeout=15;Command Timeout=30`;
+      `Host=127.0.0.1;Port=${port};Database=braid;Username=${role};Password=${secrets.get(key)};Timeout=15;Command Timeout=30`;
   const end = Date.now() + 90000;
   while (true) {
     try {
@@ -247,13 +247,13 @@ function hostEnvironment(origin, principal, extra) {
     DOTNET_ENVIRONMENT: "Development",
     ASPNETCORE_ENVIRONMENT: "Development",
     TMPDIR: scratch,
-    WEFT_CATALOG_ENABLED: "true",
-    WEFT_DEV_IDENTITY_ENABLED: "true",
-    WEFT_DEV_PRINCIPAL_ID: principal,
-    WEFT_DEV_ORGANIZATION_ID: ids.organization,
-    WEFT_DEV_BROWSER_ORIGIN: origin,
-    WEFT_DEV_LISTEN_ADDR: new URL(origin).host,
-    WEFT_CATALOG_CONNECTION_STRING: connections.weft_catalog_reader,
+    BRAID_CATALOG_ENABLED: "true",
+    BRAID_DEV_IDENTITY_ENABLED: "true",
+    BRAID_DEV_PRINCIPAL_ID: principal,
+    BRAID_DEV_ORGANIZATION_ID: ids.organization,
+    BRAID_DEV_BROWSER_ORIGIN: origin,
+    BRAID_DEV_LISTEN_ADDR: new URL(origin).host,
+    BRAID_CATALOG_CONNECTION_STRING: connections.braid_catalog_reader,
     ...extra,
   };
 }
@@ -434,11 +434,11 @@ async function upload(origin, state, project, fixture, ordinal) {
 async function prepare() {
   await startPostgres();
   tool(["migrate"]);
-  const name = { WEFT_DEV_ORGANIZATION_NAME: "Preview browser fixture" };
+  const name = { BRAID_DEV_ORGANIZATION_NAME: "Preview browser fixture" };
   tool(["provision-development-identity"], {
     ...name,
-    WEFT_DEV_ORGANIZATION_ID: ids.organization,
-    WEFT_DEV_PRINCIPAL_ID: ids.administrator,
+    BRAID_DEV_ORGANIZATION_ID: ids.organization,
+    BRAID_DEV_PRINCIPAL_ID: ids.administrator,
   });
   tool([
     "set-project-creation-capability",
@@ -463,13 +463,13 @@ async function prepare() {
     "mutation",
     products.server,
     hostEnvironment(mutationOrigin, ids.administrator, {
-      WEFT_PROJECT_CREATION_ENABLED: "true",
-      WEFT_POSTGRES_PROJECT_CREATION_CONNECTION_STRING:
-        connections.weft_project_creator,
-      WEFT_REVISION_INGESTION_ENABLED: "true",
-      WEFT_POSTGRES_INGESTION_CONNECTION_STRING: connections.weft_ingest,
-      WEFT_PRIVATE_STORAGE_ROOT: storageRoot,
-      WEFT_FERRULE_WORKER_IMAGE: workerImage,
+      BRAID_PROJECT_CREATION_ENABLED: "true",
+      BRAID_POSTGRES_PROJECT_CREATION_CONNECTION_STRING:
+        connections.braid_project_creator,
+      BRAID_REVISION_INGESTION_ENABLED: "true",
+      BRAID_POSTGRES_INGESTION_CONNECTION_STRING: connections.braid_ingest,
+      BRAID_PRIVATE_STORAGE_ROOT: storageRoot,
+      BRAID_FERRULE_WORKER_IMAGE: workerImage,
     }),
     mutationOrigin,
   );
@@ -485,7 +485,7 @@ async function prepare() {
           description: "Actual preview qualification",
         }),
       ),
-      media: "application/vnd.weft.project-create.v1+json",
+      media: "application/vnd.braid.project-create.v1+json",
       key: randomUUID(),
       session: state,
     },
@@ -517,13 +517,13 @@ async function prepare() {
   ])
     tool(["provision-development-identity"], {
       ...name,
-      WEFT_DEV_ORGANIZATION_ID: ids.organization,
-      WEFT_DEV_PRINCIPAL_ID: principal,
-      WEFT_DEV_PROJECT_ID: project.projectId,
-      WEFT_DEV_PROJECT_ROLE: role,
+      BRAID_DEV_ORGANIZATION_ID: ids.organization,
+      BRAID_DEV_PRINCIPAL_ID: principal,
+      BRAID_DEV_PROJECT_ID: project.projectId,
+      BRAID_DEV_PROJECT_ROLE: role,
     });
   return {
-    schemaVersion: "weft.preview-browser-manifest.v1",
+    schemaVersion: "braid.preview-browser-manifest.v1",
     readOrigin,
     organizationId: ids.organization,
     profiles: { publisher: ids.publisher, viewer: ids.viewer },
@@ -539,28 +539,29 @@ const startServer = (profile) =>
     "server",
     products.server,
     hostEnvironment(readOrigin, ids[profile], {
-      WEFT_PREVIEWS_ENABLED: "true",
-      WEFT_POSTGRES_PREVIEW_WRITER_CONNECTION_STRING:
-        connections.weft_preview_writer,
-      WEFT_POSTGRES_PREVIEW_READER_CONNECTION_STRING:
-        connections.weft_preview_reader,
+      BRAID_PREVIEWS_ENABLED: "true",
+      BRAID_POSTGRES_PREVIEW_WRITER_CONNECTION_STRING:
+        connections.braid_preview_writer,
+      BRAID_POSTGRES_PREVIEW_READER_CONNECTION_STRING:
+        connections.braid_preview_reader,
       ...(editing
         ? {
-            WEFT_MAPPING_EDITING_ENABLED: "true",
-            WEFT_REVISION_INGESTION_ENABLED: "true",
-            WEFT_REVISION_REPORTS_ENABLED: "true",
-            WEFT_REVISION_REPORT_DERIVATION_ENABLED: "true",
-            WEFT_PRIVATE_STORAGE_ROOT: storageRoot,
-            WEFT_FERRULE_WORKER_IMAGE: workerImage,
-            WEFT_POSTGRES_INGESTION_CONNECTION_STRING: connections.weft_ingest,
-            WEFT_POSTGRES_REPORT_CONNECTION_STRING:
-              connections.weft_report_reader,
-            WEFT_POSTGRES_DERIVATION_CONNECTION_STRING:
-              connections.weft_deriver,
-            WEFT_POSTGRES_DRAFT_READER_CONNECTION_STRING:
-              connections.weft_draft_reader,
-            WEFT_POSTGRES_DRAFT_WRITER_CONNECTION_STRING:
-              connections.weft_draft_writer,
+            BRAID_MAPPING_EDITING_ENABLED: "true",
+            BRAID_REVISION_INGESTION_ENABLED: "true",
+            BRAID_REVISION_REPORTS_ENABLED: "true",
+            BRAID_REVISION_REPORT_DERIVATION_ENABLED: "true",
+            BRAID_PRIVATE_STORAGE_ROOT: storageRoot,
+            BRAID_FERRULE_WORKER_IMAGE: workerImage,
+            BRAID_POSTGRES_INGESTION_CONNECTION_STRING:
+              connections.braid_ingest,
+            BRAID_POSTGRES_REPORT_CONNECTION_STRING:
+              connections.braid_report_reader,
+            BRAID_POSTGRES_DERIVATION_CONNECTION_STRING:
+              connections.braid_deriver,
+            BRAID_POSTGRES_DRAFT_READER_CONNECTION_STRING:
+              connections.braid_draft_reader,
+            BRAID_POSTGRES_DRAFT_WRITER_CONNECTION_STRING:
+              connections.braid_draft_writer,
           }
         : {}),
     }),
@@ -572,10 +573,10 @@ const startWorker = () =>
     DOTNET_CLI_TELEMETRY_OPTOUT: "1",
     DOTNET_ADD_GLOBAL_TOOLS_TO_PATH: "false",
     TMPDIR: scratch,
-    WEFT_PREVIEW_WRITER_CONNECTION_STRING: connections.weft_preview_writer,
-    WEFT_PRIVATE_STORAGE_ROOT: storageRoot,
-    WEFT_FERRULE_WORKER_IMAGE: workerImage,
-    WEFT_DOCKER_EXECUTABLE: "/usr/bin/docker",
+    BRAID_PREVIEW_WRITER_CONNECTION_STRING: connections.braid_preview_writer,
+    BRAID_PRIVATE_STORAGE_ROOT: storageRoot,
+    BRAID_FERRULE_WORKER_IMAGE: workerImage,
+    BRAID_DOCKER_EXECUTABLE: "/usr/bin/docker",
   });
 
 /** Closed control surface for the spec: process lifecycle and read-only run facts only. */
@@ -598,14 +599,16 @@ async function control(item) {
         throw new Error("Invalid run.");
       const row = query(
         "SELECT json_build_object('state',state,'attempt',attempt,'outcome',outcome,'submitter',submitter_id," +
-          "'outputs',(SELECT count(*) FROM weft.preview_documents d WHERE d.organization_id=r.organization_id" +
+          "'outputs',(SELECT count(*) FROM braid.preview_documents d WHERE d.organization_id=r.organization_id" +
           " AND d.run_id=r.run_id AND d.direction=2)) " +
-          `FROM weft.preview_runs r WHERE run_id='${item.runId}'`,
+          `FROM braid.preview_runs r WHERE run_id='${item.runId}'`,
       );
       return row ? JSON.parse(row) : null;
     }
     case "runs":
-      return { count: Number(query("SELECT count(*) FROM weft.preview_runs")) };
+      return {
+        count: Number(query("SELECT count(*) FROM braid.preview_runs")),
+      };
     default:
       throw new Error("Unknown control.");
   }
@@ -707,11 +710,11 @@ try {
       stdio: "inherit",
       env: {
         ...process.env,
-        WEFT_PREVIEW_BROWSER_MANIFEST: manifestPath,
-        WEFT_PREVIEW_BROWSER_BASE_URL: readOrigin,
-        WEFT_PREVIEW_BROWSER_CONTROL:
+        BRAID_PREVIEW_BROWSER_MANIFEST: manifestPath,
+        BRAID_PREVIEW_BROWSER_BASE_URL: readOrigin,
+        BRAID_PREVIEW_BROWSER_CONTROL:
           "http://127.0.0.1:" + control$.address().port,
-        WEFT_PREVIEW_BROWSER_CONTROL_TOKEN: controlToken,
+        BRAID_PREVIEW_BROWSER_CONTROL_TOKEN: controlToken,
       },
     },
   );

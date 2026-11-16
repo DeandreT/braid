@@ -11,7 +11,7 @@ export default defineConfig({
   use: {
     baseURL: "http://127.0.0.1:5174",
     headless: false,
-    launchOptions: { executablePath: process.env.WEFT_CHROMIUM_EXECUTABLE },
+    launchOptions: { executablePath: process.env.BRAID_CHROMIUM_EXECUTABLE },
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },

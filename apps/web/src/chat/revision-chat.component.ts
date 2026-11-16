@@ -83,7 +83,7 @@ interface ProposalReviewState {
 }
 
 @Component({
-  selector: "weft-revision-chat",
+  selector: "braid-revision-chat",
   imports: [HelpLinkComponent, RouterLink, RegressionStatusComponent],
   templateUrl: "./revision-chat.component.html",
   styleUrl: "./revision-chat.component.css",

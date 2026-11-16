@@ -11,7 +11,7 @@ import type { components } from "../src/api/generated";
 type Scope = components["schemas"]["CatalogRevisionScopeV1"];
 type Run = components["schemas"]["CatalogPreviewRunV1"];
 interface Manifest {
-  readonly schemaVersion: "weft.preview-browser-manifest.v1";
+  readonly schemaVersion: "braid.preview-browser-manifest.v1";
   readonly readOrigin: string;
   readonly organizationId: string;
   readonly profiles: { readonly publisher: string; readonly viewer: string };
@@ -27,9 +27,9 @@ interface RunRow {
 }
 
 const manifest = JSON.parse(
-  readFileSync(process.env.WEFT_PREVIEW_BROWSER_MANIFEST!, "utf8"),
+  readFileSync(process.env.BRAID_PREVIEW_BROWSER_MANIFEST!, "utf8"),
 ) as Manifest;
-if (manifest.schemaVersion !== "weft.preview-browser-manifest.v1")
+if (manifest.schemaVersion !== "braid.preview-browser-manifest.v1")
   throw new Error("The preview browser manifest is not the expected version.");
 const order =
   '{"id":"SO-1","lines":[{"sku":"A","qty":2},{"sku":"B","qty":9007199254740993}]}';
@@ -44,10 +44,11 @@ const runApi = (runId: string) =>
   `/api/v1/organizations/${manifest.organizationId}/previews/${runId}`;
 
 async function control<T>(body: Record<string, unknown>): Promise<T> {
-  const response = await fetch(process.env.WEFT_PREVIEW_BROWSER_CONTROL!, {
+  const response = await fetch(process.env.BRAID_PREVIEW_BROWSER_CONTROL!, {
     method: "POST",
     headers: {
-      Authorization: "Bearer " + process.env.WEFT_PREVIEW_BROWSER_CONTROL_TOKEN,
+      Authorization:
+        "Bearer " + process.env.BRAID_PREVIEW_BROWSER_CONTROL_TOKEN,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),

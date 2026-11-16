@@ -8,11 +8,11 @@ export function hostFailureSummary() {
   let prefix = "";
   function classify(line) {
     for (const [pattern, category] of [
-      [/^\s+at Weft\.Worker\./, "workerHostFrame"],
-      [/^\s+at Weft\.Jobs\./, "durableJobFrame"],
-      [/^\s+at Weft\.Persistence\.Postgres\./, "databaseFrame"],
-      [/^\s+at Weft\.Storage\./, "privateStorageFrame"],
-      [/^\s+at Weft\.MappingBackends\.Workers\./, "workerRunnerFrame"],
+      [/^\s+at Braid\.Worker\./, "workerHostFrame"],
+      [/^\s+at Braid\.Jobs\./, "durableJobFrame"],
+      [/^\s+at Braid\.Persistence\.Postgres\./, "databaseFrame"],
+      [/^\s+at Braid\.Storage\./, "privateStorageFrame"],
+      [/^\s+at Braid\.MappingBackends\.Workers\./, "workerRunnerFrame"],
       [/^\s+at Wolverine\./, "wolverineFrame"],
       [/^\s+at JasperFx\./, "jasperFxFrame"],
     ]) {

@@ -23,7 +23,7 @@ import {
   type ProjectCreationResponse,
 } from "./project-creation-types";
 
-const mediaType = "application/vnd.weft.project-create.v1+json";
+const mediaType = "application/vnd.braid.project-create.v1+json";
 
 @Injectable({ providedIn: "root" })
 export class ProjectCreationApi {

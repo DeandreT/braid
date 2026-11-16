@@ -10,7 +10,7 @@
 # - A local Ollama model for chat on an internal network, reached through the server's relay.
 # Use with: compose.yml, compose.ferrule-service.yml and compose.features.yml. See docs/hosted-acceptance.md.
 x-relay: &relay
-  image: ${WEFT_ACCEPTANCE_NODE_IMAGE:?Set the Node image}
+  image: ${BRAID_ACCEPTANCE_NODE_IMAGE:?Set the Node image}
   restart: unless-stopped
   read_only: true
   cap_drop: [ALL]
@@ -21,10 +21,10 @@ x-relay: &relay
     - ../../tools/hosted-acceptance:/opt/acceptance:ro
 
 x-blob: &blob
-  WEFT_PRIVATE_STORAGE_KIND: azure-blob
-  WEFT_PRIVATE_STORAGE_BLOB_ENDPOINT: http://127.0.0.1:10000/devstoreaccount1
-  WEFT_PRIVATE_STORAGE_BLOB_CONTAINER: weft-private
-  WEFT_PRIVATE_STORAGE_BLOB_CREDENTIAL: emulator
+  BRAID_PRIVATE_STORAGE_KIND: azure-blob
+  BRAID_PRIVATE_STORAGE_BLOB_ENDPOINT: http://127.0.0.1:10000/devstoreaccount1
+  BRAID_PRIVATE_STORAGE_BLOB_CONTAINER: braid-private
+  BRAID_PRIVATE_STORAGE_BLOB_CREDENTIAL: emulator
 
 services:
   azurite:
@@ -43,7 +43,7 @@ services:
   blob-container:
     <<: *relay
     restart: "no"
-    command: ["/opt/acceptance/blob-container.mjs", "http://azurite:10000/devstoreaccount1", "weft-private"]
+    command: ["/opt/acceptance/blob-container.mjs", "http://azurite:10000/devstoreaccount1", "braid-private"]
     networks: [storage]
     depends_on:
       azurite: {condition: service_healthy}
@@ -78,13 +78,13 @@ services:
     environment:
       <<: *blob
       # A null value unsets the inherited root; the harness keeps it out of its own environment.
-      WEFT_PRIVATE_STORAGE_ROOT:
-      SSL_CERT_FILE: /run/weft/secrets/acceptance-trust
-      WEFT_DELIVER_FILE_ACCEPTANCE_TRUST: ${WEFT_ACCEPTANCE_TRUST_PEM:?Set the test certificate authority}
+      BRAID_PRIVATE_STORAGE_ROOT:
+      SSL_CERT_FILE: /run/braid/secrets/acceptance-trust
+      BRAID_DELIVER_FILE_ACCEPTANCE_TRUST: ${BRAID_ACCEPTANCE_TRUST_PEM:?Set the test certificate authority}
     volumes: !override
       - type: volume
         source: session-keys
-        target: /var/lib/weft/keys
+        target: /var/lib/braid/keys
     networks: [database, egress, ferrule, identity, storage, models]
 
   server-relay:
@@ -98,7 +98,7 @@ services:
     environment:
       <<: *blob
       # A null value unsets the inherited root; the harness keeps it out of its own environment.
-      WEFT_PRIVATE_STORAGE_ROOT:
+      BRAID_PRIVATE_STORAGE_ROOT:
     volumes: !reset []
     networks: [database, ferrule, storage]
 
@@ -113,23 +113,23 @@ services:
     <<: *relay
     command: ["/opt/acceptance/issuer.mjs"]
     environment:
-      WEFT_ACCEPTANCE_TENANT_ID: ${WEFT_ENTRA_TENANT_ID:?}
-      WEFT_ACCEPTANCE_CLIENT_ID: ${WEFT_ENTRA_CLIENT_ID:?}
-      WEFT_ACCEPTANCE_SUBJECT: ${WEFT_ACCEPTANCE_SUBJECT:?Set the signed-in subject}
-      WEFT_ACCEPTANCE_OBJECT_ID: ${WEFT_ACCEPTANCE_OBJECT_ID:?Set the signed-in object ID}
-      WEFT_ACCEPTANCE_CALLBACK: https://${WEFT_PUBLIC_HOST:?}/api/auth/callback/entra
-      WEFT_ACCEPTANCE_ISSUER_PEM: ${WEFT_ACCEPTANCE_ISSUER_PEM:?Set the issuer TLS PEM}
-      WEFT_ACCEPTANCE_CLIENT_CERTIFICATE: ${WEFT_ACCEPTANCE_CLIENT_CERTIFICATE:?Set the Entra client certificate}
-      WEFT_ACCEPTANCE_SIGNING_KEY: ${WEFT_ACCEPTANCE_SIGNING_KEY:?Set the ID token signing key}
+      BRAID_ACCEPTANCE_TENANT_ID: ${BRAID_ENTRA_TENANT_ID:?}
+      BRAID_ACCEPTANCE_CLIENT_ID: ${BRAID_ENTRA_CLIENT_ID:?}
+      BRAID_ACCEPTANCE_SUBJECT: ${BRAID_ACCEPTANCE_SUBJECT:?Set the signed-in subject}
+      BRAID_ACCEPTANCE_OBJECT_ID: ${BRAID_ACCEPTANCE_OBJECT_ID:?Set the signed-in object ID}
+      BRAID_ACCEPTANCE_CALLBACK: https://${BRAID_PUBLIC_HOST:?}/api/auth/callback/entra
+      BRAID_ACCEPTANCE_ISSUER_PEM: ${BRAID_ACCEPTANCE_ISSUER_PEM:?Set the issuer TLS PEM}
+      BRAID_ACCEPTANCE_CLIENT_CERTIFICATE: ${BRAID_ACCEPTANCE_CLIENT_CERTIFICATE:?Set the Entra client certificate}
+      BRAID_ACCEPTANCE_SIGNING_KEY: ${BRAID_ACCEPTANCE_SIGNING_KEY:?Set the ID token signing key}
       # Optional machine clients for the mapping endpoint acceptance; none by default.
-      WEFT_ACCEPTANCE_MACHINE_CLIENTS: ${WEFT_ACCEPTANCE_MACHINE_CLIENTS:-[]}
-      # Optional public clients for the CLI acceptance stage; none by default.
-      WEFT_ACCEPTANCE_PUBLIC_CLIENTS: ${WEFT_ACCEPTANCE_PUBLIC_CLIENTS:-[]}
+      BRAID_ACCEPTANCE_MACHINE_CLIENTS: ${BRAID_ACCEPTANCE_MACHINE_CLIENTS:-[]}
+      # Optional public API clients; none by default.
+      BRAID_ACCEPTANCE_PUBLIC_CLIENTS: ${BRAID_ACCEPTANCE_PUBLIC_CLIENTS:-[]}
     # The server reaches the fixed Microsoft name on port 443; the issuer stays non-root.
     sysctls:
       net.ipv4.ip_unprivileged_port_start: 443
     ports:
-      - 127.0.0.1:${WEFT_ACCEPTANCE_ISSUER_PORT:-0}:443
+      - 127.0.0.1:${BRAID_ACCEPTANCE_ISSUER_PORT:-0}:443
     networks:
       identity:
         aliases: [login.microsoftonline.com]
@@ -138,14 +138,14 @@ services:
     <<: *relay
     command: ["/opt/acceptance/relay.mjs", "tls", "0.0.0.0:8443=server:8080"]
     environment:
-      WEFT_ACCEPTANCE_INGRESS_PEM: ${WEFT_ACCEPTANCE_INGRESS_PEM:?Set the ingress TLS PEM}
+      BRAID_ACCEPTANCE_INGRESS_PEM: ${BRAID_ACCEPTANCE_INGRESS_PEM:?Set the ingress TLS PEM}
     ports:
-      - 127.0.0.1:${WEFT_ACCEPTANCE_HTTPS_PORT:-0}:8443
+      - 127.0.0.1:${BRAID_ACCEPTANCE_HTTPS_PORT:-0}:8443
     networks: [egress]
     depends_on: [server]
 
   model:
-    image: ${WEFT_ACCEPTANCE_OLLAMA_IMAGE:-docker.io/ollama/ollama@sha256:265409e1d931028a8f7d5a32bcbafddd7bffbc6cc629d77efe9560adf692a5e7}
+    image: ${BRAID_ACCEPTANCE_OLLAMA_IMAGE:-docker.io/ollama/ollama@sha256:265409e1d931028a8f7d5a32bcbafddd7bffbc6cc629d77efe9560adf692a5e7}
     restart: unless-stopped
     environment:
       OLLAMA_HOST: 0.0.0.0:11434
@@ -170,4 +170,4 @@ volumes:
   # An existing Ollama model cache with the chat model already pulled; never removed by the harness.
   models:
     external: true
-    name: ${WEFT_ACCEPTANCE_OLLAMA_VOLUME:-weft-ollama-models}
+    name: ${BRAID_ACCEPTANCE_OLLAMA_VOLUME:-braid-ollama-models}

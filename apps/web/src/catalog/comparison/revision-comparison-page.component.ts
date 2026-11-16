@@ -124,7 +124,7 @@ export interface SideView {
 const sideNames: readonly ComparisonSideName[] = ["left", "right"];
 
 @Component({
-  selector: "weft-revision-comparison-page",
+  selector: "braid-revision-comparison-page",
   imports: [
     DatePipe,
     RouterLink,

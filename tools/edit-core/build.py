@@ -21,7 +21,7 @@ def run(*command: str) -> None:
 
 def install() -> None:
     if shutil.which("rustup") is None:
-        with tempfile.TemporaryDirectory(prefix="weft-edit-toolchain-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="braid-edit-toolchain-") as temporary:
             installer = Path(temporary) / "rustup-init"
             context = ssl.create_default_context()
             if os.path.isfile("/run/secrets/proxy_ca"):
@@ -46,7 +46,7 @@ def remap_build_paths() -> None:
     prefixes = {
         Path(os.environ.get("CARGO_HOME", home / ".cargo")).resolve(): "/cargo",
         Path(os.environ.get("RUSTUP_HOME", home / ".rustup")).resolve(): "/rustup",
-        ROOT: "/weft",
+        ROOT: "/braid",
     }
     flags = [f"--remap-path-prefix={source}={replacement}" for source, replacement in prefixes.items()]
     existing = os.environ.pop("CARGO_ENCODED_RUSTFLAGS", "")
@@ -71,6 +71,6 @@ if __name__ == "__main__":
     os.environ["CARGO_BUILD_JOBS"] = "2"
     remap_build_paths()
     run("cargo", "+" + TOOLCHAIN, "build", "--manifest-path", "engines/ferrule-edit-wasm/Cargo.toml", "--release", "--target", "wasm32-unknown-unknown", "--locked")
-    with tempfile.TemporaryDirectory(prefix="weft-edit-bindgen-") as temporary:
-        run("wasm-bindgen", "--target", "web", "--out-dir", temporary, str(target / "wasm32-unknown-unknown/release/weft_ferrule_edit_wasm.wasm"))
+    with tempfile.TemporaryDirectory(prefix="braid-edit-bindgen-") as temporary:
+        run("wasm-bindgen", "--target", "web", "--out-dir", temporary, str(target / "wasm32-unknown-unknown/release/braid_ferrule_edit_wasm.wasm"))
         run(sys.executable, "tools/edit-core/package-assets.py", temporary, str(args.destination), str(args.manifest))

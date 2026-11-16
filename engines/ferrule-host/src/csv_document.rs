@@ -3,8 +3,8 @@
 use ferrule_mapping::{FormatOptions, Project, TabularBoundaryKind};
 use serde::{Deserialize, Serialize};
 
-pub const CAPABILITY: &str = "weft.csv.flat-document.v1";
-pub const DIALECT_SCHEMA: &str = "weft.csv-dialect.v1";
+pub const CAPABILITY: &str = "braid.csv.flat-document.v1";
+pub const DIALECT_SCHEMA: &str = "braid.csv-dialect.v1";
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

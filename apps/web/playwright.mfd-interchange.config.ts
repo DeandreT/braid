@@ -8,11 +8,11 @@ export default defineConfig({
   webServer: [
     {
       command:
-        "dotnet run --no-build --configuration Release --project ../../dotnet/apps/Weft.Server",
+        "dotnet run --no-build --configuration Release --project ../../dotnet/apps/Braid.Server",
       url: "http://127.0.0.1:4101/api/v1/health",
       env: {
         DOTNET_ADD_GLOBAL_TOOLS_TO_PATH: "false",
-        WEFT_DEV_LISTEN_ADDR: "127.0.0.1:4101",
+        BRAID_DEV_LISTEN_ADDR: "127.0.0.1:4101",
         DOTNET_ENVIRONMENT: "Development",
       },
       reuseExistingServer: false,

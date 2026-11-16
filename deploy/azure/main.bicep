@@ -1,4 +1,4 @@
-// First Azure-hosted Weft environment. Deploy in two stages: the platform first, then the
+// First Azure-hosted Braid environment. Deploy in two stages: the platform first, then the
 // application and jobs after the images and Key Vault secrets exist. See docs/azure-deployment.md.
 targetScope = 'resourceGroup'
 
@@ -8,7 +8,7 @@ param location string = resourceGroup().location
 @description('Short lowercase prefix for resource names.')
 @minLength(2)
 @maxLength(10)
-param name string = 'weft'
+param name string = 'braid'
 
 @description('Suffix that makes the globally unique names (registry, vault, storage, database server) distinct.')
 @minLength(4)
@@ -18,10 +18,10 @@ param uniqueSuffix string = uniqueString(resourceGroup().id)
 @description('Microsoft Entra tenant ID whose organizational accounts sign in.')
 param entraTenantId string
 
-@description('Application (client) ID of the Weft app registration.')
+@description('Application (client) ID of the Braid app registration.')
 param entraClientId string
 
-@description('Weft organization ID served by this environment (canonical lowercase UUID).')
+@description('Braid organization ID served by this environment (canonical lowercase UUID).')
 param organizationId string
 
 @description('Object ID of the operator user or group that initializes Key Vault secrets and certificates. Empty assigns no operator role.')
@@ -30,7 +30,7 @@ param operatorPrincipalId string = ''
 @description('Public IPv4 ranges (CIDR) allowed to reach Key Vault for operator initialization. Empty leaves the public endpoint open to Entra-authorized callers only.')
 param operatorIpRanges array = []
 
-@description('Custom public host name, such as weft.contoso.com. Empty uses the Container Apps default host name.')
+@description('Custom public host name, such as braid.contoso.com. Empty uses the Container Apps default host name.')
 param customDomain string = ''
 
 @description('Resource ID of the managed certificate bound to the custom domain. Empty adds the host name without a binding.')
@@ -39,7 +39,7 @@ param customDomainCertificateId string = ''
 @description('Deploy the application and its jobs. Requires the images in the registry and the Key Vault secrets.')
 param deployApplication bool = false
 
-@description('Image tag of the weft and weft-edge repositories in the registry.')
+@description('Image tag of the braid and braid-edge repositories in the registry.')
 param imageTag string = ''
 
 @description('Enable conditional mapping metadata edits.')
@@ -48,7 +48,7 @@ param enableMetadataEdits bool = true
 @description('Enable explicit project creation.')
 param enableProjectCreation bool = true
 
-@description('HTTPS origin of a separately hosted Weft.Worker inspection service in the virtual network, such as https://10.40.4.4:8443. Container Apps cannot run its Docker runner, so this environment does not create it. Empty leaves the Session host without an inspection worker.')
+@description('HTTPS origin of a separately hosted Braid.Worker inspection service in the virtual network, such as https://10.40.4.4:8443. Container Apps cannot run its Docker runner, so this environment does not create it. Empty leaves the Session host without an inspection worker.')
 param inspectionWorkerUrl string = ''
 
 @description('Lowercase SHA-256 of the inspection worker certificate (DER). Required with inspectionWorkerUrl.')
@@ -57,20 +57,20 @@ param inspectionWorkerCertificateSha256 string = ''
 @description('Immutable lowercase sha256 image ID of the Ferrule worker image that the inspection worker runs. Required with inspectionWorkerUrl.')
 param ferruleWorkerImage string = ''
 
-@description('Where native work runs: worker (a separately hosted Weft.Worker with Docker, see inspectionWorkerUrl), service (the Ferrule service container app in this environment) or sessions (the Ferrule service in a dynamic-sessions pool). Native work stays dormant until nativeWorkEnabled, which requires service or sessions.')
+@description('Where native work runs: worker (a separately hosted Braid.Worker with Docker, see inspectionWorkerUrl), service (the Ferrule service container app in this environment) or sessions (the Ferrule service in a dynamic-sessions pool). Native work stays dormant until nativeWorkEnabled, which requires service or sessions.')
 @allowed(['worker', 'service', 'sessions'])
 param ferruleRunner string = 'worker'
 
-@description('Ferrule service image in the registry, preferably by digest (weft-ferrule-service@sha256:...). Required with the service and sessions runners.')
+@description('Ferrule service image in the registry, preferably by digest (braid-ferrule-service@sha256:...). Required with the service and sessions runners.')
 param ferruleServiceImage string = ''
 
-@description('Build identity of that image: sha256: followed by its io.weft.ferrule.worker-sha256 label. Required with the service and sessions runners.')
+@description('Build identity of that image: sha256: followed by its io.braid.ferrule.worker-sha256 label. Required with the service and sessions runners.')
 param ferruleServiceIdentity string = ''
 
-@description('Lowercase SHA-256 of the weft-ferrule-service certificate (DER), from initialize-secrets.sh. Required with the service runner.')
+@description('Lowercase SHA-256 of the braid-ferrule-service certificate (DER), from initialize-secrets.sh. Required with the service runner.')
 param ferruleServiceCertificateSha256 string = ''
 
-@description('Lowercase SHA-256 of the weft-ferrule-service-client certificate (DER), from initialize-secrets.sh. Required with the service runner.')
+@description('Lowercase SHA-256 of the braid-ferrule-service-client certificate (DER), from initialize-secrets.sh. Required with the service runner.')
 param ferruleServiceClientCertificateSha256 string = ''
 
 @description('Child processes per Ferrule service replica (512 MiB each), which is also its concurrent-connection scale target.')
@@ -91,19 +91,19 @@ param ferruleCompileToolchain string = ''
 @description('Enable native work through the Ferrule service: native upload and report derivation in the Session host, and previews, regression runs and builds executed by the <name>-worker app. Requires ferruleRunner = service or sessions, ferruleServiceCompile and ferruleCompileToolchain, and with the service runner ferruleServiceWorkerClientCertificateSha256.')
 param nativeWorkEnabled bool = false
 
-@description('Lowercase SHA-256 of the weft-ferrule-worker-client certificate (DER), from initialize-secrets.sh, which the Ferrule service admits for the worker app. Required with nativeWorkEnabled and the service runner.')
+@description('Lowercase SHA-256 of the braid-ferrule-worker-client certificate (DER), from initialize-secrets.sh, which the Ferrule service admits for the worker app. Required with nativeWorkEnabled and the service runner.')
 param ferruleServiceWorkerClientCertificateSha256 string = ''
 
-@description('Enable revision chat in the Session host. Requires nativeWorkEnabled, and the weft-chat-profiles and weft-model-provider-credential Key Vault secrets (see docs/azure-deployment.md).')
+@description('Enable revision chat in the Session host. Requires nativeWorkEnabled, and the braid-chat-profiles and braid-model-provider-credential Key Vault secrets (see docs/azure-deployment.md).')
 param chatEnabled bool = false
 
-@description('Bearer access to /api/v1 for signed-in users through allowlisted public clients such as the weft CLI. The Session app registration (entraClientId) must expose apiBearerScope and accept v2 access tokens; see docs/api-authentication.md.')
+@description('Bearer access to /api/v1 for signed-in users through allowlisted public clients such as the braid CLI. The Session app registration (entraClientId) must expose apiBearerScope and accept v2 access tokens; see docs/api-authentication.md.')
 param apiBearerEnabled bool = false
 
-@description('The delegated scope name the Session app registration exposes, exactly as it appears in the token\'s scp claim, for example weft.api. Required with apiBearerEnabled.')
+@description('The delegated scope name the Session app registration exposes, exactly as it appears in the token\'s scp claim, for example braid.api. Required with apiBearerEnabled.')
 param apiBearerScope string = ''
 
-@description('Client IDs of the public client applications allowed to present bearer tokens (1-16), for example the weft CLI registration. Required with apiBearerEnabled.')
+@description('Client IDs of the public client applications allowed to present bearer tokens (1-16), for example the braid CLI registration. Required with apiBearerEnabled.')
 param apiBearerClientIds array = []
 
 @description('Machine-facing mapping endpoints, one internal container app per registered release target: name (2-12 lowercase characters), projectId, mappingId, environmentId, environmentVersion, targetId, and optional concurrency (1-4, default 4), maxReplicas (default 4) and callers ([{ grantId, objectId }]). They execute through the Ferrule service, so they require ferruleRunner = service. Empty deploys none.')
@@ -115,20 +115,20 @@ param mappingEndpointAudience string = ''
 @description('Entra tenant whose app-only access tokens the mapping endpoints accept. Empty uses entraTenantId.')
 param mappingEndpointTenantId string = ''
 
-@description('Weft principal ID of the project administrator who grants the endpoint callers; it fills the grant commands output only.')
+@description('Braid principal ID of the project administrator who grants the endpoint callers; it fills the grant commands output only.')
 param mappingEndpointAdministratorId string = ''
 
-@description('Lowercase SHA-256 of the weft-ferrule-endpoint-client certificate (DER), from initialize-secrets.sh, which the Ferrule service admits for the endpoints. Required with mappingEndpoints.')
+@description('Lowercase SHA-256 of the braid-ferrule-endpoint-client certificate (DER), from initialize-secrets.sh, which the Ferrule service admits for the endpoints. Required with mappingEndpoints.')
 param ferruleServiceEndpointClientCertificateSha256 string = ''
 
 @description('Execution identity the Ferrule service image reports for its execute profile (see docs/compiled-service-runtime.md); every endpoint target registers it as its runtime image. Required with mappingEndpoints.')
 param compiledRuntimeIdentity string = ''
 
-@description('Object ID of a separately hosted Weft.Worker managed identity, granted the same data-plane role on the private object container. Empty grants none.')
+@description('Object ID of a separately hosted Braid.Worker managed identity, granted the same data-plane role on the private object container. Empty grants none.')
 param workerPrincipalId string = ''
 
 @description('PostgreSQL administrator login, used only by the database provisioning job.')
-param postgresAdministratorLogin string = 'weftadmin'
+param postgresAdministratorLogin string = 'braidadmin'
 
 @description('PostgreSQL administrator password. Supply it from the environment; it is also stored in Key Vault for the provisioning job.')
 @secure()
@@ -268,7 +268,7 @@ module objects 'modules/objects.bicep' = {
   params: {
     location: location
     name: names.objects
-    containerName: 'weft-private-objects'
+    containerName: 'braid-private-objects'
     endpointsSubnetId: network.outputs.endpointsSubnetId
     privateDnsZoneId: network.outputs.blobZoneId
     // Admitting the store proves the credential can create, lease and delete a probe blob, so every
@@ -407,7 +407,7 @@ module worker 'modules/worker.bicep' = if (workerEnabled) {
     workerIdentityId: workerIdentity.id
     workerIdentityClientId: workerIdentity.properties.clientId
     registryServer: registry.outputs.loginServer
-    image: 'weft-worker:${imageTag}'
+    image: 'braid-worker:${imageTag}'
     vaultUri: vault.outputs.uri
     ferruleRunner: ferruleRunner == 'sessions' ? 'sessions' : 'service'
     ferruleServiceUrl: ferruleService.?outputs.url ?? ''
@@ -429,8 +429,8 @@ module mappingEndpoint 'modules/mapping-endpoint.bicep' = if (mappingEndpointsEn
     environmentName: environment.outputs.name
     identityId: identity.id
     registryServer: registry.outputs.loginServer
-    endpointImage: 'weft-mapping-endpoint:${imageTag}'
-    weftImage: 'weft:${imageTag}'
+    endpointImage: 'braid-mapping-endpoint:${imageTag}'
+    braidImage: 'braid:${imageTag}'
     vaultUri: vault.outputs.uri
     organizationId: organizationId
     endpoints: mappingEndpoints

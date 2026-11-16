@@ -2,7 +2,7 @@ import { defineConfig } from "@playwright/test";
 
 process.env.PLAYWRIGHT_NO_COPY_PROMPT = "1";
 
-const baseURL = process.env.WEFT_NATIVE_REVISION_APPEND_BASE_URL;
+const baseURL = process.env.BRAID_NATIVE_REVISION_APPEND_BASE_URL;
 if (!baseURL)
   throw new Error(
     "Native revision append browser checks require an explicit packaged origin and private fixture.",
@@ -15,13 +15,13 @@ if (
   origin.origin !== baseURL
 )
   throw new Error(
-    "WEFT_NATIVE_REVISION_APPEND_BASE_URL must be the exact configured packaged loopback HTTP origin.",
+    "BRAID_NATIVE_REVISION_APPEND_BASE_URL must be the exact configured packaged loopback HTTP origin.",
   );
 for (const name of [
-  "WEFT_NATIVE_REVISION_APPEND_BROWSER_OPERATOR",
-  "WEFT_NATIVE_REVISION_APPEND_BROWSER_OPERATOR_CONFIG",
-  "WEFT_NATIVE_REVISION_APPEND_BROWSER_MANIFEST",
-  "WEFT_CHROMIUM_EXECUTABLE",
+  "BRAID_NATIVE_REVISION_APPEND_BROWSER_OPERATOR",
+  "BRAID_NATIVE_REVISION_APPEND_BROWSER_OPERATOR_CONFIG",
+  "BRAID_NATIVE_REVISION_APPEND_BROWSER_MANIFEST",
+  "BRAID_CHROMIUM_EXECUTABLE",
 ])
   if (!process.env[name])
     throw new Error(`Native revision append browser checks require ${name}.`);
@@ -41,7 +41,7 @@ export default defineConfig({
   use: {
     baseURL,
     headless: false,
-    launchOptions: { executablePath: process.env.WEFT_CHROMIUM_EXECUTABLE },
+    launchOptions: { executablePath: process.env.BRAID_CHROMIUM_EXECUTABLE },
     trace: "off",
     video: "off",
     screenshot: "off",

@@ -658,8 +658,8 @@ test("controlled large reports page all fields and create details only in the in
   });
   await openDisplay(page, reports, data);
   await expect(table(page).locator(".wb-row-focus")).toHaveCount(100);
-  await expect(table(page).locator("weft-mapping-details")).toHaveCount(0);
-  await expect(inspector(page).locator("weft-mapping-details")).toHaveCount(0);
+  await expect(table(page).locator("braid-mapping-details")).toHaveCount(0);
+  await expect(inspector(page).locator("braid-mapping-details")).toHaveCount(0);
   const pages = page.getByRole("navigation", {
     name: "Mapping table pages",
     exact: true,
@@ -671,7 +671,7 @@ test("controlled large reports page all fields and create details only in the in
   await expect(table(page).locator(".wb-row-focus")).toHaveCount(1);
   await rowButton(page, '["paged150"]').click();
   await expect(inspector(page)).toContainText("Repeated values");
-  await expect(inspector(page).locator("weft-mapping-details")).toHaveCount(1);
+  await expect(inspector(page).locator("braid-mapping-details")).toHaveCount(1);
   await page
     .getByLabel("Result document", { exact: true })
     .selectOption("alternate");
@@ -725,7 +725,7 @@ test("controlled typed paths preserve decimal namespaces indexes slashes Unicode
     'orders {""}["a~b/c.𝛼"]',
   );
   await expect(row(page, '[*]["total"]')).toContainText(
-    'customers {"urn:weft:customers"}["customer"]{"urn:weft:customers"}["tier"]',
+    'customers {"urn:braid:customers"}["customer"]{"urn:braid:customers"}["tier"]',
   );
   await expect(row(page, '[*]["total"]')).toContainText(
     'rates ["rates"][0]["value"]',
@@ -736,7 +736,7 @@ test("controlled typed paths preserve decimal namespaces indexes slashes Unicode
     .getByRole("button", { name: "Join customer identity", exact: true })
     .click();
   await expect(inspector(page)).toContainText(
-    'customers {"urn:weft:customers"}["customer"]@{"urn:weft:identity"}["id"]',
+    'customers {"urn:braid:customers"}["customer"]@{"urn:braid:identity"}["id"]',
   );
   await rowButton(page, '{""}["a~b/c.𝛼"]').click();
   await expect(inspector(page)).toContainText('{""}["a~b/c.𝛼"]');

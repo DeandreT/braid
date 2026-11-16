@@ -27,7 +27,7 @@ limited time, shown under **Kept until**, and only you can read them.
    **One named output**.
 7. Choose **Run preview**.
 
-**Legacy JSON** is the default admission policy and preserves existing previews.
+**Legacy JSON** is the default admission policy.
 For mappings with explicit JSON, X12 or EDIFACT boundaries, choose **Explicit
 document boundaries** under **Preview admission**. Paste or choose the document
 bytes; the mapping's embedded boundary settings select the format, not the file
@@ -84,10 +84,6 @@ A successful preview only shows that the mapping ran. It isn't compared with an
 expected result. To check output against an expected result, save a
 [regression test](regression-tests.md).
 
-EDI sample previews do not establish support for EDI regression comparison,
-compiled builds or mapping endpoints. Those workflows have separate admission
-and qualification requirements.
-
 Choose **Start a new preview** to clear the form for another run.
 
 ## Save a CSV or TSV preview as a test case
@@ -109,7 +105,6 @@ evaluation time, runtime and returned output dialect. It creates an explicit
 expected baseline using exact-byte comparison; a successful preview never becomes
 a baseline automatically. To use ordered row/cell comparison instead, edit the
 case as a new version in [Regression tests](regression-tests.md#csv-and-tsv-comparison).
-Neither saving a case nor a preview success approves or qualifies a build.
 
 ## If you reload the page
 

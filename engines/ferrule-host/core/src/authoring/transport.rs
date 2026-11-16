@@ -10,7 +10,7 @@ use crate::{
     protocol,
 };
 
-pub const PROTOCOL: &str = "weft.ferrule-authoring.v1";
+pub const PROTOCOL: &str = "braid.ferrule-authoring.v1";
 pub const DOCUMENT_ID: &str = "entry.native.json";
 pub const MAX_REQUEST_BYTES: usize = protocol::MAX_HEADER_BYTES + super::MAX_PLAN_BYTES + 8;
 pub const MAX_RESPONSE_BYTES: usize =

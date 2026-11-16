@@ -1,7 +1,7 @@
 -- Metadata edits use a separate column-limited profile. Existing ownership,
 -- ingestion and catalog reader grants remain unchanged. Provision the editor
 -- login explicitly before applying this migration.
-CREATE OR REPLACE FUNCTION weft.guard_mappings_transition() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path TO pg_catalog, weft AS $guard$
+CREATE OR REPLACE FUNCTION braid.guard_mappings_transition() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path TO pg_catalog, braid AS $guard$
 BEGIN
     IF TG_OP = 'DELETE' THEN
         RAISE EXCEPTION 'Mapping deletion is unavailable.' USING ERRCODE = '23514';
@@ -40,8 +40,8 @@ BEGIN
 END;
 $guard$;
 
-GRANT USAGE ON SCHEMA weft TO weft_catalog_editor;
-GRANT SELECT ON weft.organizations, weft.principals,
-    weft.organization_memberships, weft.projects, weft.project_memberships,
-    weft.mappings TO weft_catalog_editor;
-GRANT UPDATE (name, description, version, updated_at) ON weft.mappings TO weft_catalog_editor;
+GRANT USAGE ON SCHEMA braid TO braid_catalog_editor;
+GRANT SELECT ON braid.organizations, braid.principals,
+    braid.organization_memberships, braid.projects, braid.project_memberships,
+    braid.mappings TO braid_catalog_editor;
+GRANT UPDATE (name, description, version, updated_at) ON braid.mappings TO braid_catalog_editor;

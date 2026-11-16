@@ -13,7 +13,7 @@ const runtime = {
   engineRevision: "engine",
   backendBuild: "sha256:" + "c".repeat(64),
   adapterBuild: "adapter",
-  profile: "weft.ferrule-json-preview.v1",
+  profile: "braid.ferrule-json-preview.v1",
 };
 const limits = {
   maximumInputBytes: 8388608,
@@ -21,7 +21,7 @@ const limits = {
   maximumArtifacts: 64,
   maximumTextBytes: 2048,
 };
-const policy = "weft.regression.exact-bytes.v1";
+const policy = "braid.regression.exact-bytes.v1";
 const definition: Definition = {
   name: "Order fixture",
   revisionId: scope.revisionId,
@@ -143,7 +143,7 @@ class RegressionFixture {
       expect(request.headers()["x-xsrf-token"]).toBe(this.token);
       if (path.includes("/regression-cases/")) {
         expect(request.headers()["content-type"]).toContain(
-          "application/vnd.weft.regression-case.v1+json",
+          "application/vnd.braid.regression-case.v1+json",
         );
         const parts = path.split("/");
         const id = parts.at(-3)!;
@@ -227,12 +227,12 @@ test("document regression saves explicit media and comparison options without fi
   const fixture = new RegressionFixture();
   fixture.capabilities.documentRuntime = {
     ...runtime,
-    profile: "weft.ferrule-document-preview.v1",
+    profile: "braid.ferrule-document-preview.v1",
     adapterBuild: "document-adapter",
   };
   fixture.capabilities.comparisonPolicies = [
     policy,
-    "weft.regression.edi-segments.v1",
+    "braid.regression.edi-segments.v1",
   ];
   await fixture.install(page);
   await enterDraft(page);
@@ -243,7 +243,7 @@ test("document regression saves explicit media and comparison options without fi
     });
   await panel(page)
     .getByLabel("Comparison policy", { exact: true })
-    .selectOption("weft.regression.edi-segments.v1");
+    .selectOption("braid.regression.edi-segments.v1");
   await panel(page)
     .getByLabel(
       "Ignore supported envelope and acknowledgement control references",
@@ -257,7 +257,7 @@ test("document regression saves explicit media and comparison options without fi
   await output
     .getByLabel("Expected UTF-8 text")
     .fill(
-      "ISA*00*          *00*          *ZZ*WEFTSENDER     *ZZ*WEFTRECEIVER   *261024*1200*^*00501*000000330*0*T*:~GS*PO*WEFTSENDER*WEFTRECEIVER*20261024*1200*330*X*005010~ST*850*0330~BEG*00*SA*WEFT-330~SE*3*0330~GE*1*330~IEA*1*000000330~",
+      "ISA*00*          *00*          *ZZ*BRAIDSENDER    *ZZ*BRAIDRECEIVER  *261024*1200*^*00501*000000330*0*T*:~GS*PO*BRAIDSENDER*BRAIDRECEIVER*20261024*1200*330*X*005010~ST*850*0330~BEG*00*SA*BRAID-330~SE*3*0330~GE*1*330~IEA*1*000000330~",
     );
   await panel(page)
     .getByRole("button", { name: "Save test version", exact: true })
@@ -330,12 +330,12 @@ test("document comparison choices survive same-owner draft recovery", async ({
   const fixture = new RegressionFixture();
   fixture.capabilities.documentRuntime = {
     ...runtime,
-    profile: "weft.ferrule-document-preview.v1",
+    profile: "braid.ferrule-document-preview.v1",
     adapterBuild: "document-adapter",
   };
   fixture.capabilities.comparisonPolicies = [
     policy,
-    "weft.regression.edi-segments.v1",
+    "braid.regression.edi-segments.v1",
   ];
   await fixture.install(page);
   await enterDraft(page);
@@ -346,7 +346,7 @@ test("document comparison choices survive same-owner draft recovery", async ({
     });
   await panel(page)
     .getByLabel("Comparison policy", { exact: true })
-    .selectOption("weft.regression.edi-segments.v1");
+    .selectOption("braid.regression.edi-segments.v1");
   await panel(page)
     .getByLabel("Compare service separators", { exact: true })
     .uncheck();
@@ -363,7 +363,7 @@ test("document comparison choices survive same-owner draft recovery", async ({
     .nth(1)
     .getByLabel("Expected UTF-8 text")
     .fill(
-      "UNB+UNOC:3+WEFTSENDER+WEFTRECEIVER+261024:1200+330'UNH+330+ORDERS:D:96A:UN'BGM+220+WEFT-330'UNT+3+330'UNZ+1+330'",
+      "UNB+UNOC:3+BRAIDSENDER+BRAIDRECEIVER+261024:1200+330'UNH+330+ORDERS:D:96A:UN'BGM+220+BRAID-330'UNT+3+330'UNZ+1+330'",
     );
   await failSessionCheck(page, "unavailable");
   await recoverAccess(page);
@@ -372,7 +372,7 @@ test("document comparison choices survive same-owner draft recovery", async ({
   ).toBeVisible();
   await expect(
     panel(page).getByLabel("Comparison policy", { exact: true }),
-  ).toHaveValue("weft.regression.edi-segments.v1");
+  ).toHaveValue("braid.regression.edi-segments.v1");
   await expect(
     panel(page).getByLabel("Compare service separators", { exact: true }),
   ).not.toBeChecked();
@@ -392,7 +392,7 @@ test("document regression renders bounded segment locations and invalid-document
 }) => {
   const fixture = new RegressionFixture();
   fixture.response = run("completed", "failed");
-  fixture.response.comparison!.policy = "weft.regression.edi-segments.v1";
+  fixture.response.comparison!.policy = "braid.regression.edi-segments.v1";
   const difference = fixture.response.comparison!.differences[0];
   difference.kind = "segmentsDiffer";
   difference.firstDifferentByte = null;
@@ -436,7 +436,7 @@ test("document regression renders bounded segment locations and invalid-document
 });
 /** The revision page's in-place re-read has finished. */
 const settled = (page: Page) =>
-  expect(page.locator("weft-workbench-frame")).not.toHaveAttribute(
+  expect(page.locator("braid-workbench-frame")).not.toHaveAttribute(
     "aria-busy",
     "true",
   );

@@ -25,7 +25,7 @@ import {
 type ValidationReport = components["schemas"]["ValidationReportV1"];
 
 @Component({
-  selector: "weft-mapping-projection",
+  selector: "braid-mapping-projection",
   imports: [
     MappingDetailsComponent,
     MappingEntityComponent,

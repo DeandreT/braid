@@ -13,23 +13,23 @@ const root = fileURLToPath(new URL("../../", import.meta.url));
 const read = (path) => readFileSync(join(root, path), "utf8");
 
 test("both shipped pipelines install the same policy before static files and admission", () => {
-  const helper = read("dotnet/src/Weft.Api/BrowserSecurityHeaders.cs");
+  const helper = read("dotnet/src/Braid.Api/BrowserSecurityHeaders.cs");
   assert.ok(helper.includes(`ContentSecurityPolicy = "${applicationCsp}"`));
   for (const path of ["Program.cs", "SessionHostEntrypoint.cs"]) {
-    const source = read("dotnet/apps/Weft.Server/" + path);
-    assert.ok(source.indexOf("app.UseWeftBrowserSecurityHeaders();") >= 0);
+    const source = read("dotnet/apps/Braid.Server/" + path);
+    assert.ok(source.indexOf("app.UseBraidBrowserSecurityHeaders();") >= 0);
     assert.ok(
-      source.indexOf("app.UseWeftBrowserSecurityHeaders();") <
+      source.indexOf("app.UseBraidBrowserSecurityHeaders();") <
         source.indexOf("app.UseDefaultFiles();"),
     );
     if (path === "SessionHostEntrypoint.cs")
       assert.ok(
-        source.indexOf("app.UseWeftBrowserSecurityHeaders();") <
+        source.indexOf("app.UseBraidBrowserSecurityHeaders();") <
           source.indexOf("requests.Use(app);"),
       );
   }
   assert.doesNotMatch(applicationCsp, /(?:wasm-)?unsafe-eval/);
-  const config = JSON.parse(read("apps/web/angular.json")).projects.weft
+  const config = JSON.parse(read("apps/web/angular.json")).projects.braid
     .architect;
   assert.deepEqual(config.serve.options.headers, browserSecurityHeaders);
   assert.equal(config.serve.options.hmr, false);
@@ -37,7 +37,7 @@ test("both shipped pipelines install the same policy before static files and adm
 });
 
 test("app and probe omit forbidden base tags and inline critical-CSS script handlers", () => {
-  const config = JSON.parse(read("apps/web/angular.json")).projects.weft
+  const config = JSON.parse(read("apps/web/angular.json")).projects.braid
     .architect;
   for (const [target, index] of [
     ["build", "apps/web/index.html"],

@@ -154,7 +154,7 @@ test("profile data policy is a destination flag, not a grant or a client-selecte
     supportsTools: true,
   };
   const value = {
-    schemaVersion: "weft.chat.v1",
+    schemaVersion: "braid.chat.v1",
     organizationId: org,
     limits: { maxTextBytes: 32768, maxSelectors: 32, turnSeconds: 120 },
     profiles: [{ profile, payloadsAllowed: false }],

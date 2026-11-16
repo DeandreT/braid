@@ -10,7 +10,7 @@
         Run this saved revision on sample documents. Results are kept for a
         limited time and only you can read them.
       </p>
-      <weft-help-link [section]="'previews'">About samples</weft-help-link>
+      <braid-help-link [section]="'previews'">About samples</braid-help-link>
     </div>
     @if (allowed()) {
       <div class="preview-heading-actions">
@@ -378,7 +378,7 @@
           <section class="preview-run" aria-labelledby="preview-run-title">
             <h3 id="preview-run-title">Preview run</h3>
             <p class="preview-status" role="status" aria-live="polite">
-              <weft-status-chip [status]="runStatus(run)" />
+              <braid-status-chip [status]="runStatus(run)" />
               @if (
                 preview.notice() === "cancelRequested" &&
                 run.state === "running"
@@ -541,7 +541,7 @@
               @if (shown(); as view) {
                 <figure class="preview-output">
                   <figcaption>Output {{ view.output.ordinal + 1 }}</figcaption>
-                  <weft-document-view [data]="view.display" />
+                  <braid-document-view [data]="view.display" />
                 </figure>
               }
             }

@@ -29,18 +29,18 @@
       ]
     }
   },
-  "source_path": "http://127.0.0.1:9/weft-fixture-do-not-fetch.json",
-  "target_path": "/weft-fixture-do-not-write/result.json",
+  "source_path": "http://127.0.0.1:9/braid-fixture-do-not-fetch.json",
+  "target_path": "/braid-fixture-do-not-write/result.json",
   "source_options": {
-    "edi_config_reference": "/weft-fixture-do-not-read/source-config.xml"
+    "edi_config_reference": "/braid-fixture-do-not-read/source-config.xml"
   },
   "target_options": {
-    "edi_config_reference": "https://weft-fixture.invalid/do-not-fetch-config.xml"
+    "edi_config_reference": "https://braid-fixture.invalid/do-not-fetch-config.xml"
   },
   "extra_sources": [
     {
       "name": "localReference",
-      "path": "/weft-fixture-do-not-read/reference.json",
+      "path": "/braid-fixture-do-not-read/reference.json",
       "schema": {
         "name": "Reference",
         "kind": {
@@ -59,7 +59,7 @@
     },
     {
       "name": "remoteReference",
-      "path": "https://weft-fixture.invalid/do-not-fetch-reference.json",
+      "path": "https://braid-fixture.invalid/do-not-fetch-reference.json",
       "schema": {
         "name": "Reference",
         "kind": {

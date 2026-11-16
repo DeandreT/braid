@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../Braid.Deployment/Braid.Deployment.csproj" />
+    <ProjectReference Include="../Braid.Application/Braid.Application.csproj" />
+    <ProjectReference Include="../Braid.Domain/Braid.Domain.csproj" />
+    <ProjectReference Include="../Braid.Contracts/Braid.Contracts.csproj" />
+  </ItemGroup>
+</Project>

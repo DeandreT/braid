@@ -3,10 +3,10 @@ mod support;
 use std::io::{Cursor, Write};
 use std::process::{Command, Stdio};
 
+use braid_ferrule_core::edit::{MAX_OPERATIONS, MAX_OPERATIONS_BYTES, Session, parse_script};
+use braid_ferrule_host::edit::{PROTOCOL, Request, Response};
 use serde_json::{Value, json};
 use support::{BASIC, digest, request};
-use weft_ferrule_core::edit::{MAX_OPERATIONS, MAX_OPERATIONS_BYTES, Session, parse_script};
-use weft_ferrule_host::edit::{PROTOCOL, Request, Response};
 
 fn script() -> Vec<u8> {
     serde_json::to_vec(&json!({"format":"ferrule.edit.v1","operations":[{
@@ -59,7 +59,7 @@ fn response(bytes: &[u8]) -> (Response, &[u8]) {
 fn worker_replays_exact_base_and_returns_verified_native_validation_and_projection() {
     let operations = script();
     let header = header(BASIC, &operations);
-    let mut worker = Command::new(env!("CARGO_BIN_EXE_weft-ferrule-host"))
+    let mut worker = Command::new(env!("CARGO_BIN_EXE_braid-ferrule-host"))
         .env_clear()
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -83,7 +83,7 @@ fn worker_replays_exact_base_and_returns_verified_native_validation_and_projecti
     assert!(response.failure.is_none());
     assert_eq!(
         response.engine_revision,
-        weft_ferrule_core::protocol::ENGINE_REVISION
+        braid_ferrule_core::protocol::ENGINE_REVISION
     );
     let result = response.result.unwrap();
     assert_eq!(result.operation_count, 1);
@@ -168,7 +168,7 @@ fn failed_replay_reports_its_zero_based_operation_and_has_no_partial_checkpoint(
     let second = script["operations"][0].clone();
     script["operations"].as_array_mut().unwrap().push(second);
     let operations = serde_json::to_vec(&script).unwrap();
-    let result = weft_ferrule_host::edit::process(&header(BASIC, &operations), BASIC, &operations);
+    let result = braid_ferrule_host::edit::process(&header(BASIC, &operations), BASIC, &operations);
     let failure = result.response.failure.unwrap();
     assert_eq!(failure.code, "operationRejected");
     assert_eq!(failure.operation_index.as_deref(), Some("1"));
@@ -239,7 +239,7 @@ fn framing_digest_unknown_header_and_trailing_bytes_fail_closed() {
         (good[..good.len() - 1].to_vec(), "invalidFrame"),
     ] {
         let mut output = Vec::new();
-        weft_ferrule_host::handle_stream(&mut Cursor::new(bytes), &mut output).unwrap();
+        braid_ferrule_host::handle_stream(&mut Cursor::new(bytes), &mut output).unwrap();
         assert_eq!(response(&output).0.failure.unwrap().code, expected);
     }
 }

@@ -3,9 +3,9 @@
 #[path = "../../src/authored_preview.rs"]
 mod authored_preview;
 
+use braid_ferrule_core::{authored_document::transport, authoring};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use weft_ferrule_core::{authored_document::transport, authoring};
 
 fn frame(bytes: &[u8]) -> Vec<u8> {
     let mut result = (bytes.len() as u32).to_be_bytes().to_vec();
@@ -19,7 +19,7 @@ fn fixture() -> (Vec<u8>, Vec<u8>) {
     let scalar = json!({"name":"value","shape":{"kind":"scalar","scalar":"string"}});
     let schema = json!({"name":"root","shape":{"kind":"group","children":[scalar]}});
     let plan = json!({
-        "format":"weft.authoring.v1",
+        "format":"braid.authoring.v1",
         "source":{"schema":schema,"options":{"kind":"json"}},
         "target":{"schema":schema,"options":{"kind":"csv","header":true,"quote":true,"bom":false,"preserve_empty_strings":true}},
         "edit":{"format":"ferrule.edit.v1","operations":[{
@@ -77,12 +77,12 @@ fn actual_host_route_executes_merged_authoring_output() {
 #[test]
 fn other_protocols_and_ambiguous_probes_leave_streams_untouched() {
     for protocol in [
-        "weft.ferrule-host.v1",
+        "braid.ferrule-host.v1",
         authoring::transport::PROTOCOL,
-        "weft.ferrule-preview.v1",
-        "weft.ferrule-document-preview.v1",
-        "weft.ferrule-csv-preview.v1",
-        "weft.ferrule-xml-preview.v1",
+        "braid.ferrule-preview.v1",
+        "braid.ferrule-document-preview.v1",
+        "braid.ferrule-csv-preview.v1",
+        "braid.ferrule-xml-preview.v1",
         "unknown",
     ] {
         let request = serde_json::to_vec(&json!({"protocolVersion":protocol})).unwrap();

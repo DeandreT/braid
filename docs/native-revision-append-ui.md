@@ -58,20 +58,14 @@ One unfinished append occupies one private tab-memory slot. Files, request keys,
 tokens and recovery data are excluded from browser storage and navigation URLs.
 The page prompts before leaving at-risk work; reload, full-page navigation or
 closing the tab loses that memory. Abandonment or stopping a wait does not undo an
-already dispatched request. This page does not edit mapping rules, execute a
-preview or deploy the mapping.
+already dispatched request.
 
-## Verification boundary
+## Tests
 
-Controlled frontend cases and a separate packaged API/PostgreSQL/native-worker
-scenario cover different boundaries. Their source declarations are not execution
-evidence. Record the exact integrated source, discovered case census, packaging
-and actual outcomes when qualification runs. The fixture's separately labelled
-terminal source-free API resume is backend evidence, not a completed UI flow.
+Controlled frontend cases cover the form and recovery controls. A packaged
+API/PostgreSQL/native-worker scenario checks the saved revision and persistence.
 
 The packaged scenario mediates each already-allowlisted catalog read through one
 actual API request and delivers that complete bounded JSON entity to the original
 browser Request. Exact response identity/status, current capability/token, saved
-revision identity and immutable persistence assertions remain required. This is
-mediated API and frontend evidence; native browser cookie ordering, cancellation
-propagation and streaming timing retain separate verification boundaries.
+revision identity and immutable persistence assertions remain required.

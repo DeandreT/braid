@@ -42,7 +42,7 @@ resource files 'Microsoft.Storage/storageAccounts/fileServices@2023-05-01' = {
 
 resource keyRing 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-05-01' = {
   parent: files
-  name: 'weft-session-keys'
+  name: 'braid-session-keys'
   properties: {
     enabledProtocols: 'SMB'
     shareQuota: 1

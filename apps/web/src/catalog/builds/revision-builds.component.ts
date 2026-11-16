@@ -75,7 +75,7 @@ import { UnsentWork } from "../../workbench/unsent-work";
 
 /** No durable browser storage: uncertain requests keep their original immutable frame until explicit recovery or invalidation. */
 @Component({
-  selector: "weft-revision-builds",
+  selector: "braid-revision-builds",
   imports: [
     FormsModule,
     DatePipe,

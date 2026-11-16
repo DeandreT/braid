@@ -22,7 +22,7 @@ import type {
 } from "./mapping-metadata-types";
 
 @Component({
-  selector: "weft-edit-mapping-page",
+  selector: "braid-edit-mapping-page",
   providers: [MappingMetadataState],
   imports: [ReactiveFormsModule, RouterLink],
   templateUrl: "./edit-mapping-page.component.html",

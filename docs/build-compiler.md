@@ -1,6 +1,6 @@
 # Restricted Ferrule C# compiler worker
 
-The `weft.ferrule-build.v1` operation accepts the exact immutable native mapping
+The `braid.ferrule-build.v1` operation accepts the exact immutable native mapping
 and full request/revision/native/intent identity. It does not accept C# source,
 project files, build scripts, package sources or host paths from callers.
 
@@ -18,9 +18,9 @@ with explicit portable paths, lengths and SHA-256 values. No design-time path is
 opened. The generator's source response is a private compiler transport, not an
 API/browser source download.
 
-The separate `weft.ferrule-csharp-csv.v1` profile admits only primary flat
+The separate `braid.ferrule-csharp-csv.v1` profile admits only primary flat
 CSV-to-CSV plans. TSV is explicit CSV with a saved tab delimiter. Both boundary
-records contain `csvDialect` in the `weft.csv-dialect.v1` shape, and the build
+records contain `csvDialect` in the `braid.csv-dialect.v1` shape, and the build
 intent must match that metadata exactly. JSON/EDI boundary records omit this
 member, preserving their existing canonical representation.
 
@@ -32,14 +32,14 @@ CSV plans produce `unsupportedCsvPlan`, exposed as a typed preflight refusal.
 
 ## Offline .NET compilation
 
-`Weft.BuildWorker` invokes the fixed native generator, checks every source frame,
+`Braid.BuildWorker` invokes the fixed native generator, checks every source frame,
 and writes only the known generated mapping/target-builder and Runtime C# files
 under a new private temporary directory. The emitted project file is never
 executed. The installed .NET 10 C# compiler is invoked directly with fixed
 arguments, the installed reference assemblies and trusted generated C# files.
 No project evaluation, restore or package-feed discovery occurs. The admitted
 source set, directory layout, compiler arguments and framed reply are one shared
-implementation (`BuildCompilation` in `Weft.Deployment`), which the
+implementation (`BuildCompilation` in `Braid.Deployment`), which the
 [Ferrule service](#ferrule-service-compilation) uses as well.
 
 Child environments are cleared, then populated with only the required tool,
@@ -68,9 +68,9 @@ or cancellation.
 
 Hosted platforms that cannot run Docker compile through the
 [Ferrule service](ferrule-service.md#compile-operations) `compile` profile, with the
-same `weft.ferrule-build.v1` frames, bounds and wall deadline. Each operation runs
+same `braid.ferrule-build.v1` frames, bounds and wall deadline. Each operation runs
 the generator in the worker's own service sandbox and the pinned compiler in a fresh
-`weft-compile-sandbox` launcher whose controls the service verifies before the
+`braid-compile-sandbox` launcher whose controls the service verifies before the
 compiler starts: fixed limits with a 2 GiB managed heap, no network or new
 processes, and Landlock confinement to the read-only toolchain, the private
 directory and its one pre-created output file. Its replies, including the artifact
@@ -141,17 +141,15 @@ Roslyn and managed runtime workloads, including an asynchronous managed probe
 that attempts privacy mutations from its main thread and another thread. The
 supplementary `tools/compile-sandbox/privacy_negative_probe.py` observes actual
 post-managed-start dumpability and parent-owned attach/memory denial. Its dumpable
-positive control must work, otherwise the result is inconclusive. It is not proof
-of a production runner call or XML canonical-comparison invocation.
+positive control must work, otherwise the result is inconclusive.
 
 Build the native image first from `engines/ferrule-host`, then use
 `tools/build-worker/build_image.py --native-image sha256:<id> --tag <tag>
 --work-root <existing-work-directory>`. The launcher binds a temporary local
 reference to that exact image ID and independently checks the native binary's
 hash in the Docker build. Registry builds may use a native manifest digest with
-the corresponding verified binary hash. Local metadata/protocol tests
-do not establish actual Linux compilation/isolation. Qualify the exact combined
+the corresponding verified binary hash. Test the exact combined
 image with real generation, compilation, preview/regression equivalence,
-cancellation and cleanup before enabling it in a deployment workflow. The service
+cancellation and cleanup. The service
 compile tests compare every fixture's compile and inspection reply with this image
 byte for byte (see [Ferrule service qualification](ferrule-service.md#qualification)).

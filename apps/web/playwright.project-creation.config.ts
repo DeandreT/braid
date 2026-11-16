@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test";
 
-const baseURL = process.env.WEFT_PROJECT_CREATION_BASE_URL;
+const baseURL = process.env.BRAID_PROJECT_CREATION_BASE_URL;
 if (!baseURL)
   throw new Error(
     "Project creation browser checks require an explicit packaged origin and private fixture.",
@@ -13,13 +13,13 @@ if (
   origin.origin !== baseURL
 )
   throw new Error(
-    "WEFT_PROJECT_CREATION_BASE_URL must be the exact configured packaged loopback HTTP origin.",
+    "BRAID_PROJECT_CREATION_BASE_URL must be the exact configured packaged loopback HTTP origin.",
   );
 for (const name of [
-  "WEFT_PROJECT_CREATION_BROWSER_OPERATOR",
-  "WEFT_PROJECT_CREATION_BROWSER_OPERATOR_CONFIG",
-  "WEFT_PROJECT_CREATION_BROWSER_MANIFEST",
-  "WEFT_CHROMIUM_EXECUTABLE",
+  "BRAID_PROJECT_CREATION_BROWSER_OPERATOR",
+  "BRAID_PROJECT_CREATION_BROWSER_OPERATOR_CONFIG",
+  "BRAID_PROJECT_CREATION_BROWSER_MANIFEST",
+  "BRAID_CHROMIUM_EXECUTABLE",
 ])
   if (!process.env[name])
     throw new Error(`Project creation browser checks require ${name}.`);
@@ -39,7 +39,7 @@ export default defineConfig({
   use: {
     baseURL,
     headless: false,
-    launchOptions: { executablePath: process.env.WEFT_CHROMIUM_EXECUTABLE },
+    launchOptions: { executablePath: process.env.BRAID_CHROMIUM_EXECUTABLE },
     trace: "off",
     video: "off",
     screenshot: "off",

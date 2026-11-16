@@ -58,13 +58,13 @@ redirect page. Even a repository-relative link outside this guide is refused.
 
 ## Build and validation
 
-`Weft.Api.csproj` embeds every `docs/user-guide/*.md` file as a resource. On
+`Braid.Api.csproj` embeds every `docs/user-guide/*.md` file as a resource. On
 first use, `UserGuide` parses all sections, checks the front matter, the subset
 and that every link resolves to an existing section and heading, and keeps the
 result for the life of the process. Mapping the help routes loads the guide, so
 an invalid guide stops the server, and with it the OpenAPI generation that runs
 during the build. In-process consumers, such as chat tools, read the same guide
-through `Weft.Application.IUserGuideReader`, which `UserGuide.Embedded`
+through `Braid.Application.IUserGuideReader`, which `UserGuide.Embedded`
 implements.
 
 ## HTTP API
@@ -95,7 +95,7 @@ line client and chat tools all receive the same validated content.
 level 2 headings listed under **On this page**. Heading anchors appear in the
 address as `#<anchor>` and are rendered with the element ID `help-<anchor>`.
 The **Help & guide** navigation link opens the contents. Pages link to their guide
-section with `<weft-help-link [section]="'reports'">`, whose IDs come from
+section with `<braid-help-link [section]="'reports'">`, whose IDs come from
 `apps/web/src/help/help-sections.ts`.
 
 ![User guide contents with section summaries](images/help.png)

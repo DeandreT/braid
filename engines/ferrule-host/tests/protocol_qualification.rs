@@ -3,11 +3,11 @@ mod support;
 use std::io::{Read, Write};
 use std::process::{Command, Stdio};
 
-use serde_json::{Value, json};
-use support::*;
-use weft_ferrule_host::protocol::{
+use braid_ferrule_host::protocol::{
     MAX_HEADER_BYTES, MAX_NATIVE_BYTES, MAX_RESPONSE_BYTES, PROTOCOL_VERSION, Response,
 };
+use serde_json::{Value, json};
+use support::*;
 
 #[test]
 fn framing_roundtrip_emits_one_structured_response() {
@@ -21,7 +21,7 @@ fn framing_roundtrip_emits_one_structured_response() {
 fn executable_accepts_exact_native_frames_and_keeps_stdout_protocol_only() {
     let header = request("validate", EXACT);
     let bytes = framed_bytes(&serde_json::to_vec(&header).unwrap(), EXACT);
-    let mut worker = Command::new(env!("CARGO_BIN_EXE_weft-ferrule-host"))
+    let mut worker = Command::new(env!("CARGO_BIN_EXE_braid-ferrule-host"))
         .env_clear()
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -62,7 +62,7 @@ fn oversized_frames_are_rejected_before_body_allocation_or_read() {
             prefix: std::io::Cursor::new(prefix),
         };
         let mut output = Vec::new();
-        weft_ferrule_host::handle_stream(&mut input, &mut output).unwrap();
+        braid_ferrule_host::handle_stream(&mut input, &mut output).unwrap();
         assert_eq!(failure(&response_frame(&output)), "invalidFrame");
     }
 }
@@ -124,7 +124,7 @@ fn header_versions_operations_context_digests_and_limits_are_admitted_explicitly
     let cases = [
         (
             "/protocolVersion",
-            json!("weft.ferrule-host.v999"),
+            json!("braid.ferrule-host.v999"),
             "unsupportedProtocolVersion",
         ),
         ("/operation", json!("preview"), "unsupportedOperation"),
@@ -251,7 +251,7 @@ fn text_limits_preserve_utf8_and_report_truncation() {
 
 #[test]
 fn bounded_native_locators_preserve_exact_pointers_or_use_document_fallback() {
-    use weft_ferrule_host::protocol::{NativeLocator, bounded_locator};
+    use braid_ferrule_host::protocol::{NativeLocator, bounded_locator};
     let document = NativeLocator::Document {
         document_id: "entry.native.json".into(),
     };
@@ -293,7 +293,7 @@ fn inspect_uses_document_fallback_for_long_resource_pointers() {
         "name":"reference",
         "path":"do-not-read.json",
         "schema":document["source"],
-        "options":{"json_schema_unresolved_reference":"https://weft-fixture.invalid/do-not-fetch-schema.json"}
+        "options":{"json_schema_unresolved_reference":"https://braid-fixture.invalid/do-not-fetch-schema.json"}
     }]);
     let native = serde_json::to_vec(&json!({"__ferrule_file":{"kind":"project","version":2,"float_bits":{}},"document":document})).unwrap();
     let mut header = request("inspect", &native);
@@ -325,9 +325,13 @@ fn direct_inspection_bounds_both_boundary_and_resource_native_locators() {
     let mut header = request("inspect", RESOURCES);
     header.limits.maximum_text_bytes = 64;
     let prefix = format!("/{}", "x".repeat(64));
-    let inventory =
-        weft_ferrule_host::inspect::inspect(&project, "entry.native.json", &prefix, &header.limits)
-            .unwrap();
+    let inventory = braid_ferrule_host::inspect::inspect(
+        &project,
+        "entry.native.json",
+        &prefix,
+        &header.limits,
+    )
+    .unwrap();
     let inventory = serde_json::to_value(inventory).unwrap();
     for locator in inventory["boundaries"]
         .as_array()
@@ -346,14 +350,14 @@ fn direct_inspection_bounds_both_boundary_and_resource_native_locators() {
 #[test]
 fn bounded_response_serialization_checks_the_exact_byte_boundary() {
     let header = request("inspect", BASIC);
-    let response = weft_ferrule_host::process_request(&header, BASIC);
+    let response = braid_ferrule_host::process_request(&header, BASIC);
     let expected = serde_json::to_vec(&response).unwrap();
     assert_eq!(
-        weft_ferrule_host::framing::encode_response(&response, expected.len()).unwrap(),
+        braid_ferrule_host::framing::encode_response(&response, expected.len()).unwrap(),
         expected
     );
-    assert!(weft_ferrule_host::framing::encode_response(&response, expected.len() - 1).is_err());
-    assert!(weft_ferrule_host::framing::encode_response(&response, 0).is_err());
+    assert!(braid_ferrule_host::framing::encode_response(&response, expected.len() - 1).is_err());
+    assert!(braid_ferrule_host::framing::encode_response(&response, 0).is_err());
 }
 
 #[test]
@@ -365,11 +369,11 @@ fn oversized_worker_results_become_bounded_structured_failures() {
         &"x".repeat(MAX_RESPONSE_BYTES + 1),
     );
     assert!(
-        weft_ferrule_host::framing::encode_response(&oversized, MAX_RESPONSE_BYTES * 2).is_err(),
+        braid_ferrule_host::framing::encode_response(&oversized, MAX_RESPONSE_BYTES * 2).is_err(),
         "the caller cannot increase the compiled hard cap"
     );
     let mut bytes = Vec::new();
-    weft_ferrule_host::framing::write_response(&mut bytes, &oversized).unwrap();
+    braid_ferrule_host::framing::write_response(&mut bytes, &oversized).unwrap();
     let response = response_frame(&bytes);
     assert_eq!(failure(&response), "resultLimitExceeded");
     assert_eq!(response["requestId"], header.request_id);

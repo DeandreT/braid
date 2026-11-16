@@ -1,20 +1,13 @@
 # Claim-aware private filesystem storage
 
-Issue [#65](https://github.com/DeandreT/weft/issues/65) adds an explicitly selected
-v2 component behind `IPrivateObjectPublicationStore` and
+The filesystem store implements `IPrivateObjectPublicationStore` and
 `IPrivateObjectRetirementStore`. It retains the original publication owner and
 coordinates publishers, verified readers and physical retirement across
-processes. The component was qualified and merged in
-[#68](https://github.com/DeandreT/weft/pull/68).
+processes.
 
-The configured application host now selects v2, forwarding the original
-ingestion or report claim through a lazy role-specific registry. Existing v1
-library factories remain available for deliberately selected legacy adapters.
-Existing application roots require [explicit offline activation](private-storage-activation.md);
-requests never initialize or convert a root. This integration is being qualified
-in [#66](https://github.com/DeandreT/weft/issues/66). The bounded cleanup command and
-fresh database acknowledgements follow in
-[#62](https://github.com/DeandreT/weft/issues/62). The
+The application host forwards the original ingestion or report claim through a
+lazy role-specific registry. Initialize a new root before starting the host;
+requests never initialize a root. The
 [maintenance metadata contract](private-object-maintenance-metadata.md) supplies
 the registration and captured retirement facts; physical storage never grants
 project access or replaces an expired workflow claim.
@@ -42,17 +35,17 @@ generation.
 
 ## Permanent namespace and private records
 
-The marker `.weft-private-storage` is exactly 90 ASCII bytes:
+The marker `.braid-private-storage` is exactly 91 ASCII bytes:
 
 ```text
-weft-private-storage-v2
+braid-private-storage-v2
 <32 lowercase hexadecimal root ID>
 <32 lowercase hexadecimal control namespace ID>
 ```
 
 Both IDs are nonzero, and the final line ends with LF. The marker is mode 0400.
 The mode-0700 control namespace is
-`.weft-private-control/<control ID>/`; its immutable 68-byte `control.meta`
+`.braid-private-control/<control ID>/`; its immutable 69-byte `control.meta`
 binds the root, namespace, format/profile version and compiled limits.
 All admitted directories and files belong to the service's effective user.
 
@@ -88,7 +81,7 @@ identities. Report owners retain their complete canonical report key and hash.
 These files contain private lease evidence and must not appear in HTTP,
 diagnostics, process arguments or logs.
 
-Seal headers are `WEFTV2R\n`, a 16-bit kind, 16-bit version 1 and 32-bit total
+Seal headers are `BRAIDV2R\n`, a 16-bit kind, 16-bit version 1 and 32-bit total
 record length. Integers use big-endian encoding; UUIDs use network order. UTC
 times use .NET 100-nanosecond ticks. Records are at most 65,536 bytes, and a
 canonical report key is at most 32,768 bytes. Decoding rejects extra bytes,
@@ -99,14 +92,14 @@ The `control.meta` fields occur in this exact order, with no padding:
 
 | Field | Bytes |
 | --- | --- |
-| ASCII `WEFTV2C\n` | 8 |
+| ASCII `BRAIDV2C\n` | 9 |
 | Format version, unsigned 16-bit, value 1 | 2 |
 | RootId, then ControlNamespaceId | 16 each |
 | Profile version, unsigned 16-bit, value 1 | 2 |
 | Native limit 4,194,304, then derived limit 16,777,216, unsigned 64-bit | 8 each |
 | Maximum seal 65,536, then maximum key 32,768, unsigned 32-bit | 4 each |
 
-After its 16-byte header, every seal has this common prefix in order:
+After its 17-byte header, every seal has this common prefix in order:
 
 | Field | Encoding |
 | --- | --- |
@@ -149,8 +142,8 @@ The common prefix is followed by exactly the matching suffix:
 
 Identifiers must be nonzero, owner generations and timestamps must satisfy
 their original typed claim constraints, and locations must retain distinct
-inodes on the same recorded mount. The native golden records are exactly 446,
-526, 542 and 590 bytes for the four kinds. Report record length varies with the
+inodes on the same recorded mount. The native golden records are exactly 447,
+527, 543 and 591 bytes for the four kinds. Report record length varies with the
 full key and optional repair UUID, within the fixed limits.
 
 Each seal has a fixed `<name>.stage` slot. Installation uses CreateNew, bounded
@@ -196,26 +189,24 @@ may fence that slot and return `Missing`; it does not manufacture a seal or Bind
 A present temp requires the complete valid absence/reservation chain. Safe-empty
 unbound cleanup additionally proves a zero-length, mode-0600, singly linked
 file. Nonempty unbound files, mismatched/corrupt required chains and unknown
-legacy slots remain retained.
+slots remain retained.
 
 Physical results are `Deleted`, `Missing`, `Busy`, `Unsupported`, `UnsafeStorage`
 and `Io`; cancellation remains cancellation. These are separate from database
-cleanup dispositions. The later cleanup command must map them truthfully and
+cleanup dispositions. The cleanup command maps them and
 perform fresh acknowledgement outside the filesystem critical section.
 
-## Qualification scope
+## Tests
 
 The component needs independent binary vectors, strict codec/key refusal,
 actual filesystem identities and permissions, original-owner registry facts,
 and real cross-process gate/death recovery checks. The separate test-only
-`Weft.StorageProtocolProbe` accepts bounded stdin commands and can stop after an
+`Braid.StorageProtocolProbe` accepts bounded stdin commands and can stop after an
 actual completed phase. Its readiness marker never substitutes for a completed
 filesystem operation. A post-rename stop is signaled by the probe only after
 publication returns `Created`.
 
-Synthetic registries qualify physical behavior only. PostgreSQL integration
-checks must use actual persisted claims and registrations. This document and
-the unactivated component do not qualify service activation, cleanup command
-execution or existing-root conversion. The [Azure Blob store](private-storage-blob.md)
+PostgreSQL integration checks use actual persisted claims and registrations.
+The [Azure Blob store](private-storage-blob.md)
 implements the same contract with blob leases and conditional commits, and the
 shared contract tests run against both stores.

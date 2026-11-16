@@ -1,9 +1,6 @@
 # Saved revision reports
 
-The saved revision page has separate explanation and validation panels. Their
-implementation and qualification are tracked in [#77](https://github.com/DeandreT/weft/issues/77),
-increment B of the [catalog integration](https://github.com/DeandreT/weft/issues/19).
-Browser and clean-build qualification remain pending until recorded there.
+The saved revision page has separate explanation and validation panels.
 
 ## Reading and generating
 

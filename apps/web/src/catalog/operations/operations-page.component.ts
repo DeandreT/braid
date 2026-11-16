@@ -30,7 +30,7 @@ import {
 } from "./operations-api";
 
 @Component({
-  selector: "weft-operations-page",
+  selector: "braid-operations-page",
   imports: [FormsModule, RouterLink],
   templateUrl: "./operations-page.component.html",
   styleUrl: "../catalog.css",

@@ -7,7 +7,7 @@ import openapiTS from "openapi-typescript";
 // security schemes are the ones the host enforces.
 const specifications = [
   {
-    file: "weft-endpoint-v1.json",
+    file: "braid-endpoint-v1.json",
     schemes: { machineToken: "oauth2" },
   },
   {

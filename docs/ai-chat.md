@@ -13,7 +13,7 @@ Keep the conversation beside the selected mapping. Suggested questions include:
 - "Explain this rule in business terms."
 
 Workspace conversations may have an explicit project, mapping or revision focus;
-legacy revision conversations retain their immutable pin. The UI shows the model
+revision conversations retain their immutable pin. The UI shows the model
 profile and the focus used for each turn. Following the current mapping head and
 pinning an exact revision remain distinct; old answers never silently become
 explanations of a newer mapping.
@@ -41,11 +41,10 @@ An adapter translates native role ordering, tool schemas, stop reasons, usage,
 and streaming chunks into these contracts. It must advertise text/streaming/tool
 support and model context constraints rather than silently dropping unsupported
 features. Selecting a model that cannot support the requested grounded-chat
-operation returns an explicit admission error; a later text-only mode can have
-its own separately qualified behavior.
+operation returns an explicit admission error.
 
 Profiles can point to hosted or local services. Local inference is a configurable
-provider endpoint, not a requirement to ship model weights in Weft. Administrators
+provider endpoint, not a requirement to ship model weights in Braid. Administrators
 configure allowed endpoints and credential references; users select permitted
 profiles rather than submitting arbitrary provider URLs to the API.
 
@@ -54,14 +53,14 @@ tools or the browser chat protocol. Record the selected profile version and
 model identity for every turn. Provider output is text/tool intent, never a
 source of application authority.
 
-## Provider adapters (`Weft.Ai`)
+## Provider adapters (`Braid.Ai`)
 
-`dotnet/src/Weft.Ai` is a BCL-only module without its own host registration;
+`dotnet/src/Braid.Ai` is a BCL-only module without its own host registration;
 the Server composes one shared client when chat is configured (see
 [Chat turn HTTP API](chat-http.md)). It speaks three fixed wire dialects over HTTP: Chat Completions SSE
 (`ChatCompletionsSseV1`), its Azure Databricks variant (`DatabricksChatCompletionsSseV1`) and Ollama
 `/api/chat` NDJSON (`OllamaChatNdjsonV1`).
-Callers see only Weft-owned types; vendor event names and raw bodies stay inside
+Callers see only Braid-owned types; vendor event names and raw bodies stay inside
 the readers.
 
 - **Profiles.** `AiProfileSpec` is immutable server configuration: profile key and
@@ -139,7 +138,7 @@ app's managed identity instead of a key (see [Azure deployment](azure-deployment
 
 The identity needs the `Cognitive Services OpenAI User` role on the resource. With
 an API key, the credential is a private file instead,
-`{ "reference": "azure-openai", "file": "/run/weft/secrets/model-provider-credential" }`,
+`{ "reference": "azure-openai", "file": "/run/braid/secrets/model-provider-credential" }`,
 and the key is sent as the Bearer value. A profile's `mappingMetadataAllowed`
 records that the deployment may receive mapping metadata; set it only when the
 resource's data handling permits that.
@@ -227,12 +226,12 @@ streamed text round and a tool round followed by an answer against a real local
 Ollama service when both variables are set:
 
 ```sh
-docker run -d --name weft-ollama -p 127.0.0.1:11434:11434 \
-  -v weft-ollama-models:/root/.ollama docker.io/ollama/ollama
-docker exec weft-ollama ollama pull qwen2.5:1.5b
-WEFT_LIVE_OLLAMA_ENDPOINT=http://127.0.0.1:11434/api/chat \
-WEFT_LIVE_OLLAMA_MODEL=qwen2.5:1.5b \
-  dotnet test dotnet/Weft.slnx -c Release --filter "FullyQualifiedName~LiveOllama"
+docker run -d --name braid-ollama -p 127.0.0.1:11434:11434 \
+  -v braid-ollama-models:/root/.ollama docker.io/ollama/ollama
+docker exec braid-ollama ollama pull qwen2.5:1.5b
+BRAID_LIVE_OLLAMA_ENDPOINT=http://127.0.0.1:11434/api/chat \
+BRAID_LIVE_OLLAMA_MODEL=qwen2.5:1.5b \
+  dotnet test dotnet/Braid.slnx -c Release --filter "FullyQualifiedName~LiveOllama"
 ```
 
 The endpoint must be a loopback IP literal, because only loopback profiles may use
@@ -279,8 +278,7 @@ Every tool is scoped to the already authorized conversation/revision. Cross-
 project search, raw filesystem/network access, shell/SQL execution, and payload
 retrieval are absent from this tool registry. Organization-wide questions use a
 separate workspace conversation with its own closed read-only manifest; see
-[Workspace chat](workspace-chat.md). Revision comparison becomes
-a tool only after the comparison API is independently qualified. The registry,
+[Workspace chat](workspace-chat.md). The registry,
 read port and citation check are described in
 [Mapping explanation tools](mapping-ai-tools.md).
 
@@ -292,11 +290,10 @@ run with the matching revision.
 
 ## Actions and payloads
 
-V1 chat explains mappings; users run previews through the ordinary preview UI.
-Later AI action tools may propose parameters or mapping edits, but execution
-requires the corresponding typed application action and permission. Proposed
-edits must identify their base revision and show a concrete diff before creating
-another revision; deployment remains a separate approved workflow.
+Users run previews through the preview UI. Mapping edits identify their base
+revision and show a concrete diff for review before creating another revision;
+see [Mapping editing](mapping-editing.md) and
+[Chat edit approval](chat-edit-approval-composition.md).
 
 Production input/output bytes are not model context by default. Reading them
 requires the separate payload permission and a model profile that permits their
@@ -327,14 +324,13 @@ provenance; character limits and maximum tool rounds remain enforceable even
 when a provider does not return token accounting. Default logs contain turn IDs,
 model profile identity, timing, and bounded failures, not prompts or responses.
 
-## Qualification gate
+## Verification
 
 - Two independent provider protocol fixtures pass the same request/event/tool
   contract; no vendor SDK types appear in the API or browser contract.
-- One configured real provider passes opt-in integration checks before chat is
-  advertised as connected. Secrets and paid calls are not required in ordinary CI.
+- Use opt-in integration checks for real providers; ordinary CI uses fixtures.
 - A hosted and a local profile can be selected through configuration without
-  changing the UI/tool protocol; only qualified capabilities are advertised.
+  changing the UI/tool protocol.
 - Answers cite actual authorized fields/rules from the pinned revision.
 - Unauthorized project access, prompt-injected tool requests, excess budgets,
   invalid citation IDs, malformed streams, rate limits, reconnects, timeouts, and

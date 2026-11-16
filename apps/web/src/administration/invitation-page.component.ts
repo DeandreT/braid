@@ -5,7 +5,7 @@ import { BrowserSessionState } from "../auth/browser-session-state";
 import { UnsentWork } from "../workbench/unsent-work";
 
 @Component({
-  selector: "weft-invitation-page",
+  selector: "braid-invitation-page",
   template: `
     <section aria-labelledby="invitation-heading">
       <h1 id="invitation-heading">Join an organization</h1>

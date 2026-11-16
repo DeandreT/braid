@@ -2,7 +2,7 @@
 # Offline tests of deploy/azure/qualify.sh. Each scenario runs the harness from a committed copy of the files it
 # uses, against the recording fakes in fakes/ (az, curl, docker, date and sleep), so nothing reaches Azure or the
 # network. Usage: qualify-test.sh [SCENARIO...]; without arguments every scenario runs. With
-# WEFT_QUALIFY_UPDATE_EXPECTED=1 the successful run rewrites expected/successful-run.calls.
+# BRAID_QUALIFY_UPDATE_EXPECTED=1 the successful run rewrites expected/successful-run.calls.
 # shellcheck disable=SC2016,SC2329 # jq programs in single quotes; scenarios and their helpers run by name.
 set -euo pipefail
 tests=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
@@ -13,7 +13,7 @@ tenant=5f0c3a2e-0000-4000-8000-000000000002
 client=5f0c3a2e-0000-4000-8000-000000000003
 audience=5f0c3a2e-0000-4000-8000-000000000004
 caller_client=5f0c3a2e-0000-4000-8000-000000000005
-group=rg-weft-qualify
+group=rg-braid-qualify
 FAKE_ARTIFACT=$(printf artifact | sha256sum | cut -d' ' -f1)
 FAKE_TOOLCHAIN=sha256:$(printf toolchain | sha256sum | cut -d' ' -f1)
 FAKE_RUNTIME_IDENTITY=sha256:$(printf runtime | sha256sum | cut -d' ' -f1)
@@ -40,7 +40,7 @@ equals() { [[ $1 == "$2" ]]; }
 not() { ! "$@"; }
 
 setup() {
-  root=$(mktemp -d "${TMPDIR:-/tmp}/weft-qualify-test.XXXXXXXX")
+  root=$(mktemp -d "${TMPDIR:-/tmp}/braid-qualify-test.XXXXXXXX")
   repo=$root/repo fake=$root/fake state=$root/state
   mkdir -p "$repo/deploy/azure" "$repo/deploy/container" "$repo/engines/ferrule-host/tests/fixtures" "$root/bin" "$fake" "$root/private"
   cp -R "$repository/deploy/azure/." "$repo/deploy/azure/"
@@ -55,7 +55,7 @@ setup() {
     commit -qm fixture
   commit=$(git -C "$repo" rev-parse HEAD)
   # A private parameter file beside the template, ignored like a real one.
-  printf "using './main.bicep'\n\nparam name = 'weft'\n" >"$repo/deploy/azure/qualify.bicepparam"
+  printf "using './main.bicep'\n\nparam name = 'braid'\n" >"$repo/deploy/azure/qualify.bicepparam"
   cp "$tests"/fakes/* "$root/bin/"
   chmod +x "$root"/bin/*
   echo 0 >"$fake/clock"
@@ -253,7 +253,7 @@ scenario_successful_run() {
   run "$(printf 'yes\n%.0s' {1..11})" "${arguments[@]}"
   receipt=$(receipt_file)
   expect 'exits 0' equals "$code" 0
-  if [[ ${WEFT_QUALIFY_UPDATE_EXPECTED:-} == 1 ]]; then normalize >"$expected"; fi
+  if [[ ${BRAID_QUALIFY_UPDATE_EXPECTED:-} == 1 ]]; then normalize >"$expected"; fi
   if ! diff -u "$expected" <(normalize) >"$root/sequence.diff"; then
     printf '  FAILED: the command sequence differs from %s\n' "${expected#"$repository"/}"
     head -n 40 "$root/sequence.diff"
@@ -289,7 +289,7 @@ scenario_successful_run() {
 }
 
 scenario_failure_partway() {
-  FAKE_AZ_FAIL="containerapp job start --name weft-migrate" run "$(printf 'yes\n%.0s' {1..11})" "${arguments[@]}"
+  FAKE_AZ_FAIL="containerapp job start --name braid-migrate" run "$(printf 'yes\n%.0s' {1..11})" "${arguments[@]}"
   expect 'exits 1' equals "$code" 1
   expect 'the receipt marks the failed step' receipt_has 'last | .kind == "run" and .result == "fail" and .evidence.step == "application"'
   expect 'the run did not pass' receipt_has 'all(.[]; .kind != "run" or .result != "pass")'
@@ -309,7 +309,7 @@ scenario_failed_check_recorded() {
 }
 
 scenario_teardown_at_end_after_failure() {
-  FAKE_AZ_FAIL="containerapp job start --name weft-migrate" run "$(printf 'yes\n%.0s' {1..11})" "${arguments[@]}" --teardown-at-end
+  FAKE_AZ_FAIL="containerapp job start --name braid-migrate" run "$(printf 'yes\n%.0s' {1..11})" "${arguments[@]}" --teardown-at-end
   expect 'exits 1' equals "$code" 1
   expect 'deleted the group' contains "$fake/calls.log" "az group delete --name $group --yes"
   expect 'the group is gone' test ! -e "$fake/group"

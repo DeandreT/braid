@@ -27,16 +27,16 @@ def main():
         return 0
     if ready.exists() or stop.exists():
         parser.error('Use fresh bindings for a new viewer; existing evidence is preserved.')
-    node = args.node or Path(os.environ['LOCALAPPDATA']) / 'ITS/Tooling/weft-node-22.23.3/node-v22.23.3-win-x64/node.exe'
+    node = args.node or Path(os.environ['LOCALAPPDATA']) / 'ITS/Tooling/braid-node-22.23.3/node-v22.23.3-win-x64/node.exe'
     if subprocess.check_output([str(node), '--version'], text=True).strip() != 'v22.23.3':
         parser.error('The local viewer requires the pinned Node 22.23.3.')
     root = Path(__file__).resolve().parents[2]
     client = (root / 'apps/web/tests/browser-execution-owner.ts').as_uri()
     source = '''
 import {existsSync, writeFileSync} from 'node:fs';
-const settings = JSON.parse(process.env.WEFT_LOCAL_VIEWER_OPTIONS);
+const settings = JSON.parse(process.env.BRAID_LOCAL_VIEWER_OPTIONS);
 const {ExecutionOwner} = await import(settings.clientModule);
-const owner = new ExecutionOwner('build', () => process.env.WEFT_BUILD_BINDINGS);
+const owner = new ExecutionOwner('build', () => process.env.BRAID_BUILD_BINDINGS);
 let resolveStop;
 const stopped = new Promise(resolve => { resolveStop = resolve; });
 process.once('SIGINT', () => resolveStop());
@@ -46,7 +46,7 @@ try {
   await owner.start();
   const m = owner.manifest, r = m.revision;
   const url = `${m.readOrigin}/catalog/organizations/${r.organizationId}/projects/${r.projectId}/mappings/${r.mappingId}/revisions/${r.revisionId}`;
-  const ready = {schemaVersion:'weft.local-workbench.v1', fixtureId:m.fixtureId, url, temporary:true, dataLifecycle:'Disposed when this viewer stops'};
+  const ready = {schemaVersion:'braid.local-workbench.v1', fixtureId:m.fixtureId, url, temporary:true, dataLifecycle:'Disposed when this viewer stops'};
   writeFileSync(settings.readyFile, JSON.stringify(ready) + '\\n', {flag:'wx'});
   console.log(JSON.stringify(ready));
   await stopped;
@@ -56,7 +56,7 @@ try {
 }
 '''
     settings = {'clientModule': client, 'stopFile': str(stop), 'readyFile': str(ready)}
-    env = {**os.environ, 'WEFT_BUILD_BINDINGS': str(args.bindings), 'WEFT_LOCAL_VIEWER_OPTIONS': json.dumps(settings)}
+    env = {**os.environ, 'BRAID_BUILD_BINDINGS': str(args.bindings), 'BRAID_LOCAL_VIEWER_OPTIONS': json.dumps(settings)}
     print('Starting a disposable local workbench. Do not use it for data you need to retain.', flush=True)
     child = subprocess.Popen([str(node), '--experimental-transform-types', '--input-type=module', '-e', source], cwd=root, env=env)
     try:

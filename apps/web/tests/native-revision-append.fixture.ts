@@ -43,7 +43,7 @@ export interface AppendCounts {
   readonly reportResults: number;
 }
 export interface NativeRevisionAppendManifest {
-  readonly schemaVersion: "weft.native-revision-append-browser-fixture.v1";
+  readonly schemaVersion: "braid.native-revision-append-browser-fixture.v1";
   readonly fixtureId: string;
   readonly source: { readonly commit: string; readonly tree: string };
   readonly readOrigin: string;
@@ -92,7 +92,7 @@ export type AppendCommand =
         | "shutdown";
     };
 type AckBase = {
-  schemaVersion: "weft.native-revision-append-browser-control.v1";
+  schemaVersion: "braid.native-revision-append-browser-control.v1";
   requestNonce: string;
   fixtureId: string;
 };
@@ -206,7 +206,7 @@ function manifest(
     "reports",
   ]);
   requireAppend(
-    row.schemaVersion === "weft.native-revision-append-browser-fixture.v1" &&
+    row.schemaVersion === "braid.native-revision-append-browser-fixture.v1" &&
       canonicalId(row.fixtureId) &&
       row.readOrigin === origin &&
       row.initialReadProfile === "publisher" &&
@@ -480,7 +480,7 @@ export class NativeRevisionAppendOwner {
       "profile",
     ]);
     requireAppend(
-      ready.schemaVersion === "weft.native-revision-append-browser-ready.v1" &&
+      ready.schemaVersion === "braid.native-revision-append-browser-ready.v1" &&
         ready.profile === "publisher" &&
         typeof ready.manifestSha256 === "string" &&
         /^[0-9a-f]{64}$/.test(ready.manifestSha256),
@@ -561,7 +561,7 @@ export class NativeRevisionAppendOwner {
         ];
       requireAppend(
         row.schemaVersion ===
-          "weft.native-revision-append-browser-control.v1" &&
+          "braid.native-revision-append-browser-control.v1" &&
           row.fixtureId === envelope.fixtureId &&
           row.requestNonce === nonce &&
           row.action === command.action,
@@ -761,11 +761,12 @@ export const test = base.extend<
 >({
   nativeRevisionAppendOwner: [
     async ({}, use) => {
-      const operator = process.env.WEFT_NATIVE_REVISION_APPEND_BROWSER_OPERATOR,
+      const operator =
+          process.env.BRAID_NATIVE_REVISION_APPEND_BROWSER_OPERATOR,
         configuration =
-          process.env.WEFT_NATIVE_REVISION_APPEND_BROWSER_OPERATOR_CONFIG,
-        path = process.env.WEFT_NATIVE_REVISION_APPEND_BROWSER_MANIFEST,
-        origin = process.env.WEFT_NATIVE_REVISION_APPEND_BASE_URL;
+          process.env.BRAID_NATIVE_REVISION_APPEND_BROWSER_OPERATOR_CONFIG,
+        path = process.env.BRAID_NATIVE_REVISION_APPEND_BROWSER_MANIFEST,
+        origin = process.env.BRAID_NATIVE_REVISION_APPEND_BASE_URL;
       requireAppend(
         operator && configuration && path && origin && isAbsolute(operator),
         "explicit packaged origin/operator/private configuration/manifest are required",

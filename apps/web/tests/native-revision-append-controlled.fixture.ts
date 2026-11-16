@@ -361,23 +361,23 @@ export class ControlledAppend {
           method === "GET" &&
           !url.search &&
           (request.postDataBuffer()?.length ?? 0) === 0 &&
-          headers["x-weft-session"] === "1" &&
+          headers["x-braid-session"] === "1" &&
           ![
             "content-type",
             "authorization",
             "x-xsrf-token",
-            "x-weft-auth-token",
+            "x-braid-auth-token",
             "idempotency-key",
             "if-match",
             "if-none-match",
             "identitycontext",
             "identity-context",
-            "x-weft-identity-context",
-            "x-weft-actor",
-            "x-weft-role",
-            "x-weft-login",
-            "x-weft-logout",
-            "x-weft-forget-local",
+            "x-braid-identity-context",
+            "x-braid-actor",
+            "x-braid-role",
+            "x-braid-login",
+            "x-braid-logout",
+            "x-braid-forget-local",
           ].some((name) => name in headers);
         if (!admitted) ++this.unexpectedRequests;
         await route.fulfill(
@@ -587,8 +587,8 @@ export class ControlledAppend {
           "if-range",
           "authorization",
           "content-encoding",
-          "x-weft-actor",
-          "x-weft-role",
+          "x-braid-actor",
+          "x-braid-role",
         ].some((name) => name in headers),
       freshToken:
         this.#lastMutationToken === null || token !== this.#lastMutationToken,

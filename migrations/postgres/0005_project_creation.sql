@@ -1,28 +1,28 @@
 -- Additive creation authority. No predecessor shape, policy, trigger or grant changes.
-DO $weft_require_creator$
+DO $braid_require_creator$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM pg_catalog.pg_roles
-        WHERE rolname = 'weft_project_creator' AND rolcanlogin AND NOT rolinherit
+        WHERE rolname = 'braid_project_creator' AND rolcanlogin AND NOT rolinherit
           AND NOT rolsuper AND NOT rolbypassrls AND NOT rolcreatedb
           AND NOT rolcreaterole AND NOT rolreplication
     ) THEN
         RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Project creation requires its dedicated restricted login.';
     END IF;
 END;
-$weft_require_creator$;
+$braid_require_creator$;
 
-CREATE TABLE weft.organization_project_creation_capabilities (
+CREATE TABLE braid.organization_project_creation_capabilities (
     organization_id uuid NOT NULL,
     principal_id uuid NOT NULL,
     can_create_projects boolean NOT NULL DEFAULT false,
     CONSTRAINT organization_project_creation_capabilities_pkey PRIMARY KEY (organization_id,principal_id),
     CONSTRAINT organization_project_creation_capabilities_membership_fkey
         FOREIGN KEY (organization_id,principal_id)
-        REFERENCES weft.organization_memberships(organization_id,principal_id) ON DELETE RESTRICT
+        REFERENCES braid.organization_memberships(organization_id,principal_id) ON DELETE RESTRICT
 );
 
-CREATE TABLE weft.project_creations (
+CREATE TABLE braid.project_creations (
     organization_id uuid NOT NULL,
     idempotency_key uuid NOT NULL,
     original_actor_id uuid NOT NULL,
@@ -39,9 +39,9 @@ CREATE TABLE weft.project_creations (
     CONSTRAINT project_creations_pkey PRIMARY KEY (organization_id,idempotency_key),
     CONSTRAINT project_creations_project_key UNIQUE (organization_id,project_id),
     CONSTRAINT project_creations_project_fkey FOREIGN KEY (organization_id,project_id)
-        REFERENCES weft.projects(organization_id,id) ON DELETE RESTRICT,
+        REFERENCES braid.projects(organization_id,id) ON DELETE RESTRICT,
     CONSTRAINT project_creations_actor_fkey FOREIGN KEY (organization_id,original_actor_id)
-        REFERENCES weft.organization_memberships(organization_id,principal_id) ON DELETE RESTRICT,
+        REFERENCES braid.organization_memberships(organization_id,principal_id) ON DELETE RESTRICT,
     CONSTRAINT project_creations_key_check CHECK (idempotency_key <> '00000000-0000-0000-0000-000000000000'),
     CONSTRAINT project_creations_project_check CHECK (project_id <> '00000000-0000-0000-0000-000000000000'),
     CONSTRAINT project_creations_fingerprint_version_check CHECK (fingerprint_version = 1),
@@ -56,28 +56,28 @@ CREATE TABLE weft.project_creations (
     CONSTRAINT project_creations_initial_membership_version_check CHECK (initial_membership_version = 1)
 );
 
-ALTER TABLE weft.organization_project_creation_capabilities ENABLE ROW LEVEL SECURITY;
-CREATE POLICY organization_project_creation_capabilities_organization_scope ON weft.organization_project_creation_capabilities
-    USING (organization_id = NULLIF(current_setting('weft.organization_id',true),'')::uuid)
-    WITH CHECK (organization_id = NULLIF(current_setting('weft.organization_id',true),'')::uuid);
-ALTER TABLE weft.project_creations ENABLE ROW LEVEL SECURITY;
-CREATE POLICY project_creations_organization_scope ON weft.project_creations
-    USING (organization_id = NULLIF(current_setting('weft.organization_id',true),'')::uuid)
-    WITH CHECK (organization_id = NULLIF(current_setting('weft.organization_id',true),'')::uuid);
+ALTER TABLE braid.organization_project_creation_capabilities ENABLE ROW LEVEL SECURITY;
+CREATE POLICY organization_project_creation_capabilities_organization_scope ON braid.organization_project_creation_capabilities
+    USING (organization_id = NULLIF(current_setting('braid.organization_id',true),'')::uuid)
+    WITH CHECK (organization_id = NULLIF(current_setting('braid.organization_id',true),'')::uuid);
+ALTER TABLE braid.project_creations ENABLE ROW LEVEL SECURITY;
+CREATE POLICY project_creations_organization_scope ON braid.project_creations
+    USING (organization_id = NULLIF(current_setting('braid.organization_id',true),'')::uuid)
+    WITH CHECK (organization_id = NULLIF(current_setting('braid.organization_id',true),'')::uuid);
 
-REVOKE ALL ON weft.organization_project_creation_capabilities,weft.project_creations FROM PUBLIC;
-REVOKE ALL ON weft.organization_project_creation_capabilities,weft.project_creations
-    FROM weft_runtime,weft_ingest,weft_catalog_reader,weft_catalog_editor,weft_project_creator;
-GRANT USAGE ON SCHEMA weft TO weft_project_creator;
+REVOKE ALL ON braid.organization_project_creation_capabilities,braid.project_creations FROM PUBLIC;
+REVOKE ALL ON braid.organization_project_creation_capabilities,braid.project_creations
+    FROM braid_runtime,braid_ingest,braid_catalog_reader,braid_catalog_editor,braid_project_creator;
+GRANT USAGE ON SCHEMA braid TO braid_project_creator;
 
-CREATE FUNCTION weft.project_creation_fingerprint_v1(
+CREATE FUNCTION braid.project_creation_fingerprint_v1(
     p_organization_id uuid,p_actor_id uuid,p_idempotency_key uuid,p_name text,p_description text
 ) RETURNS text
 LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE STRICT SECURITY INVOKER
-SET search_path = pg_catalog,weft,pg_temp
-AS $weft_project_creation_fingerprint_v1$
+SET search_path = pg_catalog,braid,pg_temp
+AS $braid_project_creation_fingerprint_v1$
 DECLARE
-    v_tag bytea := pg_catalog.convert_to('weft.project-creation-intent','UTF8');
+    v_tag bytea := pg_catalog.convert_to('braid.project-creation-intent','UTF8');
     v_name bytea := pg_catalog.convert_to(p_name,'UTF8');
     v_description bytea := pg_catalog.convert_to(p_description,'UTF8');
     v_bytes bytea;
@@ -94,38 +94,38 @@ BEGIN
         || pg_catalog.decode(pg_catalog.lpad(pg_catalog.to_hex(pg_catalog.octet_length(v_description)),8,'0'),'hex') || v_description;
     RETURN pg_catalog.encode(pg_catalog.sha256(v_bytes),'hex');
 END;
-$weft_project_creation_fingerprint_v1$;
-REVOKE ALL ON FUNCTION weft.project_creation_fingerprint_v1(uuid,uuid,uuid,text,text)
-    FROM PUBLIC,weft_runtime,weft_ingest,weft_catalog_reader,weft_catalog_editor,weft_project_creator;
+$braid_project_creation_fingerprint_v1$;
+REVOKE ALL ON FUNCTION braid.project_creation_fingerprint_v1(uuid,uuid,uuid,text,text)
+    FROM PUBLIC,braid_runtime,braid_ingest,braid_catalog_reader,braid_catalog_editor,braid_project_creator;
 
-CREATE FUNCTION weft.assert_project_creation_contract_v1() RETURNS void
+CREATE FUNCTION braid.assert_project_creation_contract_v1() RETURNS void
 LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE CALLED ON NULL INPUT SECURITY INVOKER
-SET search_path = pg_catalog,weft,pg_temp
-AS $weft_assert_project_creation_contract_v1$
+SET search_path = pg_catalog,braid,pg_temp
+AS $braid_assert_project_creation_contract_v1$
 DECLARE
     v_tables text[] := ARRAY['organizations','principals','organization_memberships','projects',
         'project_memberships','organization_project_creation_capabilities','project_creations'];
     v_table record;
     v_expected_expression text;
 BEGIN
-    IF current_user <> 'weft_migrator' OR current_setting('server_encoding') <> 'UTF8'
+    IF current_user <> 'braid_migrator' OR current_setting('server_encoding') <> 'UTF8'
        OR current_setting('standard_conforming_strings') <> 'on'
        OR current_setting('session_replication_role') <> 'origin' OR current_setting('row_security') <> 'on' THEN
         RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Project creation requires its accepted execution profile.';
     END IF;
 
     -- Owner-held relation locks protect source DDL, not an ACL/role/function commit fence.
-    LOCK TABLE ONLY weft.organizations, ONLY weft.principals, ONLY weft.organization_memberships,
-        ONLY weft.projects, ONLY weft.project_memberships,
-        ONLY weft.organization_project_creation_capabilities, ONLY weft.project_creations IN ACCESS SHARE MODE;
+    LOCK TABLE ONLY braid.organizations, ONLY braid.principals, ONLY braid.organization_memberships,
+        ONLY braid.projects, ONLY braid.project_memberships,
+        ONLY braid.organization_project_creation_capabilities, ONLY braid.project_creations IN ACCESS SHARE MODE;
     IF (SELECT count(*) FROM pg_catalog.pg_class r JOIN pg_catalog.pg_namespace n ON n.oid=r.relnamespace
-        WHERE n.nspname='weft' AND r.relname=ANY(v_tables)) <> cardinality(v_tables)
+        WHERE n.nspname='braid' AND r.relname=ANY(v_tables)) <> cardinality(v_tables)
        OR EXISTS (
         SELECT 1 FROM pg_catalog.pg_class r JOIN pg_catalog.pg_namespace n ON n.oid=r.relnamespace
         JOIN pg_catalog.pg_roles ro ON ro.oid=r.relowner JOIN pg_catalog.pg_roles no ON no.oid=n.nspowner
-        WHERE n.nspname='weft' AND r.relname=ANY(v_tables)
+        WHERE n.nspname='braid' AND r.relname=ANY(v_tables)
           AND (r.relkind <> 'r' OR r.relpersistence <> 'p' OR r.relispartition
-               OR ro.rolname <> 'weft_migrator' OR no.rolname <> 'weft_migrator'
+               OR ro.rolname <> 'braid_migrator' OR no.rolname <> 'braid_migrator'
                OR EXISTS (SELECT 1 FROM pg_catalog.pg_inherits i WHERE i.inhrelid=r.oid OR i.inhparent=r.oid)
                OR EXISTS (SELECT 1 FROM pg_catalog.pg_rewrite w WHERE w.ev_class=r.oid))
     ) THEN
@@ -184,7 +184,7 @@ BEGIN
             JOIN pg_catalog.pg_attribute a ON a.attrelid=r.oid
             JOIN pg_catalog.pg_type ty ON ty.oid=a.atttypid JOIN pg_catalog.pg_namespace tn ON tn.oid=ty.typnamespace
             LEFT JOIN pg_catalog.pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum
-            WHERE n.nspname='weft' AND r.relname=ANY(v_tables) AND a.attnum>0
+            WHERE n.nspname='braid' AND r.relname=ANY(v_tables) AND a.attnum>0
         )
         SELECT 1 FROM expected e FULL JOIN actual a ON a.table_name=e.table_name AND a.ordinal=e.ordinal
         WHERE e.table_name IS NULL OR a.table_name IS NULL OR a.column_name <> e.column_name
@@ -251,7 +251,7 @@ BEGIN
             JOIN pg_catalog.pg_namespace n ON n.oid=r.relnamespace
             LEFT JOIN pg_catalog.pg_class rr ON rr.oid=c.confrelid
             LEFT JOIN pg_catalog.pg_namespace rn ON rn.oid=rr.relnamespace
-            WHERE n.nspname='weft' AND r.relname=ANY(v_tables)
+            WHERE n.nspname='braid' AND r.relname=ANY(v_tables)
         )
         SELECT 1 FROM expected e FULL JOIN actual a ON a.table_name=e.table_name AND a.constraint_name=e.constraint_name
         WHERE e.table_name IS NULL OR a.table_name IS NULL OR a.kind <> e.kind
@@ -259,7 +259,7 @@ BEGIN
           OR (e.kind = 'c' AND a.connoinherit)
           OR (e.kind <> 'c' AND a.key_columns IS DISTINCT FROM e.key_columns)
           OR (e.kind = 'c' AND a.check_definition IS DISTINCT FROM e.check_definition)
-          OR (e.kind = 'f' AND (a.referenced_schema IS DISTINCT FROM 'weft'
+          OR (e.kind = 'f' AND (a.referenced_schema IS DISTINCT FROM 'braid'
               OR a.referenced_table IS DISTINCT FROM e.referenced_table
               OR a.referenced_columns IS DISTINCT FROM e.referenced_columns
               OR a.confdeltype <> 'r' OR a.confupdtype <> 'a' OR a.confmatchtype <> 's'
@@ -276,7 +276,7 @@ BEGIN
         SELECT r.oid,r.relname,r.relrowsecurity,r.relforcerowsecurity,
             (SELECT count(*) FROM pg_catalog.pg_policy p WHERE p.polrelid=r.oid) policy_count
         FROM pg_catalog.pg_class r JOIN pg_catalog.pg_namespace n ON n.oid=r.relnamespace
-        WHERE n.nspname='weft' AND r.relname=ANY(v_tables)
+        WHERE n.nspname='braid' AND r.relname=ANY(v_tables)
     LOOP
         IF v_table.relname='principals' THEN
             IF v_table.relrowsecurity OR v_table.relforcerowsecurity OR v_table.policy_count <> 0 THEN
@@ -284,7 +284,7 @@ BEGIN
             END IF;
         ELSE
             v_expected_expression := '(' || (CASE WHEN v_table.relname='organizations' THEN 'id' ELSE 'organization_id' END)
-                || ' = (NULLIF(current_setting(''weft.organization_id''::text, true), ''''::text))::uuid)';
+                || ' = (NULLIF(current_setting(''braid.organization_id''::text, true), ''''::text))::uuid)';
             IF NOT v_table.relrowsecurity OR v_table.relforcerowsecurity OR v_table.policy_count <> 1
                OR NOT EXISTS (
                 SELECT 1 FROM pg_catalog.pg_policy p WHERE p.polrelid=v_table.oid
@@ -305,15 +305,15 @@ BEGIN
         SELECT 1 FROM pg_catalog.pg_trigger t JOIN pg_catalog.pg_proc f ON f.oid=t.tgfoid
         JOIN pg_catalog.pg_namespace n ON n.oid=f.pronamespace JOIN pg_catalog.pg_roles o ON o.oid=f.proowner
         JOIN pg_catalog.pg_language l ON l.oid=f.prolang
-        WHERE t.tgrelid='weft.project_creations'::regclass AND NOT t.tgisinternal
+        WHERE t.tgrelid='braid.project_creations'::regclass AND NOT t.tgisinternal
           AND t.tgname='project_creations_transition_guard' AND t.tgtype=31 AND t.tgenabled='O'
           AND t.tgnargs=0 AND t.tgattr::text='' AND t.tgqual IS NULL
           AND NOT t.tgdeferrable AND NOT t.tginitdeferred AND t.tgoldtable IS NULL AND t.tgnewtable IS NULL
-          AND n.nspname='weft' AND f.proname='guard_project_creations_transition' AND o.rolname='weft_migrator'
+          AND n.nspname='braid' AND f.proname='guard_project_creations_transition' AND o.rolname='braid_migrator'
           AND l.lanname='plpgsql' AND NOT f.prosecdef AND f.prokind='f' AND f.provolatile='v'
           AND f.proparallel='u' AND NOT f.proisstrict AND NOT f.proleakproof AND f.pronargs=0
           AND f.prorettype='pg_catalog.trigger'::regtype AND NOT f.proretset
-          AND f.proconfig=ARRAY['search_path=pg_catalog, weft, pg_temp']
+          AND f.proconfig=ARRAY['search_path=pg_catalog, braid, pg_temp']
     ) THEN
         RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'Project creation transition triggers are inconsistent.';
     END IF;
@@ -322,21 +322,21 @@ BEGIN
     -- the application pool's EXECUTE-only role admission. Filled from guard SQL.
     IF (
         WITH creator AS (
-            SELECT role.* FROM pg_catalog.pg_roles role WHERE role.rolname = 'weft_project_creator'
+            SELECT role.* FROM pg_catalog.pg_roles role WHERE role.rolname = 'braid_project_creator'
         ), reachable_roles AS (
             SELECT role.* FROM pg_catalog.pg_roles role
-            WHERE role.rolname = 'weft_project_creator'
-               OR pg_catalog.pg_has_role('weft_project_creator', role.oid, 'MEMBER')
+            WHERE role.rolname = 'braid_project_creator'
+               OR pg_catalog.pg_has_role('braid_project_creator', role.oid, 'MEMBER')
         ), application_relations AS (
             SELECT relation.* FROM pg_catalog.pg_class relation
             JOIN pg_catalog.pg_namespace namespace ON namespace.oid = relation.relnamespace
-            WHERE namespace.nspname = 'weft' AND relation.relkind IN ('r','p','v','m','f')
+            WHERE namespace.nspname = 'braid' AND relation.relkind IN ('r','p','v','m','f')
         ), expected_functions(signature, creator_execute) AS (
-            VALUES ('weft.get_project_creation_admission_v1(uuid,uuid)', true),
-                   ('weft.create_project_v1(uuid,uuid,uuid,text,text)', true),
-                   ('weft.assert_project_creation_contract_v1()', false),
-                   ('weft.project_creation_fingerprint_v1(uuid,uuid,uuid,text,text)', false),
-                   ('weft.guard_project_creations_transition()', false)
+            VALUES ('braid.get_project_creation_admission_v1(uuid,uuid)', true),
+                   ('braid.create_project_v1(uuid,uuid,uuid,text,text)', true),
+                   ('braid.assert_project_creation_contract_v1()', false),
+                   ('braid.project_creation_fingerprint_v1(uuid,uuid,uuid,text,text)', false),
+                   ('braid.guard_project_creations_transition()', false)
         ), installed_functions AS (
             SELECT expected.signature, expected.creator_execute, function.* FROM expected_functions expected
             LEFT JOIN pg_catalog.pg_proc function ON function.oid = pg_catalog.to_regprocedure(expected.signature)
@@ -345,16 +345,16 @@ BEGIN
           AND (SELECT count(*) FROM reachable_roles) = 1
           AND (SELECT rolcanlogin AND NOT rolinherit AND NOT rolsuper AND NOT rolbypassrls
                       AND NOT rolcreaterole AND NOT rolcreatedb AND NOT rolreplication FROM creator)
-          AND pg_catalog.has_database_privilege('weft_project_creator', current_database(), 'CONNECT')
+          AND pg_catalog.has_database_privilege('braid_project_creator', current_database(), 'CONNECT')
           AND NOT pg_catalog.has_database_privilege('public', current_database(), 'CONNECT,CREATE,TEMPORARY')
-          AND pg_catalog.has_schema_privilege('weft_project_creator', 'weft', 'USAGE')
-          AND NOT pg_catalog.has_schema_privilege('public', 'weft', 'USAGE,CREATE')
-          AND (SELECT owner.rolname = 'weft_migrator' FROM pg_catalog.pg_namespace namespace
-               JOIN pg_catalog.pg_roles owner ON owner.oid = namespace.nspowner WHERE namespace.nspname = 'weft')
+          AND pg_catalog.has_schema_privilege('braid_project_creator', 'braid', 'USAGE')
+          AND NOT pg_catalog.has_schema_privilege('public', 'braid', 'USAGE,CREATE')
+          AND (SELECT owner.rolname = 'braid_migrator' FROM pg_catalog.pg_namespace namespace
+               JOIN pg_catalog.pg_roles owner ON owner.oid = namespace.nspowner WHERE namespace.nspname = 'braid')
           AND NOT EXISTS (
               SELECT 1 FROM reachable_roles role
               WHERE role.rolsuper OR role.rolbypassrls OR role.rolcreaterole OR role.rolcreatedb OR role.rolreplication
-                OR role.rolname IN ('weft_migrator','weft_runtime','weft_ingest','weft_catalog_reader','weft_catalog_editor',
+                OR role.rolname IN ('braid_migrator','braid_runtime','braid_ingest','braid_catalog_reader','braid_catalog_editor',
                                    'pg_read_all_data','pg_write_all_data','pg_read_server_files','pg_write_server_files',
                                    'pg_execute_server_program','pg_signal_backend','pg_maintain')
                 OR pg_catalog.has_database_privilege(role.oid, current_database(), 'CREATE,TEMPORARY,CONNECT WITH GRANT OPTION')
@@ -401,7 +401,7 @@ BEGIN
           )
           AND NOT EXISTS (
               SELECT 1 FROM pg_catalog.pg_class sequence JOIN pg_catalog.pg_namespace namespace ON namespace.oid = sequence.relnamespace
-              WHERE namespace.nspname = 'weft' AND sequence.relkind = 'S'
+              WHERE namespace.nspname = 'braid' AND sequence.relkind = 'S'
                 AND CASE WHEN sequence.relkind = 'S' THEN
                     (pg_catalog.has_sequence_privilege('public', sequence.oid, 'USAGE,SELECT,UPDATE')
                      OR EXISTS (SELECT 1 FROM reachable_roles role
@@ -410,10 +410,10 @@ BEGIN
           )
           AND (SELECT count(*) FROM installed_functions WHERE oid IS NOT NULL) = 5
           AND (SELECT count(*) FROM installed_functions
-               WHERE creator_execute AND pg_catalog.has_function_privilege('weft_project_creator', oid, 'EXECUTE')) = 2
+               WHERE creator_execute AND pg_catalog.has_function_privilege('braid_project_creator', oid, 'EXECUTE')) = 2
           AND NOT EXISTS (
               SELECT 1 FROM pg_catalog.pg_proc function JOIN pg_catalog.pg_namespace namespace ON namespace.oid = function.pronamespace
-              WHERE namespace.nspname = 'weft'
+              WHERE namespace.nspname = 'braid'
                 AND (pg_catalog.has_function_privilege('public', function.oid, 'EXECUTE')
                      OR EXISTS (SELECT 1 FROM reachable_roles role
                                 WHERE pg_catalog.has_function_privilege(role.oid, function.oid, 'EXECUTE WITH GRANT OPTION')
@@ -423,7 +423,7 @@ BEGIN
           )
           AND NOT EXISTS (
               SELECT 1 FROM installed_functions function CROSS JOIN pg_catalog.pg_roles old_role
-              WHERE old_role.rolname IN ('weft_runtime','weft_ingest','weft_catalog_reader','weft_catalog_editor')
+              WHERE old_role.rolname IN ('braid_runtime','braid_ingest','braid_catalog_reader','braid_catalog_editor')
                 AND pg_catalog.has_function_privilege(old_role.oid, function.oid, 'EXECUTE')
           )
           AND NOT EXISTS (
@@ -441,7 +441,7 @@ BEGIN
           AND NOT EXISTS (
               SELECT 1 FROM pg_catalog.pg_default_acl defaults
               CROSS JOIN LATERAL pg_catalog.aclexplode(defaults.defaclacl) grant_entry
-              WHERE defaults.defaclnamespace IN (0, (SELECT oid FROM pg_catalog.pg_namespace WHERE nspname = 'weft'))
+              WHERE defaults.defaclnamespace IN (0, (SELECT oid FROM pg_catalog.pg_namespace WHERE nspname = 'braid'))
                 AND (defaults.defaclrole IN (SELECT oid FROM reachable_roles)
                      OR grant_entry.grantee = 0 OR grant_entry.grantee IN (SELECT oid FROM reachable_roles))
           )
@@ -454,24 +454,24 @@ BEGIN
         RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Project creation requires its exact execute-only privilege profile.';
     END IF;
 END;
-$weft_assert_project_creation_contract_v1$;
-REVOKE ALL ON FUNCTION weft.assert_project_creation_contract_v1()
-    FROM PUBLIC,weft_runtime,weft_ingest,weft_catalog_reader,weft_catalog_editor,weft_project_creator;
+$braid_assert_project_creation_contract_v1$;
+REVOKE ALL ON FUNCTION braid.assert_project_creation_contract_v1()
+    FROM PUBLIC,braid_runtime,braid_ingest,braid_catalog_reader,braid_catalog_editor,braid_project_creator;
 
-CREATE FUNCTION weft.guard_project_creations_transition() RETURNS trigger
+CREATE FUNCTION braid.guard_project_creations_transition() RETURNS trigger
 LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE CALLED ON NULL INPUT SECURITY INVOKER
-SET search_path = pg_catalog,weft,pg_temp
-AS $weft_guard_project_creations_transition$
+SET search_path = pg_catalog,braid,pg_temp
+AS $braid_guard_project_creations_transition$
 BEGIN
     IF TG_OP <> 'INSERT' THEN
         RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'Project creation facts are immutable.';
     END IF;
     IF NEW.fingerprint_version <> 1 OR NEW.fingerprint IS DISTINCT FROM
-        weft.project_creation_fingerprint_v1(NEW.organization_id,NEW.original_actor_id,NEW.idempotency_key,NEW.name,NEW.description)
+        braid.project_creation_fingerprint_v1(NEW.organization_id,NEW.original_actor_id,NEW.idempotency_key,NEW.name,NEW.description)
        OR NEW.initial_project_version <> 1 OR NEW.initial_membership_role <> 'administrator'
        OR NOT NEW.initial_membership_active OR NEW.initial_membership_version <> 1
        OR NOT EXISTS (
-        SELECT 1 FROM weft.projects p JOIN weft.project_memberships m
+        SELECT 1 FROM braid.projects p JOIN braid.project_memberships m
           ON m.organization_id=p.organization_id AND m.project_id=p.id AND m.principal_id=p.creator_principal_id
         WHERE p.organization_id=NEW.organization_id AND p.id=NEW.project_id
           AND p.creator_principal_id=NEW.original_actor_id
@@ -483,38 +483,38 @@ BEGIN
     END IF;
     RETURN NEW;
 END;
-$weft_guard_project_creations_transition$;
-REVOKE ALL ON FUNCTION weft.guard_project_creations_transition()
-    FROM PUBLIC,weft_runtime,weft_ingest,weft_catalog_reader,weft_catalog_editor,weft_project_creator;
-CREATE TRIGGER project_creations_transition_guard BEFORE INSERT OR UPDATE OR DELETE ON weft.project_creations
-    FOR EACH ROW EXECUTE FUNCTION weft.guard_project_creations_transition();
+$braid_guard_project_creations_transition$;
+REVOKE ALL ON FUNCTION braid.guard_project_creations_transition()
+    FROM PUBLIC,braid_runtime,braid_ingest,braid_catalog_reader,braid_catalog_editor,braid_project_creator;
+CREATE TRIGGER project_creations_transition_guard BEFORE INSERT OR UPDATE OR DELETE ON braid.project_creations
+    FOR EACH ROW EXECUTE FUNCTION braid.guard_project_creations_transition();
 
-CREATE FUNCTION weft.get_project_creation_admission_v1(p_organization_id uuid,p_actor_id uuid)
+CREATE FUNCTION braid.get_project_creation_admission_v1(p_organization_id uuid,p_actor_id uuid)
 RETURNS TABLE(outcome text,organization_id uuid,principal_id uuid,can_create_projects boolean)
 LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE CALLED ON NULL INPUT SECURITY DEFINER
-SET search_path = pg_catalog,weft,pg_temp
-AS $weft_get_project_creation_admission_v1$
+SET search_path = pg_catalog,braid,pg_temp
+AS $braid_get_project_creation_admission_v1$
 BEGIN
     IF p_organization_id IS NULL OR p_actor_id IS NULL
        OR p_organization_id='00000000-0000-0000-0000-000000000000'
        OR p_actor_id='00000000-0000-0000-0000-000000000000' THEN
         RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'Project creation identifiers must be nonempty.';
     END IF;
-    IF session_user <> 'weft_project_creator' OR current_user <> 'weft_migrator'
+    IF session_user <> 'braid_project_creator' OR current_user <> 'braid_migrator'
        OR current_setting('transaction_isolation') <> 'read committed' OR current_setting('transaction_read_only') <> 'off'
        OR current_setting('client_encoding') <> 'UTF8'
        OR current_setting('standard_conforming_strings') <> 'on'
        OR current_setting('lock_timeout') <> '1s' OR current_setting('statement_timeout') <> '5s'
-       OR current_setting('weft.organization_id',true) IS DISTINCT FROM p_organization_id::text THEN
+       OR current_setting('braid.organization_id',true) IS DISTINCT FROM p_organization_id::text THEN
         RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Project creation requires its accepted bound execution profile.';
     END IF;
-    PERFORM weft.assert_project_creation_contract_v1();
+    PERFORM braid.assert_project_creation_contract_v1();
     -- An advisory observation only: no authority row lock survives body admission.
     SELECT o.id,p.id,COALESCE(c.can_create_projects,false)
     INTO organization_id,principal_id,can_create_projects
-    FROM weft.organizations o JOIN weft.organization_memberships m ON m.organization_id=o.id
-    JOIN weft.principals p ON p.id=m.principal_id AND p.active
-    LEFT JOIN weft.organization_project_creation_capabilities c
+    FROM braid.organizations o JOIN braid.organization_memberships m ON m.organization_id=o.id
+    JOIN braid.principals p ON p.id=m.principal_id AND p.active
+    LEFT JOIN braid.organization_project_creation_capabilities c
       ON c.organization_id=m.organization_id AND c.principal_id=m.principal_id
     WHERE o.id=p_organization_id AND p.id=p_actor_id AND m.active;
     IF NOT FOUND THEN
@@ -524,24 +524,24 @@ BEGIN
     END IF;
     RETURN NEXT;
 END;
-$weft_get_project_creation_admission_v1$;
-REVOKE ALL ON FUNCTION weft.get_project_creation_admission_v1(uuid,uuid)
-    FROM PUBLIC,weft_runtime,weft_ingest,weft_catalog_reader,weft_catalog_editor,weft_project_creator;
-GRANT EXECUTE ON FUNCTION weft.get_project_creation_admission_v1(uuid,uuid) TO weft_project_creator;
+$braid_get_project_creation_admission_v1$;
+REVOKE ALL ON FUNCTION braid.get_project_creation_admission_v1(uuid,uuid)
+    FROM PUBLIC,braid_runtime,braid_ingest,braid_catalog_reader,braid_catalog_editor,braid_project_creator;
+GRANT EXECUTE ON FUNCTION braid.get_project_creation_admission_v1(uuid,uuid) TO braid_project_creator;
 
-CREATE FUNCTION weft.create_project_v1(
+CREATE FUNCTION braid.create_project_v1(
     p_organization_id uuid,p_actor_id uuid,p_idempotency_key uuid,p_name text,p_description text
 )
 RETURNS TABLE(outcome text,organization_id uuid,idempotency_key uuid,original_actor_id uuid,project_id uuid,
     fingerprint_version integer,fingerprint text,name text,description text,created_at timestamp with time zone,
     initial_project_version bigint,initial_membership_role text,initial_membership_active boolean,initial_membership_version bigint)
 LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE CALLED ON NULL INPUT SECURITY DEFINER
-SET search_path = pg_catalog,weft,pg_temp
-AS $weft_create_project_v1$
+SET search_path = pg_catalog,braid,pg_temp
+AS $braid_create_project_v1$
 DECLARE
     v_active boolean;
     v_allowed boolean;
-    v_receipt weft.project_creations%ROWTYPE;
+    v_receipt braid.project_creations%ROWTYPE;
     v_fingerprint text;
     v_project_id uuid;
     v_created_at timestamp with time zone;
@@ -556,15 +556,15 @@ BEGIN
        OR p_idempotency_key='00000000-0000-0000-0000-000000000000' THEN
         RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'Project creation identifiers must be nonempty.';
     END IF;
-    IF session_user <> 'weft_project_creator' OR current_user <> 'weft_migrator'
+    IF session_user <> 'braid_project_creator' OR current_user <> 'braid_migrator'
        OR current_setting('transaction_isolation') <> 'read committed' OR current_setting('transaction_read_only') <> 'off'
        OR current_setting('client_encoding') <> 'UTF8'
        OR current_setting('standard_conforming_strings') <> 'on'
        OR current_setting('lock_timeout') <> '1s' OR current_setting('statement_timeout') <> '5s'
-       OR current_setting('weft.organization_id',true) IS DISTINCT FROM p_organization_id::text THEN
+       OR current_setting('braid.organization_id',true) IS DISTINCT FROM p_organization_id::text THEN
         RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Project creation requires its accepted bound execution profile.';
     END IF;
-    PERFORM weft.assert_project_creation_contract_v1();
+    PERFORM braid.assert_project_creation_contract_v1();
     IF p_organization_id IS NULL OR p_actor_id IS NULL OR p_idempotency_key IS NULL
        OR p_organization_id='00000000-0000-0000-0000-000000000000'
        OR p_actor_id='00000000-0000-0000-0000-000000000000'
@@ -575,22 +575,22 @@ BEGIN
        OR pg_catalog.char_length(p_description)>4000 OR pg_catalog.octet_length(p_description)>16000 THEN
         RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'Project creation requires accepted bounded metadata and identifiers.';
     END IF;
-    v_fingerprint := weft.project_creation_fingerprint_v1(p_organization_id,p_actor_id,p_idempotency_key,p_name,p_description);
+    v_fingerprint := braid.project_creation_fingerprint_v1(p_organization_id,p_actor_id,p_idempotency_key,p_name,p_description);
 
     -- Shared authority locks are outside the insertion subtransaction. Distinct
     -- keys can proceed together; committed revocation before each lock denies.
-    PERFORM o.id FROM weft.organizations o WHERE o.id=p_organization_id FOR KEY SHARE OF o;
+    PERFORM o.id FROM braid.organizations o WHERE o.id=p_organization_id FOR KEY SHARE OF o;
     IF NOT FOUND THEN outcome := 'not_admitted'; RETURN NEXT; RETURN; END IF;
-    SELECT p.active INTO v_active FROM weft.principals p WHERE p.id=p_actor_id FOR SHARE OF p;
+    SELECT p.active INTO v_active FROM braid.principals p WHERE p.id=p_actor_id FOR SHARE OF p;
     IF NOT FOUND OR NOT v_active THEN outcome := 'not_admitted'; RETURN NEXT; RETURN; END IF;
-    SELECT m.active INTO v_active FROM weft.organization_memberships m
+    SELECT m.active INTO v_active FROM braid.organization_memberships m
         WHERE m.organization_id=p_organization_id AND m.principal_id=p_actor_id FOR SHARE OF m;
     IF NOT FOUND OR NOT v_active THEN outcome := 'not_admitted'; RETURN NEXT; RETURN; END IF;
-    SELECT c.can_create_projects INTO v_allowed FROM weft.organization_project_creation_capabilities c
+    SELECT c.can_create_projects INTO v_allowed FROM braid.organization_project_creation_capabilities c
         WHERE c.organization_id=p_organization_id AND c.principal_id=p_actor_id FOR SHARE OF c;
     IF NOT FOUND OR NOT v_allowed THEN outcome := 'capability_denied'; RETURN NEXT; RETURN; END IF;
 
-    SELECT c.* INTO v_receipt FROM weft.project_creations c
+    SELECT c.* INTO v_receipt FROM braid.project_creations c
         WHERE c.organization_id=p_organization_id AND c.idempotency_key=p_idempotency_key;
     IF NOT FOUND THEN
         BEGIN
@@ -599,11 +599,11 @@ BEGIN
                 RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'Project creation generated an invalid identity.';
             END IF;
             v_created_at := pg_catalog.clock_timestamp();
-            INSERT INTO weft.projects(organization_id,id,name,description,creator_principal_id,created_at,updated_at,version)
+            INSERT INTO braid.projects(organization_id,id,name,description,creator_principal_id,created_at,updated_at,version)
                 VALUES(p_organization_id,v_project_id,p_name,p_description,p_actor_id,v_created_at,v_created_at,1);
-            INSERT INTO weft.project_memberships(organization_id,project_id,principal_id,role,active,version)
+            INSERT INTO braid.project_memberships(organization_id,project_id,principal_id,role,active,version)
                 VALUES(p_organization_id,v_project_id,p_actor_id,'administrator',true,1);
-            INSERT INTO weft.project_creations AS c(organization_id,idempotency_key,original_actor_id,project_id,
+            INSERT INTO braid.project_creations AS c(organization_id,idempotency_key,original_actor_id,project_id,
                 fingerprint_version,fingerprint,name,description,created_at,initial_project_version,
                 initial_membership_role,initial_membership_active,initial_membership_version)
                 VALUES(p_organization_id,p_idempotency_key,p_actor_id,v_project_id,1,v_fingerprint,p_name,p_description,
@@ -611,7 +611,7 @@ BEGIN
             outcome := 'created';
         EXCEPTION WHEN unique_violation THEN
             GET STACKED DIAGNOSTICS v_schema=SCHEMA_NAME,v_table=TABLE_NAME,v_constraint=CONSTRAINT_NAME;
-            IF v_schema IS DISTINCT FROM 'weft' OR v_table IS DISTINCT FROM 'project_creations'
+            IF v_schema IS DISTINCT FROM 'braid' OR v_table IS DISTINCT FROM 'project_creations'
                OR v_constraint IS DISTINCT FROM 'project_creations_pkey' THEN
                 RAISE;
             END IF;
@@ -621,7 +621,7 @@ BEGIN
             -- Outside the completed insertion subtransaction, all three
             -- temporary writes have rolled back. This distinct VOLATILE query
             -- gets a fresh ReadCommitted snapshot after the winning commit.
-            SELECT c.* INTO v_receipt FROM weft.project_creations c
+            SELECT c.* INTO v_receipt FROM braid.project_creations c
                 WHERE c.organization_id=p_organization_id AND c.idempotency_key=p_idempotency_key;
             IF NOT FOUND THEN
                 RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'Project creation conflict has no committed original facts.';
@@ -629,7 +629,7 @@ BEGIN
         END IF;
     END IF;
     IF v_receipt.fingerprint_version <> 1 OR v_receipt.fingerprint IS DISTINCT FROM
-        weft.project_creation_fingerprint_v1(v_receipt.organization_id,v_receipt.original_actor_id,
+        braid.project_creation_fingerprint_v1(v_receipt.organization_id,v_receipt.original_actor_id,
             v_receipt.idempotency_key,v_receipt.name,v_receipt.description)
        OR v_receipt.initial_project_version <> 1 OR v_receipt.initial_membership_role <> 'administrator'
        OR NOT v_receipt.initial_membership_active OR v_receipt.initial_membership_version <> 1 THEN
@@ -657,7 +657,7 @@ BEGIN
     initial_membership_version := v_receipt.initial_membership_version;
     RETURN NEXT;
 END;
-$weft_create_project_v1$;
-REVOKE ALL ON FUNCTION weft.create_project_v1(uuid,uuid,uuid,text,text)
-    FROM PUBLIC,weft_runtime,weft_ingest,weft_catalog_reader,weft_catalog_editor,weft_project_creator;
-GRANT EXECUTE ON FUNCTION weft.create_project_v1(uuid,uuid,uuid,text,text) TO weft_project_creator;
+$braid_create_project_v1$;
+REVOKE ALL ON FUNCTION braid.create_project_v1(uuid,uuid,uuid,text,text)
+    FROM PUBLIC,braid_runtime,braid_ingest,braid_catalog_reader,braid_catalog_editor,braid_project_creator;
+GRANT EXECUTE ON FUNCTION braid.create_project_v1(uuid,uuid,uuid,text,text) TO braid_project_creator;

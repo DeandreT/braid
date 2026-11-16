@@ -156,7 +156,7 @@ test.describe("controlled sign-in controls, not provider qualification", () => {
     let posts = 0;
     await page.route("**/api/auth/session", (route) => {
       observations += 1;
-      expect(route.request().headers()["x-weft-session"]).toBe("1");
+      expect(route.request().headers()["x-braid-session"]).toBe("1");
       return route.fulfill({
         json: {
           ...status("authenticated", observations > 1),
@@ -171,11 +171,11 @@ test.describe("controlled sign-in controls, not provider qualification", () => {
       expect(request.method()).toBe("POST");
       expect(request.postData()).toBeNull();
       expect(headers["content-type"]).toBeUndefined();
-      expect(headers["x-weft-logout"]).toBe("1");
-      expect(headers["x-weft-auth-token"]).toBe(freshAuthToken);
+      expect(headers["x-braid-logout"]).toBe("1");
+      expect(headers["x-braid-auth-token"]).toBe(freshAuthToken);
       expect(headers["x-xsrf-token"]).toBe(freshEpochToken);
-      expect(headers["x-weft-login"]).toBeUndefined();
-      expect(headers["x-weft-forget-local"]).toBeUndefined();
+      expect(headers["x-braid-login"]).toBeUndefined();
+      expect(headers["x-braid-forget-local"]).toBeUndefined();
       await route.fulfill({ status: 204 });
     });
     await page.goto(entry);
@@ -296,11 +296,11 @@ test.describe("controlled sign-in controls, not provider qualification", () => {
       await page.route("**/api/auth/forget-local", (route) => {
         posts += 1;
         const headers = route.request().headers();
-        expect(headers["x-weft-forget-local"]).toBe("1");
-        expect(headers["x-weft-auth-token"]).toBe(freshAuthToken);
+        expect(headers["x-braid-forget-local"]).toBe("1");
+        expect(headers["x-braid-auth-token"]).toBe(freshAuthToken);
         expect(headers["x-xsrf-token"]).toBeUndefined();
-        expect(headers["x-weft-login"]).toBeUndefined();
-        expect(headers["x-weft-logout"]).toBeUndefined();
+        expect(headers["x-braid-login"]).toBeUndefined();
+        expect(headers["x-braid-logout"]).toBeUndefined();
         expect(route.request().postData()).toBeNull();
         return route.fulfill(
           accepted
@@ -380,8 +380,8 @@ test.describe("controlled sign-in controls, not provider qualification", () => {
       await page.route("**/api/auth/login", (route) => {
         posts += 1;
         const headers = route.request().headers();
-        expect(headers["x-weft-login"]).toBe("1");
-        expect(headers["x-weft-auth-token"]).toBe(freshAuthToken);
+        expect(headers["x-braid-login"]).toBe("1");
+        expect(headers["x-braid-auth-token"]).toBe(freshAuthToken);
         expect(headers["x-xsrf-token"]).toBeUndefined();
         return route.fulfill({ json: { version: 1, authorizationUrl } });
       });
@@ -533,7 +533,7 @@ class PositiveAuthHarness {
 
   status(state: SessionState, fresh = false, owner = ownerA): void {
     this.plan("GET", "/api/auth/session", async (route) => {
-      positiveRequire(route.request().headers()["x-weft-session"] === "1");
+      positiveRequire(route.request().headers()["x-braid-session"] === "1");
       await route.fulfill({ json: status(state, fresh, owner) });
     });
   }
@@ -575,16 +575,16 @@ class PositiveAuthHarness {
     const headers = request.headers();
     this.loginWireValid =
       request.method() === "POST" &&
-      headers["x-weft-return-to"] === returnTo &&
+      headers["x-braid-return-to"] === returnTo &&
       request.postData() === null &&
       headers["content-type"] === undefined &&
-      headers["x-weft-login"] === "1" &&
-      headers["x-weft-auth-token"] === freshAuthToken &&
+      headers["x-braid-login"] === "1" &&
+      headers["x-braid-auth-token"] === freshAuthToken &&
       headers["x-xsrf-token"] ===
         (authenticated ? freshEpochToken : undefined) &&
-      headers["x-weft-logout"] === undefined &&
-      headers["x-weft-forget-local"] === undefined &&
-      headers["x-weft-session"] === undefined;
+      headers["x-braid-logout"] === undefined &&
+      headers["x-braid-forget-local"] === undefined &&
+      headers["x-braid-session"] === undefined;
     positiveRequire(this.loginWireValid);
   }
 
@@ -684,7 +684,7 @@ class PositiveAuthHarness {
       this.totals.set(key, (this.totals.get(key) ?? 0) + 1);
       const reply = this.responder;
       await this.handle(route, async () => {
-        positiveRequire(request.headers()["x-weft-session"] === "1");
+        positiveRequire(request.headers()["x-braid-session"] === "1");
         await route.fulfill({ json: reply });
       });
       return;
@@ -696,7 +696,7 @@ class PositiveAuthHarness {
       this.totals.set(key, (this.totals.get(key) ?? 0) + 1);
       await this.handle(route, () =>
         route.fulfill({
-          json: { status: "ok", service: "weft-api", apiVersion: "v1" },
+          json: { status: "ok", service: "braid-api", apiVersion: "v1" },
         }),
       );
       return;

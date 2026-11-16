@@ -1,11 +1,11 @@
 // The Ferrule service in Azure Container Apps dynamic sessions: a custom-container pool running the same
 // service image in platform-sandbox mode, one Hyper-V sandbox per operation, with outbound network
-// disabled. Weft hosts reach sessions through the pool management endpoint with a managed-identity token.
+// disabled. Braid hosts reach sessions through the pool management endpoint with a managed-identity token.
 param location string
 param name string
 param environmentName string
 param identityId string
-@description('Principal IDs of the Weft host identities that call the pool.')
+@description('Principal IDs of the Braid host identities that call the pool.')
 param callerPrincipalIds array
 param registryServer string
 @description('Service image reference in the registry, preferably by digest (repository@sha256:...).')
@@ -78,11 +78,11 @@ resource pool 'Microsoft.App/sessionPools@2026-07-01' = {
           name: 'ferrule'
           image: '${registryServer}/${image}'
           env: [
-            { name: 'WEFT_FERRULE_SERVICE_AUTHENTICATION', value: 'platformSandbox' }
-            { name: 'WEFT_FERRULE_SERVICE_LISTEN_ADDR', value: '0.0.0.0:${port}' }
-            { name: 'WEFT_FERRULE_SERVICE_CONCURRENCY', value: '1' }
-            { name: 'WEFT_FERRULE_SERVICE_QUEUE', value: '0' }
-            { name: 'WEFT_FERRULE_SERVICE_COMPILE_ENABLED', value: compile ? 'true' : 'false' }
+            { name: 'BRAID_FERRULE_SERVICE_AUTHENTICATION', value: 'platformSandbox' }
+            { name: 'BRAID_FERRULE_SERVICE_LISTEN_ADDR', value: '0.0.0.0:${port}' }
+            { name: 'BRAID_FERRULE_SERVICE_CONCURRENCY', value: '1' }
+            { name: 'BRAID_FERRULE_SERVICE_QUEUE', value: '0' }
+            { name: 'BRAID_FERRULE_SERVICE_COMPILE_ENABLED', value: compile ? 'true' : 'false' }
           ]
           resources: {
             cpu: json(cpu)

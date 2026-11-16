@@ -34,7 +34,7 @@ export interface WorkbenchCommand {
 export { workbenchLabels } from "./presentation";
 
 @Component({
-  selector: "weft-workbench-frame",
+  selector: "braid-workbench-frame",
   imports: [NgTemplateOutlet, ResizeHandleComponent],
   templateUrl: "./workbench-frame.component.html",
   styleUrl: "./workbench-frame.component.css",

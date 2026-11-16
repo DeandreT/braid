@@ -1,22 +1,22 @@
 # Compiled execution through the Ferrule service
 
 The optional `execute` profile carries the
-`weft.ferrule-compiled-json.v1`, `weft.ferrule-compiled-document.v1` and
-`weft.ferrule-compiled-csv.v1` frames. It runs only the installed
-`Weft.CompiledRuntime` host in a fresh child. Mapping assemblies remain outside
+`braid.ferrule-compiled-json.v1`, `braid.ferrule-compiled-document.v1` and
+`braid.ferrule-compiled-csv.v1` frames. It runs only the installed
+`Braid.CompiledRuntime` host in a fresh child. Mapping assemblies remain outside
 the service and endpoint processes; the child loads the already verified bytes
 through the same generated-library ABI used by the Docker runtime.
 
 ## Explicit admission
 
-`WEFT_FERRULE_SERVICE_EXECUTION_ENABLED=true` enables execution. Without it the
+`BRAID_FERRULE_SERVICE_EXECUTION_ENABLED=true` enables execution. Without it the
 profile stays reserved and returns 501. The installation settings are:
 
 | Setting | Default |
 | --- | --- |
-| `WEFT_FERRULE_SERVICE_RUNTIME_ASSEMBLY` | `/runtime/weft-compiled-runtime.dll` |
-| `WEFT_FERRULE_SERVICE_RUNTIME_LAUNCHER` | `/weft-compile-sandbox` |
-| `WEFT_FERRULE_SERVICE_RUNTIME_DOTNET_ROOT` | `/usr/share/dotnet` |
+| `BRAID_FERRULE_SERVICE_RUNTIME_ASSEMBLY` | `/runtime/braid-compiled-runtime.dll` |
+| `BRAID_FERRULE_SERVICE_RUNTIME_LAUNCHER` | `/braid-compile-sandbox` |
+| `BRAID_FERRULE_SERVICE_RUNTIME_DOTNET_ROOT` | `/usr/share/dotnet` |
 
 These paths are trusted host settings, never request fields. Startup proves the
 launcher's controls before serving execution, and that the installed runtime host
@@ -24,7 +24,7 @@ starts and runs under them: an empty frame must fail with the host's fixed decod
 line, so readiness never reports a runtime that cannot start. Configuration does
 not enable compilation implicitly; the two profiles have independent opt-ins.
 
-The service reports its execution identity in `Weft-Compiled-Runtime` and the
+The service reports its execution identity in `Braid-Compiled-Runtime` and the
 `execute` capability. Every execution request must contain that exact pin, and
 the client verifies it before sending a frame and on the answer. A missing or
 changed pin refuses admission. An inconsistent answer after delivery is uncertain
@@ -46,10 +46,10 @@ for every output; it does not substitute row comparison for the release proof.
 
 Run the trusted service image's `runtime-identity` command to measure its native
 and runtime pins and prove the execution sandbox before configuring an endpoint.
-It reports them as `weft.compiled-runtime-image-identity.v1` and needs only the
+It reports them as `braid.compiled-runtime-image-identity.v1` and needs only the
 installed files and a private writable `/tmp`, not a listener or credentials.
 
-The `weft.compiled-runtime-identity.v1` digest binds the selected entry filename,
+The `braid.compiled-runtime-identity.v1` digest binds the selected entry filename,
 the complete installed runtime-host directory, the .NET host and pinned runtime,
 the launcher and the runner implementation. It also covers the host's ELF
 interpreter and every system library the host, runtime and launcher can load,
@@ -85,7 +85,7 @@ settings. `host_path` is .NET metadata, not the executed native image. Identity
 measurement includes the actual surviving launcher, its ELF interpreter and their
 dependencies, hostfxr, hostpolicy, CoreCLR and the installed runtime configs/deps.
 
-The `WFC2` readiness marker rejects the older launch contract. The changed runner
+The `BFC2` readiness marker identifies the launch contract. The runner
 and launcher also change the execution/compiler pins. A stale pin is refused;
 the service never approves or re-pins an installation automatically.
 
@@ -121,19 +121,19 @@ joins the original work instead of detaching it.
 ## Machine endpoint selection
 
 The endpoint defaults to its existing Docker compiled-runtime profile. For a
-service or dynamic-session runtime, select `WEFT_FERRULE_RUNNER=service` or
+service or dynamic-session runtime, select `BRAID_FERRULE_RUNNER=service` or
 `azureContainerAppsSessions` and supply the corresponding connector settings.
-`WEFT_COMPILED_RUNTIME_IMAGE` is then the exact execution identity, not the native
+`BRAID_COMPILED_RUNTIME_IMAGE` is then the exact execution identity, not the native
 worker digest. It must match the registered release target and qualification.
 
-`WEFT_FERRULE_WORKER_IMAGE` plus `WEFT_FERRULE_COMPILE_TOOLCHAIN` independently bind
+`BRAID_FERRULE_WORKER_IMAGE` plus `BRAID_FERRULE_COMPILE_TOOLCHAIN` independently bind
 the artifact's original compiler identity. The endpoint still performs all
 current grant, release-pointer, approval, artifact and output checks. It never
 changes a release's runtime or compiler identity to fit the service, and never
 loads the assembly in-process. Another runner's settings beside the selection are
 refused rather than ignored: the service URL, certificate pin and client
 certificate and key files, the dynamic-sessions pool endpoint and managed identity,
-and `WEFT_DOCKER_EXECUTABLE`. An empty value counts as unset, as for every endpoint
+and `BRAID_DOCKER_EXECUTABLE`. An empty value counts as unset, as for every endpoint
 setting.
 
 A service runtime keeps the endpoint's call bounds: work stops at 85 seconds and
@@ -154,9 +154,7 @@ replays without running anything.
 
 To execute a previously qualified artifact whose compiler identity is not the
 service's native/toolchain combination, supply its exact original
-`WEFT_ENDPOINT_COMPILER_BUILD` instead of `WEFT_FERRULE_COMPILE_TOOLCHAIN`. The
+`BRAID_ENDPOINT_COMPILER_BUILD` instead of `BRAID_FERRULE_COMPILE_TOOLCHAIN`. The
 two forms cannot be configured together. This explicit pin does not change the
 artifact or infer compatibility; the usual artifact and generated-ABI checks
 still apply.
-
-Local protocol and sandbox qualification does not establish live Azure behavior.

@@ -58,9 +58,9 @@ def main():
     assert 'rw' in mount['options'].split(',') and 'compress=zstd:3' in mount['options']
     host = os.statvfs('/mnt/example-host')
     assert host.f_bavail * host.f_frsize >= 25 * 2**30
-    base = Path('/srv/example-build/work') / ('weft-regression-' + data['fixtureId'])
-    private = Path('/srv/example-build/data') / ('weft-regression-' + data['fixtureId'])
-    for parent in (base.parent, private.parent, Path('/srv/example-build/cache/weft-tooling')):
+    base = Path('/srv/example-build/work') / ('braid-regression-' + data['fixtureId'])
+    private = Path('/srv/example-build/data') / ('braid-regression-' + data['fixtureId'])
+    for parent in (base.parent, private.parent, Path('/srv/example-build/cache/braid-tooling')):
         actual = json.loads(subprocess.check_output(['findmnt', '-J', '-T', str(parent), '-o', 'TARGET,FSTYPE,UUID,FSROOT,OPTIONS']))['filesystems'][0]
         assert actual == mount
     assert not base.exists() and not private.exists()
@@ -73,13 +73,13 @@ def main():
         path = source / item['path']
         assert path.is_file() and not path.is_symlink() and sha(path) == item['sha256']
         os.chmod(path, 0o755 if item['mode'] == '100755' else 0o644)
-    web = source / 'apps/web/dist/weft/browser'
+    web = source / 'apps/web/dist/braid/browser'
     web.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(data['web'], web)
     for name, digest in data['webHashes'].items():
         assert sha(web / name) == digest
 
-    tooling = Path('/srv/example-build/cache/weft-tooling')
+    tooling = Path('/srv/example-build/cache/braid-tooling')
     dotnet = tooling / 'dotnet/dotnet'
     node = tooling / 'node-v22.23.3-linux-x64/bin/node'
     home = tooling / 'browser-home'; home.mkdir(mode=0o700, exist_ok=True)
@@ -127,8 +127,8 @@ def main():
             products[key] = product
         reused = old['publications']['admission']
     else:
-        for key, folder, assembly in [('server', 'apps', 'Weft.Server'), ('worker', 'apps', 'Weft.Worker'),
-                                      ('databaseTool', 'tools', 'Weft.DatabaseTool'), ('storageTool', 'tools', 'Weft.StorageTool')]:
+        for key, folder, assembly in [('server', 'apps', 'Braid.Server'), ('worker', 'apps', 'Braid.Worker'),
+                                      ('databaseTool', 'tools', 'Braid.DatabaseTool'), ('storageTool', 'tools', 'Braid.StorageTool')]:
             project = f'dotnet/{folder}/{assembly}/{assembly}.csproj'
             subprocess.run([str(dotnet), 'restore', project, '--locked-mode', '--disable-parallel', '--source', 'https://api.nuget.org/v3/index.json', '-m:1', '-nr:false', '-v:q'],
                            cwd=source, env=environment, check=True)
@@ -152,10 +152,10 @@ def main():
         evidence['ordinaryPublishSucceeded'] = list(products)
     private_json(product_admission, evidence)
     manifest_path = private / 'manifest.json'
-    config = {'schemaVersion': 'weft.' + scenario + '-browser-operator-config.v1', 'fixtureId': data['fixtureId'],
+    config = {'schemaVersion': 'braid.' + scenario + '-browser-operator-config.v1', 'fixtureId': data['fixtureId'],
               'privateDirectory': str(private), 'manifestPath': str(manifest_path), 'readOrigin': data['readOrigin'],
               'mutationOrigin': data['mutationOrigin'], 'docker': '/usr/bin/docker', 'daemonSocket': '/var/run/docker.sock',
-              'privateStorageRoot': '/run/weft-regression-' + data['fixtureId'] + '/objects',
+              'privateStorageRoot': '/run/braid-regression-' + data['fixtureId'] + '/objects',
               'dotnet': str(dotnet), 'workerImage': data['workerImage'],
               'postgresImage': 'postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc',
               'source': {'workspace': str(source), 'commit': data['commit'], 'tree': data['tree'], 'manifest': bound(source_manifest), 'admission': bound(source_admission)},

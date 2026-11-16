@@ -2,7 +2,7 @@ import { Component, computed, input } from "@angular/core";
 import { formatByteCount, formatUtcTimestamp } from "./metadata-format";
 
 @Component({
-  selector: "weft-metadata-value",
+  selector: "braid-metadata-value",
   template: `
     <details>
       <summary

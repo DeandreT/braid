@@ -20,7 +20,7 @@ const { ediSegments } = await import(
   `data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`
 );
 const isa =
-  "ISA*00*          *00*          *ZZ*WEFTSENDER     *ZZ*WEFTRECEIVER   *261024*1200*^*00501*000000330*0*T*:~";
+  "ISA*00*          *00*          *ZZ*BRAIDSENDER    *ZZ*BRAIDRECEIVER  *261024*1200*^*00501*000000330*0*T*:~";
 
 test("mixed X12 declarations are consumed whole before switching body separators", () => {
   const first = isa + "BEG*ONE*A:B^C:D~IEA*0*000000330~";

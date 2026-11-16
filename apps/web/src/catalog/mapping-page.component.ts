@@ -22,7 +22,7 @@ interface MappingScreen {
 }
 
 @Component({
-  selector: "weft-mapping-page",
+  selector: "braid-mapping-page",
   imports: [
     DatePipe,
     RouterLink,

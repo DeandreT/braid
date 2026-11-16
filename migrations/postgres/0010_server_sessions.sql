@@ -1,16 +1,16 @@
 -- Private durable metadata only. Both logins are provisioned separately with CONNECT only.
 -- No authentication registration, provider facts, ticket codec or deletion authority lives here.
-DO $weft_require_session_profiles$
+DO $braid_require_session_profiles$
 DECLARE
     profile_name text;
     r record;
 BEGIN
-    IF current_user <> 'weft_migrator' OR session_user <> current_user
+    IF current_user <> 'braid_migrator' OR session_user <> current_user
         OR current_setting('server_encoding') <> 'UTF8'
         OR current_setting('standard_conforming_strings') <> 'on' THEN
         RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Server sessions require the accepted migration environment.';
     END IF;
-    FOREACH profile_name IN ARRAY ARRAY['weft_session_reader','weft_session_writer']::text[] LOOP
+    FOREACH profile_name IN ARRAY ARRAY['braid_session_reader','braid_session_writer']::text[] LOOP
         SELECT * INTO r FROM pg_catalog.pg_roles WHERE rolname = profile_name;
         IF NOT FOUND OR NOT r.rolcanlogin OR r.rolinherit OR r.rolsuper OR r.rolbypassrls
             OR r.rolcreatedb OR r.rolcreaterole OR r.rolreplication
@@ -21,19 +21,19 @@ BEGIN
             OR EXISTS (SELECT 1 FROM pg_catalog.pg_namespace n
                 WHERE n.nspname NOT LIKE 'pg_temp_%' AND n.nspname NOT LIKE 'pg_toast_temp_%'
                     AND (n.nspowner=r.oid OR pg_catalog.has_schema_privilege(r.oid,n.oid,'CREATE')))
-            OR pg_catalog.has_schema_privilege(r.oid,'weft','USAGE')
+            OR pg_catalog.has_schema_privilege(r.oid,'braid','USAGE')
             OR EXISTS (SELECT 1 FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
-                WHERE n.nspname='weft' AND c.relkind IN ('r','p','v','m','f')
+                WHERE n.nspname='braid' AND c.relkind IN ('r','p','v','m','f')
                     AND (c.relowner=r.oid OR pg_catalog.has_table_privilege(r.oid,c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
                         OR pg_catalog.has_any_column_privilege(r.oid,c.oid,'SELECT,INSERT,UPDATE,REFERENCES')))
             OR EXISTS (SELECT 1 FROM pg_catalog.pg_proc f JOIN pg_catalog.pg_namespace n ON n.oid=f.pronamespace
-                WHERE n.nspname='weft' AND pg_catalog.has_function_privilege(r.oid,f.oid,'EXECUTE'))
+                WHERE n.nspname='braid' AND pg_catalog.has_function_privilege(r.oid,f.oid,'EXECUTE'))
             OR EXISTS (SELECT 1 FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
-                WHERE n.nspname='weft' AND CASE WHEN c.relkind='S' THEN
+                WHERE n.nspname='braid' AND CASE WHEN c.relkind='S' THEN
                     pg_catalog.has_sequence_privilege(r.oid,c.oid,'USAGE,SELECT,UPDATE') ELSE false END)
             OR EXISTS (SELECT 1 FROM pg_catalog.pg_default_acl d
                 CROSS JOIN LATERAL pg_catalog.aclexplode(d.defaclacl) a
-                WHERE d.defaclnamespace IN (0,(SELECT oid FROM pg_catalog.pg_namespace WHERE nspname='weft'))
+                WHERE d.defaclnamespace IN (0,(SELECT oid FROM pg_catalog.pg_namespace WHERE nspname='braid'))
                     AND (d.defaclrole=r.oid OR a.grantee IN (0,r.oid)))
             OR EXISTS (SELECT 1 FROM pg_catalog.pg_parameter_acl p
                 CROSS JOIN LATERAL pg_catalog.aclexplode(p.paracl) a WHERE a.grantee IN (0,r.oid)) THEN
@@ -41,9 +41,9 @@ BEGIN
         END IF;
     END LOOP;
 END;
-$weft_require_session_profiles$;
+$braid_require_session_profiles$;
 
-CREATE TABLE weft.server_sessions (
+CREATE TABLE braid.server_sessions (
     handle_digest bytea NOT NULL,
     organization_id uuid NOT NULL,
     binding_id uuid NOT NULL,
@@ -59,9 +59,9 @@ CREATE TABLE weft.server_sessions (
     protected_ticket bytea NOT NULL,
     CONSTRAINT server_sessions_pkey PRIMARY KEY (handle_digest),
     CONSTRAINT server_sessions_organization_fkey FOREIGN KEY (organization_id)
-        REFERENCES weft.organizations(id) ON DELETE RESTRICT ON UPDATE NO ACTION NOT DEFERRABLE,
+        REFERENCES braid.organizations(id) ON DELETE RESTRICT ON UPDATE NO ACTION NOT DEFERRABLE,
     CONSTRAINT server_sessions_binding_fkey FOREIGN KEY (binding_id)
-        REFERENCES weft.external_identity_bindings(binding_id) ON DELETE RESTRICT ON UPDATE NO ACTION NOT DEFERRABLE,
+        REFERENCES braid.external_identity_bindings(binding_id) ON DELETE RESTRICT ON UPDATE NO ACTION NOT DEFERRABLE,
     CONSTRAINT server_sessions_digest_check CHECK (octet_length(handle_digest) = 32),
     CONSTRAINT server_sessions_ids_check CHECK (
         organization_id <> '00000000-0000-0000-0000-000000000000'::uuid
@@ -87,18 +87,18 @@ CREATE TABLE weft.server_sessions (
     CONSTRAINT server_sessions_ticket_check CHECK (octet_length(protected_ticket) BETWEEN 1 AND 16384)
 );
 
-CREATE INDEX server_sessions_organization ON weft.server_sessions (organization_id);
-CREATE INDEX server_sessions_binding ON weft.server_sessions (binding_id);
+CREATE INDEX server_sessions_organization ON braid.server_sessions (organization_id);
+CREATE INDEX server_sessions_binding ON braid.server_sessions (binding_id);
 
-ALTER TABLE weft.server_sessions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY server_sessions_organization_scope ON weft.server_sessions
-    USING (organization_id = NULLIF(current_setting('weft.organization_id', true), '')::uuid)
-    WITH CHECK (organization_id = NULLIF(current_setting('weft.organization_id', true), '')::uuid);
+ALTER TABLE braid.server_sessions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY server_sessions_organization_scope ON braid.server_sessions
+    USING (organization_id = NULLIF(current_setting('braid.organization_id', true), '')::uuid)
+    WITH CHECK (organization_id = NULLIF(current_setting('braid.organization_id', true), '')::uuid);
 
-CREATE FUNCTION weft.guard_server_sessions_transition() RETURNS trigger
+CREATE FUNCTION braid.guard_server_sessions_transition() RETURNS trigger
 LANGUAGE plpgsql STABLE PARALLEL UNSAFE SECURITY INVOKER
-SET search_path = pg_catalog, weft, pg_temp
-AS $weft_guard_server_sessions_transition$
+SET search_path = pg_catalog, braid, pg_temp
+AS $braid_guard_server_sessions_transition$
 DECLARE
     sampled_at timestamptz := statement_timestamp();
     proposed_idle timestamptz;
@@ -121,8 +121,8 @@ BEGIN
             RAISE EXCEPTION 'Server session creation facts are inconsistent.' USING ERRCODE = '23514';
         END IF;
         IF NOT EXISTS (
-            SELECT 1 FROM weft.external_identity_bindings b
-            JOIN weft.principals p ON p.id = b.principal_id
+            SELECT 1 FROM braid.external_identity_bindings b
+            JOIN braid.principals p ON p.id = b.principal_id
             WHERE b.binding_id = NEW.binding_id AND b.enabled AND b.version = NEW.binding_version AND p.active
         ) THEN
             RAISE EXCEPTION 'Server session creation requires current identity facts.' USING ERRCODE = '23514';
@@ -165,33 +165,33 @@ BEGIN
         RAISE EXCEPTION 'Server session renewal exceeds its fixed bounds.' USING ERRCODE = '23514';
     END IF;
     IF NOT EXISTS (
-        SELECT 1 FROM weft.external_identity_bindings b
-        JOIN weft.principals p ON p.id = b.principal_id
+        SELECT 1 FROM braid.external_identity_bindings b
+        JOIN braid.principals p ON p.id = b.principal_id
         WHERE b.binding_id = OLD.binding_id AND b.enabled AND b.version = OLD.binding_version AND p.active
     ) THEN
         RAISE EXCEPTION 'Server session renewal requires current identity facts.' USING ERRCODE = '23514';
     END IF;
     RETURN NEW;
 END;
-$weft_guard_server_sessions_transition$;
+$braid_guard_server_sessions_transition$;
 
-REVOKE ALL ON FUNCTION weft.guard_server_sessions_transition() FROM PUBLIC;
+REVOKE ALL ON FUNCTION braid.guard_server_sessions_transition() FROM PUBLIC;
 CREATE TRIGGER server_sessions_transition_guard
-    BEFORE INSERT OR UPDATE OR DELETE ON weft.server_sessions
-    FOR EACH ROW EXECUTE FUNCTION weft.guard_server_sessions_transition();
+    BEFORE INSERT OR UPDATE OR DELETE ON braid.server_sessions
+    FOR EACH ROW EXECUTE FUNCTION braid.guard_server_sessions_transition();
 CREATE TRIGGER server_sessions_truncate_guard
-    BEFORE TRUNCATE ON weft.server_sessions
-    FOR EACH STATEMENT EXECUTE FUNCTION weft.guard_server_sessions_transition();
+    BEFORE TRUNCATE ON braid.server_sessions
+    FOR EACH STATEMENT EXECUTE FUNCTION braid.guard_server_sessions_transition();
 
-GRANT USAGE ON SCHEMA weft TO weft_session_reader, weft_session_writer;
+GRANT USAGE ON SCHEMA braid TO braid_session_reader, braid_session_writer;
 GRANT SELECT (handle_digest, organization_id, binding_id, binding_version, login_epoch, issued_at,
     idle_expires_at, absolute_expires_at, version, revoked_at, policy_version, codec_version, protected_ticket)
-    ON weft.server_sessions TO weft_session_reader, weft_session_writer;
+    ON braid.server_sessions TO braid_session_reader, braid_session_writer;
 GRANT INSERT (handle_digest, organization_id, binding_id, binding_version, login_epoch, issued_at,
     idle_expires_at, absolute_expires_at, version, revoked_at, policy_version, codec_version, protected_ticket)
-    ON weft.server_sessions TO weft_session_writer;
-GRANT UPDATE (idle_expires_at, version, revoked_at) ON weft.server_sessions TO weft_session_writer;
-GRANT SELECT (binding_id, principal_id, enabled, version) ON weft.external_identity_bindings
-    TO weft_session_reader, weft_session_writer;
-GRANT SELECT (id, active) ON weft.principals TO weft_session_reader, weft_session_writer;
-GRANT SELECT (id) ON weft.organizations TO weft_session_writer;
+    ON braid.server_sessions TO braid_session_writer;
+GRANT UPDATE (idle_expires_at, version, revoked_at) ON braid.server_sessions TO braid_session_writer;
+GRANT SELECT (binding_id, principal_id, enabled, version) ON braid.external_identity_bindings
+    TO braid_session_reader, braid_session_writer;
+GRANT SELECT (id, active) ON braid.principals TO braid_session_reader, braid_session_writer;
+GRANT SELECT (id) ON braid.organizations TO braid_session_writer;

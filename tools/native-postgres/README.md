@@ -1,23 +1,22 @@
-# Native PostgreSQL qualification launcher
+# Native PostgreSQL test launcher
 
 `run.py` runs an explicit .NET test selection against the repository's existing
 native Windows PostgreSQL fixture. It installs nothing and never connects to an
-existing application database. Linux filesystem, Docker, browser and live-provider
-qualification are separate gates.
+existing application database.
 
 Use Python 3.12, the SDK pinned by `global.json`, and PostgreSQL 16.15. Select the
 already-installed native binaries and a shared native NuGet cache. The work and
 results roots must exist, be absolute and contain no links or junctions. Keep the
-work root short (for example `C:/example/weft-native-checks`); the launcher refuses a
+work root short (for example `C:/example/braid-native-checks`); the launcher refuses a
 source prefix over 80 characters before building. Results must be outside the
 disposable work root.
 
 ```powershell
 py -3.12 tools/native-postgres/run.py `
-  --dotnet "$env:LOCALAPPDATA/ITS/Tooling/weft-dotnet-10.0.112/dotnet.exe" `
-  --postgres-bin "$env:LOCALAPPDATA/ITS/Tooling/weft-postgres-16.15-1/pgsql/bin" `
-  --nuget-packages "$env:LOCALAPPDATA/ITS/Tooling/weft-nuget/packages" `
-  --work-root C:/example/weft-native-checks `
+  --dotnet "$env:LOCALAPPDATA/ITS/Tooling/braid-dotnet-10.0.112/dotnet.exe" `
+  --postgres-bin "$env:LOCALAPPDATA/ITS/Tooling/braid-postgres-16.15-1/pgsql/bin" `
+  --nuget-packages "$env:LOCALAPPDATA/ITS/Tooling/braid-nuget/packages" `
+  --work-root C:/example/braid-native-checks `
   --results-root "$env:LOCALAPPDATA/Temp/opencode" `
   --filter 'FullyQualifiedName~RegressionDeploymentProvisioningTests' `
   --expected-tests 6
@@ -38,7 +37,7 @@ child; application credentials, `PG*`, cloud credentials, runtime hooks and Dock
 test-mode settings do not. Each child explicitly opts out of adding global tools
 to User PATH, and the saved User PATH is checked afterward.
 Both the frozen source and original checkout must still match at the end; edits
-or a changed original HEAD prevent this run from qualifying the current checkout.
+or a changed original HEAD fail the run.
 
 The result directory contains source and product hashes, phase logs, `tests.trx`
 and `summary.json`. Only a nonempty, fully passing, unskipped result can pass;

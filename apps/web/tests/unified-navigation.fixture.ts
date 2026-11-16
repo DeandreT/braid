@@ -17,7 +17,7 @@ export async function waitForUnifiedRoute(
             ng?: { getComponent(element: Element): unknown };
           }
         ).ng;
-        const header = document.querySelector("weft-header-search");
+        const header = document.querySelector("braid-header-search");
         const component = (header && debug?.getComponent(header)) as {
           router?: {
             navigated: boolean;

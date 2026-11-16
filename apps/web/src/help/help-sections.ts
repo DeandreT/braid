@@ -12,7 +12,6 @@ export const helpSectionIds = [
   "uploads",
   "creation",
   "chat",
-  "cli",
 ] as const;
 
 export type HelpSectionId = (typeof helpSectionIds)[number];

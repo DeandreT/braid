@@ -1,8 +1,7 @@
-# Bounded Office extraction unit (not activated)
+# Bounded Office extraction
 
-The subsequent executable/host foundation is described in [spec-document-worker.md](spec-document-worker.md). Its live Linux qualification and activation gates remain explicit there; the 141-test foundation evidence below is preserved.
-
-This change adds Domain/Application DOCX and XLSX extraction and in-memory ZIP/XML tests. It does not enable Office uploads or run Office parsing in the API. It uses framework ZIP/XML parsers with no new dependencies.
+DOCX and XLSX extraction uses framework ZIP/XML parsers in the
+[document worker](spec-document-worker.md), outside the API process.
 
 ## Supported scope and honest outcomes
 
@@ -11,7 +10,7 @@ This change adds Domain/Application DOCX and XLSX extraction and in-memory ZIP/X
 - The admitted date lexical profile is a four-digit ISO calendar date, optionally `T` hours/minutes/seconds with one to seven fractional digits, optionally `Z` or an offset through ±14:00. Calendar/time values must validate; original text is preserved. Admitted error values are exactly `#NULL!`, `#DIV/0!`, `#VALUE!`, `#REF!`, `#NAME?`, `#NUM!`, `#N/A`, and `#GETTING_DATA`. Invalid/unadmitted values, including formula caches, are refused rather than labeled as valid dates/errors. Column addresses are limited to three letters and XFD, avoiding integer overflow aliases.
 - Accepted Office output is always `Partial`: `office-body-text-only` or `office-stored-cells-only`. This is a narrow structural view, not complete customer-document coverage. Layout/styles/numbering/rendering and other unexamined metadata are not represented. Unsupported body/run/table/cell features, rich-string extensions, shared/array/data-table formulas and unsupported relationships are atomic `Unsupported`, with no earlier chunks retained. Invalid packages, XML, references and typed values are atomic `Malformed`. Budget refusals are atomic `LimitExceeded`.
 - OLE compound/legacy-or-encrypted Office, encrypted ZIP, macro-enabled content types, VBA/ActiveX/macro parts, binary parts, unsupported relationships/compression and ZIP64/multi-disk archives are refused. External relationships are refused before resolution; no network or filesystem extraction occurs. DTDs/entities are prohibited and the XML resolver is null.
-- Package names and relationship targets use a deliberately narrow ASCII canonical relative-path profile. Absolute targets, `..`, percent-encoded paths, backslashes, directory entries and aliases are refused. This excludes some valid producer variants; it must not be presented as arbitrary Office compatibility. Normal Word/Excel package layouts are covered by actual in-memory fixtures, not a full producer conformance suite.
+- Package names and relationship targets use an ASCII canonical relative-path profile. Absolute targets, `..`, percent-encoded paths, backslashes, directory entries and aliases are refused.
 
 ## Bounds and identity
 
@@ -21,7 +20,7 @@ Classic ZIP central/local headers, names, overlap, encryption flags and counts a
 
 Without descriptor bit 3, the local CRC and compressed/uncompressed sizes must exactly match the central directory. With bit 3, local fields must be zero placeholders or matching final values. Both signed and unsigned classic descriptors are supported: descriptor CRC and sizes must match, the complete descriptor must precede the central directory, and its bytes are included in the entry's nonoverlap range. Conflicting, truncated or overlapping descriptors are refused.
 
-V1 text/JSON behavior and canonical serialization remain unchanged, including the current atomic physical serialization cap. The default extractor refuses Office with `office-worker-required`. Office results use extractor version **3**, an independent limits digest, exact captured source digest and canonical evidence digest. Serialized evidence is capped during writes; escaping/framing/locator overhead counts, and an overflow replaces all chunks with a bounded failure envelope.
+The default extractor refuses Office with `office-worker-required`. Office results use extractor version **3**, an independent limits digest, exact captured source digest and canonical evidence digest. Serialized evidence is capped during writes; escaping/framing/locator overhead counts, and an overflow replaces all chunks with a bounded failure envelope.
 
 ## Closed locator and evidence contract
 
@@ -37,19 +36,19 @@ V1 text/JSON behavior and canonical serialization remain unchanged, including th
 The Office envelope is:
 
 ```text
-["weft.spec-evidence.v2", fixedDiagnosticCode,
+["braid.spec-evidence.v2", fixedDiagnosticCode,
   [ordinal, text, locatorTuple, literalFormulaOrNull], ...]
 ```
 
 It is serialized by `Utf8JsonWriter` in that order; the digest covers those exact bytes. `SpecOfficeEvidenceCitation` binds an existing ordinal and typed locator to the exact extraction identity. Office result types intentionally do not expose fake byte/line properties.
 
-For the coordinator's PDF adapter, `new SpecEvidenceLocator.PdfPage(page)` validates a positive one-based page; the shared writer already supports `["pdf-page", page]`. The PDF adapter still needs its own source format/status and evidence envelope integration. A page locator conveys neither OCR success nor text coverage. This change contains no PDF parsing or worker implementation.
+`new SpecEvidenceLocator.PdfPage(page)` validates a positive one-based page; the shared writer supports `["pdf-page", page]`. See [PDF evidence](spec-pdf-native-runner.md#evidence-contract-for-consumers) for the PDF envelope and status mapping.
 
 `SpecPdfWorkerResponse.Decode(stdout, exitCode, sourceIdentity, expectedSourceDigest, expectedSourceByteCount)` is a strict, bounded decoder for the independently implemented Rust worker. It admits exactly these fields and no duplicates/unknowns:
 
 ```text
 {
-  "format": "weft.spec-pdf-extraction.v1",
+  "format": "braid.spec-pdf-extraction.v1",
   "extractor": "ferrule-pdf-dddc4dce-text.v1",
   "sourceSha256": "<exact lowercase captured digest>",
   "sourceByteCount": <exact captured byte count>,
@@ -58,28 +57,28 @@ For the coordinator's PDF adapter, `new SpecEvidenceLocator.PdfPage(page)` valid
 }
 ```
 
-It requires exit code zero, at most 8 MiB captured input/stdout, 256 sequential one-based pages and 1 MiB aggregate UTF-8 text. Blank pages are retained; missingText must agree with whitespace-only text. Partial needs at least one text-bearing page; needsOcr needs one or more all-blank pages. Encrypted/malformed/limitExceeded must be page-free. Invalid UTF-8, surrogate escapes, unknown versions/statuses, source mismatch, gaps/duplicates, inconsistent states and malformed transport raise a fixed `SpecPdfWorkerProtocolException`, not a fabricated document outcome. The result retains source identity and exact stdout digest, which is explicitly not an intake canonical-evidence digest. Tests here qualify the decoder with controlled protocol bytes; actual PDF/process qualification remains with the separate Rust worker.
+It requires exit code zero, at most 8 MiB captured input/stdout, 256 sequential one-based pages and 1 MiB aggregate UTF-8 text. Blank pages are retained; missingText must agree with whitespace-only text. Partial needs at least one text-bearing page; needsOcr needs one or more all-blank pages. Encrypted/malformed/limitExceeded must be page-free. Invalid UTF-8, surrogate escapes, unknown versions/statuses, source mismatch, gaps/duplicates, inconsistent states and malformed transport raise a fixed `SpecPdfWorkerProtocolException`, not a document outcome. The result retains source identity and exact stdout digest, distinct from the intake canonical-evidence digest.
 
-## Activation gaps
+## Worker boundary
 
-`ISpecOfficeExtractionWorker` is the explicit host boundary; `UnavailableSpecOfficeExtractionWorker` is the fail-closed implementation. `SpecOfficeParser` is internal, exposed to the existing test friend assembly only, with no DI registration or API call path. A later worker project needs a deliberate accessibility/integration change; do not make the parser public and invoke it on the API thread as a shortcut.
+`ISpecOfficeExtractionWorker` is the host boundary;
+`UnavailableSpecOfficeExtractionWorker` rejects work when unavailable. Office
+parsing runs in a killable child process with credential, filesystem and network
+isolation, hard CPU/memory/wall-time/output limits, bounded IPC and parent
+validation of source/result identity, budgets and locators.
 
-Production activation requires a separately qualified, killable child process with credential/filesystem/network isolation, hard CPU/memory/wall-time/output limits, bounded IPC and strict parent validation of source/result identity, budgets and locators. For the PDF bridge, send the exact captured PDF bytes to a pinned executable on stdin, close stdin, cap stdout while reading, discard bounded stderr, require successful exit and decode stdout using the exact captured source facts. No caller-controlled executable/path/layout/password/URL is accepted. Kill and settle the whole child tree on cancellation, timeout or output overflow before admitting any result. Neither interface flags nor a successful decoder result qualify a runner. No runner, API activation or process-isolation qualification is supplied here.
-
-Reported contract gaps: API upload admission currently permits only text/JSON/OpenAPI JSON; registry/database enum/check constraints, HTTP/OpenAPI contracts, generated clients and UI status/evidence parsers need explicit support for Docx/Xlsx, Partial and v2 structural locators. Keep v1 readers/version routing intact. No SQL, API, UI or generated-contract edits are included. Office runtime admission must remain unavailable until the ordered schema/backend and qualified worker are admitted.
-
-The follow-up schema migration must preserve immutable `0044`; use ordered `0046` for Office/PDF admission if `0045` is reserved for creation changes. It must cover persisted format/outcome constraints and the new evidence/extractor identities alongside explicit PDF format/status decisions. The API/OpenAPI, regenerated types and UI must admit those exact formats/outcomes and distinguish v1 byte citations from v2 structural citations before enabling uploads. Migration presence alone is not worker qualification.
-
-The PDF runner must independently pin and verify a configured approved executable **build digest** before execution. `weft.spec-pdf-extraction.v1` and `ferrule-pdf-dddc4dce-text.v1` remain wire checks, not proof that the executable includes later page-tree/alias fixes. This decoder cannot establish executable provenance; admission remains disabled until the runner provides that verification and resource containment.
+The PDF runner verifies the configured executable build digest before launch.
+It sends exact captured bytes on stdin, caps stdout while reading, discards
+bounded stderr and decodes the result using the captured source facts. It kills
+and settles the whole child tree on cancellation, timeout or output overflow.
+See [document host configuration](spec-document-host.md) for installation settings.
 
 ## Verification command
 
 Use the repository's pinned .NET SDK 10.0.112:
 
 ```text
-dotnet test dotnet/tests/Weft.Tests/Weft.Tests.csproj --filter "FullyQualifiedName~SpecOfficeExtractionTests|FullyQualifiedName~SpecIntakeTests|FullyQualifiedName~SpecPdfWorkerResponseTests" -m:1 -p:OpenApiGenerateDocuments=false
+dotnet test dotnet/tests/Braid.Tests/Braid.Tests.csproj --filter "FullyQualifiedName~SpecOfficeExtractionTests|FullyQualifiedName~SpecIntakeTests|FullyQualifiedName~SpecPdfWorkerResponseTests" -m:1 -p:OpenApiGenerateDocuments=false
 ```
 
-The tests create actual Office ZIP/XML bytes in memory, including multibyte paragraphs/table cells, sheet relationships, shared/rich/inline strings, blanks, formula caches, hostile archives, DTDs/external relationships and configured limits. They also exercise the existing text/JSON extraction and serialization regressions. They do not qualify API/storage activation or the future Office child-process host.
-
-Latest review-fix result: 141 tests passed, zero failed/skipped, on pinned SDK 10.0.112. This includes the original 104 cases plus address-overflow, date/error/cache lexical validation, conflicting local ZIP facts, signed/unsigned descriptors and descriptor-overlap regressions. Twenty cases exercise PDF transport decoding; no PDF parser/process test is claimed by this branch. The initial unrestricted parallel build timed out; the serial build/test command above completed successfully.
+The tests create Office ZIP/XML bytes in memory, including multibyte paragraphs/table cells, sheet relationships, shared/rich/inline strings, blanks, formula caches, hostile archives, DTDs/external relationships and configured limits. They also exercise text/JSON extraction, serialization, address and lexical validation, conflicting ZIP facts, signed/unsigned descriptors and descriptor overlap.

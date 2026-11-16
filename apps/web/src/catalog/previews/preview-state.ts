@@ -449,7 +449,7 @@ export class PreviewState {
         : this.csvProfile()
           ? { profile: csvPreviewProfile }
           : this.documentProfile()
-            ? { profile: "weft.ferrule-document-preview.v1" as const }
+            ? { profile: "braid.ferrule-document-preview.v1" as const }
             : {}),
     };
   }
@@ -461,7 +461,7 @@ export class PreviewState {
   private storageKey(): string | null {
     const scope = this.binding?.scope;
     return scope
-      ? `weft.preview.v1/${scope.organizationId}/${scope.projectId}/${scope.mappingId}/${scope.revisionId}`
+      ? `braid.preview.v1/${scope.organizationId}/${scope.projectId}/${scope.mappingId}/${scope.revisionId}`
       : null;
   }
 

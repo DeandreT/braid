@@ -4,7 +4,6 @@
 revisions of the same mapping. It is pure: callers supply both sides, built with
 `RevisionComparisonSide.Create` from a catalog revision summary and its verified
 projection and validation reports, and receive a versioned `RevisionComparisonV1`.
-It performs no I/O, authorization, derivation or execution.
 
 A side can also cite an author-private draft checkpoint. Its `kind` is `draft`,
 with a draft/version citation rather than a revision/report-derivation citation.

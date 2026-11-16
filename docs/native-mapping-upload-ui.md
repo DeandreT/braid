@@ -1,6 +1,6 @@
 # Upload a new native mapping
 
-This increment adds an Angular upload page at a project's `mappings/new` route.
+The Angular upload page is at a project's `mappings/new` route.
 The project shows **Upload mapping** only when the current catalog feature and
 that project's `createMappings` action are both enabled. The page refreshes
 identity and project access before each deliberate upload or recovery action;
@@ -68,8 +68,8 @@ risk. Reloading or closing the tab loses that memory; the before-unload warning
 does not provide durable recovery. Explicit abandonment also does not cancel or
 prove the outcome of server work.
 
-Appending to an existing mapping is a separate increment. This page does not edit
-native mapping rules or execute, preview or deploy a mapping.
+Use [revision append](native-revision-append-ui.md) to upload another version of
+an existing mapping.
 
 ## Verification boundary
 
@@ -77,9 +77,6 @@ The focused browser suite combines controlled frontend protocol/admission cases
 with one real packaged-host scenario. The latter uses actual native workers and
 PostgreSQL to cover saved native bytes, replay after HTTP response-delivery loss,
 restart, permission changes, decoded-invalid admission and decode/format refusal.
-Controlled responses establish frontend behavior only. The final implementation
-and qualification report must record exact committed source and actual results;
-implementation and qualification are tracked separately in [#84](https://github.com/DeandreT/weft/issues/84).
 
 The packaged scenario observes its allowlisted catalog reads and upload responses
 through a test proxy. Each read makes one real API request, retains its complete
@@ -88,6 +85,4 @@ Checks bind the actual response status and request identity to the existing fres
 identity, project, token and immutable revision assertions. Saved revision reads
 also require a fresh pending-to-ready page transition. A missing current value or
 a mismatching capability or token still fails; an earlier response cannot replace
-it. This qualifies the mediated API and frontend flow. Native browser cookie
-ordering, browser-to-server cancellation propagation and network streaming timing
-have separate verification boundaries. Other browser suites are unchanged.
+it.

@@ -48,7 +48,7 @@ type Loaded =
 
 /** The user guide at /help (contents) and /help/:sectionId (one section). */
 @Component({
-  selector: "weft-help-page",
+  selector: "braid-help-page",
   imports: [RouterLink, RouterLinkActive, HelpContentComponent],
   templateUrl: "./help-page.component.html",
   styleUrl: "./help-page.component.css",

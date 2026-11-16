@@ -2,8 +2,8 @@
 
 The case API stores explicit sample fixtures; it does not execute a mapping or
 capture production payloads. It uses the catalog's existing authenticated
-identity and mutation-token/CSRF boundary. `AddWeftRegressionCases` registers
-default-off options and `MapWeftRegressionCases` maps the routes explicitly.
+identity and mutation-token/CSRF boundary. `AddBraidRegressionCases` registers
+default-off options and `MapBraidRegressionCases` maps the routes explicitly.
 Enabling the module requires a server-owned exact runtime selection and the
 case reader/writer services. It never provisions database roles or schema.
 
@@ -31,7 +31,7 @@ or resolving private stores. Every response is `Cache-Control: no-store`.
 
 ## Publication body
 
-PUT requires `Content-Type: application/vnd.weft.regression-case.v1+json`, with
+PUT requires `Content-Type: application/vnd.braid.regression-case.v1+json`, with
 an optional UTF-8 charset. Content encodings are not accepted. The complete body
 is bounded to 24 MiB, with an independent body-read deadline. The raw sample
 limits are 8 MiB combined input and 8 MiB combined expected output; a request
@@ -49,19 +49,19 @@ The exact required fields are:
 - `primaryBase64Url`, plus `namedInputs` containing `{ "name", "bytesBase64Url" }`.
 - `parameters` containing `{ "name", "kind", "value" }`. Kinds are `string`,
   `integer`, `float` or `boolean`; every value is lexical text, not a JSON number.
-- `comparisonPolicy`: explicitly `weft.regression.exact-bytes.v1`, or
-  `weft.regression.edi-segments.v1` for the document runtime.
+- `comparisonPolicy`: explicitly `braid.regression.exact-bytes.v1`, or
+  `braid.regression.edi-segments.v1` for the document runtime.
 - `expected`: output `{ "name", "bytesBase64Url" }` entries; null names identify
   the primary output. An empty baseline remains unevaluated, not passed.
 
 When `documentRuntime` is advertised by capabilities, callers may select that
-complete runtime instead of the legacy `runtime`. Document expected outputs
+complete runtime instead of the JSON `runtime`. Document expected outputs
 require `mediaType`: `application/json`, `application/edi-x12` or
 `application/edifact`. Named input descriptors remain unchanged: the native
 mapping declares their formats. The EDI segment policy requires
 `comparisonOptions` with the three booleans `compareSeparators`,
 `ignoreControlNumbers` and `ignoreDates`; exact-byte comparison omits options.
-Legacy runtime requests retain their original grammar without media or options.
+JSON runtime requests omit media and options.
 Capabilities advertise the available `comparisonPolicies` alongside the
 document runtime. No case is silently switched to a newer runtime profile.
 
@@ -94,5 +94,5 @@ if final delivery fails or current access is subsequently revoked.
 Private reads bind the case, version, mapping, native digest and revision before
 serialization, then recheck current sample authority before delivering the
 bounded response. Failures return generic catalog errors rather than SQL text,
-credentials, parser details or sample excerpts. All worker execution, regression
-run history, and actual host/migration activation remain separate boundaries.
+credentials, parser details or sample excerpts. See
+[regression runs](regression-run-http.md) for execution and results.

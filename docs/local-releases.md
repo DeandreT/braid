@@ -1,8 +1,6 @@
 # Local release activation
 
-The local release adapter changes a PostgreSQL active-release pointer. It does
-not create an Azure resource, install an HTTP endpoint, provision a machine
-credential or run an external deployment command.
+The local release adapter changes a PostgreSQL active-release pointer.
 
 ## Target and request identity
 
@@ -27,10 +25,8 @@ another actor's private qualification or samples.
 ## Atomic local effects and audit
 
 Migration 0022 owns the target pointer, immutable release intent and append-only
-audit. `weft_release_reader` and `weft_release_writer` are independent logins with
-no direct table access. Existing local databases provision them with the explicit
-administrator step in `deploy/local/postgres-add-release-roles.sh` before the
-ordered migration. Application startup does not provision credentials.
+audit. `braid_release_reader` and `braid_release_writer` are independent logins with
+no direct table access. Provision the logins before applying the schema.
 
 Each application transaction locks the original authority and build, checks the
 current target/approval, and compares the expected active pointer. Only one
@@ -76,7 +72,7 @@ rollback and their audit are unchanged.
 On a local Development instance, the [local sandbox](local-sandbox.md) runs the same
 qualification, registration and activation in one step from the web app.
 
-`Weft.ReleaseTool` qualifies builds and changes the target pointer for a
+`Braid.ReleaseTool` qualifies builds and changes the target pointer for a
 [mapping endpoint](mapping-endpoint.md). It ships in the endpoint image and runs as the
 entrypoint's `release` command. Each command acts as one named principal (`ACTOR`), and
 the database checks that principal's current authority as for any other caller. The
@@ -84,32 +80,32 @@ tool uses restricted logins only, reads every setting from its environment and p
 one JSON line, for example `{"outcome":"activated","releaseId":"…","qualificationId":"…"}`.
 
 ```sh
-Weft.ReleaseTool qualify-build ACTOR ORG PROJECT MAPPING BUILD QUALIFICATION
-Weft.ReleaseTool register-release-target ACTOR ORG PROJECT MAPPING ENVIRONMENT VERSION TARGET
-Weft.ReleaseTool activate-release ACTOR ORG PROJECT MAPPING ENVIRONMENT VERSION TARGET RELEASE QUALIFICATION EXPECTED|none
-Weft.ReleaseTool rollback-release ACTOR ORG PROJECT MAPPING ENVIRONMENT VERSION TARGET RELEASE SOURCE EXPECTED
-Weft.ReleaseTool disable-release-target ACTOR ORG PROJECT MAPPING ENVIRONMENT VERSION TARGET
+Braid.ReleaseTool qualify-build ACTOR ORG PROJECT MAPPING BUILD QUALIFICATION
+Braid.ReleaseTool register-release-target ACTOR ORG PROJECT MAPPING ENVIRONMENT VERSION TARGET
+Braid.ReleaseTool activate-release ACTOR ORG PROJECT MAPPING ENVIRONMENT VERSION TARGET RELEASE QUALIFICATION EXPECTED|none
+Braid.ReleaseTool rollback-release ACTOR ORG PROJECT MAPPING ENVIRONMENT VERSION TARGET RELEASE SOURCE EXPECTED
+Braid.ReleaseTool disable-release-target ACTOR ORG PROJECT MAPPING ENVIRONMENT VERSION TARGET
 ```
 
 - `qualify-build` runs `BuildQualificationService` for one of the actor's completed
   builds. It replays the build's saved regression evidence through the compiled runtime
-  and stores the qualification. It needs `WEFT_COMPILED_RUNTIME_IMAGE`, the compiler
-  identity of the build in `WEFT_FERRULE_WORKER_IMAGE`, and one login per setting:
-  `WEFT_QUALIFICATION_WRITER_CONNECTION_STRING` (`weft_qualification_writer`), and the
-  readers `WEFT_QUALIFICATION_BUILD_READER_…` (`weft_build_reader`),
-  `…_BUILD_RUN_READER_…` (`weft_build_run_reader`), `…_ACCESS_…` (`weft_runtime`),
-  `…_REPORT_READER_…` (`weft_report_reader`), `…_RUN_READER_…` (`weft_run_reader`) and
-  `…_CASE_READER_…` (`weft_case_reader`), each ending in `_CONNECTION_STRING`. The local
+  and stores the qualification. It needs `BRAID_COMPILED_RUNTIME_IMAGE`, the compiler
+  identity of the build in `BRAID_FERRULE_WORKER_IMAGE`, and one login per setting:
+  `BRAID_QUALIFICATION_WRITER_CONNECTION_STRING` (`braid_qualification_writer`), and the
+  readers `BRAID_QUALIFICATION_BUILD_READER_…` (`braid_build_reader`),
+  `…_BUILD_RUN_READER_…` (`braid_build_run_reader`), `…_ACCESS_…` (`braid_runtime`),
+  `…_REPORT_READER_…` (`braid_report_reader`), `…_RUN_READER_…` (`braid_run_reader`) and
+  `…_CASE_READER_…` (`braid_case_reader`), each ending in `_CONNECTION_STRING`. The local
   runtime is the Docker compiled runtime, so the command needs Docker access, and
-  `WEFT_DOCKER_EXECUTABLE` optionally names the CLI.
+  `BRAID_DOCKER_EXECUTABLE` optionally names the CLI.
 - `register-release-target` registers the target with the Ferrule compiler's artifact
-  profile and `WEFT_COMPILED_RUNTIME_IMAGE` as its runtime image. It uses
-  `WEFT_RELEASE_WRITER_CONNECTION_STRING`; so does `disable-release-target`.
+  profile and `BRAID_COMPILED_RUNTIME_IMAGE` as its runtime image. It uses
+  `BRAID_RELEASE_WRITER_CONNECTION_STRING`; so does `disable-release-target`.
 - `activate-release` requests and applies an activation of one of the actor's
   qualifications. `EXPECTED` is the current release, or `none` for the first activation.
   `rollback-release` reactivates an earlier release `SOURCE` of the same target with
   that release's qualification, under a new release ID. Both also use
-  `WEFT_QUALIFICATION_READER_CONNECTION_STRING`.
+  `BRAID_QUALIFICATION_READER_CONNECTION_STRING`.
 
 Each login must name exactly its role and an explicit password. Successful outcomes
 (`qualified`, `registered`, `activated`, `disabled` and `replayed`) exit 0. A refusal,
@@ -118,8 +114,3 @@ exits 1, as does a compiled-runtime container whose removal the runner could not
 (`runtimeCleanupUnconfirmed`); invalid arguments or settings exit 2. Repeating a command
 with the same IDs replays its original result, so a qualification stored before a failed
 cleanup is not run again.
-
-Database tests use synthetic artifact bytes to exercise transaction and authority
-rules. Actual mapping invocation and release/rollback selection must also be
-qualified against real compiler/runtime output; synthetic metadata alone is not
-deployment evidence.

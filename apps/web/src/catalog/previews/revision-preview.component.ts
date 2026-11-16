@@ -48,7 +48,7 @@ import { csvPreviewProfile } from "./csv-contract";
 import { xmlPreviewProfile } from "./xml-contract";
 
 @Component({
-  selector: "weft-revision-preview",
+  selector: "braid-revision-preview",
   imports: [StatusChipComponent, HelpLinkComponent, DocumentViewComponent],
   templateUrl: "./revision-preview.component.html",
   styleUrl: "./revision-preview.component.css",

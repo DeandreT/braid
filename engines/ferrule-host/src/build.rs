@@ -5,11 +5,11 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::io::{self, Read, Write};
 
-pub const PROTOCOL: &str = "weft.ferrule-build.v1";
-pub const PROFILE: &str = "weft.ferrule-csharp-json.v1";
-pub const DOCUMENT_PROFILE: &str = "weft.ferrule-csharp-document.v1";
-pub const X12_INTERCHANGES_PROFILE: &str = "weft.ferrule-csharp-x12-interchanges.v1";
-pub const CSV_PROFILE: &str = "weft.ferrule-csharp-csv.v1";
+pub const PROTOCOL: &str = "braid.ferrule-build.v1";
+pub const PROFILE: &str = "braid.ferrule-csharp-json.v1";
+pub const DOCUMENT_PROFILE: &str = "braid.ferrule-csharp-document.v1";
+pub const X12_INTERCHANGES_PROFILE: &str = "braid.ferrule-csharp-x12-interchanges.v1";
+pub const CSV_PROFILE: &str = "braid.ferrule-csharp-csv.v1";
 
 fn document_profile(profile: &str) -> bool {
     matches!(
@@ -306,7 +306,7 @@ pub fn generate(
             u32::from(options.x12_separators.map_or('~', |value| value.segment))
         };
         let mut syntax = String::from(
-            "#nullable enable\nnamespace Weft.Generated { public static class DocumentSyntax { public static int OutputSegment(string? name) {\n",
+            "#nullable enable\nnamespace Braid.Generated { public static class DocumentSyntax { public static int OutputSegment(string? name) {\n",
         );
         syntax.push_str(&format!(
             "if (name == null) return {};\n",
@@ -328,7 +328,7 @@ pub fn generate(
         }
         syntax.push_str("throw new System.InvalidOperationException(); } } }\n");
         files.push(ferrule_codegen::GeneratedFile::new(
-            ferrule_codegen::ArtifactPath::new("Runtime/WeftDocumentSyntax.cs")
+            ferrule_codegen::ArtifactPath::new("Runtime/BraidDocumentSyntax.cs")
                 .map_err(|_| "unsupported")?,
             syntax.into_bytes(),
         ));

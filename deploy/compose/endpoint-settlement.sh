@@ -7,7 +7,7 @@ settled=0
 
 # runtime_containers RUN: the run's runtime containers, in any state.
 runtime_containers() {
-  docker ps --all --quiet --filter "label=io.weft.acceptance.run=$1"
+  docker ps --all --quiet --filter "label=io.braid.acceptance.run=$1"
 }
 
 # settle RUN REASON: prints each remaining runtime container's evidence, removes it and counts it.

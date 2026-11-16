@@ -3,7 +3,7 @@ use std::io::{self, Write};
 use std::process::ExitCode;
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-use weft_compile_sandbox as sandbox;
+use braid_compile_sandbox as sandbox;
 
 #[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
 fn main() -> ExitCode {

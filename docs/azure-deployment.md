@@ -1,47 +1,39 @@
 # Azure deployment
 
-## Decide whether to use the cloud lane
+## Choose a deployment
 
 Start packaged evaluation with the [Compose Session stack and Ferrule service](runtime-packaging.md#start-with-the-compose-session-stack).
-Azure is an optional deployment lane. Its live-provider and platform acceptance
-remain deferred; the templates and qualification procedure below are not evidence
-of a verified deployment. They remain the reference for that optional work.
+Azure is an optional deployment using the templates in `deploy/azure`.
 
-If Azure is selected, prefer the Container Apps Ferrule **service** mode as the
-candidate first cloud target: `ferruleRunner = service`. It avoids a Docker socket
+For Azure, prefer the Container Apps Ferrule **service** mode:
+`ferruleRunner = service`. It avoids a Docker socket
 inside hosted containers. Dynamic sessions and a separately hosted Docker
 inspection worker remain advanced alternatives under [Ferrule service](#ferrule-service).
-This recommendation does not change the template or example defaults:
+The template and example defaults are:
 `deployApplication = false`, `ferruleRunner = worker`, and native work, chat and
 bearer access off; no mapping endpoints are selected.
 
 Before provisioning, review [Open questions and limits](#open-questions-and-limits),
 especially the current credential-wiring gap, database administrator privileges,
-Landlock support and key-ring filesystem requirements. Resolve those requirements
-before treating the procedure as executable end to end. Even with
+Landlock support and key-ring filesystem requirements. Even with
 `deployApplication = false`, the platform deployment creates billable resources.
-Reading this guide is not approval to provision or run live qualification.
-
-Use this order when the environment and execution are approved:
+Use this order:
 
 1. Prepare the [operator inputs](#operator-inputs) and [Entra registration](#entra-app-registration).
 2. Follow [Deployment](#deployment), then [Verification](#verification) and
-   [First administrator](#first-administrator). Fresh role provisioning is not an
-   existing-database upgrade.
-3. Add only the capabilities you need: [native work](#native-work-previews-regression-runs-and-builds),
+   [First administrator](#first-administrator).
+3. Add the capabilities you need: [native work](#native-work-previews-regression-runs-and-builds),
    [chat](#chat), [bearer access](api-authentication.md#app-registrations) or
    [mapping endpoints](#mapping-endpoints).
-4. Use [Operations](#operations) for upgrades, rotation and recovery. Use the
-   [live qualification](#live-qualification) harness only for a separately approved
-   live run; its [receipt and teardown](#receipt-and-teardown) preserve ownership
-   checks and cleanup evidence.
+4. Use [Operations](#operations) for upgrades, rotation and recovery, and
+   [live qualification](#live-qualification) to check the deployment.
 
 ## Platform reference
 
 `deploy/azure` describes a hosted braid environment as Bicep, using the
 [runtime images](runtime-packaging.md). The intended layout has the Session server
 behind its same-replica edge, serving Angular from the same origin and reaching
-dependencies privately. Tracking work is [#146](https://github.com/DeandreT/weft/issues/146).
+dependencies privately.
 
 | Resource | Configuration |
 | --- | --- |
@@ -50,14 +42,14 @@ dependencies privately. Tracking work is [#146](https://github.com/DeandreT/weft
 | Container registry | Basic SKU, no admin user; the application identity has only `AcrPull`. |
 | Managed identities | One user-assigned identity for the app and jobs: image pull, Key Vault secret reads and `Storage Blob Data Contributor` on the private object container only. A second, `<name>-worker-identity`, belongs to the worker app; see [Native work](#native-work-previews-regression-runs-and-builds). |
 | Key Vault | RBAC authorization, purge protection, private endpoint; optional operator IP allow-list. Holds every credential and certificate. |
-| Storage account | No public network access; private endpoint; SMB share `weft-session-keys` for the session key ring. |
-| Private object storage | A separate account with shared-key access disabled, no public network access and a blob private endpoint; container `weft-private-objects` without anonymous access. Blob versioning and blob soft delete are off so retired objects are not retained; deleted containers are kept for 14 days. Holds every [private object](private-storage-blob.md). |
+| Storage account | No public network access; private endpoint; SMB share `braid-session-keys` for the session key ring. |
+| Private object storage | A separate account with shared-key access disabled, no public network access and a blob private endpoint; container `braid-private-objects` without anonymous access. Blob versioning and blob soft delete are off so retired objects are not retained; deleted containers are kept for 14 days. Holds every [private object](private-storage-blob.md). |
 | PostgreSQL Flexible Server | Version 16, private VNet access only, password authentication, 14-day backups. |
 | Container Apps environment | Workload-profile (Consumption) environment in the VNet with public ingress. |
 | Container app | `server` and `edge` containers in one replica (fixed at one), ingress on the edge's port 8080, HTTPS only, probes on `/api/v1/health`, key-ring share mounted with UID/GID 1654 and modes 0700/0600. |
 | Jobs (manual) | `<name>-database-roles`, `<name>-migrate`, `<name>-session-keys`, `<name>-private-storage`, `<name>-maintenance` and `<name>-owner`. |
 | Ferrule service | Optional: the internal container app `<name>-ferrule` or the session pool `<name>-ferrule-sessions`, selected by `ferruleRunner`. See [Ferrule service](#ferrule-service). |
-| Worker app | Optional, with `nativeWorkEnabled`: `<name>-worker` runs `Weft.Worker`, which executes previews, regression runs and builds through the Ferrule service. It has no ingress and runs one replica. See [Native work](#native-work-previews-regression-runs-and-builds). |
+| Worker app | Optional, with `nativeWorkEnabled`: `<name>-worker` runs `Braid.Worker`, which executes previews, regression runs and builds through the Ferrule service. It has no ingress and runs one replica. See [Native work](#native-work-previews-regression-runs-and-builds). |
 | Mapping endpoints | Optional: one internal container app `<name>-<endpoint>` per registered release target, and the manual jobs `<name>-endpoint-grants` and `<name>-endpoint-release`. See [Mapping endpoints](#mapping-endpoints). |
 
 Templates contain no secrets. The PostgreSQL administrator password is read from the
@@ -75,7 +67,7 @@ provisioning job. Every other credential is generated into Key Vault by
 | Entra tenant ID | `entraTenantId`: the organization whose accounts sign in. |
 | Entra app registration | `entraClientId`; see below. |
 | braid organization ID | `organizationId`: a new canonical lowercase UUID, and the organization's display name for the owner command. |
-| PostgreSQL administrator password | `WEFT_POSTGRES_ADMIN_PASSWORD` in the deploying shell; keep it for later deployments. |
+| PostgreSQL administrator password | `BRAID_POSTGRES_ADMIN_PASSWORD` in the deploying shell; keep it for later deployments. |
 | Operator object ID | `operatorPrincipalId`: user or group granted Key Vault Secrets Officer and Certificates Officer. |
 | Operator IP ranges | Optional `operatorIpRanges` that restrict Key Vault's public endpoint. |
 | Custom domain and DNS | Optional `customDomain`, a CNAME to the app's default host name and a TXT record `asuid.<domain>`. |
@@ -84,7 +76,7 @@ provisioning job. Every other credential is generated into Key Vault by
 | Chat profile and model credential | Optional `chatEnabled`: the profile document, and the model-provider credential unless the profile uses the application identity, stored in Key Vault; see [Chat](#chat). |
 | Mapping endpoints | Optional `mappingEndpoints`, `mappingEndpointAudience`, `mappingEndpointAdministratorId`, `ferruleServiceEndpointClientCertificateSha256` and `compiledRuntimeIdentity`; see [Mapping endpoints](#mapping-endpoints). |
 | Docker inspection worker identity | Optional `workerPrincipalId`: the object ID of the managed identity of a separately hosted [Docker inspection worker](#docker-inspection-worker), granted the same data-plane role on the private object container. |
-| Bearer access | Optional `apiBearerEnabled`, with `apiBearerScope` (the scope name the app registration exposes) and `apiBearerClientIds` (the allowed public clients, such as the `weft` CLI); see [API authentication](api-authentication.md#app-registrations). |
+| Bearer access | Optional `apiBearerEnabled`, with `apiBearerScope` (the scope name the app registration exposes) and `apiBearerClientIds` (the allowed public API clients); see [API authentication](api-authentication.md#app-registrations). |
 
 ### Entra app registration
 
@@ -96,12 +88,12 @@ Register a single-tenant web application in the sign-in tenant:
 - No client secret, implicit grant or front-channel logout URL. Sign-in requests exactly
   `openid profile` with authorization code and PKCE; `profile` is what puts the user's
   object ID in the ID token.
-- Certificate credential: upload `weft-entra-client.pem` written by `initialize-secrets.sh`,
-  for example `az ad app credential reset --id <client-id> --cert @weft-entra-client.pem --append`.
+- Certificate credential: upload `braid-entra-client.pem` written by `initialize-secrets.sh`,
+  for example `az ad app credential reset --id <client-id> --cert @braid-entra-client.pem --append`.
 - For `apiBearerEnabled`, also expose the delegated scope under *Expose an API*, set
-  `requestedAccessTokenVersion` to `2`, and register the CLI as a separate public client,
+  `requestedAccessTokenVersion` to `2`, and register each API client as a separate public client,
   as [API authentication](api-authentication.md#app-registrations) describes. Every
-  deployment provisions the `weft_api_audit_writer` login and its Key Vault secret,
+  deployment provisions the `braid_api_audit_writer` login and its Key Vault secret,
   because migration 0025 requires the login; only `apiBearerEnabled` delivers it to the
   Session app.
 
@@ -109,15 +101,14 @@ Register a single-tenant web application in the sign-in tenant:
 
 All commands run from the repository root with an authenticated Azure CLI that includes
 Bicep. Copy `deploy/azure/main.example.bicepparam` to a private parameter file and replace
-its placeholders. Keep `deployApplication = false` for the platform step; enabling
-the application is a later explicit choice, not a new default. Complete the
+its placeholders. Keep `deployApplication = false` for the platform step. Complete the
 [prerequisite review](#open-questions-and-limits) before running these commands.
 
 1. **Platform.** With `deployApplication = false`:
 
    ```sh
    az group create --name <group> --location <region>
-   export WEFT_POSTGRES_ADMIN_PASSWORD='<generated password>'
+   export BRAID_POSTGRES_ADMIN_PASSWORD='<generated password>'
    az deployment group create --resource-group <group> \
      --template-file deploy/azure/main.bicep --parameters <params>.bicepparam
    ```
@@ -128,12 +119,12 @@ the application is a later explicit choice, not a new default. Complete the
 2. **Images.** Build both targets in the registry from the same commit:
 
    ```sh
-   az acr build --registry <registryName> --file deploy/container/Dockerfile --target weft --image weft:<tag> .
-   az acr build --registry <registryName> --file deploy/container/Dockerfile --target edge --image weft-edge:<tag> .
+   az acr build --registry <registryName> --file deploy/container/Dockerfile --target braid --image braid:<tag> .
+   az acr build --registry <registryName> --file deploy/container/Dockerfile --target edge --image braid-edge:<tag> .
    # Only with native work:
-   az acr build --registry <registryName> --file deploy/container/Dockerfile --target weft-worker --image weft-worker:<tag> .
+   az acr build --registry <registryName> --file deploy/container/Dockerfile --target braid-worker --image braid-worker:<tag> .
    # Only with mapping endpoints:
-   az acr build --registry <registryName> --file deploy/container/Dockerfile --target weft-mapping-endpoint --image weft-mapping-endpoint:<tag> .
+   az acr build --registry <registryName> --file deploy/container/Dockerfile --target braid-mapping-endpoint --image braid-mapping-endpoint:<tag> .
    ```
 
    Native work and mapping endpoints also need the Ferrule service image in the registry; see
@@ -146,7 +137,7 @@ the application is a later explicit choice, not a new default. Complete the
    deploy/azure/initialize-secrets.sh <keyVaultName> <databaseHost> <private output directory>
    ```
 
-   With `WEFT_AZURE_SUBSCRIPTION=<id>` set, every Azure CLI call it makes names that subscription
+   With `BRAID_AZURE_SUBSCRIPTION=<id>` set, every Azure CLI call it makes names that subscription
    instead of the CLI's default.
    The script keeps existing passwords, certificates and placeholders, so it can be rerun.
    It refreshes the connection-string secrets from the retained passwords and supplied
@@ -166,7 +157,7 @@ the application is a later explicit choice, not a new default. Complete the
 
    Start migrations only after the provisioning execution succeeds, not merely
    after its start command returns. Follow each execution with `az containerapp job execution list` and its console logs in
-   Log Analytics. Provisioning creates the `weft` database, every restricted login,
+   Log Analytics. Provisioning creates the `braid` database, every restricted login,
    the migrator's ownership and its parameter grant in one transaction and refuses to run
    again once roles exist. PostgreSQL 16 makes a non-superuser creator an admin member of
    each role it creates; the migrations refuse such memberships, so the job creates the
@@ -190,32 +181,32 @@ the application is a later explicit choice, not a new default. Complete the
 
 - `curl -sS https://<public host>/api/v1/health` returns `{"status":"ok",...}` with a
   `Strict-Transport-Security` header.
-- `curl -sS -H 'X-Weft-Session: 1' https://<public host>/api/auth/session` reports
+- `curl -sS -H 'X-Braid-Session: 1' https://<public host>/api/auth/session` reports
   `"mode":"session"` and `"state":"anonymous"`.
 - `https://<public host>/catalog` loads the application from the same origin.
-- The server's console log contains `WeftSessionHostReady`. Startup failures print only
-  `WeftHostConfigurationFailed` or `WeftSessionHostStartupFailed`; check the job results and
+- The server's console log contains `BraidSessionHostReady`. Startup failures print only
+  `BraidHostConfigurationFailed` or `BraidSessionHostStartupFailed`; check the job results and
   the Key Vault references first.
 
 ## First administrator
 
-The owner job runs `Weft.DatabaseTool` with the migrator credential. Arguments replace the
+The owner job runs `Braid.DatabaseTool` with the migrator credential. Arguments replace the
 job's default; environment overrides replace its list, so repeat both secret references:
 
 ```sh
-owner_env='WEFT_MIGRATION_CONNECTION_STRING=secretref:migrator-connection WEFT_DELIVER_OWNER_INPUT=secretref:owner-input'
+owner_env='BRAID_MIGRATION_CONNECTION_STRING=secretref:migrator-connection BRAID_DELIVER_OWNER_INPUT=secretref:owner-input'
 # Organization, first principal and admission:
 az containerapp job start -g <group> -n <name>-owner --container-name owner --args database provision-development-identity \
-  --env-vars $owner_env WEFT_DEV_ORGANIZATION_ID=<organizationId> WEFT_DEV_PRINCIPAL_ID=<principal-uuid> WEFT_DEV_ORGANIZATION_NAME=<name>
+  --env-vars $owner_env BRAID_DEV_ORGANIZATION_ID=<organizationId> BRAID_DEV_PRINCIPAL_ID=<principal-uuid> BRAID_DEV_ORGANIZATION_NAME=<name>
 # Allow that principal to create projects:
 az containerapp job start -g <group> -n <name>-owner --container-name owner \
   --args database set-project-creation-capability <organizationId> <principal-uuid> true --env-vars $owner_env
 ```
 
 To bind the user's Entra account, store their tenant and object ID as the
-`weft-owner-input` secret (`{"tenantId":"<tenant>","objectId":"<user object id>"}`)
+`braid-owner-input` secret (`{"tenantId":"<tenant>","objectId":"<user object id>"}`)
 with `az keyvault secret set --file`, refresh the job's reference with
-`az containerapp job secret set -g <group> -n <name>-owner --secrets owner-input=keyvaultref:<vault-uri>secrets/weft-owner-input,identityref:<identity-resource-id>`,
+`az containerapp job secret set -g <group> -n <name>-owner --secrets owner-input=keyvaultref:<vault-uri>secrets/braid-owner-input,identityref:<identity-resource-id>`,
 then start the job with `--args database bind-entra-user <principal-uuid>`. Restore
 the placeholder `{}` afterwards. See [External identity bindings](external-identity-bindings.md)
 for the other owner commands and their outcomes.
@@ -236,13 +227,8 @@ deployments so the binding is kept. Add the new redirect URI to the app registra
 
 ## Operations
 
-- **Updates.** Review the [ordered database and role upgrade index](runtime-packaging.md#database-upgrade-index)
-  against the installed database first. Have the DBA add only missing restricted
-  roles before the migration that requires them; the first-time `database-roles`
-  job refuses existing roles and is not an upgrade tool. Build a new tag and
-  coordinate the revision change and migrate job as the release requires.
-  Migrations are forward-only and checksum-bound. An image rollback does not undo
-  schema changes or change a mapping's active release pointer.
+- **Updates.** Build a new image tag and deploy the revision. An image rollback
+  does not undo database changes or change a mapping's active release pointer.
 - **Restart and recovery.** A replica restart reopens the key ring from the share,
   durable metadata from PostgreSQL and private objects from Blob storage. Retain
   those stores and the protecting/decrypt certificates; do not rerun fresh
@@ -253,7 +239,7 @@ deployments so the binding is kept. Add the new redirect URI to the app registra
   or scale-to-zero.
 - **Certificate rotation.** Neither certificate renews automatically. A new session key
   certificate version needs the previous version delivered as
-  `WEFT_DELIVER_SESSION_DECRYPT_PEM_1` (a versioned Key Vault reference added to the app)
+  `BRAID_DELIVER_SESSION_DECRYPT_PEM_1` (a versioned Key Vault reference added to the app)
   for as long as keys it protects remain in the ring; rotation is restart-based. Add a new
   Entra client certificate to the app registration before restarting with it.
 - **Backups.** PostgreSQL keeps 14 days of point-in-time restore. Snapshot the key-ring share
@@ -274,7 +260,7 @@ which needs no Docker. `ferruleRunner` selects where it runs:
 - `service` adds the internal-only `<name>-ferrule` container app: TCP ingress on 8443 (TLS
   terminates in the service), probes on its plain port 8080, an `EmptyDir` volume at `/tmp`, and a
   TCP scale rule targeting `ferruleServiceConcurrency` concurrent connections per replica, up to
-  `ferruleServiceMaxReplicas`. It receives `weft-ferrule-service` from Key Vault and admits one
+  `ferruleServiceMaxReplicas`. It receives `braid-ferrule-service` from Key Vault and admits one
   client certificate per deployed caller: the Session host's (`ferruleServiceClientCertificateSha256`),
   the worker app's (`ferruleServiceWorkerClientCertificateSha256`) and the mapping endpoints'
   (`ferruleServiceEndpointClientCertificateSha256`). Every caller pins
@@ -297,7 +283,7 @@ profile), and each session 2 vCPU and 4 GiB. The platform kernel must provide La
 toolchain identity (see [Ferrule service](ferrule-service.md#compile-operations)): the Session
 host's reports and the worker app's builds then record the combined compiler identity that builds
 through the service bind. For the session pool, the toggle adds
-`WEFT_FERRULE_SERVICE_COMPILE_ENABLED=true` to each session.
+`BRAID_FERRULE_SERVICE_COMPILE_ENABLED=true` to each session.
 
 ## Native work, previews, regression runs and builds
 
@@ -306,13 +292,13 @@ Compose hosted stack does with `compose.ferrule-service.yml` and `compose.featur
 
 - **Session host.** Native upload, report reads and report derivation run through the selected
   runner, with the `pg-ingest-connection`, `pg-report-connection` and `pg-derivation-connection`
-  logins. Previews, regression cases and runs, and builds are recorded here (`WEFT_PREVIEWS_ENABLED`,
-  `WEFT_REGRESSIONS_ENABLED` and `WEFT_BUILDS_ENABLED`). Their logins arrive as owner-only files,
-  delivered with `WEFT_DELIVER_FILE_*` and named by the matching `*_CONNECTION_STRING_FILE`
+  logins. Previews, regression cases and runs, and builds are recorded here (`BRAID_PREVIEWS_ENABLED`,
+  `BRAID_REGRESSIONS_ENABLED` and `BRAID_BUILDS_ENABLED`). Their logins arrive as owner-only files,
+  delivered with `BRAID_DELIVER_FILE_*` and named by the matching `*_CONNECTION_STRING_FILE`
   settings, the only form the Session host accepts for them.
-- **Worker app.** `<name>-worker` runs the `weft-worker:<tag>` image (`worker` command) with
+- **Worker app.** `<name>-worker` runs the `braid-worker:<tag>` image (`worker` command) with
   preview, regression and build execution enabled, through the same runner. With `service` it
-  presents its own `weft-ferrule-worker-client` certificate; with `sessions` it calls the pool with
+  presents its own `braid-ferrule-worker-client` certificate; with `sessions` it calls the pool with
   its own identity. Its eleven logins arrive as owner-only files in the same way. It has no
   ingress and always runs one replica. A stop cancels in-flight runs, whose rows stay retryable;
   the 150-second termination grace period covers a canceled compilation's 120-second wall
@@ -326,50 +312,49 @@ Compose hosted stack does with `compose.ferrule-service.yml` and `compose.featur
 
 Native work requires `ferruleRunner = service` or `sessions`, plus `ferruleServiceCompile = true`
 and `ferruleCompileToolchain`, because builds compile through the service. With `service` it also
-requires the `weft-ferrule-worker-client` pin as `ferruleServiceWorkerClientCertificateSha256`. A
+requires the `braid-ferrule-worker-client` pin as `ferruleServiceWorkerClientCertificateSha256`. A
 deployment that lacks any of these fails and names the missing requirement, instead of deploying
-hosts that refuse to start. Build the `weft-worker` image in step 2.
+hosts that refuse to start. Build the `braid-worker` image in step 2.
 
 ### Docker inspection worker
 
 With `ferruleRunner = worker`, the Session host is wired to a separately hosted
-[inspection worker](ferrule-worker.md#hosted-inspection-transport). That host runs `Weft.Worker`
+[inspection worker](ferrule-worker.md#hosted-inspection-transport). That host runs `Braid.Worker`
 and the Ferrule image with a Docker daemon, which Container Apps cannot provide, so it needs a
 Docker-capable Linux host inside the virtual network, reachable only from the apps subnet on its
 inspection port. These templates do not create that host. They pass `inspectionWorkerUrl`,
-`inspectionWorkerCertificateSha256` (from `weft-inspection-worker.sha256`) and
-`ferruleWorkerImage`, and deliver the `weft-inspection-client` certificate. The worker host
-receives `weft-inspection-worker` as `WEFT_DELIVER_INSPECTION_WORKER_PEM` and the client pin from
-`weft-inspection-client.sha256`. `workerPrincipalId` grants its identity the private container
+`inspectionWorkerCertificateSha256` (from `braid-inspection-worker.sha256`) and
+`ferruleWorkerImage`, and deliver the `braid-inspection-client` certificate. The worker host
+receives `braid-inspection-worker` as `BRAID_DELIVER_INSPECTION_WORKER_PEM` and the client pin from
+`braid-inspection-client.sha256`. `workerPrincipalId` grants its identity the private container
 role. `nativeWorkEnabled` does not use this runner, so these settings stay dormant.
 
 ## Chat
 
 `chatEnabled = true` requests [chat](chat-http.md) in the Session host. It requires
 `nativeWorkEnabled`, because conversations pin the revision reports that derivation produces. The
-template adds `WEFT_CHAT_ENABLED=true` and the files below, but does not yet
-deliver the required chat-approver credential. Resolve the
-[credential-wiring gap](#open-questions-and-limits) before enabling it; these
-deliveries alone are not a complete current chat configuration:
+template adds `BRAID_CHAT_ENABLED=true` and the files below, but omits the required
+chat-approver credential. Fix the [credential wiring](#open-questions-and-limits)
+before enabling chat:
 
 - the `pg-chat-reader-connection` and `pg-chat-writer-connection` logins, delivered with
-  `WEFT_DELIVER_FILE_CHAT_READER_CONNECTION` and `WEFT_DELIVER_FILE_CHAT_WRITER_CONNECTION` and
-  named by `WEFT_CHAT_READER_CONNECTION_STRING_FILE=/run/weft/secrets/chat-reader-connection` and
-  `WEFT_CHAT_WRITER_CONNECTION_STRING_FILE=/run/weft/secrets/chat-writer-connection` (the Session
+  `BRAID_DELIVER_FILE_CHAT_READER_CONNECTION` and `BRAID_DELIVER_FILE_CHAT_WRITER_CONNECTION` and
+  named by `BRAID_CHAT_READER_CONNECTION_STRING_FILE=/run/braid/secrets/chat-reader-connection` and
+  `BRAID_CHAT_WRITER_CONNECTION_STRING_FILE=/run/braid/secrets/chat-writer-connection` (the Session
   host refuses plain chat connection strings);
-- the profile document from the `weft-chat-profiles` secret, delivered with
-  `WEFT_DELIVER_FILE_CHAT_PROFILES` and named by `WEFT_CHAT_PROFILES_FILE=/run/weft/secrets/chat-profiles`;
-- the model-provider credential from the `weft-model-provider-credential` secret, delivered with
-  `WEFT_DELIVER_FILE_MODEL_PROVIDER_CREDENTIAL` to `/run/weft/secrets/model-provider-credential`,
+- the profile document from the `braid-chat-profiles` secret, delivered with
+  `BRAID_DELIVER_FILE_CHAT_PROFILES` and named by `BRAID_CHAT_PROFILES_FILE=/run/braid/secrets/chat-profiles`;
+- the model-provider credential from the `braid-model-provider-credential` secret, delivered with
+  `BRAID_DELIVER_FILE_MODEL_PROVIDER_CREDENTIAL` to `/run/braid/secrets/model-provider-credential`,
   which a profile's `file` credential names.
 
 The template also delivers the separate payload-permission reader as
-`WEFT_CHAT_PAYLOAD_PERMISSION_CONNECTION_STRING_FILE`; that credential does not
+`BRAID_CHAT_PAYLOAD_PERMISSION_CONNECTION_STRING_FILE`; that credential does not
 itself grant a user permission to share payloads.
 
 `initialize-secrets.sh` creates both secrets as placeholders, and the placeholder document refuses
 chat startup. Replace them before enabling chat, for example with
-`az keyvault secret set --vault-name <keyVaultName> --name weft-chat-profiles --file <profiles.json>`;
+`az keyvault secret set --vault-name <keyVaultName> --name braid-chat-profiles --file <profiles.json>`;
 the server reads new values when it restarts.
 
 For an [Azure OpenAI profile](ai-chat.md#azure-openai-profiles), the profile can use the
@@ -385,7 +370,7 @@ az role assignment create --assignee-object-id <identityPrincipalId> --assignee-
 
 The resource needs a custom subdomain for Microsoft Entra tokens, and must be reachable from the
 virtual network, either publicly or through a private endpoint whose DNS zone is linked to it.
-To use an API key instead, store the key in `weft-model-provider-credential` and name that file in
+To use an API key instead, store the key in `braid-model-provider-credential` and name that file in
 the profile; the v1 endpoint accepts the key as the Bearer value, as the OpenAI client libraries
 send it.
 
@@ -404,7 +389,7 @@ reach `https://<app>.internal.<environment domain>` from the virtual network onl
 output `mappingEndpointOrigins` lists the origins. The endpoints require `ferruleRunner =
 service`: each executes its target's compiled artifacts through the Ferrule service's execute
 profile, which the deployment then enables, with its own client certificate
-`weft-ferrule-endpoint-client`, which the service admits by `ferruleServiceEndpointClientCertificateSha256`.
+`braid-ferrule-endpoint-client`, which the service admits by `ferruleServiceEndpointClientCertificateSha256`.
 No endpoint needs Docker.
 
 - **Entries.** Each entry names the endpoint (2–12 lowercase characters) and its target:
@@ -440,11 +425,10 @@ only: environment overrides replace each job's list.
 
 ## Live qualification
 
-`deploy/azure/qualify.sh` is the live harness for running this procedure end to end
-in a new resource group. A successful run would qualify the hosted Session stack
-and mapping endpoint within that run's stated scope: the platform, signed-in viewing, chat and
-previews, restart and scale recovery, and authorized, idempotent and recoverable endpoint invocation
-([#159](https://github.com/DeandreT/weft/issues/159)). It runs on Linux from a clean checkout, with
+`deploy/azure/qualify.sh` runs this procedure end to end in a new resource group.
+It checks the platform, signed-in viewing, chat and previews, restart and scale
+recovery, and authorized, idempotent and recoverable endpoint invocation.
+It runs on Linux from a clean checkout, with
 bash, an authenticated Azure CLI with Bicep, Docker with BuildKit, git, curl, jq and openssl. Part of
 the run needs an operator at the terminal and in a browser.
 
@@ -457,8 +441,8 @@ deploy/azure/qualify.sh --subscription <id> --resource-group <new group> --locat
 
 | Option | Value |
 | --- | --- |
-| `--subscription` | The approved subscription. The signed-in account must see it (`az account show --subscription <id>`), and every Azure CLI call names it, including Key Vault, registry, Log Analytics, Graph and REST calls and `initialize-secrets.sh` (through `WEFT_AZURE_SUBSCRIPTION`). The CLI's default subscription is neither required nor changed: the harness never runs `az account set`. |
-| `--resource-group` | A new group. The harness creates it, tags it `weft-qualification-run=<run ID>` with the commit, and refuses an existing group. |
+| `--subscription` | The approved subscription. The signed-in account must see it (`az account show --subscription <id>`), and every Azure CLI call names it, including Key Vault, registry, Log Analytics, Graph and REST calls and `initialize-secrets.sh` (through `BRAID_AZURE_SUBSCRIPTION`). The CLI's default subscription is neither required nor changed: the harness never runs `az account set`. |
+| `--resource-group` | A new group. The harness creates it, tags it `braid-qualification-run=<run ID>` with the commit, and refuses an existing group. |
 | `--location` | The region. |
 | `--parameters` | A private `.bicepparam` file that uses this repository's `deploy/azure/main.bicep`, with the operator principal, IP ranges, name and SKUs. The harness supplies the location, Entra IDs, a new organization ID, tags, images, identities, pins and feature switches, and generates the PostgreSQL administrator password into the deployments' environment. |
 | `--entra-tenant-id`, `--entra-client-id` | The sign-in tenant and the Session host's [app registration](#entra-app-registration). The Azure CLI's signed-in user must belong to that tenant: their object ID (`az ad signed-in-user show`) is bound to the first administrator. |
@@ -466,7 +450,7 @@ deploy/azure/qualify.sh --subscription <id> --resource-group <new group> --locat
 | `--endpoint-audience` | The client ID of the mapping endpoint's app registration, which accepts v2 access tokens. |
 | `--caller-client-id` with `--caller-secret-file` or `--caller-certificate-file` | A machine caller's app registration in the same tenant, and its client secret or its certificate and private key as one PEM file. |
 | `--confirm-provisioning` | Required: the run creates billable resources. |
-| `--yes`, `--state-dir`, `--teardown-at-end` | Accept the what-if without typing `yes`; the private run directory (default `~/.local/state/weft-qualification`, outside the repository); delete the group when the run ends, whether it passed or failed. |
+| `--yes`, `--state-dir`, `--teardown-at-end` | Accept the what-if without typing `yes`; the private run directory (default `~/.local/state/braid-qualification`, outside the repository); delete the group when the run ends, whether it passed or failed. |
 
 ### Guards
 
@@ -492,7 +476,7 @@ with `--yes`). Otherwise it deletes the empty group again.
 2. The [first administrator](#first-administrator) through the owner job, binding the Azure CLI's
    signed-in user by tenant and object ID with `bind-entra-user`.
    The binding key reaches the job only through Key Vault, and the placeholder is restored afterwards.
-3. The app registration: `az ad app show` must list the redirect URI and the `weft-entra-client`
+3. The app registration: `az ad app show` must list the redirect URI and the `braid-entra-client`
    certificate. When either is missing, the harness prints what to add and waits for the operator.
 4. The browser part, then one [mapping endpoint](#mapping-endpoints) for the completed build, with the
    machine caller granted, and the qualification caller job.
@@ -558,7 +542,7 @@ When a run fails, the group is kept for investigation and the harness prints the
 deploy/azure/qualify.sh --teardown <run ID> --subscription <id> --resource-group <group>
 ```
 
-Teardown deletes the group only when its `weft-qualification-run` tag equals the run ID, and only after
+Teardown deletes the group only when its `braid-qualification-run` tag equals the run ID, and only after
 the operator types the group's name (or with `--yes`). It then waits until Azure no longer reports the
 group, and records the result in the receipt. The Key Vault stays soft-deleted, with purge protection,
 until its retention period ends. Changes to the app registrations are not reverted.
@@ -567,41 +551,38 @@ until its retention period ends. Changes to the app registrations are not revert
 CLI, curl and Docker, and `AzureQualificationHarnessTests` runs it with the .NET tests. The fake Azure
 CLI fails every scenario in which a call omits the approved subscription or runs `az account set`.
 `deploy/azure/tests/expected/successful-run.calls` is the exact command sequence of a passing run. To
-regenerate it after an intended change, set `WEFT_QUALIFY_UPDATE_EXPECTED=1`, then review the diff.
+regenerate it after an intended change, set `BRAID_QUALIFY_UPDATE_EXPECTED=1`, then review the diff.
 
 ## Open questions and limits
 
 - **Current credential wiring.** `provision-database.sh` requires
-  `WEFT_CHAT_APPROVER_PASSWORD`, `WEFT_DRAFT_READER_PASSWORD` and
-  `WEFT_DRAFT_WRITER_PASSWORD`. The login inventory in `initialize-secrets.sh` and
+  `BRAID_CHAT_APPROVER_PASSWORD`, `BRAID_DRAFT_READER_PASSWORD` and
+  `BRAID_DRAFT_WRITER_PASSWORD`. The login inventory in `initialize-secrets.sh` and
   the `roles` array used by the `database-roles` job in `modules/application.bicep`
   do not supply them. The job therefore cannot complete fresh provisioning as
   currently wired. The application's `chatFiles` also omits
-  `WEFT_CHAT_APPROVER_CONNECTION_STRING_FILE`, which enabled Session chat requires.
-  Reconcile the secret, provisioning and runtime deliveries in a separately
-  reviewed change before a deployment or live qualification run. Do not work
+  `BRAID_CHAT_APPROVER_CONNECTION_STRING_FILE`, which enabled Session chat requires.
+  Supply these secrets to provisioning and runtime before deployment. Do not work
   around this by sharing another role's password, skipping migrations or giving
   the app the migrator credential. The optional creation/specification host
   features also need their own composition; these templates do not enable them.
 - **Private search extension.** Provisioning requires `pg_trgm` to be allowed by
   the server's extension policy. The role transaction installs it in
-  `weft_search_extensions` and removes PUBLIC schema and function privileges.
+  `braid_search_extensions` and removes PUBLIC schema and function privileges.
   The DBA must be able to revoke privileges on its bootstrap-owned routines;
   failure rolls back the role transaction rather than admitting a public
-  extension. Local PostgreSQL qualification does not establish that a managed
-  server grants these administrative privileges.
+  extension.
 - **Parameter grant on Flexible Server.** Migration 0011 requires
-  `GRANT SET ON PARAMETER weft.organization_id, weft.chat_principal_id TO weft_migrator`.
+  `GRANT SET ON PARAMETER braid.organization_id, braid.chat_principal_id TO braid_migrator`.
   Its server administrator belongs to `azure_pg_admin` but is not a superuser, and
   PostgreSQL lets only a superuser or a holder of the grant option grant `SET` on a
   placeholder parameter. Verify with the database-roles job: success prints the provisioned
-  line; refusal prints `permission denied for parameter weft.organization_id` and rolls back
-   every role (only the empty `weft` database remains). Check this before starting
+  line; refusal prints `permission denied for parameter braid.organization_id` and rolls back
+   every role (only the empty `braid` database remains). Check this before starting
    migrations: the application deployment must first create the `database-roles`
    job. If it is refused, either host PostgreSQL 16
   with a superuser-capable administrator in the same virtual network, or replace the chat
-  routines' function-level `SET` clauses through a new reviewed migration (0011 itself is
-  checksum-bound and must not be edited).
+  routines' function-level `SET` clauses in the database schema.
 - **Key ring on Azure Files.** The server admits its ring only as a 0700 directory with
   single-link 0600 files owned by its user. The SMB mount presents those owners and modes.
   The session-keys job and a successful server start verify admission on the share. If it

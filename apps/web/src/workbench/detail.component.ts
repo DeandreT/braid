@@ -9,7 +9,7 @@ import {
 } from "./projection-view";
 
 @Component({
-  selector: "weft-mapping-details",
+  selector: "braid-mapping-details",
   imports: [forwardRef(() => MappingDetailsComponent), NativeEvidenceComponent],
   template: `
     <ul class="mapping-details">
@@ -19,7 +19,7 @@ import {
             @case ("group") {
               <details open>
                 <summary>{{ detail.label }}</summary>
-                <weft-mapping-details
+                <braid-mapping-details
                   [details]="detail.children"
                   [view]="view()"
                   (navigate)="navigate.emit($event)"
@@ -29,7 +29,7 @@ import {
             @case ("expression") {
               <details open>
                 <summary>{{ detail.operation }}</summary>
-                <weft-mapping-details
+                <braid-mapping-details
                   [details]="detail.arguments"
                   [view]="view()"
                   (navigate)="navigate.emit($event)"
@@ -62,7 +62,7 @@ import {
                 <strong>{{ detail.construct }}</strong>
                 <p>{{ detail.description }}</p>
                 <span>Explanation incomplete</span>
-                <weft-native-evidence [locator]="detail.nativeLocator" />
+                <braid-native-evidence [locator]="detail.nativeLocator" />
               </div>
             }
           }

@@ -2,13 +2,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::protocol::{ENGINE_REVISION, Revision};
 
-pub const PREVIEW_PROTOCOL_VERSION: &str = "weft.ferrule-preview.v1";
-pub const PREVIEW_PROFILE: &str = "weft.ferrule-json-preview.v1";
-pub const DOCUMENT_PREVIEW_PROTOCOL_VERSION: &str = "weft.ferrule-document-preview.v1";
-pub const DOCUMENT_PREVIEW_PROFILE: &str = "weft.ferrule-document-preview.v1";
-pub const CSV_PREVIEW_PROTOCOL_VERSION: &str = "weft.ferrule-csv-preview.v1";
-pub const CSV_PREVIEW_PROFILE: &str = "weft.ferrule-csv-preview.v1";
-pub const XML_PREVIEW_PROTOCOL_VERSION: &str = "weft.ferrule-xml-preview.v1";
+pub const PREVIEW_PROTOCOL_VERSION: &str = "braid.ferrule-preview.v1";
+pub const PREVIEW_PROFILE: &str = "braid.ferrule-json-preview.v1";
+pub const DOCUMENT_PREVIEW_PROTOCOL_VERSION: &str = "braid.ferrule-document-preview.v1";
+pub const DOCUMENT_PREVIEW_PROFILE: &str = "braid.ferrule-document-preview.v1";
+pub const CSV_PREVIEW_PROTOCOL_VERSION: &str = "braid.ferrule-csv-preview.v1";
+pub const CSV_PREVIEW_PROFILE: &str = "braid.ferrule-csv-preview.v1";
+pub const XML_PREVIEW_PROTOCOL_VERSION: &str = "braid.ferrule-xml-preview.v1";
 pub const MAX_PREVIEW_INPUTS: usize = 16;
 pub const MAX_PREVIEW_INPUT_BYTES: usize = 8 * 1024 * 1024;
 pub const MAX_PREVIEW_OUTPUT_BYTES: usize = 8 * 1024 * 1024;

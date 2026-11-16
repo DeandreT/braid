@@ -22,7 +22,7 @@ import type {
 } from "./project-creation-types";
 
 @Component({
-  selector: "weft-create-project-page",
+  selector: "braid-create-project-page",
   imports: [DatePipe, ReactiveFormsModule, RouterLink],
   templateUrl: "./create-project-page.component.html",
   styleUrl: "./create-project-page.component.css",

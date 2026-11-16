@@ -21,7 +21,7 @@ class CheckoutLineEndingTests(unittest.TestCase):
             "tools/qualification-capture/fixtures/mixed.txt": b"one\r\ntwo\nthree\r\n",
             "tools/qualification-capture/fixtures/lf.txt": b"exact\nfixture\n",
         }
-        with tempfile.TemporaryDirectory(prefix="weft-checkout-test-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="braid-checkout-test-") as temporary:
             root = Path(temporary)
             source = root / "source"
             source.mkdir()
@@ -37,8 +37,8 @@ class CheckoutLineEndingTests(unittest.TestCase):
                     "-c", "core.attributesFile=" + str(empty_attributes),
                     "-c", "core.hooksPath=" + str(hooks),
                     "-c", "commit.gpgSign=false",
-                    "-c", "user.name=Weft checkout test",
-                    "-c", "user.email=checkout@weft.invalid",
+                    "-c", "user.name=Braid checkout test",
+                    "-c", "user.email=checkout@braid.invalid",
                     *arguments,
                 ], cwd=source, check=True, capture_output=True, timeout=30)
 

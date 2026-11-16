@@ -187,7 +187,7 @@ function comparison(
     !object(value) ||
     !keys(value, comparisonKeys) ||
     value["operations"] !== null ||
-    value["schemaVersion"] !== "weft.revision-comparison.v1" ||
+    value["schemaVersion"] !== "braid.revision-comparison.v1" ||
     !text(value["policyVersion"], true) ||
     !citation(value["left"], left) ||
     !citation(value["right"], right) ||

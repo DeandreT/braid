@@ -256,7 +256,7 @@ fn x12_within_limits(bytes: &[u8], mut terminator: char) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    const ISA: &str = "ISA*00*          *00*          *ZZ*WEFTSENDER     *ZZ*WEFTRECEIVER   *261024*1200*^*00501*000000330*0*T*:~";
+    const ISA: &str = "ISA*00*          *00*          *ZZ*BRAIDSENDER    *ZZ*BRAIDRECEIVER  *261024*1200*^*00501*000000330*0*T*:~";
 
     fn edifact(reference: &str, body: &str, count: usize, custom: bool) -> String {
         if custom {

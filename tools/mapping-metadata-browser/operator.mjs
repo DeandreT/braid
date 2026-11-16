@@ -75,7 +75,7 @@ await runBrowserFixture({
       check(
         initializedStorage === null && typeof process.geteuid === "function",
       );
-      const markerPath = join(storageRoot, ".weft-private-storage"),
+      const markerPath = join(storageRoot, ".braid-private-storage"),
         identity = fileIdentity(markerPath);
       check(
         identity.mode === 0o400 &&
@@ -101,7 +101,7 @@ await runBrowserFixture({
         check(readSync(fd, buffer, 0, buffer.length, 0) === 90);
         const bytes = buffer.subarray(0, 90),
           match =
-            /^weft-private-storage-v2\n([0-9a-f]{32})\n([0-9a-f]{32})\n$/.exec(
+            /^braid-private-storage-v2\n([0-9a-f]{32})\n([0-9a-f]{32})\n$/.exec(
               bytes.toString("utf8"),
             );
         check(
@@ -110,7 +110,7 @@ await runBrowserFixture({
             match[2] !== "0".repeat(32) &&
             bytes.equals(
               Buffer.from(
-                `weft-private-storage-v2\n${match[1]}\n${match[2]}\n`,
+                `braid-private-storage-v2\n${match[1]}\n${match[2]}\n`,
                 "ascii",
               ),
             ),
@@ -129,7 +129,7 @@ await runBrowserFixture({
           rootIdN: match[1],
           controlIdN: match[2],
           marker: Object.freeze({
-            path: ".weft-private-storage",
+            path: ".braid-private-storage",
             bytes: 90,
             sha256: sha(bytes),
             ...identity,
@@ -243,7 +243,7 @@ await runBrowserFixture({
       );
       check(
         reply.status === 200 &&
-          reply.body.schemaVersion === "weft.catalog-revision-report.v1" &&
+          reply.body.schemaVersion === "braid.catalog-revision-report.v1" &&
           reply.body.operation === operation &&
           equivalent(reply.body.revision, primary.scope) &&
           reply.body.state === "available" &&
@@ -268,7 +268,7 @@ await runBrowserFixture({
             /^[a-f0-9]{64}$/.test(row.bound_record_digest) &&
             // The fixture configures the filesystem store, whose label this is.
             row.storage_kind === "filesystem" &&
-            row.format === "weft.private-publication.linux.v2",
+            row.format === "braid.private-publication.linux.v2",
         );
       for (const revision of current.rows.mapping_revisions) {
         const pubs = current.rows.private_object_publications.filter(
@@ -325,7 +325,7 @@ await runBrowserFixture({
         initializedStorage !== null &&
           equivalent(
             baseline.physical.find(
-              (file) => file.path === ".weft-private-storage",
+              (file) => file.path === ".braid-private-storage",
             ),
             initializedStorage.marker,
           ),
@@ -358,7 +358,7 @@ await runBrowserFixture({
         grantsSha256: sha(Buffer.from(JSON.stringify(baseline.grants))),
       });
       return {
-        schemaVersion: "weft.mapping-metadata-browser-fixture.v1",
+        schemaVersion: "braid.mapping-metadata-browser-fixture.v1",
         fixtureId,
         source: { commit: cfg.source.commit, tree: cfg.source.tree },
         readOrigin: cfg.readOrigin,
@@ -677,7 +677,7 @@ await runBrowserFixture({
       ];
       const blob = join(...parts, compact(revision.native_object_id) + ".blob"),
         control = join(
-          ".weft-private-control",
+          ".braid-private-control",
           initializedStorage.controlIdN,
           ...parts,
           compact(revision.native_object_id),
@@ -715,7 +715,7 @@ await runBrowserFixture({
           bound.sha256 === pub.bound_record_digest,
       );
       const inode = jsonSql(
-        "SELECT to_json(file_inode::text) FROM weft.private_object_publications WHERE publication_id='" +
+        "SELECT to_json(file_inode::text) FROM braid.private_object_publications WHERE publication_id='" +
           guid(pub.publication_id) +
           "' AND organization_id='" +
           ids.organization +

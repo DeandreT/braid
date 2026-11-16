@@ -12,7 +12,7 @@ interface Manifest extends ExecutionManifest {
 }
 const owner = new ExecutionOwner<Manifest>(
   "build",
-  () => process.env.WEFT_BUILD_BINDINGS,
+  () => process.env.BRAID_BUILD_BINDINGS,
 );
 const panel = (page: Page) =>
   page.getByRole("region", { name: "Prepare this version", exact: true });
@@ -185,13 +185,13 @@ test("real environment approval compilation restart and revocation preserve exac
   await expect(
     panel(page).getByText(originalDigest, { exact: true }),
   ).toBeVisible();
-  if (process.env.WEFT_WORKBENCH_CAPTURE_DIR) {
-    expect(isAbsolute(process.env.WEFT_WORKBENCH_CAPTURE_DIR)).toBe(true);
+  if (process.env.BRAID_WORKBENCH_CAPTURE_DIR) {
+    expect(isAbsolute(process.env.BRAID_WORKBENCH_CAPTURE_DIR)).toBe(true);
     await panel(page).locator(".builds-result-details > summary").click();
     await panel(page).locator(".builds-result").scrollIntoViewIfNeeded();
     await page.screenshot({
       path: join(
-        process.env.WEFT_WORKBENCH_CAPTURE_DIR,
+        process.env.BRAID_WORKBENCH_CAPTURE_DIR,
         "workbench-real-builds.png",
       ),
     });

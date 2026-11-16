@@ -1,36 +1,28 @@
 # Native mapping upload browser fixture
 
-This is the E fixture source. Root binds and runs it only against the accepted
-committed checkout and its ordinary Server, DatabaseTool and StorageTool
-publications. This source handoff is outside Git and has not been imported,
-parsed, syntax checked or executed by its author. It is not qualification.
-
-The operator imports only the shared runtime's exported function. Its fixed
-`native-mapping-upload` scenario has no dynamic scenario/module/config hooks.
-The existing positive catalog observer is reused unchanged. All A/B/C/D
-entrypoints, protocols, default hosts, observers and scenario assertions remain
-unchanged. The proposed common patch is based on frozen D runtime1118bd83; root
-alone applies it after D qualifies/merges. Existing packets stay immutable.
+This fixture tests native mapping uploads against the packaged Server,
+DatabaseTool and StorageTool from the same committed source. The operator uses
+the shared browser-fixture runtime's fixed `native-mapping-upload` scenario and
+the catalog fixture's worker/resource observer.
 
 ## Private binding and host
 
 Use the existing common private config shape with schema
-`weft.native-mapping-upload-browser-operator-config.v1`, and release schema
-`weft.native-mapping-upload-browser-release.v1`. Config has `runtimeReleased`
-and release has `released`; both remain false until root binds/releases.
+`braid.native-mapping-upload-browser-operator-config.v1`, and release schema
+`braid.native-mapping-upload-browser-release.v1`. Config has `runtimeReleased`
+and release has `released`; set both after binding the fixture inputs.
 There are no default source/publication paths, IDs, origins or credentials.
 The exact existing config/source/manifest/admission/three-publication closure
 maps, hash-bound outer observer admission, fixed worker/PG images, owned0700
 private directory and0600 config/release requirements apply unchanged.
 
-Spawn with Node `[operator, '--config', configuration]`. Root/browser env is:
+Spawn with Node `[operator, '--config', configuration]`. Node-only settings are:
 
-- `WEFT_NATIVE_MAPPING_UPLOAD_BROWSER_OPERATOR`: absolute reviewed operator.
-- `WEFT_NATIVE_MAPPING_UPLOAD_BROWSER_OPERATOR_CONFIG`: private0600 config.
-- `WEFT_NATIVE_MAPPING_UPLOAD_BROWSER_MANIFEST`: exact private manifest path.
-- `WEFT_NATIVE_MAPPING_UPLOAD_BASE_URL`: exact concrete read origin.
+- `BRAID_NATIVE_MAPPING_UPLOAD_BROWSER_OPERATOR`: absolute reviewed operator.
+- `BRAID_NATIVE_MAPPING_UPLOAD_BROWSER_OPERATOR_CONFIG`: private0600 config.
+- `BRAID_NATIVE_MAPPING_UPLOAD_BROWSER_MANIFEST`: exact private manifest path.
+- `BRAID_NATIVE_MAPPING_UPLOAD_BASE_URL`: exact concrete read origin.
 
-The source-only candidate has no actual config/release/client/runtime binding.
 The worker image is
 `sha256:439291fb4d665e3ba9c086e88214a73fd44552af80932a9b40c97f5816c7047e`;
 the PostgreSQL16.15 reference is
@@ -47,23 +39,22 @@ deriver and maintenance credentials/flags are absent/off. `featureOff` holds
 only the catalog reader: no ingestion/private-root/worker/Docker settings.
 The project endpoint exposes createMappings only when enabled and role permits;
 its mapping-specific uploadRevisions action remains false as the product maps
-it, even though context reports the ingestion feature. E sends no append.
+it, even though context reports the ingestion feature. This scenario sends no append.
 
 ## Protocol
 
-Public manifest `weft.native-mapping-upload-browser-fixture.v1` contains exactly
+Public manifest `braid.native-mapping-upload-browser-fixture.v1` contains exactly
 fixtureId, source{commit,tree}, readOrigin, initialReadProfile publisher,
 organizationId, profiles for administrator/publisher/runner/viewer with
 actorPrincipalId/allowedOrganizationId/primaryRole, project{scope}, and
 protected{project,revision}. It contains no input path, native bytes/digest,
 query/draft/key/token, private object reference or database configuration.
-The ready line `weft.native-mapping-upload-browser-ready.v1` contains only
+The ready line `braid.native-mapping-upload-browser-ready.v1` contains only
 fixtureId, manifestSha256 and profile publisher. Manifest is bounded65536bytes.
 
 Controls are serialized, <=1024bytes and64 canonical nonzero UUID nonces, with
 fixtureId/requestNonce/action. ACK schema is
-`weft.native-mapping-upload-browser-control.v1`, <=4096bytes with exact keys.
-The accepted typed seam07bbdf10 remains authoritative:
+`braid.native-mapping-upload-browser-control.v1`, <=4096bytes with exact keys:
 
 | Action | Additional input | Successful ACK fields after base |
 | --- | --- | --- |
@@ -91,9 +82,9 @@ summarize full comparisons; they are never the sole preservation proof.
 
 ## Exact five samples and capture
 
-Corrected accepted matrix samples22876da6/captureb28ba504 is mirrored in source:
-legacy2191bytes is Administrator; versioned1566bytes, decodedInvalid988bytes,
-malformed16bytes and unsupported1568bytes are Publisher. All principals/project
+The fixed samples are `legacy` (2191 bytes, Administrator), `versioned` (1566 bytes,
+Publisher), `decodedInvalid` (988 bytes, Publisher), `malformed` (16 bytes,
+Publisher) and `unsupported` (1568 bytes, Publisher). All principals/project
 IDs derive from the current admitted manifest. Metadata/filenames are fixed
 source literals; legacy description uses LF, and accepted name uses .NET NEL
 trim. Original fixtures are read as raw bytes. The authored malformed literal
@@ -110,7 +101,7 @@ loss. A replay uses checkpoint and cannot advance the baseline.
 Post-HTTP capture subtracts exactly one actual scoped ingestion header, completed
 attempt, Bound native publication and seven v2 files. Committed samples also
 add exactly one mapping/revision at first head/sequence/version1; rejected
-samples add none and honestly RETAIN their actual staged native artifact and
+samples add none and retain their staged native artifact and
 complete seals. Every actor, exact accepted metadata/display_filename, digest,
 count, source scope, reserved profile/provenance and terminal phase is checked.
 The header uses display_filename; the public receipt uses originalFilename.
@@ -126,10 +117,9 @@ the operator captures the owned0400/single-link90-byte v2 marker and its file
 identity, requiring exact ASCII bytes (latin1 read plus reconstructed raw-byte
 equality), canonical nonzero root/control IDs. Publication root_id and
 control_namespace_id must match those captured IDs; the exact control path is
-`.weft-private-control/{controlIdN}/objects/native/...`, not a directory scan or
-a namespace inferred from a later publication. This is the separately recorded
-root-authorized oracle refinement41084a2f; accepted samples22876 remain exact. Every file is owned, regular, nonsymlink,
-single-link; gates are empty. Original native bytes are compared directly as
+`.braid-private-control/{controlIdN}/objects/native/...`, not a directory scan or
+a namespace inferred from a later publication. Every file is owned, regular,
+nonsymlink and single-link; gates are empty. Original native bytes are compared directly as
 well as by digest/length. New native inode is queried as text, with actual
 mount/device/data-parent identity checks; no unsafe inode Number conversion.
 Absence and Bound seal hashes match durable registry facts. Full seal validity
@@ -149,9 +139,6 @@ member's role and version, never facts. API and same-PG restart preserve all
 state. Every terminal resend/own-receiptGET/bodylessresume/read/refusal is zero
 rows/files/worker delta. Unexpected attempts/workers fail; they are not retried.
 
-Operator cleanup PASS is resource/state settlement, not a full browser PASS or
-proof all five sample cases executed. Root reviews actual raw browser outcomes,
-step/case census, capture records and outer lifecycle evidence separately.
 All automatic worker destruction/exact404 stays product-owned; neither the
 operator nor observer removes native workers. Only exactly owned API/PG/
 network/volume identities are normally settled by the inherited runtime.
@@ -162,13 +149,10 @@ One shared automatic NativeMappingUploadOwner spans controlled and actual test
 files with global trace/video/screenshot off and no per-file worker options.
 Node holds bytes, keys, query, cookies/tokens and original response facts only
 in private memory. No raw native/request values are printed or attached.
-E owner HTTP observations record URL.pathname only. The public manifest and
+Owner HTTP observations record URL.pathname only. The public manifest and
 closed pipe never expose credentials or private storage references.
 
-Terminal own-receipt GET and source-free resume may be verified as ordinary
-Node/browser-owned product HTTP if the page has no terminal Resume. Label that
-API-only, not a clicked UI. Pending/needsSource remain controlled UI responses
-composed with the existing qualified ingestion API. There is no manufactured
-pending state or new interrupt/clock/worker/storage hook. Real browser evidence
-must still prove same-original lost-response recovery, exact-byte saves,
-permission changes, durability and fresh immutable revision navigation.
+Terminal own-receipt GET and source-free resume use Node/browser-owned product
+HTTP when the page has no terminal Resume. Pending/needsSource use controlled
+UI responses. The browser checks original-request recovery after response loss,
+exact-byte saves, permission changes, durability and immutable revision navigation.

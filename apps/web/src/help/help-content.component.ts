@@ -11,7 +11,7 @@ type Schemas = components["schemas"];
  * here binds HTML, so guide text can never become script or styling.
  */
 @Component({
-  selector: "weft-help-content",
+  selector: "braid-help-content",
   imports: [NgTemplateOutlet, RouterLink],
   styleUrl: "./help-content.component.css",
   template: `

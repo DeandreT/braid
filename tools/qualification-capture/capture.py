@@ -22,7 +22,7 @@ import threading
 import time
 import uuid
 
-SCHEMA = 'weft.qualification-capture.v1'
+SCHEMA = 'braid.qualification-capture.v1'
 HEADER, MANIFEST, STDOUT, EVIDENCE = 'header.json', 'manifest.json', 'driver.stdout', 'evidence'
 EXIT, REVOKED = 'complete.exit', 'complete.revoked'
 LAYOUT = {HEADER, MANIFEST, STDOUT, EVIDENCE, EXIT, REVOKED}

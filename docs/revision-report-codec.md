@@ -5,10 +5,9 @@ immutable native revision. The application owns accepted report snapshots.
 Changing a caller's collection after acceptance cannot change a retained report,
 its summary, or the bytes produced from it.
 
-This increment supplies Application contracts, neutral validation, lazy trusted
-registrations, a private envelope codec, and bounded response serialization.
-Ferrule report invocation, private-object publication, metadata orchestration,
-repair, and persisted-report HTTP routes follow their focused increments.
+The report codec provides neutral validation, a private envelope and bounded
+response serialization. See [report workflow](revision-report-workflow.md) for
+derivation and [report API](persisted-report-api.md) for delivery.
 
 ## Ownership and usability
 
@@ -28,7 +27,7 @@ status, validity, or diagnostics.
 
 Verified reports bind their full revision scope, native digest, backend profile,
 format, policy, and reconstructed counts to immutable result metadata. They do
-not establish current permission to deliver a response. The later reader and
+not establish current permission to deliver a response. The reader and
 deriver must observe fresh source authority around their I/O and delivery.
 
 Stored validation diagnostics contain native evidence with null projection
@@ -41,8 +40,8 @@ response rather than the validation cache key.
 The private envelope has its own schema and codec versions. Its required fields
 are `schemaVersion`, `codecVersion`, `operation`, `key`, `cacheEntryId`,
 `derivationId`, `generation`, `candidateObjectId`, and `report`. The stored format
-is `weft.revision-report-envelope.v1`; the codec is
-`weft.revision-report-codec.v1`.
+is `braid.revision-report-envelope.v1`; the codec is
+`braid.revision-report-codec.v1`.
 
 Decoding checks physically present JSON fields before constructing contract
 records. A computed schema getter or an optional constructor argument cannot
@@ -60,7 +59,7 @@ length, and digest. It does not accept a digest in place of source identity.
 
 Private decoding uses its own strict JSON settings. Public HTTP serialization
 settings remain unchanged. Stored-format validation resolves no current backend
-or worker, so a supported historical report can be checked independently of a
+or worker, so a supported retained report can be checked independently of a
 live current engine.
 
 ## Neutral data and budgets
@@ -82,7 +81,7 @@ standalone report.
 Hard ceilings include a 16-KiB envelope header and 16-MiB stored-object and
 response limits. Trusted policies may reduce them. Reads enforce both immutable
 report policy and current read caps. A retained derived-only read preserves its
-historical native policy because it loads no native bytes.
+stored native policy because it loads no native bytes.
 
 Trusted storage and backend registrations are lazy. Size checks can refuse an
 over-limit native source or derived reference before resolving the corresponding
@@ -90,6 +89,6 @@ factory. Current effective policy includes actual adapter and derived-read caps,
 so a reduced cap changes the full cache identity.
 
 The bounded response serializer owns its returned bytes and checks cancellation
-before and during writes. The future HTTP increment must apply it to the entire
+before and during writes. HTTP serialization applies it to the entire
 public response wrapper, including selection and links; an inner report's size
 does not establish the size of that response.

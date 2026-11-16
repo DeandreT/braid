@@ -11,16 +11,16 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-use serde_json::json;
-use sha2::{Digest, Sha256};
-use weft_ferrule_host::preview::protocol::{
+use braid_ferrule_host::preview::protocol::{
     MAX_PREVIEW_INPUT_BYTES, MAX_PREVIEW_OUTPUT_BYTES, PREVIEW_PROTOCOL_VERSION, PreviewInput,
     PreviewLimits, PreviewParameter, PreviewRequestHeader, PreviewTarget, PreviewValue,
 };
-use weft_ferrule_host::sandbox::{self, Limits};
+use braid_ferrule_host::sandbox::{self, Limits};
+use serde_json::json;
+use sha2::{Digest, Sha256};
 
-const HELPER: &str = "WEFT_SANDBOX_QUALIFICATION_HELPER";
-const WORKER: &str = env!("CARGO_BIN_EXE_weft-ferrule-host");
+const HELPER: &str = "BRAID_SANDBOX_QUALIFICATION_HELPER";
+const WORKER: &str = env!("CARGO_BIN_EXE_braid-ferrule-host");
 const LIMITS: Limits = Limits {
     cpu_seconds: 10,
     memory_bytes: 268_435_456,
@@ -144,7 +144,7 @@ fn sandbox_arguments(limits: Limits) -> Vec<String> {
 
 fn private_directory() -> PathBuf {
     let directory = std::env::temp_dir().join(format!(
-        "weft-sandbox-{}-{}",
+        "braid-sandbox-{}-{}",
         std::process::id(),
         random_suffix()
     ));
@@ -224,7 +224,7 @@ fn sandboxed_worker_reports_every_control_before_input() {
 
 fn inspection_frame(operation: &str, native: &[u8]) -> Vec<u8> {
     let header = json!({
-        "protocolVersion": "weft.ferrule-host.v1",
+        "protocolVersion": "braid.ferrule-host.v1",
         "requestId": "11111111-1111-4111-8111-111111111111",
         "operation": operation,
         "revision": revision(),

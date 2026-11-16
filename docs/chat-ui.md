@@ -27,8 +27,7 @@ The **More chat actions** menu holds refresh and **Open in chat**. The composer
 keeps mapping focus and the model profile beside the question and grows for
 multiline text. Its data-policy note stays visible beneath the composer.
 
-The list includes workspace and existing revision-pinned conversations; legacy
-threads continue through their original revision/report-pinned routes. The
+The list includes workspace and revision-pinned conversations. The
 shared list is organization-scoped. **Open in chat** opens the
 same server conversation in a separate tab, leaving the panel and any unsent
 draft in place. Up to 100 recent questions and their answers share one transcript.
@@ -82,8 +81,8 @@ exact saved report, guide section or authorized resource-detail view in a separa
 tab. Run, case, approval and environment details use the existing typed app read
 clients and current authority; no resource read starts model work or displays
 sample payloads. An unavailable resource fails closed instead of following a
-different head or version. Existing legacy report citations retain their
-pin-mismatch notice. Validation and
+different head or version. Revision-pinned report citations show a pin-mismatch
+notice when opened against another report. Validation and
 operation diagnostic ordinals refer to their own report lists; explanation
 document diagnostics are not substituted for operation diagnostics.
 
@@ -125,14 +124,11 @@ button.
 offscreen browser. From `apps/web`, run `npx playwright test --config
 playwright.chat.config.ts` using the repository's pinned Node/npm versions.
 These checks exercise standalone and shared-panel presentation, exact focus,
-legacy continuation, profile/disclosure markers, current-owner fencing, request
+revision-pinned continuation, profile/disclosure markers, current-owner fencing, request
 recovery, stream framing and revision/report-bound citation selection. The pure
 `check:chat-types` suite checks closed transport shapes and citation URLs without
-opening a browser. Synthetic fixtures model policy outcomes; real tool offering
-and payload-grant intersections are separately checked by the actual PostgreSQL
-and provider-wire tests. The synthetic UI checks do not qualify a live provider,
-session deployment, database or hosted environment. Keep the existing ordinary
-browser and type/build checks as separate regression gates.
+opening a browser. PostgreSQL and provider-wire tests check tool offering and
+payload-grant intersections.
 
 ### Actual transport browser gate
 
@@ -148,15 +144,11 @@ repeats cancellation of cancelled and completed turns, which must return the
 unchanged terminal state. The test host uses retained synthetic report sources
 and does not start a native worker.
 
-Build the frontend, publish `Weft.Server`, and build `Weft.Tests` at the same
+Build the frontend, publish `Braid.Server`, and build `Braid.Tests` at the same
 source revision. Prepare the existing owned-browser admission record with
 `tools/auth-browser-https/admit.mjs --approved`, pointing its server input at the
 published server and `wwwroot` directory. The admission record pins the asset,
 Node and Chromium hashes. Under the full shared browser lock and an assigned
-Xvfb display, set `WEFT_WORKSPACE_CHAT_BROWSER=true` and run only
+Xvfb display, set `BRAID_WORKSPACE_CHAT_BROWSER=true` and run only
 `ChatWorkspaceBrowserTests` with the admitted paths. The test requires the actual
 PostgreSQL fixture settings described in [development](development.md).
-
-This gate qualifies Development transport and application orchestration with a
-fixture provider. It does not qualify Session sign-in, bearer admission, packaged
-hosted acceptance or a live Azure/Ollama provider; those retain their own gates.

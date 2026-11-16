@@ -1,25 +1,22 @@
 # Bounded private-object maintenance command
 
-`Weft.MaintenanceTool` performs one explicit maintenance invocation for one
-organization/project. It adds no background job or HTTP route. Implementation
-and qualification are recorded separately in
-[issue #62](https://github.com/DeandreT/weft/issues/62) and its linked implementing
-pull request; this document describes the command contract.
+`Braid.MaintenanceTool` performs one explicit maintenance invocation for one
+organization/project.
 
 ## Configuration and invocation
 
 Run the published tool under the identity that owns the existing private root:
 
 ```text
-dotnet Weft.MaintenanceTool.dll run-once ORGANIZATION_ID PROJECT_ID ROOT APPLICATION_ROOT [--repository-root REPOSITORY_ROOT] [--cleanup-after JSON] [--status-after JSON]
+dotnet Braid.MaintenanceTool.dll run-once ORGANIZATION_ID PROJECT_ID ROOT APPLICATION_ROOT [--repository-root REPOSITORY_ROOT] [--cleanup-after JSON] [--status-after JSON]
 ```
 
-For an [Azure Blob store](private-storage-blob.md), set `WEFT_PRIVATE_STORAGE_KIND=azure-blob`
+For an [Azure Blob store](private-storage-blob.md), set `BRAID_PRIVATE_STORAGE_KIND=azure-blob`
 and the Blob settings described in its [host selection](private-storage-blob.md#host-selection);
 the command then takes no filesystem operands:
 
 ```text
-dotnet Weft.MaintenanceTool.dll run-once ORGANIZATION_ID PROJECT_ID [--cleanup-after JSON] [--status-after JSON]
+dotnet Braid.MaintenanceTool.dll run-once ORGANIZATION_ID PROJECT_ID [--cleanup-after JSON] [--status-after JSON]
 ```
 
 An unknown kind, a missing Blob setting, or filesystem operands or a filesystem root
@@ -29,10 +26,9 @@ or storage access.
 Organization/project IDs must be nonzero UUIDs in canonical lowercase D format.
 Each named option may occur once. ROOT, APPLICATION_ROOT and optional
 REPOSITORY_ROOT use the existing storage path/exclusion rules. The root must
-already be strict v2; the command does not initialize, activate, repair or fall
-back to v1 storage.
+already be initialized; the command does not initialize or repair storage.
 
-Set the dedicated connection through `WEFT_MAINTENANCE_CONNECTION_STRING`.
+Set the dedicated connection through `BRAID_MAINTENANCE_CONNECTION_STRING`.
 There is no credential argument or fallback to another pool. The existing
 maintenance role/schema admission and organization/project binding remain in
 force. The tool opens one lazy maintenance pool and one existing v2 store,

@@ -45,8 +45,8 @@ for (const xmlRegressionEnabled of [true, false]) {
         ...output,
         mediaType: "application/xml",
         xmlMetadata: {
-          schema: "weft.xml-boundary.v1",
-          safetyProfile: "weft.xml-safe.v1",
+          schema: "braid.xml-boundary.v1",
+          safetyProfile: "braid.xml-safe.v1",
           schemaHints: null,
         },
       }),
@@ -60,7 +60,7 @@ for (const xmlRegressionEnabled of [true, false]) {
     }
     await format.selectOption("xml");
     await page
-      .locator('weft-revision-preview input[type="file"]')
+      .locator('braid-revision-preview input[type="file"]')
       .first()
       .setInputFiles({
         name: "sample.xml",
@@ -174,7 +174,7 @@ test("saved preview baseline uses verified output metadata and exact bytes", () 
   );
   expect(body.runtime.profile).toBe(csvPreviewProfile);
   expect(body.primaryBase64Url).toBe("");
-  expect(body.comparisonPolicy).toBe("weft.regression.exact-bytes.v1");
+  expect(body.comparisonPolicy).toBe("braid.regression.exact-bytes.v1");
   expect(body.expected[0]).toEqual({
     name: null,
     bytesBase64Url: Buffer.from(csvBytes).toString("base64url"),
@@ -245,7 +245,7 @@ test("CSV preview keeps empty file bytes, renders native TSV, and saves only aft
   await fixture.install(page);
   await page.locator("#preview-admission").selectOption("csv");
   await page
-    .locator('weft-revision-preview input[type="file"]')
+    .locator('braid-revision-preview input[type="file"]')
     .first()
     .setInputFiles({
       name: "deliberately-wrong.json",
@@ -261,7 +261,7 @@ test("CSV preview keeps empty file bytes, renders native TSV, and saves only aft
   await page
     .getByRole("button", { name: "Show Primary output", exact: true })
     .click();
-  const table = page.locator("weft-document-view table");
+  const table = page.locator("braid-document-view table");
   await expect(table.getByRole("columnheader")).toHaveText([
     "code",
     "description",
@@ -401,6 +401,6 @@ test("a CSV response with malformed metadata or an oversized row count never inv
       exact: true,
     }),
   ).toBeVisible();
-  await expect(page.locator("weft-document-view table")).toHaveCount(0);
+  await expect(page.locator("braid-document-view table")).toHaveCount(0);
   expect(fixture.publications).toHaveLength(0);
 });

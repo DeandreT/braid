@@ -1,14 +1,14 @@
 import { defineConfig } from "@playwright/test";
 
-const server = process.env.WEFT_EDIT_SHELL_DLL;
+const server = process.env.BRAID_EDIT_SHELL_DLL;
 if (!server)
   throw new Error(
-    "Publish the exact server with Angular assets and set WEFT_EDIT_SHELL_DLL.",
+    "Publish the exact server with Angular assets and set BRAID_EDIT_SHELL_DLL.",
   );
 export default defineConfig({
   testDir: "./tests",
   testMatch:
-    process.env.WEFT_EDIT_SHELL_ALL === "1"
+    process.env.BRAID_EDIT_SHELL_ALL === "1"
       ? [
           "**/shell.spec.ts",
           "**/mapping-viewer.spec.ts",
@@ -27,7 +27,7 @@ export default defineConfig({
     baseURL: "http://127.0.0.1:4173",
     headless: false,
     launchOptions: {
-      executablePath: process.env.WEFT_CHROMIUM_EXECUTABLE,
+      executablePath: process.env.BRAID_CHROMIUM_EXECUTABLE,
       args: ["--ozone-platform=x11"],
     },
     screenshot: "only-on-failure",
@@ -37,7 +37,7 @@ export default defineConfig({
     command: `dotnet "${server}"`,
     url: "http://127.0.0.1:4173/api/v1/health",
     env: {
-      WEFT_DEV_LISTEN_ADDR: "127.0.0.1:4173",
+      BRAID_DEV_LISTEN_ADDR: "127.0.0.1:4173",
       DOTNET_ENVIRONMENT: "Development",
       DOTNET_ADD_GLOBAL_TOOLS_TO_PATH: "false",
     },

@@ -1,8 +1,7 @@
 # Mapping viewer
 
 The Angular workbench reads braid's generated public contracts. Mapping reports
-come from retained revisions through the qualified restricted backend;
-display-only browser fixtures remain explicitly synthetic.
+come from retained revisions through the restricted backend.
 The native file stays authoritative and is never rewritten by the viewer.
 
 ## Reading a mapping
@@ -61,8 +60,5 @@ validation findings, and retries have separate states. Late responses cannot
 replace the current selection. Retained reports remain readable when the worker
 is unavailable; no empty graph represents a failed derivation.
 
-Viewing a mapping does not qualify execution or publishing. The workbench's
-preview, comparison, chat and build panels retain their separate authorization
-and feature checks. Browser qualification uses a private alternate display, including
-keyboard and small-screen flows. See [Local development](development.md) for
-configuration and checks.
+See [Local development](development.md) for browser checks, including keyboard and
+small-screen flows on a private alternate display.

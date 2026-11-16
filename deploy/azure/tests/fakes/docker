@@ -16,13 +16,13 @@ case $1 in
   run)
     case ${!#} in
       identity)
-        build=sha256:$(printf 'weft.compiler-identity.v1\nnative=sha256:%s\ntoolchain=%s\n' "$native" "$FAKE_TOOLCHAIN" | sha256sum | cut -d' ' -f1)
+        build=sha256:$(printf 'braid.compiler-identity.v1\nnative=sha256:%s\ntoolchain=%s\n' "$native" "$FAKE_TOOLCHAIN" | sha256sum | cut -d' ' -f1)
         jq -cn --arg native "sha256:$native" --arg toolchain "$FAKE_TOOLCHAIN" --arg build "$build" \
-          '{schema: "weft.compiler-image-identity.v1", native: $native, toolchain: $toolchain, build: $build}'
+          '{schema: "braid.compiler-image-identity.v1", native: $native, toolchain: $toolchain, build: $build}'
         ;;
       runtime-identity)
         jq -cn --arg native "sha256:$native" --arg runtime "$FAKE_RUNTIME_IDENTITY" \
-          '{schema: "weft.compiled-runtime-image-identity.v1", native: $native, runtime: $runtime}'
+          '{schema: "braid.compiled-runtime-image-identity.v1", native: $native, runtime: $runtime}'
         ;;
       *) exit 2 ;;
     esac

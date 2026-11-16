@@ -94,7 +94,7 @@ interface RevisionScreen {
 }
 
 @Component({
-  selector: "weft-revision-page",
+  selector: "braid-revision-page",
   imports: [
     RouterLink,
     CatalogStatusComponent,

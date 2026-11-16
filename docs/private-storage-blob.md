@@ -1,11 +1,11 @@
 # Azure Blob private storage
 
-`Weft.Storage.Blob` keeps private objects in one Azure Blob Storage container with the
+`Braid.Storage.Blob` keeps private objects in one Azure Blob Storage container with the
 same contract as the [claim-aware filesystem store](private-storage-v2.md):
 `BlobPrivateObjectStore` implements `IPrivateObjectPublicationStore`,
 `IPrivateObjectRetirementStore` and `IPrivateObjectStorageObserver`. Native mapping
 artifacts, derived reports, and the preview, regression and build inputs they feed all
-use it unchanged. Tracking work is [#232](https://github.com/DeandreT/weft/issues/232).
+use it.
 
 ## Configuration and credentials
 
@@ -30,17 +30,17 @@ access at the account level, belong to the deployment.
 
 ## Host selection
 
-The Server, `Weft.Worker`, `Weft.MaintenanceTool` and `Weft.StorageTool` select private
-storage with the same settings, parsed by `Weft.Storage.Hosting`:
+The Server, `Braid.Worker`, `Braid.MaintenanceTool` and `Braid.StorageTool` select private
+storage with the same settings, parsed by `Braid.Storage.Hosting`:
 
 | Setting | Value |
 | --- | --- |
-| `WEFT_PRIVATE_STORAGE_KIND` | Absent or `filesystem` (the default) selects the v2 filesystem store; `azure-blob` selects this store. Anything else is refused. |
-| `WEFT_PRIVATE_STORAGE_ROOT` | Filesystem only: the canonical root. Refused under `azure-blob`. |
-| `WEFT_PRIVATE_STORAGE_BLOB_ENDPOINT` | The account's blob service endpoint. |
-| `WEFT_PRIVATE_STORAGE_BLOB_CONTAINER` | The private container. |
-| `WEFT_PRIVATE_STORAGE_BLOB_CREDENTIAL` | `managed-identity`, `workload-identity` or `emulator`. |
-| `WEFT_PRIVATE_STORAGE_BLOB_CLIENT_ID` | Optional: the user-assigned managed identity's client ID, canonical lowercase. |
+| `BRAID_PRIVATE_STORAGE_KIND` | Absent or `filesystem` (the default) selects the v2 filesystem store; `azure-blob` selects this store. Anything else is refused. |
+| `BRAID_PRIVATE_STORAGE_ROOT` | Filesystem only: the canonical root. Refused under `azure-blob`. |
+| `BRAID_PRIVATE_STORAGE_BLOB_ENDPOINT` | The account's blob service endpoint. |
+| `BRAID_PRIVATE_STORAGE_BLOB_CONTAINER` | The private container. |
+| `BRAID_PRIVATE_STORAGE_BLOB_CREDENTIAL` | `managed-identity`, `workload-identity` or `emulator`. |
+| `BRAID_PRIVATE_STORAGE_BLOB_CLIENT_ID` | Optional: the user-assigned managed identity's client ID, canonical lowercase. |
 
 The Blob settings are refused under the filesystem kind, so a mixed or partial
 configuration never selects storage by accident. A missing or malformed setting fails
@@ -49,7 +49,7 @@ and the tools); retained report reads alone keep their existing deferred, fail-c
 storage resolution. Hosts open the store lazily at the first object operation, never
 initialize it, and refuse ownerless publication. The tools refuse filesystem operands
 under the Blob kind. Provision a new Blob store once with
-`Weft.StorageTool initialize-blob` (see [offline activation](private-storage-activation.md#explicit-provisioning)).
+`Braid.StorageTool initialize-blob`.
 
 ## Admission
 
@@ -58,9 +58,9 @@ under the Blob kind. Provision a new Blob store once with
 - the container already exists (neither factory creates it);
 - the container grants no anonymous access and has no immutability policy, legal hold or
   version-level immutability (retirement must be able to replace an object);
-- `OpenAsync`: the marker `.weft-private-storage` exists as exactly
-  `weft-private-storage-blob-v1\n<root ID>\n<control ID>\n` (95 bytes, two distinct
-  nonzero lowercase `N`-format UUIDs) with `weftkind=marker` metadata;
+- `OpenAsync`: the marker `.braid-private-storage` exists as exactly
+  `braid-private-storage-blob-v1\n<root ID>\n<control ID>\n` (95 bytes, two distinct
+  nonzero lowercase `N`-format UUIDs) with `braidkind=marker` metadata;
 - `InitializeAsync`: the container is empty, and the marker is written create-only.
 
 Both factories then probe the actual primitives with the configured credential: create a
@@ -75,7 +75,7 @@ store never adopts an existing container or creates the marker during ordinary u
 Every name is generated from typed nonzero UUIDs; no caller text reaches a blob name.
 
 ```text
-.weft-private-storage                                                    marker
+.braid-private-storage                                                    marker
 objects/{native|derived}/{org}/{project}/{mapping}/{revision}/{object}.blob     leased final slot
 objects/{native|derived}/{org}/{project}/{mapping}/{revision}/.attempt-{temp}.tmp  attempt marker
 control/{control}/probes/{probe}                                         transient probe
@@ -83,15 +83,15 @@ control/.../{object}/publications/{temp}/temp.gate
 control/.../{object}/publications/{temp}/{absence|reservation|bound|prepared}
 ```
 
-Each blob carries a closed `weftkind` metadata form; anything else is an unknown form.
+Each blob carries a closed `braidkind` metadata form; anything else is an unknown form.
 
 | Form | Content | Other metadata |
 | --- | --- | --- |
 | `marker` | Marker bytes | — |
 | `gate` | Empty control gate or unpublished final-name reservation | — |
 | `seal` | One canonical record | — |
-| `attempt` | Empty | `weftincarnation`: 16 lowercase hex digits, nonzero |
-| `object` | Exact payload | `weftincarnation`, `weftsha256`, `weftlength` |
+| `attempt` | Empty | `braidincarnation`: 16 lowercase hex digits, nonzero |
+| `object` | Exact payload | `braidincarnation`, `braidsha256`, `braidlength` |
 | `retired` | Empty | — |
 | `probe` | Empty | — |
 
@@ -151,7 +151,7 @@ dispositions are unchanged.
 
 ## Seal records
 
-Seals start with `WEFTB1R\n`, a big-endian 16-bit kind, 16-bit version 1 and 32-bit total
+Seals start with `BRAIDB1R\n`, a big-endian 16-bit kind, 16-bit version 1 and 32-bit total
 length. The common prefix holds the root and control IDs, object class (native 1,
 derived 2), organization, project, mapping, revision, object and TempIDs, the reference
 digest and signed 64-bit byte count, the owner kind and a SHA-256 owner digest. UUIDs use
@@ -167,14 +167,14 @@ optional repair target, candidate object and complete canonical report key.
 | Bound, 3 | Reservation digest, PublicationId, attempt incarnation, entity tag length and ASCII bytes |
 | Prepared, 4 | Bound digest, PublicationId, BoundAtUtc ticks, incarnation, verified digest, verified count, block count |
 
-Absence records are 218 bytes and prepared records 326 bytes; records are at most 1,024
+Absence records are 219 bytes and prepared records 327 bytes; records are at most 1,024
 bytes. Decoding rejects extra, missing or noncanonical bytes and re-encodes for equality.
 
 ## Publication format
 
 The Blob store registers every publication with the explicit store kind `azure-blob`, and
-the database stamps the format label `weft.private-publication.azure-blob.v1` from that kind
-(the filesystem store's kind `filesystem` carries `weft.private-publication.linux.v2`). The
+the database stamps the format label `braid.private-publication.azure-blob.v1` from that kind
+(the filesystem store's kind `filesystem` carries `braid.private-publication.linux.v2`). The
 label is never inferred from identity facts. Recovery by natural key returns only a
 registration of the store's own kind, and the store refuses a tracked-temporary cleanup
 claim whose publication carries another kind (`UnsafeStorage`) before it takes any lease or
@@ -189,7 +189,7 @@ coincide with filesystem facts, whose root IDs differ.
 | Record field | Blob value |
 | --- | --- |
 | Root and control namespace | The marker's IDs |
-| Boot ID | The fixed Blob profile ID `57656674-426c-6f62-0001-000000000001` |
+| Boot ID | The fixed Blob profile ID `42726169-6442-6c6f-6200-010000000001` |
 | Mount namespace device and inode | 0 and 1 |
 | Effective user | 0 |
 | File identity | The attempt incarnation as inode, device 0:0, mount ID from the control ID |
@@ -216,7 +216,7 @@ payload and changes nothing.
 filesystem store and this store. `BlobPrivateObjectStoreTests` adds admission, options,
 codec, staged-block visibility, lease expiry, stale-publisher fencing, abandoned
 publication recovery and tampering checks. Both use an owned Azurite container started
-from the pinned image in `WEFT_AZURITE_IMAGE` (see `AzuriteFixture.QualifiedImage`); each
+from the pinned image in `BRAID_AZURITE_IMAGE` (see `AzuriteFixture.QualifiedImage`); each
 test uses its own uniquely named blob container, and only those containers and the
 emulator are removed. Without the variable the Blob cases are skipped and the filesystem
 cases still run.

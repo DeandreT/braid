@@ -68,13 +68,13 @@ export function controlledData(
     pointer: "/controlled",
   };
   const document: components["schemas"]["ProjectionDocumentV1"] = {
-    schemaVersion: "weft.mapping-projection.v1",
+    schemaVersion: "braid.mapping-projection.v1",
     provenance: {
       revision: revision.scope,
       nativeArtifactDigest: revision.nativeDigest,
       backend: provenance.backend,
       adapterVersion: provenance.adapterVersion,
-      projectionVersion: "weft.ferrule-projection.v1",
+      projectionVersion: "braid.ferrule-projection.v1",
     },
     boundaries: [
       {
@@ -153,7 +153,7 @@ export function controlledData(
     finishedAtUtc: "2026-01-01T00:00:01Z",
   });
   const projection: Projection = {
-    schemaVersion: "weft.catalog-revision-report.v1",
+    schemaVersion: "braid.catalog-revision-report.v1",
     operation: "projection",
     revision: revision.scope,
     state: "available",
@@ -166,7 +166,7 @@ export function controlledData(
     nextAttemptAtUtc: null,
   };
   const validation: Validation = {
-    schemaVersion: "weft.catalog-revision-report.v1",
+    schemaVersion: "braid.catalog-revision-report.v1",
     operation: "validation",
     revision: revision.scope,
     state: "available",
@@ -260,7 +260,7 @@ export class ControlledReports {
   private readonly origin: string;
   private pendingHealthReads = 0;
   constructor(readonly page: Page) {
-    const origin = process.env.WEFT_REPORTS_BASE_URL;
+    const origin = process.env.BRAID_REPORTS_BASE_URL;
     if (!origin || new URL(origin).origin !== origin)
       throw new Error(
         "Controlled reports require the explicit packaged origin",
@@ -372,7 +372,7 @@ export class ControlledReports {
       ) {
         --this.pendingHealthReads;
         await route.fulfill({
-          json: { status: "ok", service: "weft-api", apiVersion: "v1" },
+          json: { status: "ok", service: "braid-api", apiVersion: "v1" },
         });
         return;
       }
@@ -383,23 +383,23 @@ export class ControlledReports {
           request.method() === "GET" &&
           !url.search &&
           (request.postDataBuffer()?.length ?? 0) === 0 &&
-          headers["x-weft-session"] === "1" &&
+          headers["x-braid-session"] === "1" &&
           ![
             "content-type",
             "authorization",
             "x-xsrf-token",
-            "x-weft-auth-token",
+            "x-braid-auth-token",
             "idempotency-key",
             "if-match",
             "if-none-match",
             "identitycontext",
             "identity-context",
-            "x-weft-identity-context",
-            "x-weft-actor",
-            "x-weft-role",
-            "x-weft-login",
-            "x-weft-logout",
-            "x-weft-forget-local",
+            "x-braid-identity-context",
+            "x-braid-actor",
+            "x-braid-role",
+            "x-braid-login",
+            "x-braid-logout",
+            "x-braid-forget-local",
           ].some((name) => name in headers);
         if (!admitted) this.unexpected.push("Refused auth bootstrap");
         await route.fulfill(

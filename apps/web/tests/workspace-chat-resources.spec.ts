@@ -19,7 +19,7 @@ for (const kind of [
     const f = await workspaceFixture(page),
       scope = f.data.revision.scope;
     const profile = {
-      id: "weft.synthetic-build",
+      id: "braid.synthetic-build",
       version: "1",
       runtime: "dotnet",
       runtimeVersion: "10.0.12",
@@ -37,7 +37,7 @@ for (const kind of [
       engineRevision: "engine",
       backendBuild: "sha256:" + "c".repeat(64),
       adapterBuild: "adapter",
-      profile: "weft.ferrule-json-preview.v1",
+      profile: "braid.ferrule-json-preview.v1",
     };
     const reads: string[] = [];
     await page.route("**/api/v1/**", async (route) => {
@@ -78,7 +78,7 @@ for (const kind of [
             maximumArtifacts: 64,
             maximumTextBytes: 2048,
           },
-          comparisonPolicy: "weft.regression.exact-bytes.v1",
+          comparisonPolicy: "braid.regression.exact-bytes.v1",
           readSamples: false,
           publishCases: false,
         });

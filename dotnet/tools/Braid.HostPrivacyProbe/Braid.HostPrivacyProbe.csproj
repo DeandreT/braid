@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="../../apps/Braid.Server/Braid.Server.csproj" />
+    <Compile Include="../../tests/Braid.Tests/Identity/EntraProtocolHttpsFixture.cs" Link="EntraSupport/EntraProtocolHttpsFixture.cs" />
+    <Compile Include="../../tests/Braid.Tests/Identity/EntraProtocolHttpsCrypto.cs" Link="EntraSupport/EntraProtocolHttpsCrypto.cs" />
+    <Compile Include="../../tests/Braid.Tests/Identity/EntraProtocolHttpsIssuer.cs" Link="EntraSupport/EntraProtocolHttpsIssuer.cs" />
+    <Compile Include="../../tests/Braid.Tests/Identity/EntraProtocolHttpsPublicClients.cs" Link="EntraSupport/EntraProtocolHttpsPublicClients.cs" />
+    <Compile Include="../../tests/Braid.Tests/Identity/EntraProtocolHttpsObservations.cs" Link="EntraSupport/EntraProtocolHttpsObservations.cs" />
+    <Compile Include="../../tests/Braid.Tests/Identity/EntraProtocolHttpsWire.cs" Link="EntraSupport/EntraProtocolHttpsWire.cs" />
+  </ItemGroup>
+</Project>

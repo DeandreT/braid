@@ -1,12 +1,8 @@
 # Project creation HTTP
 
-P3d4b / [#31](https://github.com/DeandreT/weft/issues/31) adds the HTTP boundary
-over [project creation persistence](project-creation.md). The route is implemented;
-its verification boundaries are described below, not established by this page's
-presence. Persistence owns capability, atomicity and replay; this page owns HTTP
-admission, status codes and local host options. [Catalog reads](catalog-reads.md)
-owns shared read/request rules. The original requirements are indexed in the
-[catalog contract-owner map](catalog-persistence-plan.md#current-contract-owners).
+[Project creation persistence](project-creation.md) owns capability, atomicity and
+replay. This page describes HTTP admission, status codes and local host options;
+[catalog reads](catalog-reads.md) describes shared read/request rules.
 
 ## Organization actions
 
@@ -26,7 +22,7 @@ token. Read failures remain errors rather than a false capability.
 
 `POST /api/v1/organizations/{organizationId}/projects` accepts one canonical
 nonzero UUID `Idempotency-Key`, the framework request token, and an exact matching
-Origin. Its media type is `application/vnd.weft.project-create.v1+json`, with only
+Origin. Its media type is `application/vnd.braid.project-create.v1+json`, with only
 an optional UTF-8 charset. The document contains exactly two required strings:
 
 ```json
@@ -69,8 +65,8 @@ object reference, or provider exception text.
 ## Host configuration
 
 Creation defaults off. Explicitly enable it with
-`WEFT_PROJECT_CREATION_ENABLED=true` and supply the separate restricted login in
-`WEFT_POSTGRES_PROJECT_CREATION_CONNECTION_STRING`. The enabled flag accepts only
+`BRAID_PROJECT_CREATION_ENABLED=true` and supply the separate restricted login in
+`BRAID_POSTGRES_PROJECT_CREATION_CONNECTION_STRING`. The enabled flag accepts only
 the exact values `true` and `false`. For the Development profile, enabled creation
 requires the existing enabled catalog and explicit loopback Development identity
 configuration. Protected Session hosts use [Session host](session-host.md),
@@ -84,17 +80,6 @@ worker and private-store availability. Owner-controlled capability provisioning
 remains the separate DatabaseTool command; the web application cannot grant its
 own capability.
 
-The acceptance gate composes actual HTTP creation, ordinary catalog reads, and
-the existing real native upload flow in the project created by that POST.
-Published fresh setup, historical upgrade, replay, and API/database restart are
-qualified separately from pure contract and synthetic boundary tests.
-
-## Historical implementation checkpoint
-
-The original increment-status note below is retained as history; it does not
-override the implemented route or the activation requirements above:
-
-P3d4b / [#31](https://github.com/DeandreT/weft/issues/31) adds the HTTP boundary
-over the qualified [project creation persistence](project-creation.md). This
-increment is in implementation; its source and qualification statuses remain
-separate. It changes no migration, project role, native worker, or Ferrule pin.
+HTTP tests compose creation, catalog reads and native upload into the project
+created by the POST. Published-host checks cover setup, replay and API/database
+restart.

@@ -7,7 +7,7 @@ import {
 
 const encoder = new TextEncoder();
 const dialect = (overrides = {}) => ({
-  schema: "weft.csv-dialect.v1",
+  schema: "braid.csv-dialect.v1",
   delimiter: ",",
   quote: '"',
   quoteDisabled: false,

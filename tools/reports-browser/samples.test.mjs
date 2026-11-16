@@ -49,7 +49,7 @@ test("every reports artifact is an immutable exact digest and length pin in main
     const [path, digest, length] = artifact;
     assert.match(
       path,
-      /^(?:engines\/ferrule-host\/tests\/fixtures|dotnet\/tests\/Weft.Tests\/Fixtures)\/[a-z-]+\.json$/,
+      /^(?:engines\/ferrule-host\/tests\/fixtures|dotnet\/tests\/Braid.Tests\/Fixtures)\/[a-z-]+\.json$/,
     );
     const bytes = readFileSync(new URL(path, root));
     assert.equal(bytes.length, length, path);

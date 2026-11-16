@@ -5,16 +5,16 @@ import type { components } from "../src/api/generated";
 
 type Scope = components["schemas"]["CatalogRevisionScopeV1"];
 const manifest = JSON.parse(
-  readFileSync(process.env.WEFT_PREVIEW_BROWSER_MANIFEST!, "utf8"),
+  readFileSync(process.env.BRAID_PREVIEW_BROWSER_MANIFEST!, "utf8"),
 ) as { schemaVersion: string; editor: Scope };
 if (
-  manifest.schemaVersion !== "weft.preview-browser-manifest.v1" ||
+  manifest.schemaVersion !== "braid.preview-browser-manifest.v1" ||
   !manifest.editor
 )
   throw new Error("The owned fixture must enable editing.");
 const revisionPath = (scope: Scope) =>
   `/catalog/organizations/${scope.organizationId}/projects/${scope.projectId}/mappings/${scope.mappingId}/revisions/${scope.revisionId}`;
-const editor = (page: Page) => page.locator("weft-mapping-editor");
+const editor = (page: Page) => page.locator("braid-mapping-editor");
 async function open(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Edit mapping", exact: true }).click();
   await expect(editor(page).getByRole("status")).toContainText("draft loaded", {
@@ -87,7 +87,7 @@ test("actual draft edit, reload, checkpoint, semantic diff, preview, save and ex
     "edited-live",
   );
   expect(
-    (await new AxeBuilder({ page }).include("weft-mapping-editor").analyze())
+    (await new AxeBuilder({ page }).include("braid-mapping-editor").analyze())
       .violations,
   ).toEqual([]);
   await page.screenshot({

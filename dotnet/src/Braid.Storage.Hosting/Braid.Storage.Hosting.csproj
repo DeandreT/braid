@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../Braid.Application/Braid.Application.csproj" />
+    <ProjectReference Include="../Braid.Domain/Braid.Domain.csproj" />
+    <ProjectReference Include="../Braid.Storage.Blob/Braid.Storage.Blob.csproj" />
+    <ProjectReference Include="../Braid.Storage.FileSystem/Braid.Storage.FileSystem.csproj" />
+  </ItemGroup>
+</Project>

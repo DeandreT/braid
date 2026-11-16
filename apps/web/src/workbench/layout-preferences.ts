@@ -4,7 +4,7 @@ import {
 } from "./workbench-model";
 import type { MappingColumn, MappingGrouping } from "./mapping-table-model";
 
-export const layoutStorageKey = "weft.workbench.layout.v1";
+export const layoutStorageKey = "braid.workbench.layout.v1";
 export const tableColumns = [
   "source",
   "rule",

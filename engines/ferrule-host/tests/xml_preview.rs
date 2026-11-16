@@ -1,12 +1,12 @@
 //! Authored protocol fixtures. These do not enable a host feature or qualify C14N.
 mod support;
 
-use serde_json::{Value, json};
-use weft_ferrule_host::preview::protocol::{
+use braid_ferrule_host::preview::protocol::{
     DOCUMENT_PREVIEW_PROTOCOL_VERSION, MAX_PREVIEW_INPUT_BYTES, MAX_PREVIEW_OUTPUT_BYTES,
     PreviewInput, PreviewLimits, PreviewRequestHeader, PreviewTarget, XML_PREVIEW_PROTOCOL_VERSION,
 };
-use weft_ferrule_host::preview::{PreviewOutcome, process_preview};
+use braid_ferrule_host::preview::{PreviewOutcome, process_preview};
+use serde_json::{Value, json};
 
 const NATIVE: &[u8] = include_bytes!("fixtures/xml-closed.native.json");
 const INPUT: &[u8] = b"<Order><code>A</code><quantity>2</quantity></Order>";
@@ -68,7 +68,7 @@ fn xml_is_explicit_and_carries_role_valid_metadata_not_design_file_extensions() 
     assert_eq!(artifact.sha256, support::digest(&outcome.outputs[0]));
     let metadata = artifact.xml_metadata.as_ref().unwrap();
     metadata
-        .validate(weft_ferrule_host::xml_document::Role::Output)
+        .validate(braid_ferrule_host::xml_document::Role::Output)
         .unwrap();
     assert!(metadata.schema_hints.is_none());
     assert!(artifact.csv_dialect.is_none());
@@ -208,10 +208,10 @@ fn authored_mapping_exceptions_cannot_leak_values_or_impersonate_resource_refusa
     native["graph"]["nodes"]["3"] = json!({"kind":"raise", "message":1});
     native["root"]["bindings"][0]["node"] = json!(3);
     let native = serde_json::to_vec(&native).unwrap();
-    weft_ferrule_host::xml_document::admit_native(&native).unwrap();
+    braid_ferrule_host::xml_document::admit_native(&native).unwrap();
     for message in [
         "private-sentinel",
-        "output artifact `/weft/output/primary.xml` exceeds the 64 MiB per-document limit",
+        "output artifact `/braid/output/primary.xml` exceeds the 64 MiB per-document limit",
         "structured XML input exceeds projection work limit 1",
     ] {
         let input = format!("<Order><code>{message}</code><quantity>2</quantity></Order>");
@@ -258,9 +258,9 @@ fn serializer_ceiling_mapping(named: bool) -> Vec<u8> {
 
 #[test]
 fn real_cli_serializer_ceiling_on_primary_and_named_outputs_is_a_resource_refusal() {
+    use braid_ferrule_host::xml_document as xml;
     use ferrule_cli::{PayloadDocument, PayloadRunOptions};
     use std::path::{Path, PathBuf};
-    use weft_ferrule_host::xml_document as xml;
 
     // 1,024 ordinary scalar bindings amplify a 64 KiB source string beyond the
     // real 64 MiB CLI ceiling. This does not lower or replace an upstream limit.
@@ -280,19 +280,19 @@ fn real_cli_serializer_ceiling_on_primary_and_named_outputs_is_a_resource_refusa
             .validate_bytes(&input)
             .unwrap();
         xml::validate_structured(&input, &decoded.project.source, xml::MAX_DOCUMENT_BYTES).unwrap();
-        let primary_path = Path::new("/weft/output/primary.xml");
+        let primary_path = Path::new("/braid/output/primary.xml");
         let expected_path = if named {
-            decoded.project.extra_targets[0].path = Some("/weft/output/named-0.xml".into());
-            let path = PathBuf::from("/weft/output/named-0.xml");
+            decoded.project.extra_targets[0].path = Some("/braid/output/named-0.xml".into());
+            let path = PathBuf::from("/braid/output/named-0.xml");
             if path.is_absolute() {
                 path
             } else {
-                Path::new("/weft").join(path)
+                Path::new("/braid").join(path)
             }
         } else {
             primary_path.to_path_buf()
         };
-        let document = PayloadDocument::new(Path::new("/weft/input/primary.xml"), &input).unwrap();
+        let document = PayloadDocument::new(Path::new("/braid/input/primary.xml"), &input).unwrap();
         let options = PayloadRunOptions::new(document)
             .with_output_path(primary_path)
             .with_bounded_documents()
@@ -300,7 +300,7 @@ fn real_cli_serializer_ceiling_on_primary_and_named_outputs_is_a_resource_refusa
             .unwrap();
         let Err(error) = ferrule_cli::run_project_value_payloads(
             &decoded.project,
-            Path::new("/weft/entry.native.json"),
+            Path::new("/braid/entry.native.json"),
             &options,
         ) else {
             panic!("real CLI byte ceiling must be reached");
@@ -335,13 +335,13 @@ fn real_cli_serializer_ceiling_on_primary_and_named_outputs_is_a_resource_refusa
 
 #[test]
 fn parser_resource_preflight_is_separate_from_execution_serializer_coverage() {
-    use weft_ferrule_host::xml_document as xml;
+    use braid_ferrule_host::xml_document as xml;
     let input = format!(
         "<Order><code>{}</code><quantity>2</quantity></Order>",
         "=".repeat(1_000_001)
     )
     .into_bytes();
-    let project = weft_ferrule_host::decode::decode_native(NATIVE)
+    let project = braid_ferrule_host::decode::decode_native(NATIVE)
         .unwrap()
         .project;
     xml::Safety::new(xml::MAX_DOCUMENT_BYTES)

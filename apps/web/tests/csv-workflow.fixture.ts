@@ -25,7 +25,7 @@ export const csvScope = synthetic.revision.scope;
 export const csvRunId = "80000000-0000-4000-8000-000000000330";
 export const csvCaseId = "50000000-0000-4000-8000-000000000330";
 export const csvDialect: CsvDocumentDialect = {
-  schema: "weft.csv-dialect.v1",
+  schema: "braid.csv-dialect.v1",
   delimiter: "\t",
   quote: '"',
   quoteDisabled: false,
@@ -41,7 +41,7 @@ export const csvCapabilities: CaseCapabilities = {
     engineRevision: "engine",
     backendBuild: "build",
     adapterBuild: "json-adapter",
-    profile: "weft.ferrule-json-preview.v1",
+    profile: "braid.ferrule-json-preview.v1",
   },
   csvRuntime: {
     backendId: "ferrule",
@@ -50,8 +50,8 @@ export const csvCapabilities: CaseCapabilities = {
     adapterBuild: "csv-adapter",
     profile: csvPreviewProfile,
   },
-  comparisonPolicies: ["weft.regression.exact-bytes.v1", csvRowsPolicy],
-  comparisonPolicy: "weft.regression.exact-bytes.v1",
+  comparisonPolicies: ["braid.regression.exact-bytes.v1", csvRowsPolicy],
+  comparisonPolicy: "braid.regression.exact-bytes.v1",
   limits: {
     maximumInputBytes: 8388608,
     maximumOutputBytes: 8388608,

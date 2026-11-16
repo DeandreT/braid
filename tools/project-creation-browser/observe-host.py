@@ -16,9 +16,9 @@ import uuid
 
 PG_IMAGE = 'postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc'
 WORKER_IMAGE = 'sha256:439291fb4d665e3ba9c086e88214a73fd44552af80932a9b40c97f5816c7047e'
-OWNER, NONCE, CASE = ('weft.qualification.' + key for key in ('owner', 'nonce', 'case'))
+OWNER, NONCE, CASE = ('braid.qualification.' + key for key in ('owner', 'nonce', 'case'))
 LABELS = (OWNER, NONCE, CASE)
-WORKER = re.compile(r'weft-inspect-[0-9a-f]{32}')
+WORKER = re.compile(r'braid-inspect-[0-9a-f]{32}')
 IDENTITY = re.compile(r'[0-9a-f]{64}')
 
 
@@ -101,7 +101,7 @@ def main():
 
     def owned_labels(value):
         require(value.get(OWNER) == fixture_id and re.fullmatch(r'[0-9a-f]{16}', value.get(NONCE, ''))
-            and value.get(CASE) == 'weft-project-creation-browser-' + value[NONCE], 'ownedLabelsMismatch')
+            and value.get(CASE) == 'braid-project-creation-browser-' + value[NONCE], 'ownedLabelsMismatch')
         return {key: value[key] for key in LABELS}
 
     def capture(event, is_worker):
@@ -198,7 +198,7 @@ def main():
         before = inventory(fixture_id)
         save('resources-before.json', before)
         require(observer.is_alive() and not errors, 'eventObserverUnavailableBeforeAdmission')
-        admission = {'schemaVersion': 'weft.project-creation-browser-host-observer-admission.v1', 'fixtureId': fixture_id,
+        admission = {'schemaVersion': 'braid.project-creation-browser-host-observer-admission.v1', 'fixtureId': fixture_id,
             'daemonStatus': response.status, 'filters': filters,
             'utcBeforeWorkload': datetime.datetime.now(datetime.timezone.utc).isoformat(),
             'observerResourceRemoval': False, 'workerWindow': 'exclusive creation-only window; native worker events forbidden'}
@@ -257,7 +257,7 @@ def main():
         'allOwnedPostgresProfiled': pg_created == {p['id'] for p in profiles if p['kind'] == 'postgres'},
         'associatedNetworkAndVolumeObserved': {kind for kind, _ in associated} == {'network', 'volume'} and len(associated) == 2,
         'allCapturedResourcesExactly404': bool(probes) and len(probes) == len(created) + len(associated) and all(p['absent'] for p in probes)}
-    receipt = {'schemaVersion': 'weft.project-creation-browser-host-observer-receipt.v1', 'fixtureId': fixture_id,
+    receipt = {'schemaVersion': 'braid.project-creation-browser-host-observer-receipt.v1', 'fixtureId': fixture_id,
         'outcome': 'PASS' if not errors and all(checks.values()) else 'FAIL', 'checks': checks,
         'errors': errors, 'eventCount': len(events), 'workersCreated': len(workers), 'workersDestroyed': len(workers & destroyed), 'postgresCreated': len(pg_created),
         'observerResourceRemoval': False, 'postgresNetworkVolumeCleanupOwner': 'fixture operator',

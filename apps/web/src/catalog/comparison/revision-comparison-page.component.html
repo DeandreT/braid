@@ -36,8 +36,8 @@
         Only saved reports are read; nothing is generated. Matching explanations
         are not evidence that two revisions run the same way.
       </p>
-      <weft-help-link [section]="'comparisons'"
-        >About comparisons</weft-help-link
+      <braid-help-link [section]="'comparisons'"
+        >About comparisons</braid-help-link
       >
     </div>
     <button
@@ -375,7 +375,7 @@
                           @for (gap of entry.coverage.gaps; track $index) {
                             <li>
                               <p>{{ gap.message }}</p>
-                              <weft-native-evidence
+                              <braid-native-evidence
                                 [locator]="gap.nativeLocator"
                               />
                             </li>
@@ -667,7 +667,7 @@
               </div>
               @if (viewerDocument(); as document) {
                 <div class="comparison-viewer-body">
-                  <weft-mapping-projection
+                  <braid-mapping-projection
                     [document]="document"
                     [validation]="viewerValidation()"
                   />
@@ -787,6 +787,6 @@
       }
     </section>
   } @else {
-    <weft-catalog-status [kind]="kind()" (retry)="retry()" />
+    <braid-catalog-status [kind]="kind()" (retry)="retry()" />
   }
 </section>

@@ -12,8 +12,8 @@ import {
 } from "../../apps/web/src/catalog/previews/xml-problem.ts";
 
 const metadata = {
-  schema: "weft.xml-boundary.v1",
-  safetyProfile: "weft.xml-safe.v1",
+  schema: "braid.xml-boundary.v1",
+  safetyProfile: "braid.xml-safe.v1",
   schemaHints: null,
 };
 test("XML metadata is closed and schema locations stay lexical", () => {

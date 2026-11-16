@@ -7,7 +7,7 @@ import type { CatalogContext, CatalogProjectScope } from "../catalog-types";
 import { creationCapability } from "./creation-library-model";
 
 @Component({
-  selector: "weft-creation-entry",
+  selector: "braid-creation-entry",
   imports: [RouterLink],
   template: `@if (available() && contexts.isCurrent(context())) {
     <section aria-label="New mapping proposals">

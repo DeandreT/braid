@@ -1,15 +1,15 @@
 # The portable Ferrule service image. Build from the repository root after building the pinned native worker
 # image from engines/ferrule-host:
 #   docker build --file engines/ferrule-service/Dockerfile \
-#     --build-arg WEFT_NATIVE_IMAGE=<native image reference> \
-#     --build-arg WEFT_NATIVE_BINARY_SHA256=<sha256 of its /ferrule-host> .
+#     --build-arg BRAID_NATIVE_IMAGE=<native image reference> \
+#     --build-arg BRAID_NATIVE_BINARY_SHA256=<sha256 of its /ferrule-host> .
 # Use a registry digest for the native image, or a unique local tag bound to the verified image ID. The service's
-# build identity is sha256:<WEFT_NATIVE_BINARY_SHA256>; it is recorded in the io.weft.ferrule.worker-sha256 label.
+# build identity is sha256:<BRAID_NATIVE_BINARY_SHA256>; it is recorded in the io.braid.ferrule.worker-sha256 label.
 # The image also holds the compile launcher (built here from engines/compile-sandbox with the worker's pinned Rust
 # toolchain), the pinned Roslyn compiler and the reference assemblies, used only when compilation is enabled.
 # Requires BuildKit. See docs/ferrule-service.md.
-ARG WEFT_NATIVE_IMAGE
-FROM ${WEFT_NATIVE_IMAGE} AS native
+ARG BRAID_NATIVE_IMAGE
+FROM ${BRAID_NATIVE_IMAGE} AS native
 
 FROM ubuntu@sha256:f610ab94648195aa356059f5b41d6085c9d4d903c072430cdd1af7bdb646106b AS sdk
 ARG DOTNET_SDK_VERSION=10.0.112
@@ -25,11 +25,11 @@ ENV DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=false DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_N
 WORKDIR /src
 COPY global.json ./
 COPY dotnet dotnet
-RUN /usr/share/dotnet/dotnet restore dotnet/apps/Weft.FerruleService/Weft.FerruleService.csproj --locked-mode \
-    && /usr/share/dotnet/dotnet publish dotnet/apps/Weft.FerruleService/Weft.FerruleService.csproj -c Release --no-restore \
+RUN /usr/share/dotnet/dotnet restore dotnet/apps/Braid.FerruleService/Braid.FerruleService.csproj --locked-mode \
+    && /usr/share/dotnet/dotnet publish dotnet/apps/Braid.FerruleService/Braid.FerruleService.csproj -c Release --no-restore \
         --output /out/app -p:UseSharedCompilation=false -p:OpenApiGenerateDocuments=false \
-    && /usr/share/dotnet/dotnet restore dotnet/apps/Weft.CompiledRuntime/Weft.CompiledRuntime.csproj --locked-mode \
-    && /usr/share/dotnet/dotnet publish dotnet/apps/Weft.CompiledRuntime/Weft.CompiledRuntime.csproj -c Release --no-restore \
+    && /usr/share/dotnet/dotnet restore dotnet/apps/Braid.CompiledRuntime/Braid.CompiledRuntime.csproj --locked-mode \
+    && /usr/share/dotnet/dotnet publish dotnet/apps/Braid.CompiledRuntime/Braid.CompiledRuntime.csproj -c Release --no-restore \
         --output /out/runtime -p:UseSharedCompilation=false \
     && install -d -m 1777 /out/tmp
 
@@ -38,7 +38,7 @@ FROM ubuntu@sha256:f610ab94648195aa356059f5b41d6085c9d4d903c072430cdd1af7bdb6461
 ENV CARGO_HOME=/opt/cargo \
     RUSTUP_HOME=/opt/rustup \
     RUSTUP_TOOLCHAIN=1.98.1 \
-    CARGO_TARGET_DIR=/opt/weft-target \
+    CARGO_TARGET_DIR=/opt/braid-target \
     CARGO_BUILD_JOBS=2 \
     CARGO_INCREMENTAL=0 \
     RUSTUP_USE_CURL=1 \
@@ -54,8 +54,8 @@ RUN apt-get update \
 RUN --mount=type=secret,id=proxy_ca <<'EOF'
 set -eu
 if [ -s /run/secrets/proxy_ca ]; then
-    cat /etc/ssl/certs/ca-certificates.crt /run/secrets/proxy_ca > /tmp/weft-build-ca.pem
-    export CURL_CA_BUNDLE=/tmp/weft-build-ca.pem
+    cat /etc/ssl/certs/ca-certificates.crt /run/secrets/proxy_ca > /tmp/braid-build-ca.pem
+    export CURL_CA_BUNDLE=/tmp/braid-build-ca.pem
 fi
 curl --proto '=https' --tlsv1.2 --fail --show-error --location \
     https://static.rust-lang.org/rustup/archive/1.29.1/x86_64-unknown-linux-gnu/rustup-init \
@@ -67,7 +67,7 @@ chmod 0755 /tmp/rustup-init
     --default-host x86_64-unknown-linux-gnu --default-toolchain "$RUSTUP_TOOLCHAIN"
 rustup set auto-self-update disable
 test "$(rustc --version)" = 'rustc 1.98.1 (48a229cea 2026-09-01)'
-rm -f /tmp/rustup-init /tmp/weft-build-ca.pem
+rm -f /tmp/rustup-init /tmp/braid-build-ca.pem
 EOF
 
 WORKDIR /work
@@ -75,16 +75,16 @@ COPY engines/compile-sandbox .
 # Assemble the launcher with only the trusted GNU runtime libraries the worker also uses.
 RUN <<'EOF'
 set -eu
-cargo build --release --locked --bin weft-compile-sandbox
-install -D -m 0555 /opt/weft-target/release/weft-compile-sandbox /out/weft-compile-sandbox
-ldd /out/weft-compile-sandbox > /tmp/weft-ldd.txt
+cargo build --release --locked --bin braid-compile-sandbox
+install -D -m 0555 /opt/braid-target/release/braid-compile-sandbox /out/braid-compile-sandbox
+ldd /out/braid-compile-sandbox > /tmp/braid-ldd.txt
 awk '
     NF == 0 || $1 == "linux-vdso.so.1" { next }
     $2 == "=>" && $3 ~ /^\// { print $3; next }
     $1 ~ /^\// { print $1; next }
     { print "Unexpected launcher runtime dependency: " $0 > "/dev/stderr"; exit 1 }
-' /tmp/weft-ldd.txt > /tmp/weft-runtime-libraries.txt
-test -s /tmp/weft-runtime-libraries.txt
+' /tmp/braid-ldd.txt > /tmp/braid-runtime-libraries.txt
+test -s /tmp/braid-runtime-libraries.txt
 while IFS= read -r library; do
     case "$(readlink -f "$library")" in
         /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2|/usr/lib/x86_64-linux-gnu/libc.so.6|\
@@ -95,28 +95,28 @@ while IFS= read -r library; do
             exit 1
             ;;
     esac
-done < /tmp/weft-runtime-libraries.txt
+done < /tmp/braid-runtime-libraries.txt
 EOF
 
 # The worker binary must be exactly the qualified native build.
 FROM sdk AS checked-native
-ARG WEFT_NATIVE_BINARY_SHA256
+ARG BRAID_NATIVE_BINARY_SHA256
 COPY --from=native /ferrule-host /verified-native/ferrule-host
-RUN test "${#WEFT_NATIVE_BINARY_SHA256}" = 64 \
-    && echo "${WEFT_NATIVE_BINARY_SHA256}  /verified-native/ferrule-host" | sha256sum --check --status
+RUN test "${#BRAID_NATIVE_BINARY_SHA256}" = 64 \
+    && echo "${BRAID_NATIVE_BINARY_SHA256}  /verified-native/ferrule-host" | sha256sum --check --status
 
 # No shell, package manager, SDK or network tools: the service, the verified worker, the compile launcher, the .NET
 # and ASP.NET Core shared frameworks and their libraries, and of the SDK only the pinned compiler and the reference
 # assemblies. Mount a writable volume at /tmp; the root stays read-only.
 FROM scratch
-ARG WEFT_REVISION=""
-ARG WEFT_NATIVE_BINARY_SHA256
-LABEL org.opencontainers.image.title="Weft Ferrule service" \
-      org.opencontainers.image.source="https://github.com/DeandreT/weft" \
-      org.opencontainers.image.revision="$WEFT_REVISION" \
-      io.weft.ferrule.revision="238369bf0071ee8ea097d8c54fa5061f433807fb" \
-      io.weft.ferrule.worker-sha256="$WEFT_NATIVE_BINARY_SHA256" \
-      io.weft.ferrule.compile-sdk="10.0.112"
+ARG BRAID_REVISION=""
+ARG BRAID_NATIVE_BINARY_SHA256
+LABEL org.opencontainers.image.title="Braid Ferrule service" \
+      org.opencontainers.image.source="https://github.com/DeandreT/braid" \
+      org.opencontainers.image.revision="$BRAID_REVISION" \
+      io.braid.ferrule.revision="238369bf0071ee8ea097d8c54fa5061f433807fb" \
+      io.braid.ferrule.worker-sha256="$BRAID_NATIVE_BINARY_SHA256" \
+      io.braid.ferrule.compile-sdk="10.0.112"
 COPY --from=native / /
 COPY --from=checked-native /verified-native/ferrule-host /ferrule-host
 # The native layer already holds the dynamic loader at /lib64; the service adds the shared libraries .NET needs.
@@ -130,14 +130,14 @@ COPY --from=sdk /usr/share/dotnet/shared/Microsoft.AspNetCore.App /usr/share/dot
 COPY --from=sdk /usr/share/dotnet/sdk/10.0.112/Roslyn/bincore /usr/share/dotnet/sdk/10.0.112/Roslyn/bincore
 COPY --from=sdk /usr/share/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.12 /usr/share/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.12
 COPY --from=sdk /usr/share/dotnet/LICENSE.txt /usr/share/dotnet/ThirdPartyNotices.txt /usr/share/dotnet/
-COPY --from=launcher /out/weft-compile-sandbox /weft-compile-sandbox
+COPY --from=launcher /out/braid-compile-sandbox /braid-compile-sandbox
 COPY --from=sdk /etc/os-release /etc/os-release
 COPY --from=sdk /out/app /app
 COPY --from=sdk /out/runtime /runtime
 COPY --from=sdk /out/tmp /tmp
 ENV DOTNET_ROOT=/usr/share/dotnet DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 DOTNET_NOLOGO=1 DOTNET_CLI_TELEMETRY_OPTOUT=1 \
-    WEFT_FERRULE_SERVICE_WORKER_EXECUTABLE=/ferrule-host WEFT_FERRULE_SERVICE_TEMPORARY_ROOT=/tmp
+    BRAID_FERRULE_SERVICE_WORKER_EXECUTABLE=/ferrule-host BRAID_FERRULE_SERVICE_TEMPORARY_ROOT=/tmp
 USER 65532:65532
 WORKDIR /app
 EXPOSE 8443 8080
-ENTRYPOINT ["/app/weft-ferrule-service"]
+ENTRYPOINT ["/app/braid-ferrule-service"]

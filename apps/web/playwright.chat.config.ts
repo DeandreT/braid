@@ -19,13 +19,13 @@ export default defineConfig({
   use: {
     baseURL: "http://127.0.0.1:5178",
     headless: true,
-    launchOptions: { executablePath: process.env.WEFT_CHROMIUM_EXECUTABLE },
+    launchOptions: { executablePath: process.env.BRAID_CHROMIUM_EXECUTABLE },
     trace: "off",
     screenshot: "off",
   },
   webServer: {
-    cwd: process.env.WEFT_CHAT_UI_SOURCE
-      ? `${process.env.WEFT_CHAT_UI_SOURCE}/apps/web`
+    cwd: process.env.BRAID_CHAT_UI_SOURCE
+      ? `${process.env.BRAID_CHAT_UI_SOURCE}/apps/web`
       : undefined,
     command:
       "npm run dev -- --port 5178 --proxy-config proxy.synthetic.conf.json --no-hmr",

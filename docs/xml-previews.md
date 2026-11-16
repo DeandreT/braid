@@ -1,16 +1,16 @@
 # Safe native XML previews and regression cases
 
-`weft.ferrule-xml-preview.v1` is an explicit, default-off native preview profile.
-It is distinct from legacy JSON, JSON/EDI documents and CSV/TSV. Neither
+`braid.ferrule-xml-preview.v1` is an explicit, default-off native preview profile.
+It is distinct from JSON, JSON/EDI documents and CSV/TSV. Neither
 filenames nor samples select it. Saved native options declare every XML boundary;
 the full native graph remains subject to the native worker's bounded, static
 document admission.
 
 ## Admission and authority
 
-The API requires both `WEFT_PREVIEWS_ENABLED=true` and
-`WEFT_PREVIEWS_XML_ENABLED=true`. The preview worker independently requires its
-parent preview-worker flag and `WEFT_PREVIEWS_XML_ENABLED=true`. Invalid flag
+The API requires both `BRAID_PREVIEWS_ENABLED=true` and
+`BRAID_PREVIEWS_XML_ENABLED=true`. The preview worker independently requires its
+parent preview-worker flag and `BRAID_PREVIEWS_XML_ENABLED=true`. Invalid flag
 values and missing parent workflows are configuration errors. Registration also
 requires the existing native-source metadata and verified private-storage ports.
 Admission flags come from trusted host configuration, not request parameters.
@@ -32,18 +32,17 @@ boundary identities, declaration order, selected target, metadata, target-name
 truncation, exact frame lengths and SHA-256 digests. Every output passes the safe
 physical XML check before any complete result is returned or published.
 
-`xmlMetadata` uses schema `weft.xml-boundary.v1` and safety profile
-`weft.xml-safe.v1`. `schemaHints` is explicitly null or a closed output-only object.
+`xmlMetadata` uses schema `braid.xml-boundary.v1` and safety profile
+`braid.xml-safe.v1`. `schemaHints` is explicitly null or a closed output-only object.
 Hints remain lexical output metadata. No schema, URL, local path, stylesheet or
 network resource is loaded. Unknown fields, duplicate fields, null required
 values and metadata from another document format are refused.
 
 ## Persistence and recovery
 
-Canonical requests use `weft.xml-preview-request.v1`; metadata participates in
+Canonical requests use `braid.xml-preview-request.v1`; metadata participates in
 the original request fingerprint. Migration `0042_xml_documents.sql` retains XML
 inputs and outputs in the separate private `xml_preview_documents` envelope.
-It does not rewrite existing JSON/EDI/CSV rows, constraints, functions or grants.
 Draft preview subjects and checkpoint execution remain separate; XML requires a
 saved revision. Content, byte counts and metadata have independent
 integrity checks. Existing submitter-only authorization and restricted preview
@@ -51,17 +50,10 @@ roles apply; application roles receive no direct table access.
 
 The XML entry points use the base preview authorization checks and row-locked
 completion settlement. Original-operation replay remains idempotent. Stale,
-revoked, canceled or superseded attempts cannot publish outputs. This integration
-does not include project or mapping archive lifecycle support.
+revoked, canceled or superseded attempts cannot publish outputs.
 Schema admission checks the exact new function bodies, signatures, grants,
 table shape, row policy, trigger, keys and index before preview operations. Current
-preview pools require schema 42 even for legacy profiles when their restricted
-roles cannot read migration history. Missing objects never prove an older prefix.
-Historical fixture ports separately validate the exact consecutive migration
-checksums under the shared migration lock, then use restricted connections with
-the historical function bodies. Fixture access supports prefixes 13, 24, 33, 36,
-40 and 41 without exposing a historical-mode request flag or granting history
-access. These database gates still require execution on the qualified database.
+preview pools require the XML schema even when using another profile.
 
 XML preflight refusals return HTTP 422 with `code: "xmlPreflight"`, a closed
 `kind` (`invalidInput`, `resourceLimit` or `unsupportedCapability`) and `reason`.
@@ -70,7 +62,7 @@ Optional facts are a one-based parser `location`, nonnegative physical
 Unavailable facts are null. No parser text, exception, input name, payload value
 or schema-hint URI is included. A preflight refusal creates no run or stored input.
 
-## Browser and CLI
+## Browser
 
 The browser offers XML only when `features.xmlPreview` is true. It uses the same
 private draft and recovery identities as other preview submissions. Input text
@@ -80,20 +72,13 @@ outline never creates a DOM or resolves entities; documents outside its display
 limits fall back to bounded raw text. Display is not schema validation and never
 becomes download content. Downloads retain the full original bytes and digest.
 
-The CLI selects the profile with `previews create --xml`, mutually exclusive with
-`--document` and `--csv`. File extensions do not select a profile.
-It refreshes `features.xmlPreview` before opening any file or standard input,
-including when `--organization` is explicit, and keeps that admitted operation's
-scope and original request identity. Missing or false capability refuses locally.
-CLI and browser display safe preflight reasons and numeric facts without inventing
+The browser displays safe preflight reasons and numeric facts without inventing
 a run or automatically retrying the mutation.
-The existing download staging verifies length and digest before committing a file
-or emitting stdout.
 
 ## Regression cases
 
 XML regression cases compare exact original bytes. Publication requires
-`WEFT_REGRESSIONS_ENABLED=true` and `WEFT_REGRESSIONS_XML_ENABLED=true`; the
+`BRAID_REGRESSIONS_ENABLED=true` and `BRAID_REGRESSIONS_XML_ENABLED=true`; the
 regression worker requires its own parent worker flag and the same XML flag.
 Preview and regression workers use separate backend instances, so enabling one
 never admits the other's XML work. The server advertises `xmlRuntime` in the
@@ -107,14 +92,18 @@ complete selected declarations, including the all-target output set. The
 32 KiB metadata ledger is recomputed on every read. Expected bytes pass the same
 safe physical XML check as preview outputs.
 
-Cases and results use `weft.xml-regression-case.v1` and
-`weft.xml-regression-run-result.v1`, with canonical metadata and exact
+Cases and results use `braid.xml-regression-case.v1` and
+`braid.xml-regression-run-result.v1`, with canonical metadata and exact
 re-encoding on read. Comparison reports missing or unexpected outputs, media
 type and `xmlMetadataDiffer` ahead of byte differences. Equivalent XML with
 different bytes is a byte difference. Stored bytes, digests and downloads are
 never normalized. XML cases are not editable in the case editor: run a new
 sample and explicitly save its outputs to create another baseline. Automation
 comparison settlement and build qualification do not admit XML cases.
+
+The completed preview offers baseline controls only when `xmlRuntime` is
+available. Enter a test name and explicitly accept the expected output to save
+the case. CSV runtime availability does not affect those XML controls.
 
 There is no canonical comparison enablement setting. The internal canonicalizer
 remains unused by regression and does not establish in-call cancellation or
@@ -124,7 +113,3 @@ allocation containment.
 
 Compiled XML execution remains unavailable. `unsupportedXmlBuild` is the fixed
 preflight refusal, even if a supplied capability snapshot claims support.
-Native preview success cannot qualify a build, release or machine endpoint.
-These restrictions remain until the separate runtime-containment work and real
-in-call and allocation gates are qualified. Existing exact-byte build evidence
-for admitted non-XML formats is unchanged.

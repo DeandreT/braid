@@ -1,6 +1,6 @@
 {
-  "schemaVersion": "weft.browser-return-paths.v1",
-  "description": "Shared vectors for the browser return-path rule. Weft.Identity.BrowserReturnPath and apps/web/src/auth/return-path.ts must classify each value identically.",
+  "schemaVersion": "braid.browser-return-paths.v1",
+  "description": "Shared vectors for the browser return-path rule. Braid.Identity.BrowserReturnPath and apps/web/src/auth/return-path.ts must classify each value identically.",
   "valid": [
     "/chat?creationProjectId=20000000-0000-4000-8000-000000000001&creationProposalId=30000000-0000-4000-8000-000000000001&creationFingerprint=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
     "/chat?conversationId=40000000-0000-4000-8000-000000000001&creationProjectId=20000000-0000-4000-8000-000000000001&creationProposalId=30000000-0000-4000-8000-000000000001&creationFingerprint=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",

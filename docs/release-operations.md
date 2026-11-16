@@ -2,13 +2,13 @@
 
 ## Activate or recover a mapping release
 
-This page is for a mapping's release target, not an application-image or database
-upgrade. For those, use [runtime packaging](runtime-packaging.md#database-upgrade-index)
-or [Azure operations](azure-deployment.md#operations).
+This page covers mapping release targets. For application deployment, use
+[runtime packaging](runtime-packaging.md) or
+[Azure operations](azure-deployment.md#operations).
 
 1. Have an operator qualify the completed build and register its release target
-   through [Local releases](local-releases.md#operator-commands). A completed
-   build alone is not an active release. Use the same runtime for qualification
+   through [Local releases](local-releases.md#operator-commands). Use the same
+   runtime for qualification
    and endpoint execution; the packaged service route needs no Docker socket.
 2. Enable the separate host feature and restricted credentials under
    [Host configuration](#host-configuration). In the packaged stack this is part
@@ -22,8 +22,7 @@ or [Azure operations](azure-deployment.md#operations).
 
 An endpoint deployment and machine-caller grants are separate operator tasks; see
 [mapping endpoints](runtime-packaging.md#hosted-shape-local-stack) and
-[Machine authorization](machine-authorization.md). Reading Operations, enabling
-a target or rolling back never grants a caller new authority.
+[Machine authorization](machine-authorization.md).
 
 ## Operations page
 
@@ -40,9 +39,9 @@ Administrator-only target control. A machine token does not authorize these appl
 
 ## Host configuration
 
-Set `WEFT_RELEASE_OPERATIONS_ENABLED=true` to enable the routes. Supply the existing
-restricted roles through `WEFT_RELEASE_READER_CONNECTION_STRING`,
-`WEFT_RELEASE_WRITER_CONNECTION_STRING`, and `WEFT_QUALIFICATION_READER_CONNECTION_STRING`.
+Set `BRAID_RELEASE_OPERATIONS_ENABLED=true` to enable the routes. Supply the existing
+restricted roles through `BRAID_RELEASE_READER_CONNECTION_STRING`,
+`BRAID_RELEASE_WRITER_CONNECTION_STRING`, and `BRAID_QUALIFICATION_READER_CONNECTION_STRING`.
 In Session mode use the corresponding `_FILE` settings, through private host files.
 No caller chooses a connection string, runtime image, credential, executable or URL.
 The feature neither registers targets nor qualifies builds; those remain explicit
@@ -63,8 +62,8 @@ Without a window the last 24 hours are read. Latency is elapsed time from initia
 request acceptance to the latest finished attempt, including retry gaps. A running
 request has no final latency. `replayed` and `replay_count` report replay claims,
 not proof that an HTTP response reached its caller. Input sizes measure document bytes, not HTTP
-framing; output sizes measure the retained endpoint response. Historical requests
-without size observations have null input sizes, not invented zeroes.
+framing; output sizes measure the retained endpoint response. Missing size
+observations are null.
 
 The reader deliberately does not call the own-actor private release reader. It
 selects only identity, status, audit, timing and size columns through a separate
@@ -114,25 +113,9 @@ alone does not count as unsent work. A failed session check hides retained work;
 refreshing under the same confirmed owner restores it, while a confirmed different
 owner or acknowledged sign-out clears it.
 
-The upgrade seeds a clearly marked `baseline` target snapshot at migration time.
-It does not claim to know when a previously disabled target changed or which actor
-disabled it. Existing release activation/rollback audit remains readable. New state
-events include the actual actor and time. Old registration replay remains one-way:
-it never re-enables a disabled target.
-
-## CLI and caller administration
-
-`weft operations targets --project PROJECT --mapping MAPPING` lists targets.
-The `releases`, `history`, `actions`, `invocations`, `callers`, and `summary`
-subcommands also take `--target TARGET`. Use `--offset`, `--limit`, `--since`,
-`--until`, `--caller` and `--outcome` for paging and invocation filters.
-
-Action subcommands have the same names as the HTTP actions. Supply `--project`,
-`--mapping`, `--target`, `--environment`, `--environment-version`, `--version`,
-and `--operation`. Activation requires `--qualification`; rollback additionally
-requires `--source-release`. Reuse those arguments unchanged for recovery.
+## Caller administration
 
 The caller view lists current and revoked grants without disclosing credentials.
 Grant changes retain the Administrator-only interface and checks documented in
-[Machine authorization](machine-authorization.md); viewing a grant never grants
-invocation authority and enabling a target does not restore a revoked grant.
+[Machine authorization](machine-authorization.md). Enabling a target does not
+restore a revoked grant.

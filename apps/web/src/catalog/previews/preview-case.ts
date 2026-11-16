@@ -84,7 +84,7 @@ export function previewCaseDefinition(
     parameters: submission.parameters
       .map((parameter) => ({ ...parameter }))
       .sort((a, b) => (a.name === b.name ? 0 : a.name < b.name ? -1 : 1)),
-    comparisonPolicy: "weft.regression.exact-bytes.v1",
+    comparisonPolicy: "braid.regression.exact-bytes.v1",
     expected: run.outputs.map((output, index) => ({
       name: output.boundaryId === "primary-output" ? null : output.targetName,
       bytesBase64Url: encodeBytes(bytes[index]!),

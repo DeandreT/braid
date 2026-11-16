@@ -28,7 +28,7 @@ const source = (name) =>
 const filename = "stage-diagnostics.json";
 const privateFs = process.platform === "linux";
 function temporary(run) {
-  const root = mkdtempSync(join(tmpdir(), "weft-stage-source-"));
+  const root = mkdtempSync(join(tmpdir(), "braid-stage-source-"));
   try {
     chmodSync(root, 0o700);
     run(root);
@@ -257,7 +257,7 @@ test("actual fixture stages and failures remain observational with originals ret
   );
   const parent = readFileSync(
     new URL(
-      "../dotnet/tests/Weft.Tests/AuthBrowserHttpsQualificationTests.cs",
+      "../dotnet/tests/Braid.Tests/Identity/AuthBrowserHttpsQualificationTests.cs",
       import.meta.url,
     ),
     "utf8",

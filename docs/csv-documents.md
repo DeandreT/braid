@@ -1,11 +1,10 @@
 # Flat CSV documents
 
-`weft.csv.flat-document.v1` identifies braid's primary flat CSV document capability.
-The direct Ferrule preview protocol is `weft.ferrule-csv-preview.v1`; its C# adapter
+`braid.csv.flat-document.v1` identifies braid's primary flat CSV document capability.
+The direct Ferrule preview protocol is `braid.ferrule-csv-preview.v1`; its C# adapter
 uses `PreviewExecutionProfile.CsvDocument` and the separate
-`weft.ferrule-csv-preview-adapter.v1` identity. Source generation uses
-`weft.ferrule-csharp-csv.v1`. These are separate admission contracts, not aliases
-for legacy JSON or JSON/EDI document execution.
+`braid.ferrule-csv-preview-adapter.v1` identity. Source generation uses
+`braid.ferrule-csharp-csv.v1`.
 
 ## Boundaries and settings
 
@@ -23,7 +22,7 @@ unsupported programs are refused before input parsing.
 
 Saved delimiter, quote, disabled quoting, header, UTF-8 BOM and empty-string
 settings are retained. Preview output includes resolved `csvDialect` metadata
-with schema `weft.csv-dialect.v1`: delimiter, nullable quote, quote-disabled flag,
+with schema `braid.csv-dialect.v1`: delimiter, nullable quote, quote-disabled flag,
 header flag, BOM flag and empty-string flag. Media must agree with that dialect.
 The metadata is presentation information, not permission to reinterpret input or
 alter returned bytes.
@@ -37,9 +36,7 @@ explicit zero-byte output frame with the digest of the empty byte string.
 
 ## Execution and limits
 
-Only the CSV preview profile selects `PayloadRunOptions::with_bounded_documents`.
-Legacy JSON/EDI execution retains its established route, including JSON schema
-provenance acceptance. No C ABI or secondary mapping implementation is involved.
+The CSV preview profile selects `PayloadRunOptions::with_bounded_documents`.
 CSV parsing and serialization use the pinned native codecs; braid also validates
 output against the bounded CSV reader before publication.
 
@@ -57,7 +54,7 @@ not arbitrary similarly named files.
 
 ### Browser table display
 
-The workbench uses recorded `weft.csv-dialect.v1` metadata to offer **Table** and
+The workbench uses recorded `braid.csv-dialect.v1` metadata to offer **Table** and
 **Raw text** views. It does not infer a dialect from a filename or payload. Header
 rows follow the saved setting; displayed cell strings are not trimmed, coerced
 to types or padded to a common row width.
@@ -74,24 +71,21 @@ regression comparison.
 
 ## Persisted previews and regression cases
 
-The host enables CSV previews explicitly with `WEFT_PREVIEWS_CSV_ENABLED=true`
-alongside `WEFT_PREVIEWS_ENABLED=true`. Catalog submission then selects CSV with
-profile `weft.ferrule-csv-preview.v1`; the CLI equivalent is `previews create --csv`.
+The host enables CSV previews explicitly with `BRAID_PREVIEWS_CSV_ENABLED=true`
+alongside `BRAID_PREVIEWS_ENABLED=true`. Catalog submission then selects CSV with
+profile `braid.ferrule-csv-preview.v1`.
 The first and only input must be present, but its base64 content may be empty.
 The server reads the pinned revision's native options, not a caller-supplied
 dialect. Primary and all-target selection are supported for the primary-only plan.
-Legacy JSON and JSON/EDI profiles retain their existing nonempty-input admission.
 
-Migration `0041_csv_documents.sql` adds the private storage contract after the
-unchanged mapping draft and chat write migrations. `weft.csv-preview-request.v1`
+`braid.csv-preview-request.v1`
 records explicit presence and the resolved input dialect. The retained output
 descriptor includes the exact output dialect, media, byte count and SHA-256.
 CSV and TSV downloads return the recorded media and unchanged bytes.
 
 CSV preview submission targets a saved revision. Save an editor draft as a revision
 before selecting the CSV profile; existing JSON and document draft previews retain
-their checkpoint subjects. The CSV suffix preserves those private checkpoint rows
-and uses subject-aware authority for input and output metadata reads.
+their checkpoint subjects. Input and output metadata reads use subject-aware authority.
 
 In **Try sample**, the offered admission option is **Explicit CSV / TSV (saved
 native dialect)**. An empty text input or zero-byte file is an explicit primary
@@ -102,9 +96,9 @@ The save retains the verified output bytes and dialect, original input,
 parameters, evaluation time and runtime. It selects exact-byte comparison; it
 does not automatically approve a baseline or a build.
 
-CSV regression cases use `weft.csv-regression-case.v1`; completed observations
-use `weft.csv-regression-run-result.v1`. Both input and output dialects are pinned
-to the same native revision. `weft.regression.csv-rows.v1` compares logical records
+CSV regression cases use `braid.csv-regression-case.v1`; completed observations
+use `braid.csv-regression-run-result.v1`. Both input and output dialects are pinned
+to the same native revision. `braid.regression.csv-rows.v1` compares logical records
 and cell strings in order, including headers and whitespace. Quoting and record
 terminator syntax are not themselves differences; embedded cell line breaks are.
 A missing trailing cell differs from an empty cell. UTF-8 is strict, an initial
@@ -119,16 +113,15 @@ existing CSV case so the expected dialect remains tied to the native revision.
 
 ## Host composition and compiled execution
 
-CSV regression publication and execution require `WEFT_REGRESSIONS_CSV_ENABLED=true`
+CSV regression publication and execution require `BRAID_REGRESSIONS_CSV_ENABLED=true`
 on the API and regression worker respectively. The default is off. Both select the
 installed CSV adapter against the same configured preview producer identity.
 
-CSV build controls are explicitly enabled by `WEFT_BUILDS_CSV_ENABLED`; the
+CSV build controls are explicitly enabled by `BRAID_BUILDS_CSV_ENABLED`; the
 configured native/compiler identities and transport remain independently checked.
-The compiled protocol is `weft.ferrule-compiled-csv.v1` and invokes the generated
+The compiled protocol is `braid.ferrule-compiled-csv.v1` and invokes the generated
 CSV byte entry point. Build boundary descriptors retain `csvDialect`; compiled
 document descriptors use `name`, `byteCount`, `sha256`, `mediaType`, `csvDialect`.
-Legacy descriptors omit the dialect member and keep their existing wire form.
 
 CSV HTTP native reads require the existing qualified native-metadata and private
 storage ports. Reporting/ingestion registrations remain authoritative; build-only
@@ -143,18 +136,15 @@ Use configured report sources, existing CSV-build source aliases, or explicitly
 composed qualified native sources. Ingestion storage alone is not a metadata
 source. Builds and reports are never enabled implicitly. These checks inspect
 registration metadata only, including Session composition, and do not resolve
-source factories, open credential files, or create workers. With only legacy
-previews enabled, an explicit CSV submission is rejected before source access;
-JSON/EDI admission is unchanged.
+source factories, open credential files, or create workers. With CSV previews
+disabled, an explicit CSV submission is rejected before source access.
 
 Build evidence and qualification still require exact bytes for all declared
 targets. CSV row comparison is never accepted as build proof. Canonical SQL binds
 both dialects to the build intent and verifies the exact output media, digest and
-length. Source implementation and test definitions are not runtime qualification;
-the migration, host composition and execution gates must be exercised in a
-qualified environment before deployment.
+length.
 
 The self-authored `csv-flat.native.json` fixture and CSV document tests cover the
 native contract and generated companion selection. The existing
 `ServiceEquivalenceFact` gate owns the Docker/service-child byte and dialect parity
-test. These definitions do not themselves establish runtime qualification.
+test.

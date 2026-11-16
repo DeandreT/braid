@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>braid-mapping-endpoint</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- The build writes the endpoint's OpenAPI document from its document-only host. -->
+    <OpenApiDocumentsDirectory>../../../contracts</OpenApiDocumentsDirectory>
+    <OpenApiGenerateDocumentsOptions>--file-name braid-endpoint-v1 --openapi-version OpenApi3_1</OpenApiGenerateDocumentsOptions>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.ApiDescription.Server" Version="10.0.12" PrivateAssets="all" />
+    <ProjectReference Include="../../src/Braid.Deployment/Braid.Deployment.csproj" />
+    <ProjectReference Include="../../src/Braid.Identity/Braid.Identity.csproj" />
+    <ProjectReference Include="../../src/Braid.MappingBackends/Braid.MappingBackends.csproj" />
+    <ProjectReference Include="../../src/Braid.MappingBackends.AzureSessions/Braid.MappingBackends.AzureSessions.csproj" />
+    <ProjectReference Include="../../src/Braid.WorkerTransport/Braid.WorkerTransport.csproj" />
+    <ProjectReference Include="../../src/Braid.Persistence.Postgres/Braid.Persistence.Postgres.csproj" />
+    <ProjectReference Include="../../src/Braid.Storage.FileSystem/Braid.Storage.FileSystem.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Braid.Tests</_Parameter1>
+    </AssemblyAttribute>
+    <!-- The release tool qualifies builds through exactly the endpoint's compiled runtime selection. -->
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Braid.ReleaseTool</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

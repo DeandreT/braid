@@ -2,10 +2,10 @@ mod support;
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use braid_ferrule_host::protocol::Limits;
 use ferrule_mapping::project_file;
 use serde_json::{Value, json};
 use support::{digest, process, request, success};
-use weft_ferrule_host::protocol::Limits;
 
 const BASIC: &[u8] = include_bytes!("fixtures/projection-basic.json");
 const CONTROLS: &[u8] = include_bytes!("fixtures/projection-controls.json");
@@ -717,11 +717,11 @@ fn invalid_cycles_produce_bounded_located_gaps_and_no_dangling_references() {
 
 #[test]
 fn structural_and_text_budget_exhaustion_returns_no_projection_payload() {
-    let decoded = weft_ferrule_host::decode::decode_native(BASIC).unwrap();
+    let decoded = braid_ferrule_host::decode::decode_native(BASIC).unwrap();
     let mut limits = request("project", BASIC).limits;
     limits.maximum_items = 1;
     assert!(
-        weft_ferrule_host::projection::project(
+        braid_ferrule_host::projection::project(
             &decoded.project,
             "entry.native.json",
             &decoded.document_prefix,
@@ -743,10 +743,10 @@ fn structural_and_text_budget_exhaustion_returns_no_projection_payload() {
             _ => unreachable!(),
         }
         let bytes = serde_json::to_vec(&native).unwrap();
-        let decoded = weft_ferrule_host::decode::decode_native(&bytes).unwrap();
+        let decoded = braid_ferrule_host::decode::decode_native(&bytes).unwrap();
         let limits = request("project", &bytes).limits;
         assert!(
-            weft_ferrule_host::projection::project(
+            braid_ferrule_host::projection::project(
                 &decoded.project,
                 "entry.native.json",
                 &decoded.document_prefix,
@@ -783,10 +783,10 @@ fn real_worker_project_response_is_deterministic_and_retains_native_identity() {
 }
 
 fn projected(native: &[u8]) -> Value {
-    let decoded = weft_ferrule_host::decode::decode_native(native).unwrap();
+    let decoded = braid_ferrule_host::decode::decode_native(native).unwrap();
     let limits: Limits = request("project", native).limits;
     serde_json::to_value(
-        weft_ferrule_host::projection::project(
+        braid_ferrule_host::projection::project(
             &decoded.project,
             "entry.native.json",
             &decoded.document_prefix,

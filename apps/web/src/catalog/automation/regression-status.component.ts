@@ -59,10 +59,10 @@ export function regressionStateTone(state: string | undefined): string | null {
 }
 
 @Component({
-  selector: "weft-regression-status",
+  selector: "braid-regression-status",
   imports: [RouterLink],
   template: `
-    <span class="weft-pill" role="status" [attr.data-tone]="tone()">{{
+    <span class="braid-pill" role="status" [attr.data-tone]="tone()">{{
       label()
     }}</span>
     @if (suite(); as s) {

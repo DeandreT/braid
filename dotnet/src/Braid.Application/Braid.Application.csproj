@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="[10.0.14]" />
+    <ProjectReference Include="../Braid.Contracts/Braid.Contracts.csproj" />
+    <ProjectReference Include="../Braid.Domain/Braid.Domain.csproj" />
+    <ProjectReference Include="../Braid.Ai/Braid.Ai.csproj" />
+  </ItemGroup>
+</Project>

@@ -31,7 +31,7 @@ export class BrowserSessionApi {
     return defer(() =>
       this.http.get<unknown>("/api/auth/session", {
         observe: "response",
-        headers: new HttpHeaders({ "X-Weft-Session": "1" }),
+        headers: new HttpHeaders({ "X-Braid-Session": "1" }),
       }),
     ).pipe(
       timeout(8000),
@@ -57,15 +57,15 @@ export class BrowserSessionApi {
     return defer(() => {
       if (returnTo !== null && !isReturnPath(returnTo))
         throw new BrowserSessionError();
-      let headers = actionHeaders(status, "X-Weft-Login", true);
+      let headers = actionHeaders(status, "X-Braid-Login", true);
       if (invitation !== undefined)
-        headers = headers.set("X-Weft-Invitation", invitation);
+        headers = headers.set("X-Braid-Invitation", invitation);
       return this.actions.post<unknown>("/api/auth/login", null, {
         observe: "response",
         headers:
           returnTo === null
             ? headers
-            : headers.set("X-Weft-Return-To", returnTo),
+            : headers.set("X-Braid-Return-To", returnTo),
       });
     }).pipe(
       timeout(8000),
@@ -82,7 +82,7 @@ export class BrowserSessionApi {
     return defer(() =>
       this.actions.post<unknown>("/api/auth/logout", null, {
         observe: "response",
-        headers: actionHeaders(status, "X-Weft-Logout", true),
+        headers: actionHeaders(status, "X-Braid-Logout", true),
       }),
     ).pipe(
       timeout(8000),
@@ -100,7 +100,7 @@ export class BrowserSessionApi {
         throw new BrowserSessionError();
       return this.actions.post<unknown>("/api/auth/forget-local", null, {
         observe: "response",
-        headers: actionHeaders(status, "X-Weft-Forget-Local", false),
+        headers: actionHeaders(status, "X-Braid-Forget-Local", false),
       });
     }).pipe(
       timeout(8000),
@@ -116,7 +116,7 @@ export class BrowserSessionApi {
 
 function actionHeaders(
   status: SessionAuthStatus,
-  action: "X-Weft-Login" | "X-Weft-Logout" | "X-Weft-Forget-Local",
+  action: "X-Braid-Login" | "X-Braid-Logout" | "X-Braid-Forget-Local",
   sessionToken: boolean,
 ): HttpHeaders {
   // Only fresh auth status supplies these distinct-purpose tokens, never catalog context.
@@ -124,7 +124,7 @@ function actionHeaders(
     throw new BrowserSessionError();
   let headers = new HttpHeaders({
     [action]: "1",
-    "X-Weft-Auth-Token": status.authActionRequestToken,
+    "X-Braid-Auth-Token": status.authActionRequestToken,
   });
   if (sessionToken && status.state === "authenticated")
     headers = headers.set("X-XSRF-TOKEN", status.requestToken);

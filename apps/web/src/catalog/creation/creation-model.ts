@@ -168,7 +168,7 @@ export async function creationProposal(
   const plan: unknown = JSON.parse(value.planJson);
   if (
     !object(plan) ||
-    !["weft.creation-plan.v1", "weft.creation-plan.v2"].includes(
+    !["braid.creation-plan.v1", "braid.creation-plan.v2"].includes(
       String(plan.schema),
     ) ||
     (await sha256(new TextEncoder().encode(value.planJson))) !==

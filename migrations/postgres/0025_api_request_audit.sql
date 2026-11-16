@@ -4,8 +4,8 @@
 DO $roles$
 DECLARE r record;
 BEGIN
-    SELECT * INTO r FROM pg_catalog.pg_roles WHERE rolname='weft_api_audit_writer';
-    IF current_user<>'weft_migrator' OR session_user<>current_user OR NOT FOUND OR NOT r.rolcanlogin
+    SELECT * INTO r FROM pg_catalog.pg_roles WHERE rolname='braid_api_audit_writer';
+    IF current_user<>'braid_migrator' OR session_user<>current_user OR NOT FOUND OR NOT r.rolcanlogin
         OR r.rolsuper OR r.rolinherit OR r.rolcreatedb OR r.rolcreaterole OR r.rolreplication OR r.rolbypassrls
         OR r.rolconfig IS NOT NULL OR r.rolvaliduntil IS NOT NULL
         OR NOT pg_catalog.has_database_privilege(r.oid,current_database(),'CONNECT')
@@ -16,7 +16,7 @@ BEGIN
             WHERE s.nspname NOT IN ('pg_catalog','information_schema') AND c.relkind IN ('r','p','v','m','f')
             AND (c.relowner=r.oid OR pg_catalog.has_table_privilege(r.oid,c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
                 OR pg_catalog.has_any_column_privilege(r.oid,c.oid,'SELECT,INSERT,UPDATE,REFERENCES')))
-        OR pg_catalog.has_schema_privilege(r.oid,'weft','USAGE') THEN
+        OR pg_catalog.has_schema_privilege(r.oid,'braid','USAGE') THEN
         RAISE EXCEPTION 'Independent API audit role required.' USING ERRCODE='42501';
     END IF;
 END;
@@ -24,11 +24,11 @@ $roles$;
 
 -- One row per admitted mutating bearer request, written before the request runs. Resource names are
 -- route parameter names; their values are canonical UUIDs or positive decimal integers, nothing else.
-CREATE TABLE weft.api_request_audit (
-    organization_id uuid NOT NULL REFERENCES weft.organizations(id),
+CREATE TABLE braid.api_request_audit (
+    organization_id uuid NOT NULL REFERENCES braid.organizations(id),
     audit_id uuid NOT NULL CHECK(audit_id<>'00000000-0000-0000-0000-000000000000'),
-    principal_id uuid NOT NULL REFERENCES weft.principals(id),
-    binding_id uuid NOT NULL REFERENCES weft.external_identity_bindings(binding_id),
+    principal_id uuid NOT NULL REFERENCES braid.principals(id),
+    binding_id uuid NOT NULL REFERENCES braid.external_identity_bindings(binding_id),
     client_application_id uuid NOT NULL CHECK(client_application_id<>'00000000-0000-0000-0000-000000000000'),
     operation text NOT NULL CHECK(operation~'^[A-Z][A-Za-z0-9]{0,127}$'),
     method text NOT NULL CHECK(method IN ('POST','PUT','PATCH','DELETE')),
@@ -43,47 +43,47 @@ CREATE TABLE weft.api_request_audit (
     CHECK(pg_catalog.array_to_string(resource_values,',')
         ~'^(([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[1-9][0-9]{0,18})(,([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[1-9][0-9]{0,18}))*)?$')
 );
-CREATE INDEX api_request_audit_principal ON weft.api_request_audit(organization_id,principal_id,recorded_at);
-ALTER TABLE weft.api_request_audit ENABLE ROW LEVEL SECURITY;
-CREATE POLICY organization_scope ON weft.api_request_audit USING(organization_id=NULLIF(current_setting('weft.organization_id',true),'')::uuid);
-REVOKE ALL ON weft.api_request_audit FROM PUBLIC;
+CREATE INDEX api_request_audit_principal ON braid.api_request_audit(organization_id,principal_id,recorded_at);
+ALTER TABLE braid.api_request_audit ENABLE ROW LEVEL SECURITY;
+CREATE POLICY organization_scope ON braid.api_request_audit USING(organization_id=NULLIF(current_setting('braid.organization_id',true),'')::uuid);
+REVOKE ALL ON braid.api_request_audit FROM PUBLIC;
 
-CREATE FUNCTION weft.guard_api_request_audit() RETURNS trigger
-LANGUAGE plpgsql VOLATILE SECURITY INVOKER SET search_path=pg_catalog,weft,pg_temp
+CREATE FUNCTION braid.guard_api_request_audit() RETURNS trigger
+LANGUAGE plpgsql VOLATILE SECURITY INVOKER SET search_path=pg_catalog,braid,pg_temp
 AS $body$
 BEGIN
-    IF current_user<>'weft_migrator' OR session_user<>'weft_api_audit_writer' OR TG_OP<>'INSERT'
+    IF current_user<>'braid_migrator' OR session_user<>'braid_api_audit_writer' OR TG_OP<>'INSERT'
         OR NEW.recorded_at<>statement_timestamp() THEN
         RAISE EXCEPTION 'The API request audit is append-only.' USING ERRCODE='42501';
     END IF;
     RETURN NEW;
 END;
 $body$;
-REVOKE ALL ON FUNCTION weft.guard_api_request_audit() FROM PUBLIC;
-CREATE TRIGGER api_request_audit_guard BEFORE INSERT OR UPDATE OR DELETE ON weft.api_request_audit FOR EACH ROW EXECUTE FUNCTION weft.guard_api_request_audit();
-CREATE TRIGGER api_request_audit_no_truncate BEFORE TRUNCATE ON weft.api_request_audit FOR EACH STATEMENT EXECUTE FUNCTION weft.guard_api_request_audit();
+REVOKE ALL ON FUNCTION braid.guard_api_request_audit() FROM PUBLIC;
+CREATE TRIGGER api_request_audit_guard BEFORE INSERT OR UPDATE OR DELETE ON braid.api_request_audit FOR EACH ROW EXECUTE FUNCTION braid.guard_api_request_audit();
+CREATE TRIGGER api_request_audit_no_truncate BEFORE TRUNCATE ON braid.api_request_audit FOR EACH STATEMENT EXECUTE FUNCTION braid.guard_api_request_audit();
 
 -- Status: 0 recorded; 1 the binding is no longer enabled, owned by the principal or the principal is
 -- inactive, so the request must not run; 2 refused input. Only 0 writes.
-CREATE FUNCTION weft.record_api_request(org uuid, audit uuid, principal uuid, binding uuid, client uuid, operation_name text, http_method text, names text[], resource_ids text[]) RETURNS integer
-LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,weft,pg_temp
+CREATE FUNCTION braid.record_api_request(org uuid, audit uuid, principal uuid, binding uuid, client uuid, operation_name text, http_method text, names text[], resource_ids text[]) RETURNS integer
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,braid,pg_temp
 AS $body$
 BEGIN
-    IF session_user<>'weft_api_audit_writer' OR org IS NULL OR org IS DISTINCT FROM NULLIF(current_setting('weft.organization_id',true),'')::uuid
+    IF session_user<>'braid_api_audit_writer' OR org IS NULL OR org IS DISTINCT FROM NULLIF(current_setting('braid.organization_id',true),'')::uuid
         OR audit IS NULL OR audit='00000000-0000-0000-0000-000000000000' OR principal IS NULL OR binding IS NULL
         OR client IS NULL OR client='00000000-0000-0000-0000-000000000000' OR operation_name IS NULL OR http_method IS NULL
         OR names IS NULL OR resource_ids IS NULL THEN
         RETURN 2;
     END IF;
-    IF NOT EXISTS(SELECT 1 FROM ONLY weft.external_identity_bindings b JOIN ONLY weft.principals p ON p.id=b.principal_id
+    IF NOT EXISTS(SELECT 1 FROM ONLY braid.external_identity_bindings b JOIN ONLY braid.principals p ON p.id=b.principal_id
         WHERE b.binding_id=binding AND b.principal_id=principal AND b.enabled AND p.active) THEN
         RETURN 1;
     END IF;
-    INSERT INTO weft.api_request_audit(organization_id,audit_id,principal_id,binding_id,client_application_id,operation,method,resource_names,resource_values)
+    INSERT INTO braid.api_request_audit(organization_id,audit_id,principal_id,binding_id,client_application_id,operation,method,resource_names,resource_values)
     VALUES(org,audit,principal,binding,client,operation_name,http_method,names,resource_ids);
     RETURN 0;
 END;
 $body$;
-REVOKE ALL ON FUNCTION weft.record_api_request(uuid,uuid,uuid,uuid,uuid,text,text,text[],text[]) FROM PUBLIC;
-GRANT USAGE ON SCHEMA weft TO weft_api_audit_writer;
-GRANT EXECUTE ON FUNCTION weft.record_api_request(uuid,uuid,uuid,uuid,uuid,text,text,text[],text[]) TO weft_api_audit_writer;
+REVOKE ALL ON FUNCTION braid.record_api_request(uuid,uuid,uuid,uuid,uuid,text,text,text[],text[]) FROM PUBLIC;
+GRANT USAGE ON SCHEMA braid TO braid_api_audit_writer;
+GRANT EXECUTE ON FUNCTION braid.record_api_request(uuid,uuid,uuid,uuid,uuid,text,text,text[],text[]) TO braid_api_audit_writer;

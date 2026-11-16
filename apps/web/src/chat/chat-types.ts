@@ -60,7 +60,7 @@ export function availability(
 ): value is ChatAvailability {
   return (
     object(value) &&
-    value.schemaVersion === "weft.chat.v1" &&
+    value.schemaVersion === "braid.chat.v1" &&
     sameScope(value.revision, scope) &&
     typeof value.toolsEnabled === "boolean" &&
     object(value.limits) &&

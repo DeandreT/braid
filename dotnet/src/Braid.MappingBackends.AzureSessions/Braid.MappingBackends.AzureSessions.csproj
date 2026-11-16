@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <!-- The only project that depends on the Azure SDK; core Braid and the Ferrule service do not. -->
+    <PackageReference Include="Azure.Identity" Version="1.21.0" />
+    <ProjectReference Include="../Braid.MappingBackends/Braid.MappingBackends.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Braid.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

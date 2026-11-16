@@ -11,8 +11,8 @@ import sys
 
 
 def package(source: Path, destination: Path, manifest: Path) -> None:
-    wasm = source / "weft_ferrule_edit_wasm_bg.wasm"
-    glue = source / "weft_ferrule_edit_wasm.js"
+    wasm = source / "braid_ferrule_edit_wasm_bg.wasm"
+    glue = source / "braid_ferrule_edit_wasm.js"
     subprocess.run([sys.executable, str(Path(__file__).with_name("check-imports.py")), str(wasm)], check=True)
     if "qualify_checkpoint" in glue.read_text():
         raise ValueError("The qualification export must not ship in the application.")

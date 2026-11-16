@@ -3,7 +3,7 @@ import { Injectable, effect, inject, signal } from "@angular/core";
 
 export type ThemeChoice = "light" | "dark" | "system";
 /** public/theme.js reads the same key before the first paint. */
-export const themeStorageKey = "weft.theme.v1";
+export const themeStorageKey = "braid.theme.v1";
 
 /** The Light, Dark or System appearance, saved in this browser only. */
 @Injectable({ providedIn: "root" })

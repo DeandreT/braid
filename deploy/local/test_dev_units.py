@@ -1,7 +1,7 @@
 """Exercise real unit composition with stub services, never Docker or systemd.
 
 Run: py -3.12 -m unittest discover -s deploy/local -p test_dev_units.py -v
-Windows uses the existing Git Bash; WEFT_TEST_BASH can select another Bash.
+Windows uses the existing Git Bash; BRAID_TEST_BASH can select another Bash.
 """
 
 import hashlib
@@ -17,9 +17,9 @@ import uuid
 
 LOCAL = Path(__file__).resolve().parent
 HELPER = LOCAL / "dev-units.sh"
-CREATE = "WEFT_FERRULE_DOCKER_CREATE_TIMEOUT_SECONDS"
-CLEANUP = "WEFT_FERRULE_DOCKER_CLEANUP_TIMEOUT_SECONDS"
-OPTIONS = LOCAL.parents[1] / "dotnet/src/Weft.MappingBackends/Workers/DockerInspectionWorkerOptions.cs"
+CREATE = "BRAID_FERRULE_DOCKER_CREATE_TIMEOUT_SECONDS"
+CLEANUP = "BRAID_FERRULE_DOCKER_CLEANUP_TIMEOUT_SECONDS"
+OPTIONS = LOCAL.parents[1] / "dotnet/src/Braid.MappingBackends/Workers/DockerInspectionWorkerOptions.cs"
 MAXIMUM = int(re.search(r"TimeSpan Maximum = TimeSpan.FromSeconds\((\d+)\)", OPTIONS.read_text()).group(1))
 
 HARNESS = r'''#!/usr/bin/env bash
@@ -43,9 +43,9 @@ dotnet=$dotnet_root/dotnet
 storage_root=$root/storage
 worker_image=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 chat_profiles=$root/private/chat.json
-WEFT_DEV_ORGANIZATION_ID=11111111-1111-1111-1111-111111111111
-WEFT_DEV_PRINCIPAL_ID=22222222-2222-2222-2222-222222222222
-fixture_secret=$WEFT_UNIT_TEST_SECRET
+BRAID_DEV_ORGANIZATION_ID=11111111-1111-1111-1111-111111111111
+BRAID_DEV_PRINCIPAL_ID=22222222-2222-2222-2222-222222222222
+fixture_secret=$BRAID_UNIT_TEST_SECRET
 declare -A log_offset
 step() { printf '%s\n' "$*"; }
 fail() { printf '%s\n' "$*" >&2; exit 1; }
@@ -103,9 +103,9 @@ systemd-run() {
 # This is the maintained environment-file block from dev-up.sh, not a copy of it.
 source "$3"
 [[ $mode != prepare ]] || exit 0
-if [[ $mode == server-env-change ]]; then printf 'WEFT_UNIT_FIXTURE_SETTING=changed\n' >>"$server_env"; fi
-start_unit fixture-server Weft.Server "$server_env"
-start_unit fixture-worker Weft.Worker "$worker_env"
+if [[ $mode == server-env-change ]]; then printf 'BRAID_UNIT_FIXTURE_SETTING=changed\n' >>"$server_env"; fi
+start_unit fixture-server Braid.Server "$server_env"
+start_unit fixture-worker Braid.Worker "$worker_env"
 '''
 
 
@@ -115,8 +115,8 @@ def bash_path(path):
 
 
 def find_bash():
-    if os.environ.get("WEFT_TEST_BASH"):
-        return os.environ["WEFT_TEST_BASH"]
+    if os.environ.get("BRAID_TEST_BASH"):
+        return os.environ["BRAID_TEST_BASH"]
     if os.name == "nt":
         git = shutil.which("git")
         candidates = [Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Git/bin/bash.exe"]
@@ -127,7 +127,7 @@ def find_bash():
                 return str(candidate)
     elif shutil.which("bash"):
         return shutil.which("bash")
-    raise RuntimeError("Bash is required. Set WEFT_TEST_BASH to an existing Bash executable.")
+    raise RuntimeError("Bash is required. Set BRAID_TEST_BASH to an existing Bash executable.")
 
 
 class DevUnitSettingsTests(unittest.TestCase):
@@ -136,14 +136,14 @@ class DevUnitSettingsTests(unittest.TestCase):
         cls.bash = find_bash()
 
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory(prefix="weft unit fixture ", dir=os.environ.get("WEFT_TEST_TEMP_ROOT"))
+        self.temporary = tempfile.TemporaryDirectory(prefix="braid unit fixture ", dir=os.environ.get("BRAID_TEST_TEMP_ROOT"))
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.secret = "private-fixture-" + uuid.uuid4().hex
         self.output = ""
-        for directory in ["home/run", "private", "logs", "state", "calls", "app/Weft.Server", "app/Weft.Worker"]:
+        for directory in ["home/run", "private", "logs", "state", "calls", "app/Braid.Server", "app/Braid.Worker"]:
             (self.root / directory).mkdir(parents=True, exist_ok=True)
-        for host in ["Weft.Server", "Weft.Worker"]:
+        for host in ["Braid.Server", "Braid.Worker"]:
             (self.root / "app" / host / (host + ".dll")).write_bytes(b"fixture binary, never executed")
         source = (LOCAL / "dev-up.sh").read_text(encoding="utf-8")
         self.assertIn('source "$script_dir/dev-units.sh"', source)
@@ -159,7 +159,7 @@ class DevUnitSettingsTests(unittest.TestCase):
         for key in [CREATE, CLEANUP, "BASH_ENV", "ENV", "SHELLOPTS", "BASHOPTS"]:
             environment.pop(key, None)
         environment.update(budgets or {})
-        environment["WEFT_UNIT_TEST_SECRET"] = self.secret
+        environment["BRAID_UNIT_TEST_SECRET"] = self.secret
         result = subprocess.run(
             [self.bash, "--noprofile", "--norc", bash_path(self.harness), bash_path(self.root), bash_path(helper), bash_path(self.block), mode],
             env=environment, capture_output=True, text=True, timeout=30,
@@ -199,7 +199,7 @@ class DevUnitSettingsTests(unittest.TestCase):
     def assert_grace(self, calls, seconds=300):
         for call in calls:
             unit = call[call.index("--unit") + 1]
-            host, name = {"fixture-server": ("Weft.Server", "server"), "fixture-worker": ("Weft.Worker", "worker")}[unit]
+            host, name = {"fixture-server": ("Braid.Server", "server"), "fixture-worker": ("Braid.Worker", "worker")}[unit]
             properties = [call[index + 1] for index, value in enumerate(call[:-1]) if value == "--property"]
             self.assertIn("TimeoutStopSec=" + str(seconds), properties)
             self.assertIn("KillMode=mixed", properties)
@@ -237,7 +237,7 @@ class DevUnitSettingsTests(unittest.TestCase):
 
     def test_legacy_unit_is_not_stopped_before_owner_confirmed_safe_upgrade(self):
         self.run_fixture(mode="prepare")
-        for unit, host, name in [("fixture-server", "Weft.Server", "server"), ("fixture-worker", "Weft.Worker", "worker")]:
+        for unit, host, name in [("fixture-server", "Braid.Server", "server"), ("fixture-worker", "Braid.Worker", "worker")]:
             data = (self.root / "private" / (name + ".env")).read_bytes() + (self.root / "app" / host / (host + ".dll")).read_bytes()
             (self.root / "home/run" / (unit + ".stamp")).write_text(hashlib.sha256(data).hexdigest() + "\n")
             (self.root / "state" / (unit + ".active")).touch()
@@ -279,7 +279,7 @@ class DevUnitSettingsTests(unittest.TestCase):
 
     def test_binary_and_private_environment_changes_still_restart_only_affected_unit(self):
         self.run_fixture()
-        (self.root / "app/Weft.Server/Weft.Server.dll").write_bytes(b"changed fixture binary")
+        (self.root / "app/Braid.Server/Braid.Server.dll").write_bytes(b"changed fixture binary")
         self.run_fixture()
         self.assertEqual(len(self.calls()), 3)
         self.assertEqual(self.stops(), ["stop fixture-server"])
@@ -292,7 +292,7 @@ class DevUnitSettingsTests(unittest.TestCase):
     def test_failed_live_grace_query_fails_closed_without_stop_or_replacement(self):
         self.run_fixture()
         previous = self.stamps()
-        (self.root / "app/Weft.Server/Weft.Server.dll").write_bytes(b"changed fixture binary")
+        (self.root / "app/Braid.Server/Braid.Server.dll").write_bytes(b"changed fixture binary")
         self.run_fixture(mode="grace-unavailable", expected_success=False)
         self.assertEqual(self.stops(), [])
         self.assertEqual(len(self.calls()), 2)
@@ -301,7 +301,7 @@ class DevUnitSettingsTests(unittest.TestCase):
     def test_malformed_live_grace_fails_closed_without_stop_or_replacement(self):
         self.run_fixture()
         previous = self.stamps()
-        (self.root / "app/Weft.Server/Weft.Server.dll").write_bytes(b"changed fixture binary")
+        (self.root / "app/Braid.Server/Braid.Server.dll").write_bytes(b"changed fixture binary")
         self.run_fixture(mode="grace-malformed", expected_success=False)
         self.assertEqual(self.stops(), [])
         self.assertEqual(len(self.calls()), 2)

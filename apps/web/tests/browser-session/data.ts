@@ -126,7 +126,7 @@ export function savedReports() {
     confirmed: true,
   };
   const projection: components["schemas"]["CatalogProjectionReportV1"] = {
-    schemaVersion: "weft.catalog-revision-report.v1",
+    schemaVersion: "braid.catalog-revision-report.v1",
     operation: "projection",
     revision: revision.scope,
     state: "available",
@@ -146,13 +146,13 @@ export function savedReports() {
       diagnostics: [],
       provenance,
       document: {
-        schemaVersion: "weft.mapping-projection.v1",
+        schemaVersion: "braid.mapping-projection.v1",
         provenance: {
           revision: revision.scope,
           nativeArtifactDigest: revision.nativeDigest,
           backend: provenance.backend,
           adapterVersion: "owned-fixture",
-          projectionVersion: "weft.ferrule-projection.v1",
+          projectionVersion: "braid.ferrule-projection.v1",
         },
         boundaries: [
           {
@@ -186,7 +186,7 @@ export function savedReports() {
     },
   };
   const validation: components["schemas"]["CatalogValidationReportV1"] = {
-    schemaVersion: "weft.catalog-revision-report.v1",
+    schemaVersion: "braid.catalog-revision-report.v1",
     operation: "validation",
     revision: revision.scope,
     state: "available",

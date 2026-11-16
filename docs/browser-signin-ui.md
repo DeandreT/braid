@@ -97,7 +97,7 @@ auth caller or service destruction ends its request without converting uncertain
 to success. No completed auth result is shared or replayed, and no automatic retry
 or post-action check is introduced.
 
-The separate auth-action antiforgery token is used only as `X-Weft-Auth-Token`.
+The separate auth-action antiforgery token is used only as `X-Braid-Auth-Token`.
 Positive-session login/logout additionally use the fresh status mutation token
 as `X-XSRF-TOKEN`; neither is replaced by a catalog context token. Forgetting uses
 only the auth-action token. Mutation transport uses `HttpBackend` directly, without

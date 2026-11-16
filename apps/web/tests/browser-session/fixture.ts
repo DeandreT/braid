@@ -714,16 +714,16 @@ export class ControlledSession {
       correctHeaders:
         ![
           "authorization",
-          "x-weft-actor",
-          "x-weft-role",
-          "x-weft-auth-token",
+          "x-braid-actor",
+          "x-braid-role",
+          "x-braid-auth-token",
           "identitycontext",
           "identity-context",
-          "x-weft-identity-context",
-          "x-weft-session",
-          "x-weft-login",
-          "x-weft-logout",
-          "x-weft-forget-local",
+          "x-braid-identity-context",
+          "x-braid-session",
+          "x-braid-login",
+          "x-braid-logout",
+          "x-braid-forget-local",
         ].some((name) => name in headers) &&
         (kind === "resume"
           ? bytes.length === 0 &&
@@ -736,11 +736,11 @@ export class ControlledSession {
             ? headers["if-match"] === this.tag() &&
               !key &&
               headers["content-type"] ===
-                "application/vnd.weft.mapping-metadata-edit.v1+json"
+                "application/vnd.braid.mapping-metadata-edit.v1+json"
             : /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(key) &&
               headers["content-type"] ===
                 (kind === "creation"
-                  ? "application/vnd.weft.project-create.v1+json"
+                  ? "application/vnd.braid.project-create.v1+json"
                   : "application/octet-stream")),
     });
   }
@@ -795,7 +795,7 @@ export class ControlledSession {
           return register(...args);
         };
       }
-      Object.defineProperty(window, "__weft119StorageCounts", {
+      Object.defineProperty(window, "__braid119StorageCounts", {
         value: () => ({ ...counts }),
         configurable: false,
       });
@@ -831,7 +831,7 @@ export class ControlledSession {
         return route.fulfill({
           json: {
             status: "ok",
-            service: "weft-api",
+            service: "braid-api",
             version: "0.1.0",
             apiVersion: "v1",
           },
@@ -880,23 +880,23 @@ export class ControlledSession {
       "if-unmodified-since",
       "if-range",
       "range",
-      "x-weft-auth-token",
+      "x-braid-auth-token",
       "identitycontext",
       "identity-context",
-      "x-weft-identity-context",
-      "x-weft-actor",
-      "x-weft-role",
-      "x-weft-login",
-      "x-weft-logout",
-      "x-weft-forget-local",
+      "x-braid-identity-context",
+      "x-braid-actor",
+      "x-braid-role",
+      "x-braid-login",
+      "x-braid-logout",
+      "x-braid-forget-local",
     ];
     if (
       request.method() === "GET" &&
       ((request.postDataBuffer()?.length ?? 0) !== 0 ||
         forbiddenRead.some((name) => name in headers) ||
         (kind === "status"
-          ? headers["x-weft-session"] !== "1"
-          : "x-weft-session" in headers))
+          ? headers["x-braid-session"] !== "1"
+          : "x-braid-session" in headers))
     ) {
       ++this.routeFailures;
       await route.abort("blockedbyclient").catch(() => {});
@@ -952,7 +952,7 @@ export class ControlledSession {
     const original = this.#sampleTail.then(async () => {
       check(!this.#closed);
       await this.page.goto(
-        this.origin + (probe ? "/__weft119_probe" : "") + path,
+        this.origin + (probe ? "/__braid119_probe" : "") + path,
       );
       this.#requestedSamples = 0;
     });
@@ -1085,8 +1085,8 @@ export class ControlledSession {
       if (!this.page.isClosed()) {
         const fileGate = await this.page.evaluate(() => {
           const gate = (
-            window as unknown as { __weft119FileGate?: { release(): void } }
-          ).__weft119FileGate;
+            window as unknown as { __braid119FileGate?: { release(): void } }
+          ).__braid119FileGate;
           gate?.release();
           return gate !== undefined;
         });
@@ -1100,9 +1100,9 @@ export class ControlledSession {
               this.page.evaluate(() => {
                 const gate = (
                   window as unknown as {
-                    __weft119FileGate: { settled(): boolean };
+                    __braid119FileGate: { settled(): boolean };
                   }
-                ).__weft119FileGate;
+                ).__braid119FileGate;
                 return gate.settled();
               }),
             )
@@ -1111,15 +1111,15 @@ export class ControlledSession {
             await this.page.evaluate(() =>
               (
                 window as unknown as {
-                  __weft119FileGate: { drain(): Promise<boolean> };
+                  __braid119FileGate: { drain(): Promise<boolean> };
                 }
-              ).__weft119FileGate.drain(),
+              ).__braid119FileGate.drain(),
             ),
           );
           await this.page.evaluate(() =>
             (
-              window as unknown as { __weft119FileGate: { restore(): void } }
-            ).__weft119FileGate.restore(),
+              window as unknown as { __braid119FileGate: { restore(): void } }
+            ).__braid119FileGate.restore(),
           );
         }
       }
@@ -1178,7 +1178,7 @@ export const test = base.extend<
     async ({}, use) => {
       check(process.env.PLAYWRIGHT_NO_COPY_PROMPT === "1");
       const owner = await BrowserSessionStaticOwner.open(
-        process.env.WEFT_BROWSER_SESSION_CONTROLLED_CONFIG!,
+        process.env.BRAID_BROWSER_SESSION_CONTROLLED_CONFIG!,
       );
       let primary: unknown;
       try {

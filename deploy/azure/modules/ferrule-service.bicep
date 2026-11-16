@@ -66,7 +66,7 @@ resource service 'Microsoft.App/containerApps@2024-03-01' = {
         {
           // A Key Vault certificate's secret is its PEM bundle: the private key and the certificate.
           name: 'ferrule-service-pem'
-          keyVaultUrl: '${vaultUri}secrets/weft-ferrule-service'
+          keyVaultUrl: '${vaultUri}secrets/braid-ferrule-service'
           identity: identityId
         }
       ]
@@ -77,14 +77,14 @@ resource service 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'ferrule'
           image: '${registryServer}/${image}'
           env: [
-            { name: 'WEFT_FERRULE_SERVICE_LISTEN_ADDR', value: '0.0.0.0:${port}' }
-            { name: 'WEFT_FERRULE_SERVICE_HEALTH_ADDR', value: '0.0.0.0:${healthPort}' }
-            { name: 'WEFT_FERRULE_SERVICE_PEM', secretRef: 'ferrule-service-pem' }
-            { name: 'WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256', value: clientCertificatePins }
-            { name: 'WEFT_FERRULE_SERVICE_CONCURRENCY', value: string(concurrency) }
-            { name: 'WEFT_FERRULE_SERVICE_QUEUE', value: string(queue) }
-            { name: 'WEFT_FERRULE_SERVICE_COMPILE_ENABLED', value: compile ? 'true' : 'false' }
-            { name: 'WEFT_FERRULE_SERVICE_EXECUTION_ENABLED', value: execute ? 'true' : 'false' }
+            { name: 'BRAID_FERRULE_SERVICE_LISTEN_ADDR', value: '0.0.0.0:${port}' }
+            { name: 'BRAID_FERRULE_SERVICE_HEALTH_ADDR', value: '0.0.0.0:${healthPort}' }
+            { name: 'BRAID_FERRULE_SERVICE_PEM', secretRef: 'ferrule-service-pem' }
+            { name: 'BRAID_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256', value: clientCertificatePins }
+            { name: 'BRAID_FERRULE_SERVICE_CONCURRENCY', value: string(concurrency) }
+            { name: 'BRAID_FERRULE_SERVICE_QUEUE', value: string(queue) }
+            { name: 'BRAID_FERRULE_SERVICE_COMPILE_ENABLED', value: compile ? 'true' : 'false' }
+            { name: 'BRAID_FERRULE_SERVICE_EXECUTION_ENABLED', value: execute ? 'true' : 'false' }
           ]
           resources: {
             cpu: json(cpu)
@@ -147,5 +147,5 @@ resource service 'Microsoft.App/containerApps@2024-03-01' = {
   }
 }
 
-@description('The canonical HTTPS origin Weft hosts use for the service inside the environment.')
+@description('The canonical HTTPS origin Braid hosts use for the service inside the environment.')
 output url string = 'https://${name}.internal.${environment.properties.defaultDomain}:${port}'

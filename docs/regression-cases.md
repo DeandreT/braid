@@ -1,8 +1,7 @@
 # Immutable regression case versions
 
 `RegressionCaseVersion` and `RegressionCaseEnvelopeCodec` define the private
-stored content of one explicit case version. They do not save a database row,
-grant access, run a worker, or promote an observed output into an expectation.
+stored content of one explicit case version.
 
 ## Identity and exact replay
 
@@ -10,8 +9,8 @@ A version binds its case ID, positive version, owner, display name, complete
 mapping revision, native digest, and exact backend/engine/adapter/profile
 identity. It includes all requested target, input, parameter, evaluation-clock,
 execution-limit and expected-output facts. The initial profile is
-`weft.ferrule-json-preview.v1` and its explicit comparison policy is
-`weft.regression.exact-bytes.v1`; unknown policies/profiles are rejected, not
+`braid.ferrule-json-preview.v1` and its explicit comparison policy is
+`braid.regression.exact-bytes.v1`; unknown policies/profiles are rejected, not
 silently replaced.
 
 Input and expected bytes are preserved exactly. This layer does not parse,
@@ -27,13 +26,11 @@ fractional digits. Its original spelling is retained, not converted to the
 machine's local timezone or current time. It affects mapping evaluation only:
 authorization, leases, cancellation and retention use their independent live
 clocks. A fixed clock does not seed random or GUID-generating mapping functions;
-such outputs can still fail exact comparison. `CreatePreviewRequest` requires an exact native scope/digest and runtime
-match, but is only request construction, not execution permission or proof of
-runtime qualification.
+such outputs can still fail exact comparison. `CreatePreviewRequest` requires an exact native scope/digest and runtime match.
 
 ## Private storage format
 
-`weft.regression-case.v1` contains a four-byte big-endian header length, a strict
+`braid.regression-case.v1` contains a four-byte big-endian header length, a strict
 UTF-8 JSON header, then four-byte-length-prefixed raw frames: primary input,
 ordinally sorted named inputs, then primary-first/ordinal expected outputs.
 Parameters are also sorted ordinally. Equivalent caller list ordering produces
@@ -55,7 +52,7 @@ parameter text can reach the header ceiling before its per-value limit.
 
 ## Persistence and execution boundary
 
-A later store must assign/check versions atomically, bind each private object
+A store must assign/check versions atomically, bind each private object
 reference to the same owner/revision, authorize fresh access before reads and
 writes, and retain immutable successful versions. A matching digest is not an
 access token. Upload/admission layers must check request sizes before allocating
@@ -63,6 +60,4 @@ the preview document objects consumed by this module.
 
 Expected outputs are an explicit user-selected baseline, not the latest preview
 result. An empty baseline remains `NotEvaluated` under the comparison policy.
-Actual case metadata persistence, private-object lifecycle/retention, HTTP/UI,
-and durable regression-run publication are separate workflows and must retain
-these exact identities and failure boundaries.
+Case storage and durable runs retain these exact identities and failure boundaries.

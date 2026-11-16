@@ -39,9 +39,9 @@ test("document compiler environments use the explicitly offered profile", async 
   await panel(page)
     .getByRole("combobox", { name: "Compiler profile", exact: true })
     .selectOption({ label: "Declared document formats" });
-  if (process.env.WEFT_EDI_SCREENSHOT_ROOT)
+  if (process.env.BRAID_EDI_SCREENSHOT_ROOT)
     await panel(page).screenshot({
-      path: `${process.env.WEFT_EDI_SCREENSHOT_ROOT}/profile-single.png`,
+      path: `${process.env.BRAID_EDI_SCREENSHOT_ROOT}/profile-single.png`,
     });
   await panel(page)
     .getByRole("button", { name: "Register new environment", exact: true })
@@ -49,7 +49,7 @@ test("document compiler environments use the explicitly offered profile", async 
   await confirmAction(page);
   await expect.poll(() => state.writes.length).toBe(1);
   expect(JSON.parse(state.writes[0].body!)).toEqual({
-    profileId: "weft.ferrule-csharp-document.v1",
+    profileId: "braid.ferrule-csharp-document.v1",
     profileVersion: "1",
   });
 });
@@ -67,9 +67,9 @@ test("X12 compiler environments bind the explicitly offered interchange profile"
   await panel(page)
     .getByRole("combobox", { name: "Compiler profile", exact: true })
     .selectOption({ label: "X12 MapForce interchanges" });
-  if (process.env.WEFT_EDI_SCREENSHOT_ROOT)
+  if (process.env.BRAID_EDI_SCREENSHOT_ROOT)
     await panel(page).screenshot({
-      path: `${process.env.WEFT_EDI_SCREENSHOT_ROOT}/profile-interchanges.png`,
+      path: `${process.env.BRAID_EDI_SCREENSHOT_ROOT}/profile-interchanges.png`,
     });
   await panel(page)
     .getByRole("button", { name: "Register new environment", exact: true })
@@ -77,7 +77,7 @@ test("X12 compiler environments bind the explicitly offered interchange profile"
   await confirmAction(page);
   await expect.poll(() => state.writes.length).toBe(1);
   expect(JSON.parse(state.writes[0].body!)).toEqual({
-    profileId: "weft.ferrule-csharp-x12-interchanges.v1",
+    profileId: "braid.ferrule-csharp-x12-interchanges.v1",
     profileVersion: "1",
   });
 });
@@ -290,7 +290,7 @@ test("approval, explicit queue and a terminal cancellation race preserve actual 
   await approved(page, state);
   expect(state.writes).toHaveLength(1);
   expect(state.writes[0].media).toContain(
-    "application/vnd.weft.build-approval.v1+json",
+    "application/vnd.braid.build-approval.v1+json",
   );
   expect(state.writes[0].token).toBe("synthetic-ui-only-not-a-credential");
   await panel(page)
@@ -395,7 +395,7 @@ test("a same-owner catalog refresh keeps the panel and its uncertain original re
   await refresh.click();
   // Wait for the page's own re-read to finish, not only the access check.
   expect((await revision).status()).toBe(200);
-  await expect(page.locator("weft-workbench-frame")).not.toHaveAttribute(
+  await expect(page.locator("braid-workbench-frame")).not.toHaveAttribute(
     "aria-busy",
     "true",
   );
@@ -515,7 +515,7 @@ test("controls requested during a routine refresh load after it without disturbi
     }),
   ).toBeVisible();
   // The page's own re-read was not refused by the panel's later admission check.
-  await expect(page.locator("weft-workbench-frame")).not.toHaveAttribute(
+  await expect(page.locator("braid-workbench-frame")).not.toHaveAttribute(
     "aria-busy",
     "true",
   );

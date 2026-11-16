@@ -22,11 +22,11 @@ resets its durable attempt count.
 The runtime adapter has separate configured identities for the original compiler
 and the executing runtime image. It requires the exact admitted compiler and
 artifact profile; a different runtime image does not rewrite the original build
-provenance. Runtime-image qualification is separate from compiler capability.
+provenance.
 
 ## Byte contract
 
-`weft.ferrule-compiled-json.v1` uses positive, four-byte big-endian frame lengths.
+`braid.ferrule-compiled-json.v1` uses positive, four-byte big-endian frame lengths.
 The request contains a closed JSON header, canonical build intent, artifact bytes,
 primary document and then named documents. The header binds the build/intent and
 artifact digest, exact input hashes and lengths, fixed clock, typed lexical
@@ -44,7 +44,7 @@ passing comparison.
 
 ## Separate process
 
-`Weft.CompiledRuntime` runs at the fixed `/weft-compiled-runtime` entrypoint. The
+`Braid.CompiledRuntime` runs at the fixed `/braid-compiled-runtime` entrypoint. The
 compiled Docker profile is non-root, network-disabled and read-only, with no host
 mounts or writable tmpfs. It retains the existing runner's ownership checks,
 memory/CPU/process/wall limits and automatic cleanup failure handling.
@@ -82,5 +82,3 @@ Successful compilation is not output equivalence. Qualification must execute
 actual generated artifacts and compare complete output bytes against independently
 authored baselines and the interpreted path, including named inputs/outputs,
 parameters, fixed clocks, selected targets, failure isolation and corrected retry.
-Azure endpoint authorization, deployment audit and rollback remain separate target
-responsibilities.

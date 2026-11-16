@@ -56,6 +56,5 @@ choice is saved in this browser only.
   your workspace until it can. This doesn't mean you were signed out. Choose
   **Check session** to try again.
 
-Signing in only proves who you are. What you can see and change depends on your
-project roles, which braid checks again for every action. See
+Your project roles determine what you can see and change. See
 [Projects and roles](catalog.md#projects-and-roles).

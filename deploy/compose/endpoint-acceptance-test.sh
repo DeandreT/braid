@@ -2,7 +2,7 @@
 # Local acceptance of the packaged mapping endpoint (docs/hosted-acceptance.md). It runs the hosted
 # acceptance (acceptance-test.sh) with this script as its follow-on stage. The stage takes the build the
 # browser flows completed, qualifies it and activates a release with the release tool, grants one machine
-# caller with Weft.DatabaseTool, and starts the endpoint from compose.endpoint.yml. WEFT_ENDPOINT_ACCEPTANCE_RUNTIME
+# caller with Braid.DatabaseTool, and starts the endpoint from compose.endpoint.yml. BRAID_ENDPOINT_ACCEPTANCE_RUNTIME
 # selects its compiled runtime: service (the default, the hosted shape through the run's Ferrule service, with
 # no Docker socket) or docker (local only). It then calls the endpoint with app-only tokens from the run's
 # issuer: a call, a retry under the same request ID, a new activation and a rollback, expired and
@@ -14,27 +14,27 @@ set -euo pipefail
 repository=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 compose_directory=$repository/deploy/compose
 
-if [[ ${WEFT_ENDPOINT_ACCEPTANCE_RUN:-} != stage ]]; then
-  export WEFT_ENDPOINT_ACCEPTANCE_RUNTIME=${WEFT_ENDPOINT_ACCEPTANCE_RUNTIME:-service}
-  [[ $WEFT_ENDPOINT_ACCEPTANCE_RUNTIME =~ ^(service|docker)$ ]] ||
-    { echo 'FAILED: WEFT_ENDPOINT_ACCEPTANCE_RUNTIME must be service or docker' >&2; exit 1; }
+if [[ ${BRAID_ENDPOINT_ACCEPTANCE_RUN:-} != stage ]]; then
+  export BRAID_ENDPOINT_ACCEPTANCE_RUNTIME=${BRAID_ENDPOINT_ACCEPTANCE_RUNTIME:-service}
+  [[ $BRAID_ENDPOINT_ACCEPTANCE_RUNTIME =~ ^(service|docker)$ ]] ||
+    { echo 'FAILED: BRAID_ENDPOINT_ACCEPTANCE_RUNTIME must be service or docker' >&2; exit 1; }
   # The run's issuer registers two machine clients: the endpoint's caller, and one whose tokens expire at once.
   uuid() { cat /proc/sys/kernel/random/uuid; }
   digest() { printf '%s' "$1" | sha256sum | cut -d' ' -f1; }
-  WEFT_ENDPOINT_ACCEPTANCE_CALLER_CLIENT=$(uuid)
-  WEFT_ENDPOINT_ACCEPTANCE_CALLER_OBJECT=$(uuid)
-  WEFT_ENDPOINT_ACCEPTANCE_CALLER_SECRET=$(openssl rand -hex 32)
-  WEFT_ENDPOINT_ACCEPTANCE_EXPIRING_CLIENT=$(uuid)
-  WEFT_ENDPOINT_ACCEPTANCE_EXPIRING_SECRET=$(openssl rand -hex 32)
-  WEFT_ACCEPTANCE_MACHINE_CLIENTS=$(printf '[{"clientId":"%s","objectId":"%s","secretSha256":"%s","lifetimeSeconds":3600},{"clientId":"%s","objectId":"%s","secretSha256":"%s","lifetimeSeconds":2}]' \
-    "$WEFT_ENDPOINT_ACCEPTANCE_CALLER_CLIENT" "$WEFT_ENDPOINT_ACCEPTANCE_CALLER_OBJECT" "$(digest "$WEFT_ENDPOINT_ACCEPTANCE_CALLER_SECRET")" \
-    "$WEFT_ENDPOINT_ACCEPTANCE_EXPIRING_CLIENT" "$(uuid)" "$(digest "$WEFT_ENDPOINT_ACCEPTANCE_EXPIRING_SECRET")")
+  BRAID_ENDPOINT_ACCEPTANCE_CALLER_CLIENT=$(uuid)
+  BRAID_ENDPOINT_ACCEPTANCE_CALLER_OBJECT=$(uuid)
+  BRAID_ENDPOINT_ACCEPTANCE_CALLER_SECRET=$(openssl rand -hex 32)
+  BRAID_ENDPOINT_ACCEPTANCE_EXPIRING_CLIENT=$(uuid)
+  BRAID_ENDPOINT_ACCEPTANCE_EXPIRING_SECRET=$(openssl rand -hex 32)
+  BRAID_ACCEPTANCE_MACHINE_CLIENTS=$(printf '[{"clientId":"%s","objectId":"%s","secretSha256":"%s","lifetimeSeconds":3600},{"clientId":"%s","objectId":"%s","secretSha256":"%s","lifetimeSeconds":2}]' \
+    "$BRAID_ENDPOINT_ACCEPTANCE_CALLER_CLIENT" "$BRAID_ENDPOINT_ACCEPTANCE_CALLER_OBJECT" "$(digest "$BRAID_ENDPOINT_ACCEPTANCE_CALLER_SECRET")" \
+    "$BRAID_ENDPOINT_ACCEPTANCE_EXPIRING_CLIENT" "$(uuid)" "$(digest "$BRAID_ENDPOINT_ACCEPTANCE_EXPIRING_SECRET")")
   # The endpoint's own app registration: the audience its callers request.
-  WEFT_ENDPOINT_ENTRA_AUDIENCE=$(uuid)
-  export WEFT_ENDPOINT_ACCEPTANCE_CALLER_CLIENT WEFT_ENDPOINT_ACCEPTANCE_CALLER_OBJECT WEFT_ENDPOINT_ACCEPTANCE_CALLER_SECRET \
-    WEFT_ENDPOINT_ACCEPTANCE_EXPIRING_CLIENT WEFT_ENDPOINT_ACCEPTANCE_EXPIRING_SECRET WEFT_ACCEPTANCE_MACHINE_CLIENTS \
-    WEFT_ENDPOINT_ENTRA_AUDIENCE
-  export WEFT_ENDPOINT_ACCEPTANCE_RUN=stage WEFT_ACCEPTANCE_STAGE=$compose_directory/endpoint-acceptance-test.sh
+  BRAID_ENDPOINT_ENTRA_AUDIENCE=$(uuid)
+  export BRAID_ENDPOINT_ACCEPTANCE_CALLER_CLIENT BRAID_ENDPOINT_ACCEPTANCE_CALLER_OBJECT BRAID_ENDPOINT_ACCEPTANCE_CALLER_SECRET \
+    BRAID_ENDPOINT_ACCEPTANCE_EXPIRING_CLIENT BRAID_ENDPOINT_ACCEPTANCE_EXPIRING_SECRET BRAID_ACCEPTANCE_MACHINE_CLIENTS \
+    BRAID_ENDPOINT_ENTRA_AUDIENCE
+  export BRAID_ENDPOINT_ACCEPTANCE_RUN=stage BRAID_ACCEPTANCE_STAGE=$compose_directory/endpoint-acceptance-test.sh
   exec "$compose_directory/acceptance-test.sh"
 fi
 
@@ -42,18 +42,18 @@ fi
 source "$compose_directory/acceptance-lifecycle.sh"
 
 # The follow-on stage, inside the hosted acceptance run: its stack, environment and private directory.
-for setting in WEFT_ACCEPTANCE_WORK WEFT_ACCEPTANCE_COMPOSE_PROJECT WEFT_ACCEPTANCE_COMPOSE_FILES WEFT_ACCEPTANCE_PRINCIPAL_ID \
-  WEFT_SESSION_ORGANIZATION_ID WEFT_ENTRA_TENANT_ID WEFT_ENTRA_CLIENT_ID WEFT_FERRULE_SERVICE_IDENTITY WEFT_FERRULE_COMPILE_TOOLCHAIN \
-  WEFT_ACCEPTANCE_TRUST_PEM WEFT_ENDPOINT_ENTRA_AUDIENCE WEFT_ENDPOINT_ACCEPTANCE_CALLER_SECRET WEFT_ENDPOINT_ACCEPTANCE_RUNTIME \
-  WEFT_FERRULE_SERVICE_IMAGE WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256 WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256; do
+for setting in BRAID_ACCEPTANCE_WORK BRAID_ACCEPTANCE_COMPOSE_PROJECT BRAID_ACCEPTANCE_COMPOSE_FILES BRAID_ACCEPTANCE_PRINCIPAL_ID \
+  BRAID_SESSION_ORGANIZATION_ID BRAID_ENTRA_TENANT_ID BRAID_ENTRA_CLIENT_ID BRAID_FERRULE_SERVICE_IDENTITY BRAID_FERRULE_COMPILE_TOOLCHAIN \
+  BRAID_ACCEPTANCE_TRUST_PEM BRAID_ENDPOINT_ENTRA_AUDIENCE BRAID_ENDPOINT_ACCEPTANCE_CALLER_SECRET BRAID_ENDPOINT_ACCEPTANCE_RUNTIME \
+  BRAID_FERRULE_SERVICE_IMAGE BRAID_FERRULE_SERVICE_CERTIFICATE_SHA256 BRAID_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256; do
   [[ -n ${!setting:-} ]] || { echo "FAILED: the endpoint stage requires $setting from the hosted acceptance run" >&2; exit 1; }
 done
-project=$WEFT_ACCEPTANCE_COMPOSE_PROJECT
-principal=$WEFT_ACCEPTANCE_PRINCIPAL_ID
-runtime=$WEFT_ENDPOINT_ACCEPTANCE_RUNTIME
-work=$(mktemp -d "$WEFT_ACCEPTANCE_WORK/endpoint.XXXXXXXX")
+project=$BRAID_ACCEPTANCE_COMPOSE_PROJECT
+principal=$BRAID_ACCEPTANCE_PRINCIPAL_ID
+runtime=$BRAID_ENDPOINT_ACCEPTANCE_RUNTIME
+work=$(mktemp -d "$BRAID_ACCEPTANCE_WORK/endpoint.XXXXXXXX")
 files=()
-IFS=: read -r -a acceptance_files <<<"$WEFT_ACCEPTANCE_COMPOSE_FILES"
+IFS=: read -r -a acceptance_files <<<"$BRAID_ACCEPTANCE_COMPOSE_FILES"
 for file in "${acceptance_files[@]}" "$compose_directory/compose.endpoint.yml" "$compose_directory/compose.endpoint-$runtime.yml" \
   "$compose_directory/compose.endpoint-acceptance.yml"; do
   files+=(--file "$file")
@@ -74,10 +74,10 @@ cleanup() {
   set +e
   acceptance_result "$status"
   status=$?
-  if ((status != 0)) && [[ -n ${WEFT_ACCEPTANCE_LOG_DIRECTORY:-} ]]; then
+  if ((status != 0)) && [[ -n ${BRAID_ACCEPTANCE_LOG_DIRECTORY:-} ]]; then
     # The endpoint and the tools write fixed status lines only.
-    mkdir -p "$WEFT_ACCEPTANCE_LOG_DIRECTORY/$project" &&
-      compose logs --no-color --timestamps endpoint >"$WEFT_ACCEPTANCE_LOG_DIRECTORY/$project/endpoint.log" 2>&1
+    mkdir -p "$BRAID_ACCEPTANCE_LOG_DIRECTORY/$project" &&
+      compose logs --no-color --timestamps endpoint >"$BRAID_ACCEPTANCE_LOG_DIRECTORY/$project/endpoint.log" 2>&1
   fi
   if [[ -n $(compose ps --all --quiet endpoint 2>/dev/null) ]]; then
     compose rm --stop --force endpoint >/dev/null 2>&1 || cleanup_status=1
@@ -109,91 +109,91 @@ build() {
 
 if [[ $runtime == service ]]; then
   # The hosted shape: the endpoint image without a Docker CLI, executing through the run's Ferrule service.
-  if [[ -z ${WEFT_ENDPOINT_IMAGE:-} ]]; then
-    build "weft-mapping-endpoint:$project" --file "$repository/deploy/container/Dockerfile" --target weft-mapping-endpoint "$repository"
-    export WEFT_ENDPOINT_IMAGE=weft-mapping-endpoint:$project
+  if [[ -z ${BRAID_ENDPOINT_IMAGE:-} ]]; then
+    build "braid-mapping-endpoint:$project" --file "$repository/deploy/container/Dockerfile" --target braid-mapping-endpoint "$repository"
+    export BRAID_ENDPOINT_IMAGE=braid-mapping-endpoint:$project
   fi
   # The execution identity the target registers, measured from the trusted local service image.
   docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
     --label "com.docker.compose.project=$project" --tmpfs /tmp:size=256m,mode=1777 \
-    --memory 3g --pids-limit 256 "$WEFT_FERRULE_SERVICE_IMAGE" runtime-identity >"$work/runtime-identity.json" ||
+    --memory 3g --pids-limit 256 "$BRAID_FERRULE_SERVICE_IMAGE" runtime-identity >"$work/runtime-identity.json" ||
     fail 'service runtime identity'
-  WEFT_COMPILED_RUNTIME_IMAGE=$(node -e '
+  BRAID_COMPILED_RUNTIME_IMAGE=$(node -e '
     const value = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
     const pin = /^sha256:[0-9a-f]{64}$/;
-    if (value.schema !== "weft.compiled-runtime-image-identity.v1" || value.native !== process.argv[2] || !pin.test(value.runtime))
+    if (value.schema !== "braid.compiled-runtime-image-identity.v1" || value.native !== process.argv[2] || !pin.test(value.runtime))
       process.exit(1);
     process.stdout.write(value.runtime);
-  ' "$work/runtime-identity.json" "$WEFT_FERRULE_SERVICE_IDENTITY") || fail 'service runtime identity'
+  ' "$work/runtime-identity.json" "$BRAID_FERRULE_SERVICE_IDENTITY") || fail 'service runtime identity'
   # The endpoint's own client certificate, which the service admits beside its other clients.
-  openssl req -x509 -newkey rsa:2048 -nodes -sha256 -days 2 -subj '/CN=weft-endpoint-ferrule-client' \
+  openssl req -x509 -newkey rsa:2048 -nodes -sha256 -days 2 -subj '/CN=braid-endpoint-ferrule-client' \
     -keyout "$work/endpoint-client.key" -out "$work/endpoint-client.crt" 2>/dev/null
-  WEFT_ENDPOINT_FERRULE_SERVICE_CLIENT_PEM=$(cat "$work/endpoint-client.key" "$work/endpoint-client.crt")
+  BRAID_ENDPOINT_FERRULE_SERVICE_CLIENT_PEM=$(cat "$work/endpoint-client.key" "$work/endpoint-client.crt")
   endpoint_pin=$(openssl x509 -in "$work/endpoint-client.crt" -outform DER | openssl dgst -sha256 -r | cut -d' ' -f1)
-  WEFT_ENDPOINT_SERVICE_CLIENT_PINS=$WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256${WEFT_RUNS_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256:+,$WEFT_RUNS_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256},$endpoint_pin
-  export WEFT_COMPILED_RUNTIME_IMAGE WEFT_ENDPOINT_FERRULE_SERVICE_CLIENT_PEM WEFT_ENDPOINT_SERVICE_CLIENT_PINS
+  BRAID_ENDPOINT_SERVICE_CLIENT_PINS=$BRAID_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256${BRAID_RUNS_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256:+,$BRAID_RUNS_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256},$endpoint_pin
+  export BRAID_COMPILED_RUNTIME_IMAGE BRAID_ENDPOINT_FERRULE_SERVICE_CLIENT_PEM BRAID_ENDPOINT_SERVICE_CLIENT_PINS
 else
   # The local profile: the endpoint image with the Docker CLI, and the compiled runtime image its target names.
-  if [[ -z ${WEFT_ENDPOINT_IMAGE:-} ]]; then
-    build "weft-mapping-endpoint-local-docker:$project" --file "$repository/deploy/container/Dockerfile" \
-      --target weft-mapping-endpoint-local-docker "$repository"
-    export WEFT_ENDPOINT_IMAGE=weft-mapping-endpoint-local-docker:$project
+  if [[ -z ${BRAID_ENDPOINT_IMAGE:-} ]]; then
+    build "braid-mapping-endpoint-local-docker:$project" --file "$repository/deploy/container/Dockerfile" \
+      --target braid-mapping-endpoint-local-docker "$repository"
+    export BRAID_ENDPOINT_IMAGE=braid-mapping-endpoint-local-docker:$project
   fi
-  if [[ -z ${WEFT_COMPILED_RUNTIME_IMAGE:-} ]]; then
-    native=${WEFT_FERRULE_NATIVE_IMAGE:-weft-ferrule-native:$project}
+  if [[ -z ${BRAID_COMPILED_RUNTIME_IMAGE:-} ]]; then
+    native=${BRAID_FERRULE_NATIVE_IMAGE:-braid-ferrule-native:$project}
     docker image inspect "$native" >/dev/null 2>&1 ||
-      fail 'set WEFT_FERRULE_NATIVE_IMAGE or WEFT_COMPILED_RUNTIME_IMAGE when the service image is supplied'
+      fail 'set BRAID_FERRULE_NATIVE_IMAGE or BRAID_COMPILED_RUNTIME_IMAGE when the service image is supplied'
     container=$(docker create "$native")
     docker cp "$container:/ferrule-host" "$work/ferrule-host" >/dev/null
     docker rm "$container" >/dev/null
     native_digest=$(sha256sum "$work/ferrule-host" | cut -d' ' -f1)
     rm -f "$work/ferrule-host"
-    build "weft-compiled-runtime-base:$project" --file "$repository/engines/build-worker/Dockerfile" \
-      --build-arg "WEFT_NATIVE_IMAGE=$native" --build-arg "WEFT_NATIVE_BINARY_SHA256=$native_digest" "$repository"
-    base=weft-compiled-runtime-base:$project
+    build "braid-compiled-runtime-base:$project" --file "$repository/engines/build-worker/Dockerfile" \
+      --build-arg "BRAID_NATIVE_IMAGE=$native" --build-arg "BRAID_NATIVE_BINARY_SHA256=$native_digest" "$repository"
+    base=braid-compiled-runtime-base:$project
   else
-    base=$WEFT_COMPILED_RUNTIME_IMAGE
+    base=$BRAID_COMPILED_RUNTIME_IMAGE
   fi
   # A reproducible build can share its image ID with other users of the same sources. The stage registers a
   # run-unique child image instead, which differs only by a label. Its runtime containers inherit that label,
   # and only containers carrying it are ever checked or removed.
-  build "weft-compiled-runtime:$project" - <<<"$(printf 'FROM %s\nLABEL io.weft.acceptance.run=%s\n' "$base" "$project")"
-  WEFT_COMPILED_RUNTIME_IMAGE=$(docker image inspect --format '{{.Id}}' "weft-compiled-runtime:$project")
-  [[ $WEFT_COMPILED_RUNTIME_IMAGE =~ ^sha256:[0-9a-f]{64}$ ]] || fail 'the compiled runtime image ID'
-  runtime_image=$WEFT_COMPILED_RUNTIME_IMAGE
-  export WEFT_COMPILED_RUNTIME_IMAGE
+  build "braid-compiled-runtime:$project" - <<<"$(printf 'FROM %s\nLABEL io.braid.acceptance.run=%s\n' "$base" "$project")"
+  BRAID_COMPILED_RUNTIME_IMAGE=$(docker image inspect --format '{{.Id}}' "braid-compiled-runtime:$project")
+  [[ $BRAID_COMPILED_RUNTIME_IMAGE =~ ^sha256:[0-9a-f]{64}$ ]] || fail 'the compiled runtime image ID'
+  runtime_image=$BRAID_COMPILED_RUNTIME_IMAGE
+  export BRAID_COMPILED_RUNTIME_IMAGE
   [[ -z $(runtime_containers "$project") ]] || fail 'compiled-runtime containers exist before the stage'
 fi
 
 # The build the browser flows completed, read from the database only to name it.
 sql() {
-  compose exec -T postgres psql -U postgres -d weft -At -c "$1"
+  compose exec -T postgres psql -U postgres -d braid -At -c "$1"
 }
 mapfile -t builds < <(sql "SELECT a.project_id||' '||a.mapping_id||' '||a.build_id||' '||a.environment_id||' '||a.environment_version||' '||r.artifact_digest
-  FROM weft.build_runs r JOIN weft.build_approvals a USING (organization_id,build_id)
-  WHERE r.state='succeeded' AND r.organization_id='$WEFT_SESSION_ORGANIZATION_ID' AND r.actor_id='$principal'")
+  FROM braid.build_runs r JOIN braid.build_approvals a USING (organization_id,build_id)
+  WHERE r.state='succeeded' AND r.organization_id='$BRAID_SESSION_ORGANIZATION_ID' AND r.actor_id='$principal'")
 ((${#builds[@]} == 1)) || fail "expected one completed build, found ${#builds[@]}"
 read -r project_id mapping_id build_id environment_id environment_version artifact_digest <<<"${builds[0]}"
 # The builds compiled through the Ferrule service name its combined compiler identity, which the run
 # also measured from the service image before the stack started.
-WEFT_ENDPOINT_COMPILER_IDENTITY=sha256:$(printf 'weft.compiler-identity.v1\nnative=%s\ntoolchain=%s\n' \
-  "$WEFT_FERRULE_SERVICE_IDENTITY" "$WEFT_FERRULE_COMPILE_TOOLCHAIN" | sha256sum | cut -d' ' -f1)
+BRAID_ENDPOINT_COMPILER_IDENTITY=sha256:$(printf 'braid.compiler-identity.v1\nnative=%s\ntoolchain=%s\n' \
+  "$BRAID_FERRULE_SERVICE_IDENTITY" "$BRAID_FERRULE_COMPILE_TOOLCHAIN" | sha256sum | cut -d' ' -f1)
 [[ $(node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).build))' \
-  "$WEFT_ACCEPTANCE_WORK/compiler-identity.json") == "$WEFT_ENDPOINT_COMPILER_IDENTITY" ]] ||
+  "$BRAID_ACCEPTANCE_WORK/compiler-identity.json") == "$BRAID_ENDPOINT_COMPILER_IDENTITY" ]] ||
   fail 'the measured compiler identity differs from the combined service identity'
-[[ $(sql "SELECT count(*) FROM weft.build_approvals WHERE organization_id='$WEFT_SESSION_ORGANIZATION_ID' AND build_id='$build_id'
-  AND position('$WEFT_ENDPOINT_COMPILER_IDENTITY' in convert_from(intent_body,'UTF8'))>0") == 1 ]] ||
+[[ $(sql "SELECT count(*) FROM braid.build_approvals WHERE organization_id='$BRAID_SESSION_ORGANIZATION_ID' AND build_id='$build_id'
+  AND position('$BRAID_ENDPOINT_COMPILER_IDENTITY' in convert_from(intent_body,'UTF8'))>0") == 1 ]] ||
   fail 'the completed build does not name the service compiler identity'
 echo "ok - completed build $build_id with artifact $artifact_digest"
 
 uuid() { cat /proc/sys/kernel/random/uuid; }
 target_id=$(uuid)
-export WEFT_ENDPOINT_COMPILER_IDENTITY WEFT_ENDPOINT_ORGANIZATION_ID=$WEFT_SESSION_ORGANIZATION_ID WEFT_ENDPOINT_PROJECT_ID=$project_id \
-  WEFT_ENDPOINT_MAPPING_ID=$mapping_id WEFT_ENDPOINT_ENVIRONMENT_ID=$environment_id \
-  WEFT_ENDPOINT_ENVIRONMENT_VERSION=$environment_version WEFT_ENDPOINT_TARGET_ID=$target_id \
-  WEFT_ENDPOINT_ENTRA_TENANT_ID=$WEFT_ENTRA_TENANT_ID WEFT_ENDPOINT_PORT=0 WEFT_ENDPOINT_CONCURRENCY=2
-WEFT_DOCKER_GID=$(stat -c %g /var/run/docker.sock)
-export WEFT_DOCKER_GID
+export BRAID_ENDPOINT_COMPILER_IDENTITY BRAID_ENDPOINT_ORGANIZATION_ID=$BRAID_SESSION_ORGANIZATION_ID BRAID_ENDPOINT_PROJECT_ID=$project_id \
+  BRAID_ENDPOINT_MAPPING_ID=$mapping_id BRAID_ENDPOINT_ENVIRONMENT_ID=$environment_id \
+  BRAID_ENDPOINT_ENVIRONMENT_VERSION=$environment_version BRAID_ENDPOINT_TARGET_ID=$target_id \
+  BRAID_ENDPOINT_ENTRA_TENANT_ID=$BRAID_ENTRA_TENANT_ID BRAID_ENDPOINT_PORT=0 BRAID_ENDPOINT_CONCURRENCY=2
+BRAID_DOCKER_GID=$(stat -c %g /var/run/docker.sock)
+export BRAID_DOCKER_GID
 compose config --quiet || fail 'endpoint stack configuration'
 if [[ $runtime == service ]]; then
   # Every service replica restarts with the execute profile enabled and the endpoint's pin admitted.
@@ -216,7 +216,7 @@ field() {
 expect() {
   [[ $(field "$1" outcome) == "$2" ]] || fail "$1 outcome $(field "$1" outcome)"
 }
-scope=("$principal" "$WEFT_SESSION_ORGANIZATION_ID" "$project_id" "$mapping_id")
+scope=("$principal" "$BRAID_SESSION_ORGANIZATION_ID" "$project_id" "$mapping_id")
 target=("${scope[@]}" "$environment_id" "$environment_version" "$target_id")
 
 # Qualification replays the build's saved regression evidence through the compiled runtime. Only an
@@ -236,7 +236,7 @@ for attempt in 1 2 3; do
   fail 'qualify-build'
 done
 expect qualify qualified
-[[ $(field qualify artifactSha256) == "$artifact_digest" && $(field qualify runtimeImage) == "$WEFT_COMPILED_RUNTIME_IMAGE" ]] ||
+[[ $(field qualify artifactSha256) == "$artifact_digest" && $(field qualify runtimeImage) == "$BRAID_COMPILED_RUNTIME_IMAGE" ]] ||
   fail 'qualification provenance'
 operator endpoint-release register register-release-target "${target[@]}"
 expect register registered
@@ -244,8 +244,8 @@ first_release=$(uuid)
 operator endpoint-release activate-first activate-release "${target[@]}" "$first_release" "$qualification" none
 expect activate-first activated
 grant=$(uuid)
-operator endpoint-grants grant grant-machine-invocation "${target[@]}" "$grant" "$WEFT_ENTRA_TENANT_ID" \
-  "$WEFT_ENDPOINT_ACCEPTANCE_CALLER_OBJECT"
+operator endpoint-grants grant grant-machine-invocation "${target[@]}" "$grant" "$BRAID_ENTRA_TENANT_ID" \
+  "$BRAID_ENDPOINT_ACCEPTANCE_CALLER_OBJECT"
 expect grant granted
 echo 'ok - the build qualified in the compiled runtime; target registered, release activated, one caller granted'
 
@@ -257,7 +257,7 @@ endpoint=$(compose ps --quiet endpoint)
   '1654:1654 true [ALL] [no-new-privileges:true]' ]] || fail 'endpoint container hardening'
 [[ $(docker inspect --format '{{.State.Health.Status}}' "$endpoint") == healthy ]] || fail 'endpoint health'
 compose logs --no-color endpoint >"$work/endpoint.log" 2>&1
-grep -q 'WeftMappingEndpointReady' "$work/endpoint.log" || fail 'endpoint readiness line'
+grep -q 'BraidMappingEndpointReady' "$work/endpoint.log" || fail 'endpoint readiness line'
 if [[ $runtime == service ]]; then
   # The hosted shape: no container of the stack, the endpoint included, receives the Docker socket.
   for container in $(compose ps --all --quiet); do
@@ -271,7 +271,7 @@ port=$(compose port endpoint 8080 | cut -d: -f2)
 echo 'ok - the endpoint is healthy, non-root, read-only and holds no capability'
 
 # App-only tokens from the run's issuer through its client-credentials grant, kept as private header files.
-printf '%s\n' "$WEFT_ACCEPTANCE_TRUST_PEM" >"$work/trust.pem"
+printf '%s\n' "$BRAID_ACCEPTANCE_TRUST_PEM" >"$work/trust.pem"
 issuer_port=$(compose port issuer 443 | cut -d: -f2)
 token() {
   local name=$1 client=$2 secret=$3 resource=$4
@@ -280,7 +280,7 @@ token() {
     --connect-to "login.microsoftonline.com:443:127.0.0.1:$issuer_port" \
     --data-urlencode grant_type=client_credentials --data-urlencode "client_id=$client" \
     --data-urlencode "client_secret@$work/$name.secret" --data-urlencode "scope=api://$resource/.default" \
-    --output "$work/$name.token" "https://login.microsoftonline.com/$WEFT_ENTRA_TENANT_ID/oauth2/v2.0/token" ||
+    --output "$work/$name.token" "https://login.microsoftonline.com/$BRAID_ENTRA_TENANT_ID/oauth2/v2.0/token" ||
     fail "token for $name"
   node -e '
     const fs = require("fs");
@@ -290,9 +290,9 @@ token() {
   ' "$work/$name.token" "$work/$name.header" || fail "token response for $name"
   rm -f "$work/$name.secret" "$work/$name.token"
 }
-token caller "$WEFT_ENDPOINT_ACCEPTANCE_CALLER_CLIENT" "$WEFT_ENDPOINT_ACCEPTANCE_CALLER_SECRET" "$WEFT_ENDPOINT_ENTRA_AUDIENCE"
+token caller "$BRAID_ENDPOINT_ACCEPTANCE_CALLER_CLIENT" "$BRAID_ENDPOINT_ACCEPTANCE_CALLER_SECRET" "$BRAID_ENDPOINT_ENTRA_AUDIENCE"
 # The same caller's token for another resource: the Session application's registration.
-token foreign "$WEFT_ENDPOINT_ACCEPTANCE_CALLER_CLIENT" "$WEFT_ENDPOINT_ACCEPTANCE_CALLER_SECRET" "$WEFT_ENTRA_CLIENT_ID"
+token foreign "$BRAID_ENDPOINT_ACCEPTANCE_CALLER_CLIENT" "$BRAID_ENDPOINT_ACCEPTANCE_CALLER_SECRET" "$BRAID_ENTRA_CLIENT_ID"
 
 # The browser run's regression inputs: the primary order, the named rates document and both parameters.
 node -e '
@@ -314,7 +314,7 @@ call() {
   local name=$1 request=$2 credential=$3 attempt
   for attempt in 1 2 3 4 5 6 7 8; do
     status=$(curl --silent --show-error --max-time 120 --output "$work/$name.body" --dump-header "$work/$name.headers" \
-      --write-out '%{http_code}' --header @"$work/$credential.header" --header "Weft-Request-Id: $request" \
+      --write-out '%{http_code}' --header @"$work/$credential.header" --header "Braid-Request-Id: $request" \
       --header 'Content-Type: application/json' --data-binary @"$work/request.json" \
       "http://127.0.0.1:$port/v1/invocations") || fail "call $name"
     # Busy, unavailable or past its deadline: nothing final was recorded, so the same request is retried.
@@ -333,8 +333,8 @@ completed() {
     const [body, headers, release, build, artifact, replayed] = process.argv.slice(1);
     const fail = (message) => { console.error(message); process.exit(1); };
     const response = JSON.parse(fs.readFileSync(body, "utf8"));
-    if (!fs.readFileSync(headers, "utf8").toLowerCase().includes(`weft-invocation-replayed: ${replayed}`)) fail("replay header");
-    if (response.schema !== "weft.mapping-invocation-response.v1" || response.releaseId !== release ||
+    if (!fs.readFileSync(headers, "utf8").toLowerCase().includes(`braid-invocation-replayed: ${replayed}`)) fail("replay header");
+    if (response.schema !== "braid.mapping-invocation-response.v1" || response.releaseId !== release ||
         response.buildId !== build || response.artifactDigest !== artifact) fail("provenance");
     if (response.outputs.length !== 2) fail("output count");
     const output = (name) => {
@@ -358,7 +358,7 @@ refused() {
     fail "$name outcome"
 }
 audit() {
-  sql "SELECT count(*) FROM weft.machine_invocation_audit WHERE request_id='$1'"
+  sql "SELECT count(*) FROM braid.machine_invocation_audit WHERE request_id='$1'"
 }
 
 first_request=$(uuid)
@@ -386,7 +386,7 @@ echo 'ok - a new activation, then a rollback to the first release, each served t
 call wrong-audience "$(uuid)" foreign
 refused wrong-audience 401 unauthorized
 grep -qi '^www-authenticate: bearer' "$work/wrong-audience.headers" || fail 'bearer challenge'
-token expiring "$WEFT_ENDPOINT_ACCEPTANCE_EXPIRING_CLIENT" "$WEFT_ENDPOINT_ACCEPTANCE_EXPIRING_SECRET" "$WEFT_ENDPOINT_ENTRA_AUDIENCE"
+token expiring "$BRAID_ENDPOINT_ACCEPTANCE_EXPIRING_CLIENT" "$BRAID_ENDPOINT_ACCEPTANCE_EXPIRING_SECRET" "$BRAID_ENDPOINT_ENTRA_AUDIENCE"
 sleep 4
 call expired "$(uuid)" expiring
 refused expired 401 unauthorized

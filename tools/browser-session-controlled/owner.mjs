@@ -117,14 +117,14 @@ export class BrowserSessionStaticOwner {
     }
     const cfg = JSON.parse(raw.toString("utf8"));
     demand(
-      cfg.schemaVersion === "weft.browser-session-controlled-owner.v1" &&
+      cfg.schemaVersion === "braid.browser-session-controlled-owner.v1" &&
         cfg.runtimeReleased === true &&
         cfg.sourceAndPublicationsAccepted === true,
     );
     let publicationBytes = 0;
     for (const [prefix, publication] of [
       ["", cfg.application],
-      ["/__weft119_probe", cfg.probe],
+      ["/__braid119_probe", cfg.probe],
     ]) {
       demand(
         publication &&
@@ -208,13 +208,13 @@ export class BrowserSessionStaticOwner {
         return;
       }
       const probe =
-        url.pathname === "/__weft119_probe" ||
-        url.pathname.startsWith("/__weft119_probe/");
+        url.pathname === "/__braid119_probe" ||
+        url.pathname.startsWith("/__braid119_probe/");
       const file =
         this.#files.get(url.pathname) ??
         (!url.pathname.split("/").at(-1).includes(".")
           ? this.#files.get(
-              probe ? "/__weft119_probe/index.html" : "/index.html",
+              probe ? "/__braid119_probe/index.html" : "/index.html",
             )
           : null);
       if (!file) {

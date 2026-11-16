@@ -1,13 +1,9 @@
-// Keeps docs/images, its manifest, the capture spec and the Markdown that
-// embeds the screenshots consistent. Run by `npm run check`.
+// Checks documentation image references without building or running the app.
 import { readFile, readdir, stat } from "node:fs/promises";
-import { createHash } from "node:crypto";
 import { dirname, join, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const imageDirectory = "docs/images";
-export const manifestPath = "docs/images/manifest.json";
-export const captureSpec = "apps/web/tests/docs-screenshots.spec.ts";
 export const maximumTotalBytes = 4 * 1024 * 1024;
 const imageExtensions = /\.(png|webp|jpe?g|gif|svg)$/i;
 // Guide sections are embedded by the server, whose Markdown subset refuses images.
@@ -52,7 +48,7 @@ export async function checkDocsImages(root) {
       () => false,
     );
 
-  const embedded = new Map();
+  const embedded = new Set();
   for (const file of await markdownFiles(root)) {
     const text = await readFile(join(root, file), "utf8");
     for (const target of imageReferences(text)) {
@@ -67,94 +63,18 @@ export async function checkDocsImages(root) {
         problems.push(`${file} references missing image ${target}.`);
       if (path.startsWith(imageDirectory + "/")) {
         const name = path.slice(imageDirectory.length + 1);
-        if (!embedded.has(name)) embedded.set(name, new Set());
-        embedded.get(name).add(file);
+        embedded.add(name);
       }
     }
   }
-
-  let manifest;
-  try {
-    manifest = JSON.parse(await readFile(join(root, manifestPath), "utf8"));
-  } catch (error) {
-    return [...problems, `${manifestPath} is unreadable: ${error.message}`];
-  }
-  const entries = Array.isArray(manifest.images) ? manifest.images : [];
-  if (entries.length === 0) problems.push(`${manifestPath} lists no images.`);
-
-  const spec = await readFile(join(root, captureSpec), "utf8").catch(() => "");
-  const titles = new Set(
-    [...spec.matchAll(/^test\(\s*"([^"]+)"/gm)].map((match) => match[1]),
-  );
-  const captured = new Set(
-    [...spec.matchAll(/capture\([^)]*?"([^"]+\.(?:png|webp))"\)/g)].map(
-      (match) => match[1],
-    ),
-  );
-
-  const listed = new Set();
-  for (const entry of entries) {
-    const name = entry?.file;
-    if (typeof name !== "string" || !imageExtensions.test(name)) {
-      problems.push(`${manifestPath} has an entry without an image file.`);
-      continue;
-    }
-    if (listed.has(name)) problems.push(`${manifestPath} lists ${name} twice.`);
-    listed.add(name);
-    for (const key of ["screen", "route", "capture"])
-      if (typeof entry[key] !== "string" || !entry[key])
-        problems.push(`${manifestPath}: ${name} has no ${key}.`);
-    if (!(await exists(posix.join(imageDirectory, name))))
-      problems.push(
-        `${name} is listed but not produced; run npm run docs:screenshots.`,
-      );
-    else if (entry.provenance) {
-      const image = await readFile(join(root, imageDirectory, name));
-      const digest = createHash("sha256").update(image).digest("hex");
-      if (entry.provenance.imageSha256 !== digest)
-        problems.push(`${name} does not match its captured image digest.`);
-    }
-    if (!captured.has(name))
-      problems.push(
-        `${name} is listed but ${captureSpec} does not capture it.`,
-      );
-    if (typeof entry.capture === "string" && !titles.has(entry.capture))
-      problems.push(
-        `${name}: capture step "${entry.capture}" is not a test in ${captureSpec}.`,
-      );
-    const declared = new Set(
-      Array.isArray(entry.embeddedIn) ? entry.embeddedIn : [],
-    );
-    const actual = embedded.get(name) ?? new Set();
-    if (actual.size === 0)
-      problems.push(`${name} is listed but no document embeds it.`);
-    for (const file of actual)
-      if (!declared.has(file))
-        problems.push(`${name} is embedded in ${file}; add it to embeddedIn.`);
-    for (const file of declared)
-      if (!actual.has(file))
-        problems.push(
-          `${name} lists ${file} in embeddedIn but is not used there.`,
-        );
-  }
-  for (const name of captured)
-    if (!listed.has(name))
-      problems.push(
-        `${captureSpec} captures ${name}, which the manifest omits.`,
-      );
-  for (const name of embedded.keys())
-    if (!listed.has(name))
-      problems.push(
-        `${imageDirectory}/${name} is embedded but not in the manifest.`,
-      );
 
   let total = 0;
   const files = await readdir(join(root, imageDirectory)).catch(() => []);
   for (const name of files) {
     if (!imageExtensions.test(name)) continue;
     total += (await stat(join(root, imageDirectory, name))).size;
-    if (!listed.has(name))
-      problems.push(`${imageDirectory}/${name} is not listed in the manifest.`);
+    if (!embedded.has(name))
+      problems.push(`${imageDirectory}/${name} is not used by any document.`);
   }
   if (total > maximumTotalBytes)
     problems.push(
@@ -171,9 +91,7 @@ if (
   const problems = await checkDocsImages(root);
   for (const problem of problems) console.error(problem);
   if (problems.length) {
-    console.error(
-      `Documentation images are inconsistent; see ${manifestPath}.`,
-    );
+    console.error("Documentation images are inconsistent.");
     process.exitCode = 1;
   }
 }

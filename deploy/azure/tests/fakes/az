@@ -27,7 +27,7 @@ if [[ -n ${FAKE_AZ_FAIL:-} && " $* " == *"$FAKE_AZ_FAIL"* ]]; then
   exit 1
 fi
 # Values the harness must never print or pass as arguments: the scan in the tests reads this list.
-[[ -z ${WEFT_POSTGRES_ADMIN_PASSWORD:-} ]] || printf '%s\n' "$WEFT_POSTGRES_ADMIN_PASSWORD" >>"$state/secrets"
+[[ -z ${BRAID_POSTGRES_ADMIN_PASSWORD:-} ]] || printf '%s\n' "$BRAID_POSTGRES_ADMIN_PASSWORD" >>"$state/secrets"
 
 option() { # name: the value after the first occurrence
   local i
@@ -76,7 +76,7 @@ iso() { # epoch
   date -u -d "@$1" +%Y-%m-%dT%H:%M:%SZ
 }
 
-public_host=weft-app.fake-env.eastus2.azurecontainerapps.io
+public_host=braid-app.fake-env.eastus2.azurecontainerapps.io
 
 # ---- Job executions ----
 
@@ -142,7 +142,7 @@ release_tool() { # command arguments...
 caller() { # mode call origin [request credential]
   local mode=$1 name=$2 request=${4:-} credential=${5:-} token status body replayed=false challenge=false now
   if [[ $mode == ready ]]; then
-    emit "weft-qualify-call {\"call\":\"$name\",\"status\":204}"
+    emit "braid-qualify-call {\"call\":\"$name\",\"status\":204}"
     finish Succeeded
     return
   fi
@@ -164,14 +164,14 @@ caller() { # mode call origin [request credential]
       --arg clock "$(date -u -d "@$now" +%Y-%m-%dT%H:%M:%S.0000000Z)" --arg shipment "$shipment" --arg summary "$summary" \
       --arg shipmentSha "$(base64 -d <<<"$shipment" | sha256sum | cut -d' ' -f1)" \
       --arg summarySha "$(base64 -d <<<"$summary" | sha256sum | cut -d' ' -f1)" \
-      '{schema: "weft.mapping-invocation-response.v1", requestId: $request, releaseId: $release, buildId: $build,
+      '{schema: "braid.mapping-invocation-response.v1", requestId: $request, releaseId: $release, buildId: $build,
         revisionId: "3a7c4f00-0000-4000-8000-000000000001", artifactDigest: $artifact, currentDateTime: $clock,
         outputs: [{name: null, sha256: $shipmentSha, content: $shipment}, {name: "summary", sha256: $summarySha, content: $summary}]}')
     printf '%s' "$body" >"$state/responses/$request"
     printf '1 claimed -\n2 completed %s\n' "$release" >"$state/audit/$request"
     status=200
   fi
-  emit "weft-qualify-call $(jq -cn --arg call "$name" --arg request "$request" --argjson status "$status" \
+  emit "braid-qualify-call $(jq -cn --arg call "$name" --arg request "$request" --argjson status "$status" \
     --arg replayed "$replayed" --argjson challenge "$challenge" --arg digest "$(printf '%s' "$body" | sha256sum | cut -d' ' -f1)" \
     --argjson body "$body" '{call: $call, requestId: $request, status: $status, attempts: 1, replayed: $replayed,
       bearerChallenge: $challenge, bodySha256: $digest, body: $body}')"
@@ -185,10 +185,10 @@ job_start() {
   execution_start "$job"
   case $job in
     *-database-roles)
-      emit 'The weft database, restricted logins and migrator ownership are provisioned.'
+      emit 'The braid database, restricted logins and migrator ownership are provisioned.'
       finish Succeeded
       ;;
-    *-migrate) emit 'The Weft database migrations are current.' && finish Succeeded ;;
+    *-migrate) emit 'The Braid database migrations are current.' && finish Succeeded ;;
     *-session-keys) emit 'Bootstrapped' && finish Succeeded ;;
     *-private-storage) emit 'InitializedBlob' && finish Succeeded ;;
     *-owner)
@@ -231,18 +231,18 @@ database_query() {
   sql=$(jq -r '.containers[0].command[4]' "${body#@}")
   [[ $(jq -r '.containers[0].command[0:2] | join(" ")' "${body#@}") == 'bash -c' ]] || exit 2
   execution_start "$job"
-  if [[ $sql == *'FROM weft.build_runs r JOIN'* ]]; then
-    emit "weft-qualify-row $FAKE_PROJECT $FAKE_MAPPING $FAKE_BUILD $FAKE_ENVIRONMENT 1 $FAKE_ARTIFACT t"
+  if [[ $sql == *'FROM braid.build_runs r JOIN'* ]]; then
+    emit "braid-qualify-row $FAKE_PROJECT $FAKE_MAPPING $FAKE_BUILD $FAKE_ENVIRONMENT 1 $FAKE_ARTIFACT t"
   elif [[ $sql == *machine_invocation_audit* ]]; then
     local request
     request=$(sed -nE "s/.*request_id = '([^']+)'.*/\1/p" <<<"$sql" | tail -n 1)
-    while read -r line; do emit "weft-qualify-row $line"; done <"$state/audit/$request"
+    while read -r line; do emit "braid-qualify-row $line"; done <"$state/audit/$request"
   elif [[ $sql == *chat_conversations* ]]; then
-    emit 'weft-qualify-row 1 1 1 1 1 1 1'
+    emit 'braid-qualify-row 1 1 1 1 1 1 1'
   else
-    emit 'weft-qualify-row 1 1 1 1 1 1 1'
+    emit 'braid-qualify-row 1 1 1 1 1 1 1'
   fi
-  emit weft-qualify-end
+  emit braid-qualify-end
   finish Succeeded
 }
 
@@ -254,9 +254,9 @@ log_query() {
   if [[ -n $execution ]]; then
     jq -R -s 'split("\n")[:-1] | map({Log_s: .})' "$state/executions/$execution.lines"
   elif [[ $app == *-app ]]; then
-    echo '[{"Log_s": "WeftSessionHostReady"}]'
+    echo '[{"Log_s": "BraidSessionHostReady"}]'
   elif [[ $app == *-qualify ]]; then
-    echo '[{"Log_s": "WeftMappingEndpointReady"}]'
+    echo '[{"Log_s": "BraidMappingEndpointReady"}]'
   else
     echo '[]'
   fi
@@ -266,12 +266,12 @@ deployment_create() {
   local name file
   name=$(option --name)
   touch "$state/deployment-$name"
-  if [[ $name == weft-qualify-caller ]]; then
+  if [[ $name == braid-qualify-caller ]]; then
     file=$(values --parameters | sed -n 's/^@//p' | head -n 1)
     for credential in caller foreign expiring; do
       jq -j --arg name "${credential}Token" '.parameters[$name].value' "$file" >"$state/token-$credential"
     done
-  elif [[ $name == weft-qualify-endpoints ]]; then
+  elif [[ $name == braid-qualify-endpoints ]]; then
     jq -n --arg endpoints "$(parameter mappingEndpoints)" --arg admin "$(parameter mappingEndpointAdministratorId)" \
       --arg organization "$(parameter organizationId)" --arg tenant "$(parameter entraTenantId)" \
       '$endpoints | fromjson | map(. as $e | $e.callers[] | ["database", "grant-machine-invocation", $admin, $organization,
@@ -285,16 +285,16 @@ deployment_outputs() {
   name=$(option --name)
   [[ -f $state/deployment-$name ]] || { echo "ERROR: deployment $name not found" >&2 && exit 3; }
   local host='' worker='' origins='[]' grants='[]'
-  if [[ $name != weft-qualify-platform ]]; then host=$public_host worker=weft-worker; fi
-  if [[ $name == weft-qualify-endpoints ]]; then
-    origins='["https://weft-qualify.internal.fake-env.eastus2.azurecontainerapps.io"]'
+  if [[ $name != braid-qualify-platform ]]; then host=$public_host worker=braid-worker; fi
+  if [[ $name == braid-qualify-endpoints ]]; then
+    origins='["https://braid-qualify.internal.fake-env.eastus2.azurecontainerapps.io"]'
     grants=$(<"$state/grant-arguments.json")
   fi
   jq -n --arg host "$host" --arg worker "$worker" --argjson origins "$origins" --argjson grants "$grants" '{
-    registryName: {type: "String", value: "weftacrfake"}, registryLoginServer: {type: "String", value: "weftacrfake.azurecr.io"},
-    keyVaultName: {type: "String", value: "weft-kv-fake"}, databaseHost: {type: "String", value: "weft-pg-fake.postgres.database.azure.com"},
+    registryName: {type: "String", value: "braidacrfake"}, registryLoginServer: {type: "String", value: "braidacrfake.azurecr.io"},
+    keyVaultName: {type: "String", value: "braid-kv-fake"}, databaseHost: {type: "String", value: "braid-pg-fake.postgres.database.azure.com"},
     environmentDefaultDomain: {type: "String", value: "fake-env.eastus2.azurecontainerapps.io"},
-    applicationName: {type: "String", value: "weft-app"}, publicHost: {type: "String", value: $host},
+    applicationName: {type: "String", value: "braid-app"}, publicHost: {type: "String", value: $host},
     workerName: {type: "String", value: $worker}, mappingEndpointOrigins: {type: "Array", value: $origins},
     mappingEndpointGrantArguments: {type: "Array", value: $grants}}'
 }
@@ -318,7 +318,7 @@ containerapp_show() {
     *minReplicas*) echo "{\"min\": 1, \"max\": 10}" ;;
     '')
       jq -n '{properties: {configuration: {ingress: {external: false, transport: "tcp"}}, template: {containers: [{
-        env: [{name: "WEFT_FERRULE_SERVICE_COMPILE_ENABLED", value: "true"}, {name: "WEFT_FERRULE_SERVICE_EXECUTION_ENABLED", value: "true"}],
+        env: [{name: "BRAID_FERRULE_SERVICE_COMPILE_ENABLED", value: "true"}, {name: "BRAID_FERRULE_SERVICE_EXECUTION_ENABLED", value: "true"}],
         probes: [{type: "Startup", httpGet: {path: "/v1/health/ready"}}, {type: "Readiness", httpGet: {path: "/v1/health/ready"}}]}]}}}'
       ;;
     *) echo "Unexpected fake query $query for $name" >&2 && exit 2 ;;
@@ -339,7 +339,7 @@ case "$*" in
   'group exists'*) [[ -f $state/group ]] && echo true || echo false ;;
   'group create'*)
     touch "$state/group"
-    values --tags | sed -n 's/^weft-qualification-run=//p' >"$state/group-tag"
+    values --tags | sed -n 's/^braid-qualification-run=//p' >"$state/group-tag"
     ;;
   'group show'*)
     [[ -f $state/group ]] || { echo 'ERROR: (ResourceGroupNotFound)' >&2 && exit 3; }
@@ -356,12 +356,12 @@ case "$*" in
     if [[ $(option --query) == value ]]; then printf '%064d\n' 0; fi
     ;;
   'keyvault secret set'*)
-    [[ $(option --name) != weft-owner-input ]] || cp -- "$(option --file)" "$state/owner-input"
+    [[ $(option --name) != braid-owner-input ]] || cp -- "$(option --file)" "$state/owner-input"
     ;;
   'keyvault certificate show'* | 'keyvault certificate create'*) ;;
   'keyvault certificate download'*) certificate_download ;;
-  'keyvault show'*) echo 'https://weft-kv-fake.vault.azure.net/' ;;
-  'identity show'*) echo "/subscriptions/$FAKE_SUBSCRIPTION/resourceGroups/rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/weft-identity" ;;
+  'keyvault show'*) echo 'https://braid-kv-fake.vault.azure.net/' ;;
+  'identity show'*) echo "/subscriptions/$FAKE_SUBSCRIPTION/resourceGroups/rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/braid-identity" ;;
   'acr build'*) echo 'Run ID: ca1 was successful after 2m' ;;
   'acr repository show'*) printf 'sha256:%s\n' "$(printf '%s' "$(option --image)" | sha256sum | cut -d' ' -f1)" ;;
   'acr login'*) echo 'Login Succeeded' ;;
@@ -376,21 +376,21 @@ case "$*" in
   'containerapp job show'*)
     jq -n '{containers: [{name: "database-roles", image: "docker.io/library/postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc",
       command: ["bash", "-c", "provision"], resources: {cpu: 0.5, memory: "1Gi"},
-      env: [{name: "PGHOST", value: "weft-pg-fake"}, {name: "WEFT_MIGRATOR_PASSWORD", secretRef: "pg-migrator-password"}]}]}'
+      env: [{name: "PGHOST", value: "braid-pg-fake"}, {name: "BRAID_MIGRATOR_PASSWORD", secretRef: "pg-migrator-password"}]}]}'
     ;;
   'containerapp job secret set'*) ;;
   'containerapp job list'*)
-    jq -n '[{name: "weft-migrate", properties: {template: {containers: [{image: "weftacrfake.azurecr.io/weft:tag"}]}}},
-      {name: "weft-database-roles", properties: {template: {containers: [{image: "docker.io/library/postgres@sha256:ec9f"}]}}},
-      {name: "weft-session-keys", properties: {template: {volumes: [{name: "session-keys", storageType: "AzureFile"}],
-        containers: [{image: "weftacrfake.azurecr.io/weft:tag", volumeMounts: [{volumeName: "session-keys", mountPath: "/var/lib/weft/keys"}]}]}}}]'
+    jq -n '[{name: "braid-migrate", properties: {template: {containers: [{image: "braidacrfake.azurecr.io/braid:tag"}]}}},
+      {name: "braid-database-roles", properties: {template: {containers: [{image: "docker.io/library/postgres@sha256:ec9f"}]}}},
+      {name: "braid-session-keys", properties: {template: {volumes: [{name: "session-keys", storageType: "AzureFile"}],
+        containers: [{image: "braidacrfake.azurecr.io/braid:tag", volumeMounts: [{volumeName: "session-keys", mountPath: "/var/lib/braid/keys"}]}]}}}]'
     ;;
   'containerapp list'*)
-    jq -n '[{name: "weft-app", properties: {template: {volumes: [{name: "session-keys", storageType: "AzureFile"}],
-        containers: [{image: "weftacrfake.azurecr.io/weft:tag", volumeMounts: [{volumeName: "session-keys", mountPath: "/var/lib/weft/keys"}]},
-          {image: "weftacrfake.azurecr.io/weft-edge:tag"}]}}},
-      {name: "weft-ferrule", properties: {template: {volumes: [{name: "operations", storageType: "EmptyDir"}],
-        containers: [{image: "weftacrfake.azurecr.io/weft-ferrule-service@sha256:00", volumeMounts: [{volumeName: "operations", mountPath: "/tmp"}]}]}}}]'
+    jq -n '[{name: "braid-app", properties: {template: {volumes: [{name: "session-keys", storageType: "AzureFile"}],
+        containers: [{image: "braidacrfake.azurecr.io/braid:tag", volumeMounts: [{volumeName: "session-keys", mountPath: "/var/lib/braid/keys"}]},
+          {image: "braidacrfake.azurecr.io/braid-edge:tag"}]}}},
+      {name: "braid-ferrule", properties: {template: {volumes: [{name: "operations", storageType: "EmptyDir"}],
+        containers: [{image: "braidacrfake.azurecr.io/braid-ferrule-service@sha256:00", volumeMounts: [{volumeName: "operations", mountPath: "/tmp"}]}]}}}]'
     ;;
   'containerapp revision list'*) echo "$(option --name)--rev1" ;;
   'containerapp revision restart'*) ;;

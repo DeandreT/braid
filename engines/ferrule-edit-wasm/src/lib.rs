@@ -1,9 +1,9 @@
 #![forbid(unsafe_code)]
 
+use braid_ferrule_core::edit::{EditFailure, Session};
 use wasm_bindgen::prelude::*;
-use weft_ferrule_core::edit::{EditFailure, Session};
 
-/// The only JavaScript-facing document is Weft's view. Native project JSON
+/// The only JavaScript-facing document is Braid's view. Native project JSON
 /// remains opaque bytes and is decoded exclusively by Ferrule.
 #[wasm_bindgen]
 pub struct EditorSession {
@@ -20,7 +20,7 @@ impl EditorSession {
     }
 
     pub fn apply(&mut self, operation: &str) -> Result<bool, JsValue> {
-        if operation.len() > weft_ferrule_core::edit::MAX_OPERATIONS_BYTES {
+        if operation.len() > braid_ferrule_core::edit::MAX_OPERATIONS_BYTES {
             return Err(error(EditFailure::new(
                 "operationsLimitExceeded",
                 "The operation exceeds 1 MiB.",

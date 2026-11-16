@@ -22,7 +22,7 @@ native controls and scrollbars follow. Keep text at 4.5:1 and control borders an
 focus rings at 3:1 against the surfaces they sit on; `tests/theme.spec.ts` checks
 the key pairs. The account menu offers Light, Dark and System (the default, which
 follows `prefers-color-scheme` live). The choice is stored as
-`weft.theme.v1` in local storage. `public/theme.js` applies it from `<head>`
+`braid.theme.v1` in local storage. `public/theme.js` applies it from `<head>`
 before the first paint, as a same-origin file because the CSP admits no inline
 script; `theme-preference.ts` owns it after start-up. Browser tests and the
 documentation screenshots run with the light colour scheme and no saved choice.
@@ -53,9 +53,8 @@ tests**, the short **Tests** navigation label, and **Diff**.
 
 `StatusChipComponent` takes a presentation value, not arbitrary display text.
 State adapters compare exact protocol codes. Unknown codes are unavailable, not
-successes, failures or cancellations. Finishing execution is not a comparison
-pass. Preparing a version is not proof it is approved, verified, eligible or in
-use. A missing capability is not proof of denied permission.
+successes, failures or cancellations. Keep execution, comparison, approval and
+release states separate.
 
 A successful sample run is not a regression comparison pass. Missing expected
 results, unsupported comparisons and unsuccessful execution retain separate
@@ -95,7 +94,7 @@ cancellation and keeps that distinction in its confirmation.
 ## Layout preferences
 
 `LayoutPreferencesStore` persists only a normalized versioned allowlist in
-`weft.workbench.layout.v1`: density, panel sizes/collapse state, table widths,
+`braid.workbench.layout.v1`: density, panel sizes/collapse state, table widths,
 optional rule/type column visibility, sort direction/key, grouping mode and key
 column pinning. Reset layout restores both frame and table defaults.
 
@@ -130,8 +129,6 @@ state expressions, source locations and a source-file manifest. Plain HTML text
 extraction misses Angular control-flow branches and inline templates. Inventory
 bindings as source expressions, not as sampled user values; never rewrite
 payloads, field keys, identifiers or protocol codes as part of a copy pass.
-Collecting the inventory and approving/applying each wording change are separate
-steps.
 
 | Surface | Copy owners |
 | --- | --- |
@@ -148,12 +145,9 @@ steps.
 | Sign-in, access checking and server/local sign-out distinction | `auth/*.ts` |
 | Question entry, grounded answers, citations and provider availability | `chat/*.ts`, `chat/*.html` |
 
-## Verification boundaries
+## Verification
 
 Exercise dense and narrow layouts, keyboard navigation, focus return, resizing,
 200% text scaling, selected/hover states and contrast using the actual rendered
 styles. Keep non-color labels/icons and exact expected/actual data visible.
-Controlled browser fixtures verify presentation and privacy regressions; they do
-not establish real API, database, worker or deployment behavior. Qualify those
-workflows separately. Never use the design prototype's simulated actions as
-product evidence.
+Browser fixtures cover presentation and privacy regressions.

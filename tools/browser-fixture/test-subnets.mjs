@@ -5,7 +5,7 @@
 import { randomInt } from "node:crypto";
 import net from "node:net";
 
-export const testSubnetRangeVariable = "WEFT_TEST_SUBNET_RANGE";
+export const testSubnetRangeVariable = "BRAID_TEST_SUBNET_RANGE";
 export const defaultTestSubnetRange = "198.19.0.0/16";
 export const testSubnetPrefixLength = 28;
 export const maximumSubnetAttempts = 32;

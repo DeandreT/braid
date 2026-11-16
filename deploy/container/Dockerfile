@@ -1,8 +1,8 @@
-# Weft runtime images. Build from the repository root with the classic builder or BuildKit:
-#   docker build -f deploy/container/Dockerfile --target weft -t weft:local .
-#   docker build -f deploy/container/Dockerfile --target edge -t weft-edge:local .
-#   docker build -f deploy/container/Dockerfile --target weft-worker -t weft-worker:local .
-#   docker build -f deploy/container/Dockerfile --target weft-mapping-endpoint -t weft-mapping-endpoint:local .
+# Braid runtime images. Build from the repository root with the classic builder or BuildKit:
+#   docker build -f deploy/container/Dockerfile --target braid -t braid:local .
+#   docker build -f deploy/container/Dockerfile --target edge -t braid-edge:local .
+#   docker build -f deploy/container/Dockerfile --target braid-worker -t braid-worker:local .
+#   docker build -f deploy/container/Dockerfile --target braid-mapping-endpoint -t braid-mapping-endpoint:local .
 # See docs/runtime-packaging.md. Every base image is pinned by digest.
 
 ARG NODE_IMAGE=docker.io/library/node:22.23.3-bookworm-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392
@@ -14,14 +14,14 @@ ARG DOCKER_CLI_IMAGE=docker.io/library/docker:29.8.1-cli@sha256:018edbc908e08fcc
 FROM ${CADDY_IMAGE} AS edge
 # File capabilities would make exec fail once every capability is dropped; port 8080 needs none.
 RUN setcap -r /usr/bin/caddy
-COPY deploy/container/Caddyfile /etc/weft/Caddyfile
+COPY deploy/container/Caddyfile /etc/braid/Caddyfile
 ENV XDG_CONFIG_HOME=/tmp/caddy/config XDG_DATA_HOME=/tmp/caddy/data
 USER 65532:65532
 EXPOSE 8080
-ENTRYPOINT ["/usr/bin/caddy", "run", "--config", "/etc/weft/Caddyfile", "--adapter", "caddyfile"]
+ENTRYPOINT ["/usr/bin/caddy", "run", "--config", "/etc/braid/Caddyfile", "--adapter", "caddyfile"]
 
 FROM ubuntu@sha256:f610ab94648195aa356059f5b41d6085c9d4d903c072430cdd1af7bdb646106b AS edit-assets
-ENV CARGO_HOME=/opt/cargo RUSTUP_HOME=/opt/rustup CARGO_TARGET_DIR=/opt/weft-target \
+ENV CARGO_HOME=/opt/cargo RUSTUP_HOME=/opt/rustup CARGO_TARGET_DIR=/opt/braid-target \
     CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 RUSTUP_USE_CURL=1 PATH=/opt/cargo/bin:$PATH CARGO_NET_GIT_FETCH_WITH_CLI=true
 RUN apt-get update && apt-get install --no-install-recommends -y build-essential ca-certificates curl git python3 \
     && rm -rf /var/lib/apt/lists/*
@@ -64,71 +64,71 @@ COPY migrations migrations
 COPY engines/ferrule-host/tests/fixtures engines/ferrule-host/tests/fixtures
 COPY dotnet dotnet
 COPY docs/user-guide docs/user-guide
-RUN dotnet restore dotnet/apps/Weft.Server/Weft.Server.csproj --locked-mode \
+RUN dotnet restore dotnet/apps/Braid.Server/Braid.Server.csproj --locked-mode \
     && for tool in DatabaseTool StorageTool MaintenanceTool SessionKeyTool; do \
-        dotnet restore "dotnet/tools/Weft.$tool/Weft.$tool.csproj" --locked-mode || exit 1; done
-COPY --from=web /src/apps/web/dist/weft/browser apps/web/dist/weft/browser
-RUN dotnet publish dotnet/apps/Weft.Server/Weft.Server.csproj --configuration Release --no-restore \
+        dotnet restore "dotnet/tools/Braid.$tool/Braid.$tool.csproj" --locked-mode || exit 1; done
+COPY --from=web /src/apps/web/dist/braid/browser apps/web/dist/braid/browser
+RUN dotnet publish dotnet/apps/Braid.Server/Braid.Server.csproj --configuration Release --no-restore \
         --output /out/app/server -p:UseAppHost=false -p:OpenApiGenerateDocuments=false \
     && test -f /out/app/server/wwwroot/index.html \
     && for tool in database:DatabaseTool storage:StorageTool maintenance:MaintenanceTool session-keys:SessionKeyTool; do \
-        dotnet publish "dotnet/tools/Weft.${tool#*:}/Weft.${tool#*:}.csproj" --configuration Release --no-restore \
+        dotnet publish "dotnet/tools/Braid.${tool#*:}/Braid.${tool#*:}.csproj" --configuration Release --no-restore \
             --output "/out/app/tools/${tool%%:*}" -p:UseAppHost=false || exit 1; done \
-    && install -d -m 0700 /out/state/weft/storage /out/state/weft/keys /out/state/run/secrets
+    && install -d -m 0700 /out/state/braid/storage /out/state/braid/keys /out/state/run/secrets
 
 # Server and one-shot operator commands share one image and one dependency closure.
-FROM ${ASPNET_IMAGE} AS weft
+FROM ${ASPNET_IMAGE} AS braid
 COPY --from=build /out/app /app
-COPY deploy/container/weft-entrypoint.sh /app/bin/weft-entrypoint
-COPY --from=build --chown=1654:1654 /out/state/weft /var/lib/weft
-COPY --from=build --chown=1654:1654 /out/state/run /run/weft
+COPY deploy/container/braid-entrypoint.sh /app/bin/braid-entrypoint
+COPY --from=build --chown=1654:1654 /out/state/braid /var/lib/braid
+COPY --from=build --chown=1654:1654 /out/state/run /run/braid
 USER 1654:1654
 WORKDIR /app
-ENTRYPOINT ["/app/bin/weft-entrypoint"]
+ENTRYPOINT ["/app/bin/braid-entrypoint"]
 CMD ["server"]
 
 FROM ${DOCKER_CLI_IMAGE} AS docker-cli
 
-# Hosted inspection worker: Weft.Worker with the Docker CLI. It runs the Ferrule image through a
+# Hosted inspection worker: Braid.Worker with the Docker CLI. It runs the Ferrule image through a
 # Docker daemon for the Session server, which reaches it only over the pinned inspection transport.
 # These stages come last so the classic builder does not build them for the other targets.
 FROM build AS worker-build
-RUN dotnet restore dotnet/apps/Weft.Worker/Weft.Worker.csproj --locked-mode \
-    && dotnet publish dotnet/apps/Weft.Worker/Weft.Worker.csproj --configuration Release --no-restore \
+RUN dotnet restore dotnet/apps/Braid.Worker/Braid.Worker.csproj --locked-mode \
+    && dotnet publish dotnet/apps/Braid.Worker/Braid.Worker.csproj --configuration Release --no-restore \
         --output /out/worker -p:UseAppHost=false
 
-FROM ${ASPNET_IMAGE} AS weft-worker
+FROM ${ASPNET_IMAGE} AS braid-worker
 COPY --from=worker-build /out/worker /app/worker
-COPY deploy/container/weft-entrypoint.sh /app/bin/weft-entrypoint
+COPY deploy/container/braid-entrypoint.sh /app/bin/braid-entrypoint
 COPY --from=docker-cli /usr/local/bin/docker /usr/bin/docker
-COPY --from=build --chown=1654:1654 /out/state/run /run/weft
+COPY --from=build --chown=1654:1654 /out/state/run /run/braid
 USER 1654:1654
 WORKDIR /app
-ENTRYPOINT ["/app/bin/weft-entrypoint"]
+ENTRYPOINT ["/app/bin/braid-entrypoint"]
 CMD ["worker"]
 
 # Machine-facing mapping endpoint for one registered target, with the release operator tool that qualifies
 # builds and activates releases for it. No Docker CLI, curl or package manager: health is the host's own
 # HTTP probe of /v1/health/live and /v1/health/ready.
 FROM build AS endpoint-build
-RUN dotnet restore dotnet/apps/Weft.MachineEndpoint/Weft.MachineEndpoint.csproj --locked-mode \
-    && dotnet restore dotnet/tools/Weft.ReleaseTool/Weft.ReleaseTool.csproj --locked-mode \
-    && dotnet publish dotnet/apps/Weft.MachineEndpoint/Weft.MachineEndpoint.csproj --configuration Release --no-restore \
+RUN dotnet restore dotnet/apps/Braid.MachineEndpoint/Braid.MachineEndpoint.csproj --locked-mode \
+    && dotnet restore dotnet/tools/Braid.ReleaseTool/Braid.ReleaseTool.csproj --locked-mode \
+    && dotnet publish dotnet/apps/Braid.MachineEndpoint/Braid.MachineEndpoint.csproj --configuration Release --no-restore \
         --output /out/endpoint -p:UseAppHost=false -p:OpenApiGenerateDocuments=false \
-    && dotnet publish dotnet/tools/Weft.ReleaseTool/Weft.ReleaseTool.csproj --configuration Release --no-restore \
+    && dotnet publish dotnet/tools/Braid.ReleaseTool/Braid.ReleaseTool.csproj --configuration Release --no-restore \
         --output /out/tools/release -p:UseAppHost=false -p:OpenApiGenerateDocuments=false
 
-FROM ${ASPNET_IMAGE} AS weft-mapping-endpoint
+FROM ${ASPNET_IMAGE} AS braid-mapping-endpoint
 COPY --from=endpoint-build /out/endpoint /app/endpoint
 COPY --from=endpoint-build /out/tools /app/tools
-COPY deploy/container/weft-entrypoint.sh /app/bin/weft-entrypoint
-COPY --from=build --chown=1654:1654 /out/state/run /run/weft
+COPY deploy/container/braid-entrypoint.sh /app/bin/braid-entrypoint
+COPY --from=build --chown=1654:1654 /out/state/run /run/braid
 USER 1654:1654
 WORKDIR /app
 EXPOSE 8080
-ENTRYPOINT ["/app/bin/weft-entrypoint"]
+ENTRYPOINT ["/app/bin/braid-entrypoint"]
 CMD ["endpoint"]
 
 # Local profile only: the Docker compiled runtime drives the host Docker daemon, which is equivalent to host root.
-FROM weft-mapping-endpoint AS weft-mapping-endpoint-local-docker
+FROM braid-mapping-endpoint AS braid-mapping-endpoint-local-docker
 COPY --from=docker-cli /usr/local/bin/docker /usr/bin/docker

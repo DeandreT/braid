@@ -19,7 +19,7 @@ fn every_retained_native_fixture_round_trips_through_the_pinned_codec() {
         .collect::<Vec<_>>();
     // The invalid-cycle fixture is retained outside application packaging.
     fixtures.push(
-        include_bytes!("../../../dotnet/tests/Weft.Tests/Fixtures/validation-cycle.json").to_vec(),
+        include_bytes!("../../../dotnet/tests/Braid.Tests/Fixtures/validation-cycle.json").to_vec(),
     );
     assert!(fixtures.len() >= 15);
     let mut legacy = 0;
@@ -85,7 +85,7 @@ fn strip_pointer_prefix(value: &mut Value, prefix: &str) {
 fn self_authored_documents_use_the_authoritative_decoder() {
     for native in [BASIC, INVALID, INVALID_FUNCTION, EXACT, RESOURCES] {
         let expected = project_file::decode_bytes(native).unwrap();
-        let actual = weft_ferrule_host::decode::decode_native(native).unwrap();
+        let actual = braid_ferrule_host::decode::decode_native(native).unwrap();
         assert_eq!(
             serde_json::to_value(actual.project).unwrap(),
             serde_json::to_value(expected).unwrap()
@@ -95,7 +95,7 @@ fn self_authored_documents_use_the_authoritative_decoder() {
 
 #[test]
 fn native_codec_preserves_exact_integer_float_tag_and_negative_zero() {
-    let decoded = weft_ferrule_host::decode::decode_native(EXACT).unwrap();
+    let decoded = braid_ferrule_host::decode::decode_native(EXACT).unwrap();
     assert_eq!(decoded.document_prefix, "/document");
     let Node::Const {
         value: ScalarValue::Int(integer),
@@ -126,7 +126,7 @@ fn native_codec_preserves_exact_integer_float_tag_and_negative_zero() {
 fn ordinary_native_negative_zero_uses_the_same_codec_semantics() {
     let envelope: Value = serde_json::from_slice(EXACT).unwrap();
     let native = serde_json::to_vec(&envelope["document"]).unwrap();
-    let decoded = weft_ferrule_host::decode::decode_native(&native).unwrap();
+    let decoded = braid_ferrule_host::decode::decode_native(&native).unwrap();
     let direct = project_file::decode_bytes(&native).unwrap();
     assert_eq!(decoded.document_prefix, "");
     let Node::Const {
@@ -155,7 +155,7 @@ fn legacy_ignored_metadata_does_not_trigger_a_second_json_tree_decode() {
         "a generic tree parse rejects this ignored number"
     );
     let direct = project_file::decode_bytes(&native).unwrap();
-    let decoded = weft_ferrule_host::decode::decode_native(&native).unwrap();
+    let decoded = braid_ferrule_host::decode::decode_native(&native).unwrap();
     assert_eq!(decoded.document_prefix, "");
     assert_eq!(
         serde_json::to_value(decoded.project).unwrap(),
@@ -183,7 +183,7 @@ fn authoritative_decoder_rejects_duplicate_root_markers_and_bom_prefixes() {
     }
     for native in cases {
         assert!(project_file::decode_bytes(&native).is_err());
-        assert!(weft_ferrule_host::decode::decode_native(&native).is_err());
+        assert!(braid_ferrule_host::decode::decode_native(&native).is_err());
         let header = request("inspect", &native);
         assert_eq!(failure(&process(&header, &native)), "nativeDecodeFailed");
     }
@@ -353,7 +353,7 @@ fn long_schema_native_pointer_fallback_preserves_the_in_memory_engine_owner() {
     let mut header = request("validate", BASIC);
     header.limits.maximum_text_bytes = 64;
     let actual =
-        weft_ferrule_host::validation::validate(&project, "entry.native.json", "", &header.limits)
+        braid_ferrule_host::validation::validate(&project, "entry.native.json", "", &header.limits)
             .unwrap();
     let actual = serde_json::to_value(actual).unwrap();
     let issue = actual["issues"]
@@ -525,13 +525,13 @@ fn function_identity_exceeding_json_precision_remains_exact_in_worker_diagnostic
 
 #[test]
 fn every_native_owner_variant_and_structural_step_preserves_typed_identity() {
+    use braid_ferrule_host::validation::{owner_locator, owner_to_wire};
     use ferrule_engine::{
         ValidationEndpoint as Endpoint, ValidationOwner as Owner, ValidationSchemaLocation,
         ValidationSchemaStep as SchemaStep, ValidationScopeLocation,
         ValidationScopeStep as ScopeStep,
     };
     use ferrule_mapping::FunctionId;
-    use weft_ferrule_host::validation::{owner_locator, owner_to_wire};
 
     let endpoints = [
         Endpoint::Source,
@@ -726,9 +726,9 @@ fn metadata_resources_remain_unresolved_without_file_or_network_access() {
                 assert_locator_resolves(&resource["nativeLocator"], &retained, "");
             }
             let encoded = serde_json::to_string(&response).unwrap();
-            assert!(!encoded.contains("weft-fixture-do-not"));
+            assert!(!encoded.contains("braid-fixture-do-not"));
             assert!(!encoded.contains("127.0.0.1"));
-            assert!(!encoded.contains("weft-fixture.invalid"));
+            assert!(!encoded.contains("braid-fixture.invalid"));
         }
     }
 }

@@ -50,10 +50,12 @@ try {
   demand(process.argv.length === 3 && process.argv[2] === "--approved");
   const sourceRoot = realpathSync(process.cwd());
   const probeAssembly = ordinary(
-    process.env.WEFT_HOST_PRIVACY_PROBE_PATH ?? "",
+    process.env.BRAID_HOST_PRIVACY_PROBE_PATH ?? "",
   );
-  const serverAssembly = ordinary(process.env.WEFT_HOST_TEST_SERVER_PATH ?? "");
-  const chromium = ordinary(process.env.WEFT_CHROMIUM_EXECUTABLE ?? "");
+  const serverAssembly = ordinary(
+    process.env.BRAID_HOST_TEST_SERVER_PATH ?? "",
+  );
+  const chromium = ordinary(process.env.BRAID_CHROMIUM_EXECUTABLE ?? "");
   const node = ordinary(process.execPath),
     npm = executable("npm"),
     certutil = executable("certutil");
@@ -61,7 +63,7 @@ try {
   executable("xvfb-run");
   executable("Xvfb");
   executable("xauth");
-  let root = process.env.WEFT_AUTH_BROWSER_ADMISSION_ROOT;
+  let root = process.env.BRAID_AUTH_BROWSER_ADMISSION_ROOT;
   if (root) {
     demand(isAbsolute(root) && realpathSync(root) === root);
   } else {
@@ -70,7 +72,7 @@ try {
         process.env.RUNNER_TEMP &&
         isAbsolute(process.env.RUNNER_TEMP),
     );
-    root = mkdtempSync(join(process.env.RUNNER_TEMP, "weft-ah-"));
+    root = mkdtempSync(join(process.env.RUNNER_TEMP, "braid-ah-"));
     // mkdtemp creates 0700; do not repair an existing selected root.
   }
   const directory = lstatSync(root);
@@ -148,12 +150,12 @@ try {
     demand(!root.includes("\n") && !root.includes("\r"));
     writeFileSync(
       process.env.GITHUB_ENV,
-      `WEFT_AUTH_BROWSER_ADMISSION_ROOT=${root}\nWEFT_AUTH_BROWSER_ADMISSION_FILE=${path}\n`,
+      `BRAID_AUTH_BROWSER_ADMISSION_ROOT=${root}\nBRAID_AUTH_BROWSER_ADMISSION_FILE=${path}\n`,
       { flag: "a" },
     );
-  } else demand(process.env.WEFT_AUTH_BROWSER_ADMISSION_FILE === path);
-  process.stdout.write("WeftAuthBrowserAdmissionPrepared\n");
+  } else demand(process.env.BRAID_AUTH_BROWSER_ADMISSION_FILE === path);
+  process.stdout.write("BraidAuthBrowserAdmissionPrepared\n");
 } catch {
-  process.stderr.write("WeftAuthBrowserAdmissionFailed\n");
+  process.stderr.write("BraidAuthBrowserAdmissionFailed\n");
   process.exitCode = 1;
 }

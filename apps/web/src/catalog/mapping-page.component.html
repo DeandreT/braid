@@ -134,7 +134,7 @@
       </dl>
       @if (context(); as context) {
         <div class="catalog-summary-status">
-          <weft-regression-status
+          <braid-regression-status
             [scope]="view.mapping.scope"
             [context]="context"
             [revisionId]="view.mapping.head.scope.revisionId"
@@ -269,7 +269,7 @@
                 >{{ admissionLabel(revision.admission) }}</span
               >
               @if (context(); as admission) {
-                <weft-regression-status
+                <braid-regression-status
                   [scope]="view.mapping.scope"
                   [context]="admission"
                   [revisionId]="revision.scope.revisionId"
@@ -306,7 +306,7 @@
       }
     </nav>
   } @else {
-    <weft-catalog-status
+    <braid-catalog-status
       [kind]="kind()"
       [firstPage]="firstPage()"
       (retry)="retry()"

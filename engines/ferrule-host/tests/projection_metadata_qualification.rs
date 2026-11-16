@@ -1,5 +1,5 @@
+use braid_ferrule_host::protocol::Limits;
 use serde_json::{Value, json};
-use weft_ferrule_host::protocol::Limits;
 
 fn base() -> Value {
     json!({
@@ -12,9 +12,9 @@ fn base() -> Value {
 
 fn project(native: &Value) -> Value {
     let bytes = serde_json::to_vec(native).unwrap();
-    let decoded = weft_ferrule_host::decode::decode_native(&bytes).unwrap();
+    let decoded = braid_ferrule_host::decode::decode_native(&bytes).unwrap();
     serde_json::to_value(
-        weft_ferrule_host::projection::project(
+        braid_ferrule_host::projection::project(
             &decoded.project,
             "entry.native.json",
             &decoded.document_prefix,
@@ -70,9 +70,9 @@ fn new_pin_invocation_counter_is_a_located_gap_not_inferred_execution() {
 }
 
 #[test]
-fn owned_iteration_explanation_keeps_weft_execution_unqualified_without_claiming_native_refusal() {
+fn owned_iteration_explanation_keeps_braid_execution_unqualified_without_claiming_native_refusal() {
     let bytes = serde_json::to_vec(&base()).unwrap();
-    let mut decoded = weft_ferrule_host::decode::decode_native(&bytes).unwrap();
+    let mut decoded = braid_ferrule_host::decode::decode_native(&bytes).unwrap();
     decoded.project.source.repeating = true;
     decoded.project.target.repeating = true;
     decoded.project.root.iteration = ferrule_mapping::ScopeIteration::OwnedSource {
@@ -83,7 +83,7 @@ fn owned_iteration_explanation_keeps_weft_execution_unqualified_without_claiming
         output_path: None,
     };
     let projected = serde_json::to_value(
-        weft_ferrule_host::projection::project(
+        braid_ferrule_host::projection::project(
             &decoded.project,
             "entry.native.json",
             &decoded.document_prefix,
@@ -119,7 +119,7 @@ fn explicit_json_ignores_retained_xml_attribute_and_namespace_path_flags() {
     native["source_options"] = json!({"json_document":true});
     native["source"]["kind"]["children"][0]["attribute"] = json!(true);
     native["source"]["kind"]["children"][0]["xml_namespace"] =
-        json!({"kind":"qualified","uri":"urn:weft:fixture"});
+        json!({"kind":"qualified","uri":"urn:braid:fixture"});
     let projected = project(&native);
     assert_eq!(
         input_field(&projected, "code")["path"],
@@ -134,7 +134,7 @@ fn qualified_xml_keeps_attribute_and_exact_namespace_identity() {
     native["source_options"] = json!({"xml_document":true});
     native["source"]["kind"]["children"][0]["attribute"] = json!(true);
     native["source"]["kind"]["children"][0]["xml_namespace"] =
-        json!({"kind":"qualified","uri":"urn:weft:fixture"});
+        json!({"kind":"qualified","uri":"urn:braid:fixture"});
     let mut unqualified = native["source"]["kind"]["children"][0].clone();
     unqualified["name"] = json!("local");
     unqualified["xml_namespace"] = json!({"kind":"unqualified"});
@@ -148,7 +148,7 @@ fn qualified_xml_keeps_attribute_and_exact_namespace_identity() {
     let projected = project(&native);
     assert_eq!(
         input_field(&projected, "code")["path"],
-        json!([{"kind":"attribute","name":"code","namespaceUri":"urn:weft:fixture"}])
+        json!([{"kind":"attribute","name":"code","namespaceUri":"urn:braid:fixture"}])
     );
     assert_eq!(
         input_field(&projected, "local")["path"],

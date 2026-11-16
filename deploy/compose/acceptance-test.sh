@@ -15,17 +15,17 @@ compose_directory=$repository/deploy/compose
 source "$compose_directory/acceptance-lifecycle.sh"
 # shellcheck source=test-subnets.sh
 source "$compose_directory/test-subnets.sh"
-project=weft-accept-$(openssl rand -hex 4)
-work=$(mktemp -d "${TMPDIR:-/tmp}/weft-accept.XXXXXXXX")
+project=braid-accept-$(openssl rand -hex 4)
+work=$(mktemp -d "${TMPDIR:-/tmp}/braid-accept.XXXXXXXX")
 chmod 0700 "$work"
 built_images=()
 files=(--file "$compose_directory/compose.yml" --file "$compose_directory/compose.ferrule-service.yml"
   --file "$compose_directory/compose.features.yml" --file "$compose_directory/compose.acceptance.yml")
-if [[ ${WEFT_ACCEPTANCE_MODEL_FIXTURE:-false} == true ]]; then
+if [[ ${BRAID_ACCEPTANCE_MODEL_FIXTURE:-false} == true ]]; then
   files+=(--file "$compose_directory/compose.model-fixture.yml")
 fi
-# Bearer access for the allowlisted public clients, such as the CLI stage's (cli-acceptance-test.sh).
-if [[ -n ${WEFT_API_BEARER_CLIENT_IDS:-} ]]; then
+# Bearer access for allowlisted public API clients.
+if [[ -n ${BRAID_API_BEARER_CLIENT_IDS:-} ]]; then
   files+=(--file "$compose_directory/compose.bearer.yml")
 fi
 
@@ -46,12 +46,12 @@ cleanup() {
   set +e
   acceptance_result "$status"
   status=$?
-  if ((status != 0)) && [[ -n ${WEFT_ACCEPTANCE_LOG_DIRECTORY:-} ]]; then
+  if ((status != 0)) && [[ -n ${BRAID_ACCEPTANCE_LOG_DIRECTORY:-} ]]; then
     # Service logs and browser failure context carry no secrets: the server and tools emit
     # fixed status lines only, and the issuer and relays log no protocol values.
-    mkdir -p "$WEFT_ACCEPTANCE_LOG_DIRECTORY/$project" &&
-      compose logs --no-color --timestamps >"$WEFT_ACCEPTANCE_LOG_DIRECTORY/$project/services.log" 2>&1
-    [[ -d $work/playwright ]] && cp -r "$work/playwright" "$WEFT_ACCEPTANCE_LOG_DIRECTORY/$project/"
+    mkdir -p "$BRAID_ACCEPTANCE_LOG_DIRECTORY/$project" &&
+      compose logs --no-color --timestamps >"$BRAID_ACCEPTANCE_LOG_DIRECTORY/$project/services.log" 2>&1
+    [[ -d $work/playwright ]] && cp -r "$work/playwright" "$BRAID_ACCEPTANCE_LOG_DIRECTORY/$project/"
   fi
   if [[ -n $(owned_objects) ]] && ! compose down --volumes --remove-orphans --timeout 30 >/dev/null 2>&1; then
     # Compose cannot render the stack without its settings (for example after an early failure);
@@ -72,9 +72,9 @@ cleanup() {
   fi
   if ((status != 0)); then
     echo 'Acceptance failed.' >&2
-  elif [[ -n ${WEFT_ACCEPTANCE_HOLD:-} ]]; then
+  elif [[ -n ${BRAID_ACCEPTANCE_HOLD:-} ]]; then
     echo 'Held stack removed.'
-  elif [[ ${WEFT_ACCEPTANCE_STAGE_ONLY:-false} == true ]]; then
+  elif [[ ${BRAID_ACCEPTANCE_STAGE_ONLY:-false} == true ]]; then
     echo 'Client-stage acceptance passed (browser workflows not run).'
   else
     echo 'Acceptance passed.'
@@ -89,23 +89,23 @@ fail() {
 }
 
 # A dedicated client stage can qualify itself on the same packaged stack without borrowing a browser.
-case ${WEFT_ACCEPTANCE_STAGE_ONLY:-false} in
-  true) [[ -x ${WEFT_ACCEPTANCE_STAGE:-} && -z ${WEFT_ACCEPTANCE_HOLD:-} ]] ||
-    fail 'Stage-only acceptance requires an executable WEFT_ACCEPTANCE_STAGE and no hold.' ;;
+case ${BRAID_ACCEPTANCE_STAGE_ONLY:-false} in
+  true) [[ -x ${BRAID_ACCEPTANCE_STAGE:-} && -z ${BRAID_ACCEPTANCE_HOLD:-} ]] ||
+    fail 'Stage-only acceptance requires an executable BRAID_ACCEPTANCE_STAGE and no hold.' ;;
   false)
-    [[ -x ${WEFT_CHROMIUM_EXECUTABLE:-} ]] || fail 'Set WEFT_CHROMIUM_EXECUTABLE to a Chromium executable.'
+    [[ -x ${BRAID_CHROMIUM_EXECUTABLE:-} ]] || fail 'Set BRAID_CHROMIUM_EXECUTABLE to a Chromium executable.'
     [[ -d $repository/node_modules/@playwright/test ]] || fail 'Run npm ci in the repository first.' ;;
-  *) fail 'WEFT_ACCEPTANCE_STAGE_ONLY must be true or false' ;;
+  *) fail 'BRAID_ACCEPTANCE_STAGE_ONLY must be true or false' ;;
 esac
-export WEFT_ACCEPTANCE_OLLAMA_VOLUME=${WEFT_ACCEPTANCE_OLLAMA_VOLUME:-weft-ollama-models}
-export WEFT_ACCEPTANCE_CHAT_MODEL=${WEFT_ACCEPTANCE_CHAT_MODEL:-qwen2.5:1.5b}
-case ${WEFT_ACCEPTANCE_MODEL_FIXTURE:-false} in
-  false) docker volume inspect "$WEFT_ACCEPTANCE_OLLAMA_VOLUME" >/dev/null 2>&1 ||
-    fail "Model volume $WEFT_ACCEPTANCE_OLLAMA_VOLUME is missing; see docs/hosted-acceptance.md." ;;
-  true) export WEFT_ACCEPTANCE_MODEL_FIXTURE=true ;;
-  *) fail 'WEFT_ACCEPTANCE_MODEL_FIXTURE must be true or false' ;;
+export BRAID_ACCEPTANCE_OLLAMA_VOLUME=${BRAID_ACCEPTANCE_OLLAMA_VOLUME:-braid-ollama-models}
+export BRAID_ACCEPTANCE_CHAT_MODEL=${BRAID_ACCEPTANCE_CHAT_MODEL:-qwen2.5:1.5b}
+case ${BRAID_ACCEPTANCE_MODEL_FIXTURE:-false} in
+  false) docker volume inspect "$BRAID_ACCEPTANCE_OLLAMA_VOLUME" >/dev/null 2>&1 ||
+    fail "Model volume $BRAID_ACCEPTANCE_OLLAMA_VOLUME is missing; see docs/hosted-acceptance.md." ;;
+  true) export BRAID_ACCEPTANCE_MODEL_FIXTURE=true ;;
+  *) fail 'BRAID_ACCEPTANCE_MODEL_FIXTURE must be true or false' ;;
 esac
-export WEFT_ACCEPTANCE_NODE_IMAGE=${WEFT_ACCEPTANCE_NODE_IMAGE:-docker.io/library/node@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392}
+export BRAID_ACCEPTANCE_NODE_IMAGE=${BRAID_ACCEPTANCE_NODE_IMAGE:-docker.io/library/node@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392}
 
 build() {
   local tag=$1
@@ -115,34 +115,34 @@ build() {
   built_images+=("$tag")
 }
 
-if [[ -z ${WEFT_IMAGE:-} ]]; then
-  for target in weft edge weft-worker; do
+if [[ -z ${BRAID_IMAGE:-} ]]; then
+  for target in braid edge braid-worker; do
     build "$target:$project" --file "$repository/deploy/container/Dockerfile" --target "$target" "$repository"
   done
-  export WEFT_IMAGE=weft:$project WEFT_EDGE_IMAGE=edge:$project WEFT_WORKER_IMAGE=weft-worker:$project
+  export BRAID_IMAGE=braid:$project BRAID_EDGE_IMAGE=edge:$project BRAID_WORKER_IMAGE=braid-worker:$project
 fi
-if [[ -z ${WEFT_FERRULE_SERVICE_IMAGE:-} ]]; then
+if [[ -z ${BRAID_FERRULE_SERVICE_IMAGE:-} ]]; then
   # A supplied native image must be a tag or registry digest of an engines/ferrule-host build.
-  native=${WEFT_FERRULE_NATIVE_IMAGE:-}
+  native=${BRAID_FERRULE_NATIVE_IMAGE:-}
   if [[ -z $native ]]; then
-    build "weft-ferrule-native:$project" "$repository/engines/ferrule-host"
-    native=weft-ferrule-native:$project
+    build "braid-ferrule-native:$project" "$repository/engines/ferrule-host"
+    native=braid-ferrule-native:$project
   fi
   container=$(docker create "$native")
   docker cp "$container:/ferrule-host" "$work/ferrule-host" >/dev/null
   docker rm "$container" >/dev/null
   native_digest=$(sha256sum "$work/ferrule-host" | cut -d' ' -f1)
   rm -f "$work/ferrule-host"
-  build "weft-ferrule-service:$project" --file "$repository/engines/ferrule-service/Dockerfile" \
-    --build-arg "WEFT_NATIVE_IMAGE=$native" --build-arg "WEFT_NATIVE_BINARY_SHA256=$native_digest" "$repository"
-  export WEFT_FERRULE_SERVICE_IMAGE=weft-ferrule-service:$project
+  build "braid-ferrule-service:$project" --file "$repository/engines/ferrule-service/Dockerfile" \
+    --build-arg "BRAID_NATIVE_IMAGE=$native" --build-arg "BRAID_NATIVE_BINARY_SHA256=$native_digest" "$repository"
+  export BRAID_FERRULE_SERVICE_IMAGE=braid-ferrule-service:$project
 fi
 
 for role in POSTGRES_ADMIN MIGRATOR RUNTIME INGEST CATALOG METADATA CREATOR REPORT DERIVATION MAINTENANCE \
   IDENTITY PAYLOAD_PERMISSION SESSION_READER SESSION_WRITER CHAT_READER CHAT_WRITER CHAT_APPROVER CHAT_LIFECYCLE \
   PREVIEW_READER PREVIEW_WRITER CASE_READER CASE_WRITER RUN_READER RUN_WRITER COMPARISON BUILD_READER BUILD_WRITER BUILD_RUN_READER \
   BUILD_RUN_WRITER BUILD_DISPATCHER BUILD_METADATA QUALIFICATION_READER QUALIFICATION_WRITER RELEASE_READER RELEASE_WRITER INVOCATION_GRANT_WRITER INVOCATION_WRITER API_AUDIT_WRITER DRAFT_READER DRAFT_WRITER; do
-  export "WEFT_LOCAL_${role}_PASSWORD=$(openssl rand -hex 24)"
+  export "BRAID_LOCAL_${role}_PASSWORD=$(openssl rand -hex 24)"
 done
 new_pem() {
   openssl req -x509 -newkey rsa:2048 -nodes -sha256 -days 30 -subj "/CN=$1" \
@@ -153,7 +153,7 @@ new_pem() {
 pin() { openssl x509 -in "$work/$1.crt" -outform DER | openssl dgst -sha256 -r | cut -d' ' -f1; }
 # The run's own certificate authority and the two TLS names it signs. The server trusts only this
 # authority; the browser admits the leaves' public keys for this run.
-openssl req -x509 -newkey rsa:2048 -nodes -sha256 -days 2 -subj '/CN=Weft acceptance test authority' \
+openssl req -x509 -newkey rsa:2048 -nodes -sha256 -days 2 -subj '/CN=Braid acceptance test authority' \
   -addext 'basicConstraints=critical,CA:TRUE' -addext 'keyUsage=critical,keyCertSign,cRLSign' \
   -keyout "$work/authority.key" -out "$work/authority.crt" 2>/dev/null
 new_leaf() {
@@ -166,57 +166,57 @@ new_leaf() {
 }
 spki() { openssl x509 -in "$work/$1.crt" -pubkey -noout | openssl pkey -pubin -outform DER | openssl dgst -sha256 -binary | base64; }
 
-unset WEFT_PRIVATE_STORAGE_ROOT # compose.acceptance.yml leaves it unset for Blob storage
-export WEFT_PUBLIC_HOST=weft.example.test WEFT_EDGE_TRUSTED_PROXIES=
-export WEFT_COMPOSE_PORT=0 WEFT_ACCEPTANCE_HTTPS_PORT=0 WEFT_ACCEPTANCE_ISSUER_PORT=0
-WEFT_SESSION_KEY_PEM=$(new_pem weft-session-key)
-WEFT_ENTRA_CLIENT_PEM=$(new_pem weft-entra-client)
-WEFT_ACCEPTANCE_CLIENT_CERTIFICATE=$(cat "$work/weft-entra-client.crt")
-WEFT_SESSION_ORGANIZATION_ID=$(cat /proc/sys/kernel/random/uuid)
-WEFT_ENTRA_TENANT_ID=$(cat /proc/sys/kernel/random/uuid)
-WEFT_ENTRA_CLIENT_ID=$(cat /proc/sys/kernel/random/uuid)
-WEFT_ACCEPTANCE_SUBJECT=$(openssl rand 32 | basenc --base64url | tr -d '=')
-WEFT_ACCEPTANCE_OBJECT_ID=$(cat /proc/sys/kernel/random/uuid)
-WEFT_ACCEPTANCE_ISSUER_PEM=$(new_leaf issuer login.microsoftonline.com)
-WEFT_ACCEPTANCE_INGRESS_PEM=$(new_leaf ingress "$WEFT_PUBLIC_HOST")
-WEFT_ACCEPTANCE_TRUST_PEM=$(cat "$work/authority.crt")
-WEFT_ACCEPTANCE_SIGNING_KEY=$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 2>/dev/null)
-export WEFT_SESSION_KEY_PEM WEFT_ENTRA_CLIENT_PEM WEFT_ACCEPTANCE_CLIENT_CERTIFICATE WEFT_SESSION_ORGANIZATION_ID \
-  WEFT_ENTRA_TENANT_ID WEFT_ENTRA_CLIENT_ID WEFT_ACCEPTANCE_SUBJECT WEFT_ACCEPTANCE_OBJECT_ID WEFT_ACCEPTANCE_ISSUER_PEM \
-  WEFT_ACCEPTANCE_INGRESS_PEM WEFT_ACCEPTANCE_TRUST_PEM WEFT_ACCEPTANCE_SIGNING_KEY
+unset BRAID_PRIVATE_STORAGE_ROOT # compose.acceptance.yml leaves it unset for Blob storage
+export BRAID_PUBLIC_HOST=braid.example.test BRAID_EDGE_TRUSTED_PROXIES=
+export BRAID_COMPOSE_PORT=0 BRAID_ACCEPTANCE_HTTPS_PORT=0 BRAID_ACCEPTANCE_ISSUER_PORT=0
+BRAID_SESSION_KEY_PEM=$(new_pem braid-session-key)
+BRAID_ENTRA_CLIENT_PEM=$(new_pem braid-entra-client)
+BRAID_ACCEPTANCE_CLIENT_CERTIFICATE=$(cat "$work/braid-entra-client.crt")
+BRAID_SESSION_ORGANIZATION_ID=$(cat /proc/sys/kernel/random/uuid)
+BRAID_ENTRA_TENANT_ID=$(cat /proc/sys/kernel/random/uuid)
+BRAID_ENTRA_CLIENT_ID=$(cat /proc/sys/kernel/random/uuid)
+BRAID_ACCEPTANCE_SUBJECT=$(openssl rand 32 | basenc --base64url | tr -d '=')
+BRAID_ACCEPTANCE_OBJECT_ID=$(cat /proc/sys/kernel/random/uuid)
+BRAID_ACCEPTANCE_ISSUER_PEM=$(new_leaf issuer login.microsoftonline.com)
+BRAID_ACCEPTANCE_INGRESS_PEM=$(new_leaf ingress "$BRAID_PUBLIC_HOST")
+BRAID_ACCEPTANCE_TRUST_PEM=$(cat "$work/authority.crt")
+BRAID_ACCEPTANCE_SIGNING_KEY=$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 2>/dev/null)
+export BRAID_SESSION_KEY_PEM BRAID_ENTRA_CLIENT_PEM BRAID_ACCEPTANCE_CLIENT_CERTIFICATE BRAID_SESSION_ORGANIZATION_ID \
+  BRAID_ENTRA_TENANT_ID BRAID_ENTRA_CLIENT_ID BRAID_ACCEPTANCE_SUBJECT BRAID_ACCEPTANCE_OBJECT_ID BRAID_ACCEPTANCE_ISSUER_PEM \
+  BRAID_ACCEPTANCE_INGRESS_PEM BRAID_ACCEPTANCE_TRUST_PEM BRAID_ACCEPTANCE_SIGNING_KEY
 # The service's build identity is the digest of the exact worker binary recorded in its image.
-worker_digest=$(docker image inspect --format '{{index .Config.Labels "io.weft.ferrule.worker-sha256"}}' "$WEFT_FERRULE_SERVICE_IMAGE")
+worker_digest=$(docker image inspect --format '{{index .Config.Labels "io.braid.ferrule.worker-sha256"}}' "$BRAID_FERRULE_SERVICE_IMAGE")
 [[ $worker_digest =~ ^[0-9a-f]{64}$ ]] || fail 'service image identity label'
-WEFT_FERRULE_SERVICE_IDENTITY=sha256:$worker_digest
+BRAID_FERRULE_SERVICE_IDENTITY=sha256:$worker_digest
 # Measure the trusted local image, including its installed compiler implementation. This is
 # not an automatic adoption of an unknown remote replica's advertised identity. The browser run
 # checks the build's provenance against the combined identity recorded here.
 docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
   --label "com.docker.compose.project=$project" --tmpfs /tmp:size=256m,mode=1777 \
-  --memory 3g --pids-limit 256 "$WEFT_FERRULE_SERVICE_IMAGE" identity >"$work/compiler-identity.json"
-WEFT_FERRULE_COMPILE_TOOLCHAIN=$(node -e '
+  --memory 3g --pids-limit 256 "$BRAID_FERRULE_SERVICE_IMAGE" identity >"$work/compiler-identity.json"
+BRAID_FERRULE_COMPILE_TOOLCHAIN=$(node -e '
   const fs = require("node:fs");
   const value = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
   const pin = /^sha256:[a-f0-9]{64}$/;
-  if (value.schema !== "weft.compiler-image-identity.v1" || Object.keys(value).length !== 4 ||
+  if (value.schema !== "braid.compiler-image-identity.v1" || Object.keys(value).length !== 4 ||
     value.native !== process.argv[2] || !pin.test(value.toolchain) || !pin.test(value.build) ||
     value.build === value.native) process.exit(1);
   process.stdout.write(value.toolchain);
-' "$work/compiler-identity.json" "$WEFT_FERRULE_SERVICE_IDENTITY") || fail 'service compiler identity'
-export WEFT_FERRULE_COMPILE_TOOLCHAIN
-WEFT_FERRULE_SERVICE_PEM=$(new_pem weft-ferrule-service)
-WEFT_FERRULE_SERVICE_CLIENT_PEM=$(new_pem weft-ferrule-service-client)
-WEFT_RUNS_FERRULE_SERVICE_CLIENT_PEM=$(new_pem weft-ferrule-runs-client)
-WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256=$(pin weft-ferrule-service)
-WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256=$(pin weft-ferrule-service-client)
-WEFT_RUNS_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256=$(pin weft-ferrule-runs-client)
-export WEFT_FERRULE_SERVICE_IDENTITY WEFT_FERRULE_SERVICE_PEM WEFT_FERRULE_SERVICE_CLIENT_PEM \
-  WEFT_RUNS_FERRULE_SERVICE_CLIENT_PEM WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256 \
-  WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256 WEFT_RUNS_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256
-export WEFT_FERRULE_SERVICE_REPLICAS=${WEFT_FERRULE_SERVICE_REPLICAS:-2}
-WEFT_CHAT_PROFILES_JSON=$(printf '{"version":1,"retentionDays":7,"turnSeconds":180,"maxOutputTokens":512,"profiles":[{"id":"local-acceptance","version":1,"displayName":"Local acceptance model","provider":"ollama","dialect":"ollamaChatNdjson","model":"%s","endpoint":"http://127.0.0.1:11434/api/chat","loopbackFixture":true,"requestThinkFalse":true,"credentialReference":null,"capabilities":["text","functionTools"],"metadataPolicy":{"id":"mapping-metadata","version":1,"mappingMetadataAllowed":true,"payloadsAllowed":false}},{"id":"local-acceptance-payloads","version":1,"displayName":"Local acceptance samples","provider":"ollama","dialect":"ollamaChatNdjson","model":"%s","endpoint":"http://127.0.0.1:11434/api/chat","loopbackFixture":true,"requestThinkFalse":true,"credentialReference":null,"capabilities":["text","functionTools"],"metadataPolicy":{"id":"mapping-and-samples","version":1,"mappingMetadataAllowed":true,"payloadsAllowed":true}}],"credentials":[]}' \
-  "$WEFT_ACCEPTANCE_CHAT_MODEL" "$WEFT_ACCEPTANCE_CHAT_MODEL")
-export WEFT_CHAT_PROFILES_JSON
+' "$work/compiler-identity.json" "$BRAID_FERRULE_SERVICE_IDENTITY") || fail 'service compiler identity'
+export BRAID_FERRULE_COMPILE_TOOLCHAIN
+BRAID_FERRULE_SERVICE_PEM=$(new_pem braid-ferrule-service)
+BRAID_FERRULE_SERVICE_CLIENT_PEM=$(new_pem braid-ferrule-service-client)
+BRAID_RUNS_FERRULE_SERVICE_CLIENT_PEM=$(new_pem braid-ferrule-runs-client)
+BRAID_FERRULE_SERVICE_CERTIFICATE_SHA256=$(pin braid-ferrule-service)
+BRAID_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256=$(pin braid-ferrule-service-client)
+BRAID_RUNS_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256=$(pin braid-ferrule-runs-client)
+export BRAID_FERRULE_SERVICE_IDENTITY BRAID_FERRULE_SERVICE_PEM BRAID_FERRULE_SERVICE_CLIENT_PEM \
+  BRAID_RUNS_FERRULE_SERVICE_CLIENT_PEM BRAID_FERRULE_SERVICE_CERTIFICATE_SHA256 \
+  BRAID_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256 BRAID_RUNS_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256
+export BRAID_FERRULE_SERVICE_REPLICAS=${BRAID_FERRULE_SERVICE_REPLICAS:-2}
+BRAID_CHAT_PROFILES_JSON=$(printf '{"version":1,"retentionDays":7,"turnSeconds":180,"maxOutputTokens":512,"profiles":[{"id":"local-acceptance","version":1,"displayName":"Local acceptance model","provider":"ollama","dialect":"ollamaChatNdjson","model":"%s","endpoint":"http://127.0.0.1:11434/api/chat","loopbackFixture":true,"requestThinkFalse":true,"credentialReference":null,"capabilities":["text","functionTools"],"metadataPolicy":{"id":"mapping-metadata","version":1,"mappingMetadataAllowed":true,"payloadsAllowed":false}},{"id":"local-acceptance-payloads","version":1,"displayName":"Local acceptance samples","provider":"ollama","dialect":"ollamaChatNdjson","model":"%s","endpoint":"http://127.0.0.1:11434/api/chat","loopbackFixture":true,"requestThinkFalse":true,"credentialReference":null,"capabilities":["text","functionTools"],"metadataPolicy":{"id":"mapping-and-samples","version":1,"mappingMetadataAllowed":true,"payloadsAllowed":true}}],"credentials":[]}' \
+  "$BRAID_ACCEPTANCE_CHAT_MODEL" "$BRAID_ACCEPTANCE_CHAT_MODEL")
+export BRAID_CHAT_PROFILES_JSON
 
 compose config --quiet || fail 'acceptance stack configuration'
 networks=$(compose config --networks) || fail 'acceptance stack networks'
@@ -230,9 +230,9 @@ for service in migrate blob-container storage-init session-keys; do
     fail "$service exit status"
 done
 echo 'ok - migration, Blob container, Blob store and key-ring steps completed'
-if [[ ${WEFT_ACCEPTANCE_MODEL_FIXTURE:-false} != true ]]; then
-  compose exec -T model ollama list | grep -q -F "$WEFT_ACCEPTANCE_CHAT_MODEL" ||
-    fail "chat model $WEFT_ACCEPTANCE_CHAT_MODEL is not in $WEFT_ACCEPTANCE_OLLAMA_VOLUME"
+if [[ ${BRAID_ACCEPTANCE_MODEL_FIXTURE:-false} != true ]]; then
+  compose exec -T model ollama list | grep -q -F "$BRAID_ACCEPTANCE_CHAT_MODEL" ||
+    fail "chat model $BRAID_ACCEPTANCE_CHAT_MODEL is not in $BRAID_ACCEPTANCE_OLLAMA_VOLUME"
 fi
 
 # No container of the stack receives the Docker socket.
@@ -251,37 +251,37 @@ owner() {
   compose run --rm --no-deps -T "$@" >"$work/owner.out" 2>&1 ||
     { cat "$work/owner.out" >&2; fail "owner command $*"; }
 }
-owner -e "WEFT_DEV_ORGANIZATION_ID=$WEFT_SESSION_ORGANIZATION_ID" -e "WEFT_DEV_PRINCIPAL_ID=$principal" \
-  -e 'WEFT_DEV_ORGANIZATION_NAME=Acceptance organization' migrate database provision-development-identity
-owner -e "WEFT_DELIVER_OWNER_INPUT={\"tenantId\":\"$WEFT_ENTRA_TENANT_ID\",\"objectId\":\"$WEFT_ACCEPTANCE_OBJECT_ID\"}" \
+owner -e "BRAID_DEV_ORGANIZATION_ID=$BRAID_SESSION_ORGANIZATION_ID" -e "BRAID_DEV_PRINCIPAL_ID=$principal" \
+  -e 'BRAID_DEV_ORGANIZATION_NAME=Acceptance organization' migrate database provision-development-identity
+owner -e "BRAID_DELIVER_OWNER_INPUT={\"tenantId\":\"$BRAID_ENTRA_TENANT_ID\",\"objectId\":\"$BRAID_ACCEPTANCE_OBJECT_ID\"}" \
   migrate database bind-entra-user "$principal"
 grep -q '"outcome":"created"' "$work/owner.out" || fail 'identity binding'
-owner migrate database set-project-creation-capability "$WEFT_SESSION_ORGANIZATION_ID" "$principal" true
+owner migrate database set-project-creation-capability "$BRAID_SESSION_ORGANIZATION_ID" "$principal" true
 echo 'ok - one external identity bound to an admitted principal that may create projects'
 
 https_port=$(compose port ingress 8443 | cut -d: -f2)
 issuer_port=$(compose port issuer 443 | cut -d: -f2)
-export WEFT_ACCEPTANCE_BASE_URL=https://$WEFT_PUBLIC_HOST
-export WEFT_ACCEPTANCE_HOST_RULES="MAP $WEFT_PUBLIC_HOST:443 127.0.0.1:$https_port, MAP login.microsoftonline.com:443 127.0.0.1:$issuer_port, MAP * ~NOTFOUND"
-WEFT_ACCEPTANCE_SPKI=$(spki issuer),$(spki ingress)
-export WEFT_ACCEPTANCE_SPKI
-export WEFT_ACCEPTANCE_COMPOSE_PROJECT=$project
-WEFT_ACCEPTANCE_COMPOSE_FILES=$(printf '%s:' "$compose_directory"/compose.{yml,ferrule-service.yml,features.yml,acceptance.yml})
-export WEFT_ACCEPTANCE_COMPOSE_FILES=${WEFT_ACCEPTANCE_COMPOSE_FILES%:}
-if [[ ${WEFT_ACCEPTANCE_MODEL_FIXTURE:-false} == true ]]; then
-  export WEFT_ACCEPTANCE_COMPOSE_FILES="$WEFT_ACCEPTANCE_COMPOSE_FILES:$compose_directory/compose.model-fixture.yml"
+export BRAID_ACCEPTANCE_BASE_URL=https://$BRAID_PUBLIC_HOST
+export BRAID_ACCEPTANCE_HOST_RULES="MAP $BRAID_PUBLIC_HOST:443 127.0.0.1:$https_port, MAP login.microsoftonline.com:443 127.0.0.1:$issuer_port, MAP * ~NOTFOUND"
+BRAID_ACCEPTANCE_SPKI=$(spki issuer),$(spki ingress)
+export BRAID_ACCEPTANCE_SPKI
+export BRAID_ACCEPTANCE_COMPOSE_PROJECT=$project
+BRAID_ACCEPTANCE_COMPOSE_FILES=$(printf '%s:' "$compose_directory"/compose.{yml,ferrule-service.yml,features.yml,acceptance.yml})
+export BRAID_ACCEPTANCE_COMPOSE_FILES=${BRAID_ACCEPTANCE_COMPOSE_FILES%:}
+if [[ ${BRAID_ACCEPTANCE_MODEL_FIXTURE:-false} == true ]]; then
+  export BRAID_ACCEPTANCE_COMPOSE_FILES="$BRAID_ACCEPTANCE_COMPOSE_FILES:$compose_directory/compose.model-fixture.yml"
 fi
-export WEFT_ACCEPTANCE_COMPOSE_FILES="$WEFT_ACCEPTANCE_COMPOSE_FILES:$work/subnets.yml"
-if [[ -n ${WEFT_API_BEARER_CLIENT_IDS:-} ]]; then
-  export WEFT_ACCEPTANCE_COMPOSE_FILES="$WEFT_ACCEPTANCE_COMPOSE_FILES:$compose_directory/compose.bearer.yml"
+export BRAID_ACCEPTANCE_COMPOSE_FILES="$BRAID_ACCEPTANCE_COMPOSE_FILES:$work/subnets.yml"
+if [[ -n ${BRAID_API_BEARER_CLIENT_IDS:-} ]]; then
+  export BRAID_ACCEPTANCE_COMPOSE_FILES="$BRAID_ACCEPTANCE_COMPOSE_FILES:$compose_directory/compose.bearer.yml"
 fi
-export WEFT_ACCEPTANCE_PRINCIPAL_ID=$principal
-export WEFT_ACCEPTANCE_WORK=$work
-export WEFT_ACCEPTANCE_FIXTURES=$repository/engines/ferrule-host/tests/fixtures
+export BRAID_ACCEPTANCE_PRINCIPAL_ID=$principal
+export BRAID_ACCEPTANCE_WORK=$work
+export BRAID_ACCEPTANCE_FIXTURES=$repository/engines/ferrule-host/tests/fixtures
 
-if [[ -n ${WEFT_ACCEPTANCE_HOLD:-} ]]; then
+if [[ -n ${BRAID_ACCEPTANCE_HOLD:-} ]]; then
   # Debugging aid: keep the stack for manual browser runs until the release file appears.
-  export -p | grep -E ' (WEFT_|DOCKER_CONFIG=)' >"$work/environment"
+  export -p | grep -E ' (BRAID_|DOCKER_CONFIG=)' >"$work/environment"
   chmod 0600 "$work/environment"
   echo "Holding $project: source $work/environment, then touch $work/release to clean up."
   until [[ -e $work/release ]]; do sleep 5; done
@@ -289,13 +289,13 @@ if [[ -n ${WEFT_ACCEPTANCE_HOLD:-} ]]; then
   exit 0
 fi
 
-if [[ ${WEFT_ACCEPTANCE_STAGE_ONLY:-false} == true ]]; then
-  echo "Running the standalone client stage $(basename -- "$WEFT_ACCEPTANCE_STAGE")"
-  "$WEFT_ACCEPTANCE_STAGE" || fail 'standalone client stage'
+if [[ ${BRAID_ACCEPTANCE_STAGE_ONLY:-false} == true ]]; then
+  echo "Running the standalone client stage $(basename -- "$BRAID_ACCEPTANCE_STAGE")"
+  "$BRAID_ACCEPTANCE_STAGE" || fail 'standalone client stage'
 else
   echo 'Running the browser flows'
   # An optional command prefix for the browser run, for example a virtual display or a lock.
-  read -r -a wrapper <<<"${WEFT_ACCEPTANCE_BROWSER_WRAPPER:-}"
+  read -r -a wrapper <<<"${BRAID_ACCEPTANCE_BROWSER_WRAPPER:-}"
   (cd "$repository/apps/web" && "${wrapper[@]}" npx playwright test --config playwright.hosted-acceptance.config.ts) ||
     fail 'browser flows'
   # Each use of the application's own recovery controls on a slow host, the chat attempts the
@@ -307,7 +307,7 @@ fi
 # The run's own evidence: sign-in went through the issuer without refusals, every service replica
 # is still healthy (a replica with unconfirmed cleanup fails readiness) and nothing restarted on its own.
 compose logs --no-color issuer >"$work/issuer.log" 2>&1
-if [[ ${WEFT_ACCEPTANCE_STAGE_ONLY:-false} == true ]]; then
+if [[ ${BRAID_ACCEPTANCE_STAGE_ONLY:-false} == true ]]; then
   grep -q 'issuer public-token' "$work/issuer.log" || fail 'no public-client token was redeemed at the issuer'
 else
   grep -q 'issuer token' "$work/issuer.log" || fail 'no token was redeemed at the issuer'
@@ -319,7 +319,7 @@ for container in $(compose ps --quiet ferrule); do
 done
 echo 'ok - every Ferrule service replica is healthy'
 project_id=$(cat "$work/project-id" 2>/dev/null) || fail 'the client run recorded no project'
-compose run --rm --no-deps -T maintenance run-once "$WEFT_SESSION_ORGANIZATION_ID" "$project_id" \
+compose run --rm --no-deps -T maintenance run-once "$BRAID_SESSION_ORGANIZATION_ID" "$project_id" \
   >"$work/maintenance.out" 2>"$work/maintenance.err" || { tail -n 5 "$work/maintenance.err" >&2; fail 'maintenance over the Blob store'; }
 grep -q '"outcome":"finished","failure":null' "$work/maintenance.out" || fail 'maintenance outcome'
 grep -q '"filesystemTraversalComplete":true' "$work/maintenance.out" || fail 'maintenance observation of the Blob store'
@@ -328,8 +328,8 @@ echo "ok - maintenance observed the project's Blob objects: $(grep -o '"publicat
 # An optional follow-on stage on this run's stack before cleanup, for example
 # deploy/compose/endpoint-acceptance-test.sh. It inherits the run's environment, and its failure
 # fails the run; the run's cleanup still removes the stack.
-if [[ -n ${WEFT_ACCEPTANCE_STAGE:-} && ${WEFT_ACCEPTANCE_STAGE_ONLY:-false} != true ]]; then
-  echo "Running the follow-on stage $(basename -- "$WEFT_ACCEPTANCE_STAGE")"
-  "$WEFT_ACCEPTANCE_STAGE" || fail 'follow-on stage'
+if [[ -n ${BRAID_ACCEPTANCE_STAGE:-} && ${BRAID_ACCEPTANCE_STAGE_ONLY:-false} != true ]]; then
+  echo "Running the follow-on stage $(basename -- "$BRAID_ACCEPTANCE_STAGE")"
+  "$BRAID_ACCEPTANCE_STAGE" || fail 'follow-on stage'
 fi
 acceptance_complete=true

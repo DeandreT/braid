@@ -1,10 +1,9 @@
 # Durable build approval and artifact storage
 
-Migration 0018 adds independent `weft_build_reader` and `weft_build_writer`
+Migration 0018 adds independent `braid_build_reader` and `braid_build_writer`
 profiles. Both are CONNECT-only logins before migration. The installed profiles
 can call only the bounded owner-defined build functions; neither can read or
-mutate tables directly. Existing installations provision them with
-`deploy/local/postgres-add-build-roles.sh` before applying the migration.
+mutate tables directly. Provision both logins before applying the schema.
 
 ## Environment and approval identity
 
@@ -57,6 +56,4 @@ principal. Reader credentials cannot approve, stage, publish or revoke.
 Environment creation is administrator-only; other build operations require
 current publisher/administrator access and original-actor ownership.
 
-These adapters do not infer compiler capability, start a worker, expose an HTTP
-route or deploy to Azure. The host must explicitly compose approved operations,
-the qualified compiler and target. See [build workflow](build-workflow.md).
+See [build workflow](build-workflow.md) for compiler and publication composition.

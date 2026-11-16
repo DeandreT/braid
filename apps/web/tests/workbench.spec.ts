@@ -15,7 +15,7 @@ import { layoutStorageKey } from "../src/workbench/layout-preferences";
 // default --hide-scrollbars would otherwise conceal lost usable viewport space.
 test.use({
   launchOptions: {
-    executablePath: process.env.WEFT_CHROMIUM_EXECUTABLE,
+    executablePath: process.env.BRAID_CHROMIUM_EXECUTABLE,
     ignoreDefaultArgs: ["--hide-scrollbars"],
   },
 });
@@ -46,7 +46,7 @@ test("readable saved timestamps retain their exact value through a keyboard disc
 }) => {
   await workbench(page);
   await page.getByRole("tab", { name: "Tests", exact: true }).click();
-  const metadata = page.locator(".wb-case-table weft-metadata-value");
+  const metadata = page.locator(".wb-case-table braid-metadata-value");
   const summary = metadata.locator("summary");
   await expect(summary).toContainText("UTC");
   await summary.focus();
@@ -315,7 +315,7 @@ async function workbench(page: Page, fieldCount = 1) {
     engineRevision: "engine",
     backendBuild: "sha256:" + "c".repeat(64),
     adapterBuild: "adapter",
-    profile: "weft.ferrule-json-preview.v1",
+    profile: "braid.ferrule-json-preview.v1",
   };
   const definition: components["schemas"]["RegressionCasePutV1"] = {
     name: "Exact number sample",
@@ -327,7 +327,7 @@ async function workbench(page: Page, fieldCount = 1) {
       maximumArtifacts: 64,
       maximumTextBytes: 2048,
     },
-    comparisonPolicy: "weft.regression.exact-bytes.v1",
+    comparisonPolicy: "braid.regression.exact-bytes.v1",
     currentDateTime: "2026-10-20T12:00:00Z",
     target: { kind: "all", name: null },
     primaryBase64Url: base64('{"privateSample":9007199254740993}'),

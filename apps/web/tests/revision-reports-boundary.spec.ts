@@ -846,7 +846,7 @@ test("controlled pending metadata: foreign locations and malformed retry delays 
     ),
     reports.data.reportPath("validation"),
     path + "?extra=1",
-    new URL(path, process.env.WEFT_REPORTS_BASE_URL).href,
+    new URL(path, process.env.BRAID_REPORTS_BASE_URL).href,
   ]) {
     await prepareGenerate(page, reports);
     await settleFocus(page);
@@ -969,7 +969,7 @@ test("controlled observation bounds: long delays stay pending and repeated GET o
         const url = new URL(response.url());
         return (
           response.request().method() === "GET" &&
-          url.origin === process.env.WEFT_REPORTS_BASE_URL &&
+          url.origin === process.env.BRAID_REPORTS_BASE_URL &&
           url.pathname === path &&
           url.search === "" &&
           response.status() === 200

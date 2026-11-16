@@ -6,8 +6,6 @@ summary: Approve and prepare a build of a tested revision, and how a build reach
 ---
 
 A build turns one revision into a compiled file that other systems can run.
-Preparing a build doesn't put it in use: that is a separate step, described in
-[The mapping endpoint](#the-mapping-endpoint).
 
 Publishers and administrators can approve and prepare builds. Administrators
 also manage build environments. Builds may be turned off in your workspace.
@@ -26,7 +24,7 @@ A build needs:
 - the revision's **current explanation**, saved and successful with
   **complete** [coverage](reports.md#coverage). If it hasn't been generated,
   [generate it](reports.md#generate-a-report) first;
-- a mapping admitted by the selected compiler profile. The legacy profile
+- a mapping admitted by the selected compiler profile. The JSON profile
   accepts JSON; separate profiles cover declared document formats and flat
   CSV/TSV mappings. CSV/TSV requires one primary input and one primary output,
   with the dialect saved in the native revision.
@@ -34,8 +32,7 @@ A build needs:
 If any of these is missing, braid refuses the approval or the build.
 
 CSV builds are separately opt-in: an administrator must enable
-`WEFT_BUILDS_CSV_ENABLED=true` and configure the matching compiler and runtime.
-Offering CSV previews or regression tests alone does not enable CSV builds.
+`BRAID_BUILDS_CSV_ENABLED=true` and configure the matching compiler and runtime.
 A passing **Ordered CSV rows and cells** test is not exact-byte evidence and
 cannot support build approval or compiled qualification.
 
@@ -80,9 +77,8 @@ version with the people who run the endpoint.
 
 For CSV/TSV, choose **CSV / TSV with native dialect** under **Compiler profile**
 when the server offers it. This registers the separate
-`weft.ferrule-csharp-csv.v1` profile. Its native boundary and compiler identity
-checks are independent of the preview's success; a JSON environment does not
-become a CSV environment automatically.
+`braid.ferrule-csharp-csv.v1` profile. Its native boundary and compiler identity
+checks use the selected CSV environment.
 
 ## The mapping endpoint
 

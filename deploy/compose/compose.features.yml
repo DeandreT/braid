@@ -1,6 +1,6 @@
 # Session features beyond catalog, upload and reports: chat, previews, regression cases and runs,
 # and builds, each through its own login delivered as a protected private file. The separate
-# `runs` Weft.Worker executes previews, regression runs and approved builds through the Ferrule
+# `runs` Braid.Worker executes previews, regression runs and approved builds through the Ferrule
 # service with its own logins, also delivered as private files; like the service override,
 # nothing here needs the Docker socket. Builds run through the service's explicitly enabled
 # compiler profile with the same toolchain pin as their saved evidence.
@@ -9,106 +9,106 @@
 services:
   server:
     environment:
-      WEFT_CHAT_ENABLED: "true"
-      WEFT_CHAT_PROFILES_FILE: /run/weft/secrets/chat-profiles
-      WEFT_DELIVER_FILE_CHAT_PROFILES: ${WEFT_CHAT_PROFILES_JSON:?Set the private chat profile document}
-      WEFT_CHAT_READER_CONNECTION_STRING_FILE: /run/weft/secrets/chat-reader
-      WEFT_DELIVER_FILE_CHAT_READER: Host=postgres;Database=weft;Username=weft_chat_reader;Password=${WEFT_LOCAL_CHAT_READER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_CHAT_WRITER_CONNECTION_STRING_FILE: /run/weft/secrets/chat-writer
-      WEFT_DELIVER_FILE_CHAT_WRITER: Host=postgres;Database=weft;Username=weft_chat_writer;Password=${WEFT_LOCAL_CHAT_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_CHAT_APPROVER_CONNECTION_STRING_FILE: /run/weft/secrets/chat-approver
-      WEFT_DELIVER_FILE_CHAT_APPROVER: Host=postgres;Database=weft;Username=weft_chat_approver;Password=${WEFT_LOCAL_CHAT_APPROVER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_CHAT_PAYLOAD_PERMISSION_CONNECTION_STRING_FILE: /run/weft/secrets/chat-payload-permission
-      WEFT_DELIVER_FILE_CHAT_PAYLOAD_PERMISSION: Host=postgres;Database=weft;Username=weft_payload_permission_reader;Password=${WEFT_LOCAL_PAYLOAD_PERMISSION_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_PREVIEWS_ENABLED: "true"
-      WEFT_POSTGRES_PREVIEW_READER_CONNECTION_STRING_FILE: /run/weft/secrets/preview-reader
-      WEFT_DELIVER_FILE_PREVIEW_READER: Host=postgres;Database=weft;Username=weft_preview_reader;Password=${WEFT_LOCAL_PREVIEW_READER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_POSTGRES_PREVIEW_WRITER_CONNECTION_STRING_FILE: /run/weft/secrets/preview-writer
-      WEFT_DELIVER_FILE_PREVIEW_WRITER: Host=postgres;Database=weft;Username=weft_preview_writer;Password=${WEFT_LOCAL_PREVIEW_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_REGRESSIONS_ENABLED: "true"
-      WEFT_REGRESSION_CASE_READER_CONNECTION_STRING_FILE: /run/weft/secrets/case-reader
-      WEFT_DELIVER_FILE_CASE_READER: Host=postgres;Database=weft;Username=weft_case_reader;Password=${WEFT_LOCAL_CASE_READER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_REGRESSION_CASE_WRITER_CONNECTION_STRING_FILE: /run/weft/secrets/case-writer
-      WEFT_DELIVER_FILE_CASE_WRITER: Host=postgres;Database=weft;Username=weft_case_writer;Password=${WEFT_LOCAL_CASE_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_REGRESSION_RUN_READER_CONNECTION_STRING_FILE: /run/weft/secrets/run-reader
-      WEFT_DELIVER_FILE_RUN_READER: Host=postgres;Database=weft;Username=weft_run_reader;Password=${WEFT_LOCAL_RUN_READER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_REGRESSION_RUN_WRITER_CONNECTION_STRING_FILE: /run/weft/secrets/run-writer
-      WEFT_DELIVER_FILE_RUN_WRITER: Host=postgres;Database=weft;Username=weft_run_writer;Password=${WEFT_LOCAL_RUN_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_BUILDS_ENABLED: "true"
-      WEFT_FERRULE_COMPILE_TOOLCHAIN: ${WEFT_FERRULE_COMPILE_TOOLCHAIN:?Set the verified service toolchain pin}
-      WEFT_BUILD_METADATA_CONNECTION_STRING_FILE: /run/weft/secrets/build-metadata
-      WEFT_DELIVER_FILE_BUILD_METADATA: Host=postgres;Database=weft;Username=weft_build_metadata_reader;Password=${WEFT_LOCAL_BUILD_METADATA_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_BUILD_CONTROL_CONNECTION_STRING_FILE: /run/weft/secrets/build-control
-      WEFT_DELIVER_FILE_BUILD_CONTROL: Host=postgres;Database=weft;Username=weft_build_writer;Password=${WEFT_LOCAL_BUILD_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_BUILD_ACCESS_CONNECTION_STRING_FILE: /run/weft/secrets/build-access
-      WEFT_DELIVER_FILE_BUILD_ACCESS: Host=postgres;Database=weft;Username=weft_runtime;Password=${WEFT_LOCAL_RUNTIME_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_BUILD_REPORT_CONNECTION_STRING_FILE: /run/weft/secrets/build-report
-      WEFT_DELIVER_FILE_BUILD_REPORT: Host=postgres;Database=weft;Username=weft_report_reader;Password=${WEFT_LOCAL_REPORT_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_BUILD_CASE_READER_CONNECTION_STRING_FILE: /run/weft/secrets/build-case-reader
-      WEFT_DELIVER_FILE_BUILD_CASE_READER: Host=postgres;Database=weft;Username=weft_case_reader;Password=${WEFT_LOCAL_CASE_READER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_BUILD_EVIDENCE_READER_CONNECTION_STRING_FILE: /run/weft/secrets/build-evidence
-      WEFT_DELIVER_FILE_BUILD_EVIDENCE: Host=postgres;Database=weft;Username=weft_run_reader;Password=${WEFT_LOCAL_RUN_READER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_BUILD_RUN_READER_CONNECTION_STRING_FILE: /run/weft/secrets/build-run-reader
-      WEFT_DELIVER_FILE_BUILD_RUN_READER: Host=postgres;Database=weft;Username=weft_build_run_reader;Password=${WEFT_LOCAL_BUILD_RUN_READER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_BUILD_RUN_WRITER_CONNECTION_STRING_FILE: /run/weft/secrets/build-run-writer
-      WEFT_DELIVER_FILE_BUILD_RUN_WRITER: Host=postgres;Database=weft;Username=weft_build_run_writer;Password=${WEFT_LOCAL_BUILD_RUN_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_RELEASE_OPERATIONS_ENABLED: "true"
-      WEFT_RELEASE_READER_CONNECTION_STRING_FILE: /run/weft/secrets/release-reader
-      WEFT_DELIVER_FILE_RELEASE_READER: Host=postgres;Database=weft;Username=weft_release_reader;Password=${WEFT_LOCAL_RELEASE_READER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_RELEASE_WRITER_CONNECTION_STRING_FILE: /run/weft/secrets/release-writer
-      WEFT_DELIVER_FILE_RELEASE_WRITER: Host=postgres;Database=weft;Username=weft_release_writer;Password=${WEFT_LOCAL_RELEASE_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_QUALIFICATION_READER_CONNECTION_STRING_FILE: /run/weft/secrets/qualification-reader
-      WEFT_DELIVER_FILE_QUALIFICATION_READER: Host=postgres;Database=weft;Username=weft_qualification_reader;Password=${WEFT_LOCAL_QUALIFICATION_READER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_CHAT_ENABLED: "true"
+      BRAID_CHAT_PROFILES_FILE: /run/braid/secrets/chat-profiles
+      BRAID_DELIVER_FILE_CHAT_PROFILES: ${BRAID_CHAT_PROFILES_JSON:?Set the private chat profile document}
+      BRAID_CHAT_READER_CONNECTION_STRING_FILE: /run/braid/secrets/chat-reader
+      BRAID_DELIVER_FILE_CHAT_READER: Host=postgres;Database=braid;Username=braid_chat_reader;Password=${BRAID_LOCAL_CHAT_READER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_CHAT_WRITER_CONNECTION_STRING_FILE: /run/braid/secrets/chat-writer
+      BRAID_DELIVER_FILE_CHAT_WRITER: Host=postgres;Database=braid;Username=braid_chat_writer;Password=${BRAID_LOCAL_CHAT_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_CHAT_APPROVER_CONNECTION_STRING_FILE: /run/braid/secrets/chat-approver
+      BRAID_DELIVER_FILE_CHAT_APPROVER: Host=postgres;Database=braid;Username=braid_chat_approver;Password=${BRAID_LOCAL_CHAT_APPROVER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_CHAT_PAYLOAD_PERMISSION_CONNECTION_STRING_FILE: /run/braid/secrets/chat-payload-permission
+      BRAID_DELIVER_FILE_CHAT_PAYLOAD_PERMISSION: Host=postgres;Database=braid;Username=braid_payload_permission_reader;Password=${BRAID_LOCAL_PAYLOAD_PERMISSION_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_PREVIEWS_ENABLED: "true"
+      BRAID_POSTGRES_PREVIEW_READER_CONNECTION_STRING_FILE: /run/braid/secrets/preview-reader
+      BRAID_DELIVER_FILE_PREVIEW_READER: Host=postgres;Database=braid;Username=braid_preview_reader;Password=${BRAID_LOCAL_PREVIEW_READER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_POSTGRES_PREVIEW_WRITER_CONNECTION_STRING_FILE: /run/braid/secrets/preview-writer
+      BRAID_DELIVER_FILE_PREVIEW_WRITER: Host=postgres;Database=braid;Username=braid_preview_writer;Password=${BRAID_LOCAL_PREVIEW_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_REGRESSIONS_ENABLED: "true"
+      BRAID_REGRESSION_CASE_READER_CONNECTION_STRING_FILE: /run/braid/secrets/case-reader
+      BRAID_DELIVER_FILE_CASE_READER: Host=postgres;Database=braid;Username=braid_case_reader;Password=${BRAID_LOCAL_CASE_READER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_REGRESSION_CASE_WRITER_CONNECTION_STRING_FILE: /run/braid/secrets/case-writer
+      BRAID_DELIVER_FILE_CASE_WRITER: Host=postgres;Database=braid;Username=braid_case_writer;Password=${BRAID_LOCAL_CASE_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_REGRESSION_RUN_READER_CONNECTION_STRING_FILE: /run/braid/secrets/run-reader
+      BRAID_DELIVER_FILE_RUN_READER: Host=postgres;Database=braid;Username=braid_run_reader;Password=${BRAID_LOCAL_RUN_READER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_REGRESSION_RUN_WRITER_CONNECTION_STRING_FILE: /run/braid/secrets/run-writer
+      BRAID_DELIVER_FILE_RUN_WRITER: Host=postgres;Database=braid;Username=braid_run_writer;Password=${BRAID_LOCAL_RUN_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_BUILDS_ENABLED: "true"
+      BRAID_FERRULE_COMPILE_TOOLCHAIN: ${BRAID_FERRULE_COMPILE_TOOLCHAIN:?Set the verified service toolchain pin}
+      BRAID_BUILD_METADATA_CONNECTION_STRING_FILE: /run/braid/secrets/build-metadata
+      BRAID_DELIVER_FILE_BUILD_METADATA: Host=postgres;Database=braid;Username=braid_build_metadata_reader;Password=${BRAID_LOCAL_BUILD_METADATA_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_BUILD_CONTROL_CONNECTION_STRING_FILE: /run/braid/secrets/build-control
+      BRAID_DELIVER_FILE_BUILD_CONTROL: Host=postgres;Database=braid;Username=braid_build_writer;Password=${BRAID_LOCAL_BUILD_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_BUILD_ACCESS_CONNECTION_STRING_FILE: /run/braid/secrets/build-access
+      BRAID_DELIVER_FILE_BUILD_ACCESS: Host=postgres;Database=braid;Username=braid_runtime;Password=${BRAID_LOCAL_RUNTIME_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_BUILD_REPORT_CONNECTION_STRING_FILE: /run/braid/secrets/build-report
+      BRAID_DELIVER_FILE_BUILD_REPORT: Host=postgres;Database=braid;Username=braid_report_reader;Password=${BRAID_LOCAL_REPORT_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_BUILD_CASE_READER_CONNECTION_STRING_FILE: /run/braid/secrets/build-case-reader
+      BRAID_DELIVER_FILE_BUILD_CASE_READER: Host=postgres;Database=braid;Username=braid_case_reader;Password=${BRAID_LOCAL_CASE_READER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_BUILD_EVIDENCE_READER_CONNECTION_STRING_FILE: /run/braid/secrets/build-evidence
+      BRAID_DELIVER_FILE_BUILD_EVIDENCE: Host=postgres;Database=braid;Username=braid_run_reader;Password=${BRAID_LOCAL_RUN_READER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_BUILD_RUN_READER_CONNECTION_STRING_FILE: /run/braid/secrets/build-run-reader
+      BRAID_DELIVER_FILE_BUILD_RUN_READER: Host=postgres;Database=braid;Username=braid_build_run_reader;Password=${BRAID_LOCAL_BUILD_RUN_READER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_BUILD_RUN_WRITER_CONNECTION_STRING_FILE: /run/braid/secrets/build-run-writer
+      BRAID_DELIVER_FILE_BUILD_RUN_WRITER: Host=postgres;Database=braid;Username=braid_build_run_writer;Password=${BRAID_LOCAL_BUILD_RUN_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_RELEASE_OPERATIONS_ENABLED: "true"
+      BRAID_RELEASE_READER_CONNECTION_STRING_FILE: /run/braid/secrets/release-reader
+      BRAID_DELIVER_FILE_RELEASE_READER: Host=postgres;Database=braid;Username=braid_release_reader;Password=${BRAID_LOCAL_RELEASE_READER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_RELEASE_WRITER_CONNECTION_STRING_FILE: /run/braid/secrets/release-writer
+      BRAID_DELIVER_FILE_RELEASE_WRITER: Host=postgres;Database=braid;Username=braid_release_writer;Password=${BRAID_LOCAL_RELEASE_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_QUALIFICATION_READER_CONNECTION_STRING_FILE: /run/braid/secrets/qualification-reader
+      BRAID_DELIVER_FILE_QUALIFICATION_READER: Host=postgres;Database=braid;Username=braid_qualification_reader;Password=${BRAID_LOCAL_QUALIFICATION_READER_PASSWORD:?};GSS Encryption Mode=Disable
 
   # Previews, the regression runs that execute them and approved builds, through the Ferrule
   # service with this worker's own pinned client certificate. No Docker socket, egress or
   # published port.
   runs:
-    image: ${WEFT_WORKER_IMAGE:-weft-worker:local}
+    image: ${BRAID_WORKER_IMAGE:-braid-worker:local}
     restart: unless-stopped
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     tmpfs:
       - /tmp:size=64m,mode=1777
-      - /run/weft/secrets:uid=1654,gid=1654,mode=0700,size=1m
+      - /run/braid/secrets:uid=1654,gid=1654,mode=0700,size=1m
     environment:
-      WEFT_PREVIEW_WORKER_ENABLED: "true"
-      WEFT_PREVIEW_WRITER_CONNECTION_STRING_FILE: /run/weft/secrets/preview-writer
-      WEFT_DELIVER_FILE_PREVIEW_WRITER: Host=postgres;Database=weft;Username=weft_preview_writer;Password=${WEFT_LOCAL_PREVIEW_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_REGRESSION_WORKER_ENABLED: "true"
-      WEFT_REGRESSION_RUN_WRITER_CONNECTION_STRING_FILE: /run/weft/secrets/run-writer
-      WEFT_DELIVER_FILE_RUN_WRITER: Host=postgres;Database=weft;Username=weft_run_writer;Password=${WEFT_LOCAL_RUN_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_REGRESSION_CASE_READER_CONNECTION_STRING_FILE: /run/weft/secrets/case-reader
-      WEFT_DELIVER_FILE_CASE_READER: Host=postgres;Database=weft;Username=weft_case_reader;Password=${WEFT_LOCAL_CASE_READER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_REGRESSION_ACCESS_CONNECTION_STRING_FILE: /run/weft/secrets/regression-access
-      WEFT_DELIVER_FILE_REGRESSION_ACCESS: Host=postgres;Database=weft;Username=weft_runtime;Password=${WEFT_LOCAL_RUNTIME_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_REGRESSION_REPORT_READER_CONNECTION_STRING_FILE: /run/weft/secrets/regression-report
-      WEFT_DELIVER_FILE_REGRESSION_REPORT: Host=postgres;Database=weft;Username=weft_report_reader;Password=${WEFT_LOCAL_REPORT_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_AUTOMATION_COMPARISON_CONNECTION_STRING_FILE: /run/weft/secrets/comparison
-      WEFT_DELIVER_FILE_COMPARISON: Host=postgres;Database=weft;Username=weft_comparison_settler;Password=${WEFT_LOCAL_COMPARISON_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_BUILD_WORKER_ENABLED: "true"
-      WEFT_BUILD_DISPATCHER_CONNECTION_STRING_FILE: /run/weft/secrets/build-dispatcher
-      WEFT_DELIVER_FILE_BUILD_DISPATCHER: Host=postgres;Database=weft;Username=weft_build_dispatcher;Password=${WEFT_LOCAL_BUILD_DISPATCHER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_BUILD_WRITER_CONNECTION_STRING_FILE: /run/weft/secrets/build-writer
-      WEFT_DELIVER_FILE_BUILD_WRITER: Host=postgres;Database=weft;Username=weft_build_writer;Password=${WEFT_LOCAL_BUILD_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_BUILD_ACCESS_CONNECTION_STRING_FILE: /run/weft/secrets/build-access
-      WEFT_DELIVER_FILE_BUILD_ACCESS: Host=postgres;Database=weft;Username=weft_runtime;Password=${WEFT_LOCAL_RUNTIME_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_BUILD_REPORT_READER_CONNECTION_STRING_FILE: /run/weft/secrets/build-report
-      WEFT_DELIVER_FILE_BUILD_REPORT: Host=postgres;Database=weft;Username=weft_report_reader;Password=${WEFT_LOCAL_REPORT_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_BUILD_REGRESSION_RUN_READER_CONNECTION_STRING_FILE: /run/weft/secrets/build-evidence
-      WEFT_DELIVER_FILE_BUILD_EVIDENCE: Host=postgres;Database=weft;Username=weft_run_reader;Password=${WEFT_LOCAL_RUN_READER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_BUILD_CASE_READER_CONNECTION_STRING_FILE: /run/weft/secrets/build-case-reader
-      WEFT_DELIVER_FILE_BUILD_CASE_READER: Host=postgres;Database=weft;Username=weft_case_reader;Password=${WEFT_LOCAL_CASE_READER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_PRIVATE_STORAGE_ROOT: /var/lib/weft/storage/root
-      WEFT_FERRULE_RUNNER: service
-      WEFT_FERRULE_COMPILE_TOOLCHAIN: ${WEFT_FERRULE_COMPILE_TOOLCHAIN:?Set the verified service toolchain pin}
-      WEFT_FERRULE_WORKER_IMAGE: ${WEFT_FERRULE_SERVICE_IDENTITY:?Set the service build identity}
-      WEFT_FERRULE_SERVICE_URL: https://ferrule:8443
-      WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256: ${WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256:?Set the service certificate pin}
-      WEFT_DELIVER_FERRULE_SERVICE_CLIENT_PEM: ${WEFT_RUNS_FERRULE_SERVICE_CLIENT_PEM:?Set the runs worker service client PEM}
+      BRAID_PREVIEW_WORKER_ENABLED: "true"
+      BRAID_PREVIEW_WRITER_CONNECTION_STRING_FILE: /run/braid/secrets/preview-writer
+      BRAID_DELIVER_FILE_PREVIEW_WRITER: Host=postgres;Database=braid;Username=braid_preview_writer;Password=${BRAID_LOCAL_PREVIEW_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_REGRESSION_WORKER_ENABLED: "true"
+      BRAID_REGRESSION_RUN_WRITER_CONNECTION_STRING_FILE: /run/braid/secrets/run-writer
+      BRAID_DELIVER_FILE_RUN_WRITER: Host=postgres;Database=braid;Username=braid_run_writer;Password=${BRAID_LOCAL_RUN_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_REGRESSION_CASE_READER_CONNECTION_STRING_FILE: /run/braid/secrets/case-reader
+      BRAID_DELIVER_FILE_CASE_READER: Host=postgres;Database=braid;Username=braid_case_reader;Password=${BRAID_LOCAL_CASE_READER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_REGRESSION_ACCESS_CONNECTION_STRING_FILE: /run/braid/secrets/regression-access
+      BRAID_DELIVER_FILE_REGRESSION_ACCESS: Host=postgres;Database=braid;Username=braid_runtime;Password=${BRAID_LOCAL_RUNTIME_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_REGRESSION_REPORT_READER_CONNECTION_STRING_FILE: /run/braid/secrets/regression-report
+      BRAID_DELIVER_FILE_REGRESSION_REPORT: Host=postgres;Database=braid;Username=braid_report_reader;Password=${BRAID_LOCAL_REPORT_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_AUTOMATION_COMPARISON_CONNECTION_STRING_FILE: /run/braid/secrets/comparison
+      BRAID_DELIVER_FILE_COMPARISON: Host=postgres;Database=braid;Username=braid_comparison_settler;Password=${BRAID_LOCAL_COMPARISON_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_BUILD_WORKER_ENABLED: "true"
+      BRAID_BUILD_DISPATCHER_CONNECTION_STRING_FILE: /run/braid/secrets/build-dispatcher
+      BRAID_DELIVER_FILE_BUILD_DISPATCHER: Host=postgres;Database=braid;Username=braid_build_dispatcher;Password=${BRAID_LOCAL_BUILD_DISPATCHER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_BUILD_WRITER_CONNECTION_STRING_FILE: /run/braid/secrets/build-writer
+      BRAID_DELIVER_FILE_BUILD_WRITER: Host=postgres;Database=braid;Username=braid_build_writer;Password=${BRAID_LOCAL_BUILD_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_BUILD_ACCESS_CONNECTION_STRING_FILE: /run/braid/secrets/build-access
+      BRAID_DELIVER_FILE_BUILD_ACCESS: Host=postgres;Database=braid;Username=braid_runtime;Password=${BRAID_LOCAL_RUNTIME_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_BUILD_REPORT_READER_CONNECTION_STRING_FILE: /run/braid/secrets/build-report
+      BRAID_DELIVER_FILE_BUILD_REPORT: Host=postgres;Database=braid;Username=braid_report_reader;Password=${BRAID_LOCAL_REPORT_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_BUILD_REGRESSION_RUN_READER_CONNECTION_STRING_FILE: /run/braid/secrets/build-evidence
+      BRAID_DELIVER_FILE_BUILD_EVIDENCE: Host=postgres;Database=braid;Username=braid_run_reader;Password=${BRAID_LOCAL_RUN_READER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_BUILD_CASE_READER_CONNECTION_STRING_FILE: /run/braid/secrets/build-case-reader
+      BRAID_DELIVER_FILE_BUILD_CASE_READER: Host=postgres;Database=braid;Username=braid_case_reader;Password=${BRAID_LOCAL_CASE_READER_PASSWORD:?};GSS Encryption Mode=Disable
+      BRAID_PRIVATE_STORAGE_ROOT: /var/lib/braid/storage/root
+      BRAID_FERRULE_RUNNER: service
+      BRAID_FERRULE_COMPILE_TOOLCHAIN: ${BRAID_FERRULE_COMPILE_TOOLCHAIN:?Set the verified service toolchain pin}
+      BRAID_FERRULE_WORKER_IMAGE: ${BRAID_FERRULE_SERVICE_IDENTITY:?Set the service build identity}
+      BRAID_FERRULE_SERVICE_URL: https://ferrule:8443
+      BRAID_FERRULE_SERVICE_CERTIFICATE_SHA256: ${BRAID_FERRULE_SERVICE_CERTIFICATE_SHA256:?Set the service certificate pin}
+      BRAID_DELIVER_FERRULE_SERVICE_CLIENT_PEM: ${BRAID_RUNS_FERRULE_SERVICE_CLIENT_PEM:?Set the runs worker service client PEM}
     volumes:
-      - private-storage:/var/lib/weft/storage
+      - private-storage:/var/lib/braid/storage
     networks: [database, ferrule]
     depends_on:
       migrate: { condition: service_completed_successfully }
@@ -117,9 +117,9 @@ services:
   # The service admits the server's and the runs worker's client certificates.
   ferrule:
     environment:
-      WEFT_FERRULE_SERVICE_COMPILE_ENABLED: "true"
-      WEFT_FERRULE_SERVICE_CONCURRENCY: "1"
-      WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256: ${WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256:?},${WEFT_RUNS_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256:?Set the runs worker client certificate pin}
+      BRAID_FERRULE_SERVICE_COMPILE_ENABLED: "true"
+      BRAID_FERRULE_SERVICE_CONCURRENCY: "1"
+      BRAID_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256: ${BRAID_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256:?},${BRAID_RUNS_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256:?Set the runs worker client certificate pin}
     deploy:
       resources:
         limits:

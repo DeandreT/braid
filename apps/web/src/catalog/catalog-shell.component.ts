@@ -53,7 +53,7 @@ type CatalogStatusKind =
 type CatalogPageKind = "projects" | "project" | "mapping" | "revision";
 
 @Component({
-  selector: "weft-catalog-status",
+  selector: "braid-catalog-status",
   imports: [RouterLink],
   template: `
     @switch (kind()) {
@@ -309,7 +309,7 @@ function routeSelection(
 }
 
 @Component({
-  selector: "weft-catalog-shell",
+  selector: "braid-catalog-shell",
   imports: [RouterOutlet, CatalogStatusComponent],
   providers: [InitiatingControl],
   templateUrl: "./catalog-shell.component.html",

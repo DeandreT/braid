@@ -26,7 +26,7 @@ test("the MFD child is not owned by the transient native form or project admissi
   const parents = [];
   function visit(nodes, conditions = []) {
     for (const node of nodes) {
-      if (node.name === "weft-mfd-import") parents.push(conditions);
+      if (node.name === "braid-mfd-import") parents.push(conditions);
       if (node.children) visit(node.children, conditions);
       for (const branch of node.branches ?? [])
         visit(branch.children, [
@@ -152,7 +152,7 @@ test("package framing preserves exact bytes and uses Rust-compatible UTF-8 path 
     offset += n;
     return value;
   };
-  assert.equal(decoder.decode(field()), "weft.interchange-package.v1");
+  assert.equal(decoder.decode(field()), "braid.interchange-package.v1");
   assert.equal(decoder.decode(field()), "design.mfd");
   assert.equal(number(), 3);
   const paths = [],

@@ -13,7 +13,7 @@ import {
 } from "./catalog-search";
 
 @Component({
-  selector: "weft-search-page",
+  selector: "braid-search-page",
   imports: [RouterLink, CatalogStatusComponent],
   template: `
     <section
@@ -112,7 +112,7 @@ import {
               results are never shown.
             </p>
           }
-          <weft-catalog-status
+          <braid-catalog-status
             [kind]="read.state().kind"
             (retry)="read.retry()"
           />

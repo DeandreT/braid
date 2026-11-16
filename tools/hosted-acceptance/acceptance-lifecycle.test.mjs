@@ -18,7 +18,7 @@ const helper = fileURLToPath(
 );
 const windows = process.platform === "win32";
 const bash =
-  process.env.WEFT_TEST_BASH ??
+  process.env.BRAID_TEST_BASH ??
   (windows
     ? join(process.env.ProgramFiles ?? "C:\\Program Files", "Git/bin/bash.exe")
     : "bash");
@@ -48,7 +48,7 @@ function run(
   const end = source.indexOf("trap cleanup EXIT", start);
   assert.ok(start >= 0 && end > start);
   const cleanup = source.slice(start, end + "trap cleanup EXIT".length);
-  const root = mkdtempSync(join(tmpdir(), "weft-acceptance-lifecycle-"));
+  const root = mkdtempSync(join(tmpdir(), "braid-acceptance-lifecycle-"));
   const work = join(root, "work");
   const logs = join(root, "logs");
   mkdirSync(join(work, "playwright"), { recursive: true });
@@ -63,8 +63,8 @@ function run(
         `set -euo pipefail
 source "$1"
 work=$2
-project=weft-fixture
-WEFT_ACCEPTANCE_LOG_DIRECTORY=$3
+project=braid-fixture
+BRAID_ACCEPTANCE_LOG_DIRECTORY=$3
 built_images=()
 runtime_image=
 owned_objects() { :; }
@@ -91,8 +91,8 @@ ${commands}`,
         env: {
           PATH: "/usr/bin:/bin",
           ...(windows ? { SystemRoot: process.env.SystemRoot } : {}),
-          ...(held ? { WEFT_ACCEPTANCE_HOLD: "1" } : {}),
-          ...(stageOnly ? { WEFT_ACCEPTANCE_STAGE_ONLY: "true" } : {}),
+          ...(held ? { BRAID_ACCEPTANCE_HOLD: "1" } : {}),
+          ...(stageOnly ? { BRAID_ACCEPTANCE_STAGE_ONLY: "true" } : {}),
         },
       },
     );
@@ -102,12 +102,12 @@ ${commands}`,
       diagnostics: existsSync(
         join(
           logs,
-          "weft-fixture",
+          "braid-fixture",
           script.startsWith("endpoint") ? "endpoint.log" : "services.log",
         ),
       ),
       browserEvidence: existsSync(
-        join(logs, "weft-fixture", "playwright", "evidence.txt"),
+        join(logs, "braid-fixture", "playwright", "evidence.txt"),
       ),
     };
   } finally {

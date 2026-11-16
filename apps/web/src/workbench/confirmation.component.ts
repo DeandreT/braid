@@ -15,7 +15,7 @@ let nextConfirmation = 0;
 
 /** Presentation only: the owner retains and validates the exact operation frame. */
 @Component({
-  selector: "weft-confirmation",
+  selector: "braid-confirmation",
   template: `
     <dialog #dialog [attr.aria-labelledby]="titleId" (cancel)="cancel($event)">
       @if (model(); as value) {

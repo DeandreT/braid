@@ -235,12 +235,12 @@ export function evidence(value: unknown): Evidence {
     !Array.isArray(value) ||
     value.length < 2 ||
     value.length > 10002 ||
-    !["weft.spec-evidence.v1", "weft.spec-evidence.v2"].includes(value[0]) ||
+    !["braid.spec-evidence.v1", "braid.spec-evidence.v2"].includes(value[0]) ||
     !textValue(value[1], 100)
   )
     throw new Error("Invalid evidence");
   const chunks: Chunk[] = [];
-  const version = value[0] === "weft.spec-evidence.v1" ? 1 : 2;
+  const version = value[0] === "braid.spec-evidence.v1" ? 1 : 2;
   for (const c of value.slice(2)) {
     if (
       !Array.isArray(c) ||

@@ -1,18 +1,16 @@
 # Project-creation browser fixture
 
-This fixture proves the actual project-creation UI against ordinary published
+This fixture tests the project-creation UI against published
 braid APIs and a new PostgreSQL database. It never uploads native data, creates a
 private storage root, enables ingestion/reports or starts native workers. Its
-separate read-only observer requires **zero native worker events**. Existing
-catalog/report fixtures and their positive-worker observer remain unchanged.
+separate read-only observer requires **zero native worker events**.
 
 Build Angular and ordinarily publish Server and DatabaseTool from the exact
 committed source. Include all actual files/assets in their SHA-256 maps. The
 source manifest includes every committed source body and canonical644/755 mode,
-including the shared runtime and both C scripts. No old products, credentials,
-private state or successful results qualify a current fixture.
+including the shared runtime, operator and observer.
 
-Root owns execution in an exclusive Docker window and on an alternate display.
+Use an exclusive Docker window and an isolated display.
 Start `observe-host.py --fixture-id <UUID> --output <private empty directory>`
 first. Its actual GET200 event admission is bound in configuration. Keep its
 stdin open, then send `finish` only after operator/API/PG cleanup has settled.
@@ -21,7 +19,7 @@ bridge/volume and exact identities; it verifies normal automatic destruction and
 container/network/volume404 without removing resources. Any worker-like event
 (by native worker name or immutable worker image) fails this scenario.
 
-The operator uses the shared runtime's ordinary bootstrap/migrate7, source and
+The operator uses the shared runtime's bootstrap and migration, source and
 publication admission, fixed origins, private owner commands, strict child
 PID/start identity and bounded cleanup. It requires only restricted catalog and
 project-creator credentials in the browser API. The API has no ingestion,
@@ -30,12 +28,12 @@ no worker-image/daemon environment. The owner operator's distinct private Docker
 connection does not become a browser control endpoint.
 
 Private configuration and release must be owned0600 in an owned0700 directory
-outside the checkout/publications. Use this deliberately held shape and fill
-nulls only from actual reviewed source/publication/observer inputs:
+outside the checkout/publications. Fill the nulls below from
+source/publication/observer inputs:
 
 ```json
 {
-  "schemaVersion": "weft.project-creation-browser-operator-config.v1",
+  "schemaVersion": "braid.project-creation-browser-operator-config.v1",
   "runtimeReleased": false,
   "fixtureId": null,
   "privateDirectory": null,
@@ -63,15 +61,15 @@ nulls only from actual reviewed source/publication/observer inputs:
 }
 ```
 
-The release has schema `weft.project-creation-browser-release.v1` and the existing
+The release has schema `braid.project-creation-browser-release.v1` and the existing
 fields `released`, `configurationSha256`, `operatorSha256`,
-`sourceAndPublicationsAccepted`, `outerObserversAccepted`. Keep booleans false and
-hashes null until root accepts the actual inputs. This binds the C entrypoint;
-the complete admitted source manifest separately binds the shared runtime.
+`sourceAndPublicationsAccepted`, `outerObserversAccepted`. Bind the configuration
+and operator hashes and set the booleans after the corresponding checks succeed.
+The complete source manifest also binds the shared runtime.
 
-Node-only browser settings are `WEFT_PROJECT_CREATION_BROWSER_OPERATOR`,
-`WEFT_PROJECT_CREATION_BROWSER_OPERATOR_CONFIG`,
-`WEFT_PROJECT_CREATION_BROWSER_MANIFEST`, `WEFT_PROJECT_CREATION_BASE_URL`.
+Node-only browser settings are `BRAID_PROJECT_CREATION_BROWSER_OPERATOR`,
+`BRAID_PROJECT_CREATION_BROWSER_OPERATOR_CONFIG`,
+`BRAID_PROJECT_CREATION_BROWSER_MANIFEST`, `BRAID_PROJECT_CREATION_BASE_URL`.
 The manifest/base values must equal the private configuration. The worker fixture
 spawns `node [absoluteOperator, '--config', privateConfig]`. No configuration,
 password, token, key, fingerprint or raw body belongs in browser storage, tracing,
@@ -84,23 +82,23 @@ makes projectAdministrator its Administrator, with no organization capability.
 The browser starts as capable creator with zero project memberships/projects.
 No successful project or receipt is seeded with SQL.
 
-The atomic immutable public manifest (`weft.project-creation-browser-fixture.v1`)
+The atomic immutable public manifest (`braid.project-creation-browser-fixture.v1`)
 contains fixture/source/origin/organization identities, initial profile `creator`,
 `profiles.creator` and `profiles.projectAdministrator` with only actorPrincipalId
 and allowedOrganizationId, and `seedProject.scope`. Ready contains schema
-`weft.project-creation-browser-ready.v1`, fixtureId, manifestSha256 and profile.
+`braid.project-creation-browser-ready.v1`, fixtureId, manifestSha256 and profile.
 
-The C-only fixed read-only grant snapshot covers the current database ACL/owner,
+The fixed read-only grant snapshot covers the current database ACL/owner,
 all schema ACLs/owners, relation and column ACLs/owners, routine ACLs/identities/
 owners, and default ACLs. Complete ordered catalog arrays are hashed inside PG
 to keep private pipe sizes bounded. These actual grant digests participate in
-all full-baseline and normal-restart comparisons. This adds no A/B snapshot field
-or changed default behavior; roles/password digests remain independently captured.
+all full-baseline and normal-restart comparisons. Role and password digests are
+captured separately.
 
 The closed private command envelope is `{requestNonce,fixtureId,action,...}`.
 Canonical UUID nonces replay identical receipts; changed content refuses. At most
 64 nonces,1024-byte commands,4096-byte ACKs are accepted, serialized one at a time.
-ACK base is `{schemaVersion:'weft.project-creation-browser-control.v1',requestNonce,
+ACK base is `{schemaVersion:'braid.project-creation-browser-control.v1',requestNonce,
 fixtureId,action}`. Additional exact fields:
 
 - `api-stop`: outcome `stopped` or `alreadyStopped`.
@@ -156,7 +154,7 @@ revocation/restoration and membership demotion/deletion happen through the close
 owner controls. Historical Administrator receipt never grants current authority:
 fresh GET determines Viewer or404. Once confirmed, access retry is GET-only.
 
-Controlled-response UI cases remain synthetic and use no owner controls. Retain
+Controlled-response UI cases use mocked responses and no owner controls. Retain
 failures and private ledgers. Memory-only recovery survives SPA navigation and
 server restart while the tab remains alive; reload/closed tab loses its original
-key/body. This fixture adds no native/parser/Rust/full-upgrade qualification gate.
+key/body.

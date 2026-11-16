@@ -38,7 +38,7 @@ import { HelpLinkComponent } from "../../help/help-link.component";
 import { MfdImportComponent } from "./mfd-import.component";
 
 @Component({
-  selector: "weft-upload-mapping-page",
+  selector: "braid-upload-mapping-page",
   imports: [
     ReactiveFormsModule,
     RouterLink,

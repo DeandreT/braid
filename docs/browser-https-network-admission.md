@@ -1,13 +1,11 @@
 # Qualification browser transport admission
 
 The nonshipped HTTPS probe uses a parent-owned literal-loopback CONNECT proxy, one
-browser-root Fetch owner, and an earliest probe request/response gate. This does not
-change shipping authentication or establish identity. Cookies, antiforgery, OIDC
-validation and session state remain the real product implementations.
+browser-root Fetch owner, and an earliest probe request/response gate. Cookies,
+antiforgery, OIDC validation and session state use the product implementations.
 
-The bounded claim covers HTTP/HTTPS/WS/WSS destinations and product delivery in the
-trusted controlled scenario. It is not a packet sandbox and makes no WebRTC, raw
-UDP, DNS, QUIC or OS external-handler guarantee.
+The gate covers HTTP/HTTPS/WS/WSS destinations. It does not intercept WebRTC, raw
+UDP, DNS, QUIC or OS external handlers.
 
 The proxy permits CONNECT only to its configured literal IPv4 application port and
 copies opaque TLS; a peer reset ends a tunnel without counting as a proxy failure.

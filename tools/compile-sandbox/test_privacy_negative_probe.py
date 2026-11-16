@@ -29,8 +29,8 @@ class ProbeTests(unittest.TestCase):
 
     def test_provenance_uses_the_surviving_image_not_host_path_metadata(self):
         root = Path("/dotnet")
-        self.assertEqual(root / "dotnet", probe.managed_image(root, "/launcher", b"WFC1"))
-        self.assertEqual(Path("/launcher"), probe.managed_image(root, "/launcher", b"WFC2"))
+        self.assertEqual(Path("/launcher"), probe.managed_image("/launcher"))
+        self.assertEqual(root / "dotnet", probe.managed_image("/dotnet/dotnet"))
         child = Mock(pid=12)
         with self.assertRaisesRegex(RuntimeError, "provenance"):
             probe.observe(None, child, {"pid": 12, "exe": "/dotnet/dotnet"}, Path("/launcher"), {}, probe.Deadline(30))
@@ -52,7 +52,7 @@ class ProbeTests(unittest.TestCase):
             command = json.loads(output.getvalue())["compile_command"]
             self.assertEqual("exec", command[1])
             self.assertEqual("-noconfig", command[-2])
-            config = json.loads((directory / "weft-privacy-probe.runtimeconfig.json").read_text())
+            config = json.loads((directory / "braid-privacy-probe.runtimeconfig.json").read_text())
             self.assertEqual(probe.RUNTIME, config["runtimeOptions"]["framework"]["version"])
             self.assertEqual("Disable", config["runtimeOptions"]["rollForward"])
             with self.assertRaises(RuntimeError):
@@ -104,11 +104,11 @@ class ProbeTests(unittest.TestCase):
     def run_mocked_failure(self, uncertain):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            assembly, launcher = root / "weft-privacy-probe.dll", root / "launcher"
+            assembly, launcher = root / "braid-privacy-probe.dll", root / "launcher"
             assembly.touch(); launcher.touch()
             operation = root / "operation"; operation.mkdir()
             args = argparse.Namespace(dotnet_root=root, probe_assembly=assembly, launcher=launcher,
-                                      work_root=root, contract="current", expect="protected")
+                                      work_root=root, expect="protected")
             values = {"Uid": "65532 65532 65532 65532", "Gid": "65532 65532 65532 65532",
                       "CapInh": "0", "CapPrm": "0", "CapEff": "0", "CapAmb": "0", "TracerPid": "0"}
             blocked = {"self": {"dump": 1}} | {name: {"allowed": False} for name in ("attach", "environ", "maps", "mem", "memory")}

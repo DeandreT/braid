@@ -1,8 +1,7 @@
 # Exact saved-case execution
 
 `RegressionCaseExecutionService` replays one immutable saved-case reference
-through the existing preview backend. It is a workflow boundary, not an HTTP
-route, durable queue, scheduler, batch runner or run-history store.
+through the preview backend.
 
 ## Admission and replay
 
@@ -36,7 +35,7 @@ runtime. It must provide bounded JSON outputs with unambiguous identities:
 
 Named output order does not affect comparison. Case-sensitive full names and
 exact bytes do. Successful execution is not itself a passing regression:
-`weft.regression.exact-bytes.v1` still requires an explicit baseline and exact
+`braid.regression.exact-bytes.v1` still requires an explicit baseline and exact
 output equality. Failed preview statuses remain separate from comparison status
 and never pass, including when they happen to carry no output.
 
@@ -55,5 +54,4 @@ The preview backend still owns process termination and isolation cleanup.
 There is no automatic retry here. The durable caller must persist each case's
 request/reference and terminal result independently, retain successful results,
 and retry only failed/retryable work. Lease fencing, crash recovery, queue
-delivery and run-result retention are separate responsibilities; invoking this
-workflow alone does not qualify them.
+delivery and run-result retention belong to the durable caller.

@@ -12,9 +12,9 @@ type Editor = Exclude<Feature, "creation">;
 const leaveCopy =
   "Leave this workspace view? Private in-tab work and recovery information may be lost. A previously sent request may already have committed.";
 const host: Record<Editor, string> = {
-  metadata: "weft-edit-mapping-page",
-  upload: "weft-upload-mapping-page",
-  append: "weft-append-revision-page",
+  metadata: "braid-edit-mapping-page",
+  upload: "braid-upload-mapping-page",
+  append: "braid-append-revision-page",
 };
 const submitName: Record<Editor, string> = {
   metadata: "Save metadata",

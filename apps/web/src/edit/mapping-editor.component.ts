@@ -60,7 +60,7 @@ import {
 } from "./operation-templates";
 
 @Component({
-  selector: "weft-mapping-editor",
+  selector: "braid-mapping-editor",
   imports: [
     WorkbenchFrameComponent,
     WorkbenchMappingTableComponent,
@@ -154,7 +154,7 @@ export class MappingEditorComponent {
     if (!view || !draft) return null;
     return new ProjectionView({
       ...view.projection,
-      schemaVersion: "weft.mapping-projection.v1",
+      schemaVersion: "braid.mapping-projection.v1",
       provenance: {
         revision: draft.base.revision,
         nativeArtifactDigest: draft.base.nativeDigest,
@@ -164,7 +164,7 @@ export class MappingEditorComponent {
           buildId: "local-uncheckpointed",
         },
         adapterVersion: "browser-editor",
-        projectionVersion: "weft.ferrule-projection.v1",
+        projectionVersion: "braid.ferrule-projection.v1",
       },
     });
   });

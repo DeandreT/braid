@@ -46,8 +46,6 @@ Choose **Help & guide** in the workspace navigation at any time. On a narrow
 screen, open **Menu** first. Each help page has its own address,
 so you can bookmark it or share it with a colleague.
 
-To work from a terminal, see [Using the command line](cli.md).
-
 To check new versions automatically and choose activity alerts, see
 [Automation and notifications](automation.md).
 

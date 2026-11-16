@@ -3,14 +3,13 @@
 The immutable build ID is also the durable run ID. Submission binds the original
 actor and exact canonical intent to its existing approval. An identical retry
 returns the original run; another intent or actor cannot replace it or reset its
-attempt budget. Browser submission and environment/approval HTTP operations are
-separate from worker composition.
+attempt budget.
 
 ## Queue and authority
 
 Migration 0019 adds a retained `build_runs` ledger and three independent profiles:
-`weft_build_run_reader` reads the actor's run metadata, `weft_build_run_writer`
-submits or cancels that actor's runs, and `weft_build_dispatcher` discovers and
+`braid_build_run_reader` reads the actor's run metadata, `braid_build_run_writer`
+submits or cancels that actor's runs, and `braid_build_dispatcher` discovers and
 executes committed work. None has direct table or column access. Discovery is
 unscoped and machine-only, returning at most 32 organization/build ID pairs;
 claims load the actor and approved intent from the database, not a worker's
@@ -53,34 +52,31 @@ publication, the exhausted run remains a nonpassing terminal result.
 
 ## Installation and worker configuration
 
-Fresh provisioning includes the three run profiles. Existing local installations
-apply `deploy/local/postgres-add-build-run-roles.sh` explicitly with an
-administrator before migrating. Applications never create their own credentials
-or schema. Schema18 controls retain their exact function bodies; when schema19 is
-present, both old controls and new run profiles validate the extended schema and
-publication fence before operating.
+Provision the three run profiles before installing the schema. Applications never
+create their own credentials or schema. Controls and run profiles validate the
+schema and publication fence before operating.
 
-`Weft.Worker` remains the ordinary preview worker. Its build component is off by
+`Braid.Worker` remains the ordinary preview worker. Its build component is off by
 default and reads no build credentials or creates build services until
-`WEFT_BUILD_WORKER_ENABLED=true`. Enabled composition additionally requires:
+`BRAID_BUILD_WORKER_ENABLED=true`. Enabled composition additionally requires:
 
 | Environment input | Restricted database profile |
 | --- | --- |
-| `WEFT_BUILD_DISPATCHER_CONNECTION_STRING` | `weft_build_dispatcher` |
-| `WEFT_BUILD_WRITER_CONNECTION_STRING` | `weft_build_writer` |
-| `WEFT_BUILD_ACCESS_CONNECTION_STRING` | `weft_runtime` |
-| `WEFT_BUILD_REPORT_READER_CONNECTION_STRING` | `weft_report_reader` |
-| `WEFT_BUILD_REGRESSION_RUN_READER_CONNECTION_STRING` | `weft_run_reader` |
-| `WEFT_BUILD_CASE_READER_CONNECTION_STRING` | `weft_case_reader` |
+| `BRAID_BUILD_DISPATCHER_CONNECTION_STRING` | `braid_build_dispatcher` |
+| `BRAID_BUILD_WRITER_CONNECTION_STRING` | `braid_build_writer` |
+| `BRAID_BUILD_ACCESS_CONNECTION_STRING` | `braid_runtime` |
+| `BRAID_BUILD_REPORT_READER_CONNECTION_STRING` | `braid_report_reader` |
+| `BRAID_BUILD_REGRESSION_RUN_READER_CONNECTION_STRING` | `braid_run_reader` |
+| `BRAID_BUILD_CASE_READER_CONNECTION_STRING` | `braid_case_reader` |
 
 Each can instead be supplied as `<NAME>_FILE`, a
 [protected private file](runtime-packaging.md#private-delivery), but not both.
 
-With the default Docker runner, `WEFT_FERRULE_WORKER_IMAGE` is the exact qualified
+With the default Docker runner, `BRAID_FERRULE_WORKER_IMAGE` is the exact qualified
 combined image used by the approval's regression evidence. With
-`WEFT_FERRULE_RUNNER=service` or `azureContainerAppsSessions`, the build component
+`BRAID_FERRULE_RUNNER=service` or `azureContainerAppsSessions`, the build component
 uses that runner's compile profile instead and requires
-`WEFT_FERRULE_COMPILE_TOOLCHAIN=sha256:<digest>`. The service must explicitly enable
+`BRAID_FERRULE_COMPILE_TOOLCHAIN=sha256:<digest>`. The service must explicitly enable
 compilation, and the configured pin must match its complete toolchain identity.
 No Docker socket is needed for these service-backed builds.
 
@@ -93,9 +89,6 @@ selection is refused. A different pin is not adopted from the service's response
 The build component shares one
 compiler-profile runner for process-wide concurrency and cleanup ownership, while
 constructing controls and private-object wrappers for each claimed actor.
-Successful process startup alone is not build readiness: qualify a real queued
-build through compilation, private publication and durable completion.
 
 See [Build persistence](build-persistence.md), [Build workflow](build-workflow.md)
-and [Restricted compiler](build-compiler.md). Compiled-runtime output equivalence,
-deployment and Azure endpoint authorization remain separate target boundaries.
+and [Restricted compiler](build-compiler.md).

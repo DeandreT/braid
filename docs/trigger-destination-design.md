@@ -1,19 +1,8 @@
 # Queue and schedule triggers with output destinations
 
-**Design only; prerequisite reconciliation required before implementation.**
-The audit/AI-usage/quota baseline assumed below is not the current migration
-inventory. Actual slots 0037–0039 are `0037_mapping_drafts.sql`,
-`0038_mapping_draft_previews.sql` and `0039_chat_mapping_writes.sql`, not
-`0037_audit_log.sql`, `0038_ai_usage.sql` and `0039_ai_quotas.sql`. Reconcile the
-intended contracts, schema guards and acceptance fixtures against the actual
-integrated baseline and qualified prerequisites. Keep proposed extensions as
-design, not deployed SQL; preserve all applied migration bytes and choose any
-future suffix only after that reconciliation. [Project ownership](project-ownership.md#migrations-and-local-setup)
-owns migration integrity; [ROADMAP](../ROADMAP.md) owns future priorities.
-
 ## Scope and implementation boundaries
 
-This is the design specification for [#337](https://github.com/DeandreT/weft/issues/337), not a statement of implemented or qualified behavior. It covers Service Bus queue/subscription inputs, cron-driven Blob/SFTP inputs, Blob/SFTP/HTTPS/Service Bus topic outputs, per-target configuration, Operations/API/CLI, offline templates and emulator acceptance. It introduces no new mapping engine or catalog-writing runtime path. Implementation must not create CI pipelines or provision live Azure resources without separate authorization.
+This design covers Service Bus queue/subscription inputs, cron-driven Blob/SFTP inputs, Blob/SFTP/HTTPS/Service Bus topic outputs, per-target configuration, Operations/API, templates and emulator acceptance. It reuses the mapping engine and release runtime.
 
 Read alongside [archive and deletion](archive-deletion-design.md), [organization switching](organization-switching-design.md), [machine authorization](machine-authorization.md), [mapping endpoints](mapping-endpoint.md) and [release operations](release-operations.md). Archiving does not stop an already deployed runtime. Explicit target disable, retirement, grant revocation, approval/environment revocation and payload retirement still fence execution/delivery. Runtime admission follows target/release lineage, not the authoring archive epoch.
 
@@ -21,11 +10,11 @@ All triggers and destinations remain disabled until their required settings, aut
 
 ## Existing components to reuse, with their actual limits
 
-.NET source paths below are under `dotnet/src` or `dotnet/apps` as applicable. The audit, AI usage and quota entries are assumed prerequisite contracts requiring reconciliation, not evidence that those migrations or features are installed. Source presence is not qualification evidence.
+.NET source paths below are under `dotnet/src` or `dotnet/apps` as applicable.
 
 | Existing source | Reuse and required extension |
 | --- | --- |
-| `Weft.Deployment/MachineInvocationContracts.cs` | `MachineInvocationKey(target, caller, requestId)` and `IMachineInvocationLedger.ClaimWithMetadataAsync`, `FinishAsync`, `PurgeExpiredAsync`. Key includes principal; application ID and request digest must match. Eight attempts, 120-second lease, 24-hour private response retention, 4 MiB response bound. |
+| `Braid.Deployment/MachineInvocationContracts.cs` | `MachineInvocationKey(target, caller, requestId)` and `IMachineInvocationLedger.ClaimWithMetadataAsync`, `FinishAsync`, `PurgeExpiredAsync`. Key includes principal; application ID and request digest must match. Eight attempts, 120-second lease, 24-hour private response retention, 4 MiB response bound. |
 | `MachineInvocationService.InvokeAsync` | Creates the canonical request digest, claims before execution, uses the publisher returned by the claim, validates output boundaries/media, and encodes exact retained response bytes. Share this execution core, not an HTTP loopback or second executor. |
 | `MachineInvocationRequest` | Exact primary/named-input bytes, typed parameters, explicit media and canonical digest. Never infer format from a filename; use the qualified profile's admitted formats. |
 | `LocalReleaseInvocation.ExecuteAsync`, `CompiledBuildExecution.ExecuteQualifiedAsync` | Active-pointer checks, current publisher authority, approval/evidence, verified build bytes, fixed isolated runtime, pre/post execution fences. Four concurrent executions and a 60-second runtime bound. |
@@ -36,17 +25,16 @@ All triggers and destinations remain disabled until their required settings, aut
 | `IReleaseOperationsStore.ReadAsync/OperateAsync/RecoverAsync`, `ReleaseOperationsService.OperateAsync` | Metadata-only reads and idempotent, version-conditional mutations; SQL `read_release_operations`, `operate_release_target`, `read_release_operation`. Activation/rollback stay here. |
 | `BuildControlService.ReadAsync`, `CompiledBuildExecution` | Still check the publisher's current project rights, environment, approval, source identity and evidence. Archival policy must not bypass these checks or inherit a catalog-only archive prohibition. |
 | `NotificationConfigurationFile`, `NotificationUrlPolicy`, `NotificationTransport.SendHttpsAsync` | Reuse private-file admission and extract the safe HTTPS connection primitive: pinned DNS connection, TLS, no proxy/redirect/cookies. Do not send payloads through the notification envelope/outbox or copy its retry/disable policy. |
-| Audit and AI usage/quota contracts | Transactional metadata-only audit; separate AI turn/token accounting and quota reservations. Trigger execution is not AI usage. |
 
 Required extensions: claims do not return/persist an active-release pin; a retry resolves the current release. `machine_invocation_provenance` verifies an activated release's identity, not that it is still the current pointer. The service checks the pointer before finish, leaving a check-to-commit race for asynchronous output. `LocalReleaseInvocation` has no expected-release argument. Existing 24-hour results alone cannot support a durable delivery backlog.
 
 ## Runtime and authority boundary
 
-- Add a dormant trigger/delivery worker in the existing .NET hosting/jobs structure; compose the same compiled runtime and release services as `MappingEndpointResources`. Do not host mapping execution in a scheduler adapter or notification worker.
+- Add a trigger/delivery worker in the .NET hosting/jobs structure; compose the same compiled runtime and release services as `MappingEndpointResources`. Do not host mapping execution in a scheduler adapter or notification worker.
 - Operator-private configuration registers immutable, project-scoped connector IDs and versions: endpoint identity, allowed prefix/path, authentication profile, capabilities and destination limits. API users select IDs and bounded policies, not arbitrary network endpoints or secret paths.
 - Managed identity supplies Azure data-plane credentials and the validated machine caller; protected private files supply local/emulator connection strings, SFTP keys and webhook credentials. Database rows contain references and non-secret configuration only, never tokens, passwords, private keys, SAS URLs or credential hashes.
 - Freeze a non-secret connector configuration fingerprint/version on each work/delivery. Rotation may change credentials for the same identity, never silently redirect retained deliveries. Missing old configuration blocks them.
-- Reuse release reader/writer credentials for Operations reads and administrator-only configuration functions. Introduce a separate CONNECT-only `weft_trigger_worker` with narrowly scoped source, work and delivery functions, no table access, grant administration, catalog writes, release mutation or AI quota access.
+- Reuse release reader/writer credentials for Operations reads and administrator-only configuration functions. Introduce a separate CONNECT-only `braid_trigger_worker` with narrowly scoped source, work and delivery functions, no table access, grant administration, catalog writes, release mutation or AI quota access.
 - Extract shared owner-only ledger internals behind the existing invocation wrappers and new trigger wrappers. Preserve endpoint login privileges; do not give the new worker arbitrary `FinishAsync` authority or grant the endpoint input-receipt access. Guards admit the new role only through validated work/key/claim relationships, not a caller-set trusted flag.
 - Admission, execution finish and delivery admission recheck current target, grant and publisher/build authority. Archive is not a stop switch; a retired target is permanently unavailable. Keep Operations available for authorized inspection/containment of archived deployments.
 
@@ -147,7 +135,7 @@ All required outputs are explicit by qualified output name/media. Delivery succe
 - Reads: `.../operations/{target}/triggers`, `/runs`, `/deliveries`, `/dead-letters`; configuration/action writes use `.../triggers/{trigger}/actions/{operationId}` and delivery resolution uses its own resource-version `If-Match`. Use bounded existing page/window conventions and closed request DTOs.
 - `ITriggerAdministrationStore` follows `RecoverAsync` before current-state mutation, stores admitted failures, checks same actor/body/expected version, and refuses an ID collision. Do not overload release activation bodies or replace their target-version semantics.
 - Reads retain current Publisher/Administrator access; trigger/destination edits, enable/disable/retire and replay/resolution require current Administrator. Machine credentials cannot administer. Payload reads are absent from these metadata APIs; any later download requires a separately authorized, audited payload boundary.
-- Extend `weft operations` via generated OpenAPI contracts with matching IDs/version requirements. Browser/CLI never auto-retry a mutation after an uncertain reply; retain original operation for explicit recovery. Wrong identity hides/clears retained state using existing session rules.
+- Generate OpenAPI contracts with matching IDs/version requirements. The browser never auto-retries a mutation after an uncertain reply; retain original operation for explicit recovery. Wrong identity hides/clears retained state using existing session rules.
 - Add new source event projections to the existing audit journal in the same transaction, with IDs, actor, category and timestamps only. Update audit kind filters/contracts explicitly if new kinds are chosen. Do not log source filenames, endpoint URLs, payload digests, raw errors or credentials in the general audit.
 - Preserve `MachineInvocationRoleGuard`, `ReleaseOperationsRoleGuard`, audit, Automation and AI schema admission as complete contracts. Verify additive objects before exclusions; do not loosen fingerprints or grant inheritance. No catalog/project/mapping metadata writes from the worker.
 - No AI turn/provider calls, token-count estimates, quota reservations, quota releases or usage attribution for mapping/delivery work. Operational byte/concurrency/backlog caps are independent settings. Regression tests must prove audit/usage/quota behavior remains unchanged.
@@ -159,16 +147,6 @@ All required outputs are explicit by qualified output name/media. Delivery succe
 - Crash/restart tests at each boundary: input commit, ledger claim, before/after finish commit, before send, remote accept before acknowledgement, observation commit, and broker settlement. Confirm no rerun of completed mapping, no duplicate successful child, no unknown result labeled accepted.
 - Source/order tests: valid-failing-valid at start/middle/end, corrected failed-only retry, partial batches, redelivery with changed body/application, equal message IDs on different entities/principals, Blob replacement mid-read, late files, SFTP partial upload/manifest change, and scan interruption after every page.
 - Delivery tests: fan-out partial success, output expiry/pressure, corrupt receipts, duplicate keys with equal/different bytes, SFTP no-replace capability absence, HTTPS ambiguous acceptance, topic deduplication-window expiry, post-disable acceptance observations, and no implicit destination redirect on config rotation.
-- UI/API/CLI tests: role loss, missing/stale If-Match, operation collision, uncertain mutation recovery, metadata privacy, explicit unknown/partial states, disabled capabilities, and generated OpenAPI parity. Preserve existing audit and quota tests.
-- Local acceptance: additive opt-in Compose profile with Service Bus emulator, Azurite, fixed-host-key SFTP and HTTPS receipt fixture, against the existing runtime. Test production policy failures separately from Development-only loopback/secret fixtures; emulators cannot qualify managed identity or cloud RBAC.
-- Offline Bicep: extend existing `deploy/azure/modules/mapping-endpoint.bicep`/hosting conventions with opt-in worker and existing resource references, least-privilege receive/send/storage roles and secret-file delivery. Validate/lint/render offline; provision nothing and create no CI pipeline. Live Azure execution and qualification require separate authorization.
-
-## Delivery behavior and required configuration
-
-1. Outputs use create-only deterministic keys; overwrite and append are not supported. Every required output route is explicitly configured; unconfigured routes are refused. Collisions follow the per-destination rules above: matching delivery identity and content succeeds, a mismatch is a conflict.
-2. A queue message completes at durable output/outbox handoff. Later delivery failures are tracked as Operations delivery dead letters in braid's outbox, not the broker DLQ.
-3. HTTPS receiver and Service Bus topic deliveries whose outcome is ambiguous require manual resolution and are never automatically retried.
-4. Schedules require an explicit cron expression and IANA timezone (UTC is selectable, never assumed), plus explicit DST, catch-up and overlap selections. The source readiness/version contract, one-order versus explicit batch envelope, named-input snapshot binding and corrected-order identity are explicit trigger configuration. Missing choices block enablement; there are no inferred shipping/business defaults.
-5. Output from a stale release that is still awaiting delivery is held/fenced as `releaseSuperseded`; it is never repinned or resent.
-6. Disable/retire stops new admissions but cannot retract an already admitted remote request; its recorded or `unknown` outcome is retained.
-7. Operators must explicitly set retry/backoff and lock-renewal ceilings, payload retention and backlog caps before enabling. There are no inferred defaults.
+- UI/API tests: role loss, missing/stale If-Match, operation collision, uncertain mutation recovery, metadata privacy, explicit unknown/partial states, disabled capabilities, and generated OpenAPI parity. Preserve existing audit and quota tests.
+- Local acceptance: opt-in Compose profile with Service Bus emulator, Azurite, fixed-host-key SFTP and HTTPS receipt fixture, against the runtime. Test production policy failures separately from Development-only loopback/secret fixtures.
+- Offline Bicep: extend `deploy/azure/modules/mapping-endpoint.bicep`/hosting conventions with an opt-in worker, resource references, least-privilege receive/send/storage roles and secret-file delivery. Validate, lint and render offline.

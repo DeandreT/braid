@@ -59,9 +59,9 @@ export class RegressionError extends Error {
     super("The regression request could not be completed.");
   }
 }
-export const exactPolicy = "weft.regression.exact-bytes.v1";
-export const ediPolicy = "weft.regression.edi-segments.v1";
-export const documentProfile = "weft.ferrule-document-preview.v1";
+export const exactPolicy = "braid.regression.exact-bytes.v1";
+export const ediPolicy = "braid.regression.edi-segments.v1";
+export const documentProfile = "braid.ferrule-document-preview.v1";
 const maxBytes = 8 * 1024 * 1024;
 type Obj = Record<string, unknown>;
 const scopeKeys = ["organizationId", "projectId", "mappingId"] as const;
@@ -400,8 +400,8 @@ export class RegressionApi {
               ...(method === "PUT"
                 ? {
                     "Content-Type": suffix.startsWith("/regression-cases")
-                      ? "application/vnd.weft.regression-case.v1+json"
-                      : "application/vnd.weft.regression-run.v1+json",
+                      ? "application/vnd.braid.regression-case.v1+json"
+                      : "application/vnd.braid.regression-run.v1+json",
                   }
                 : {}),
             });

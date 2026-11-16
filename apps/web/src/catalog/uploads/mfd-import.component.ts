@@ -25,7 +25,7 @@ import { mfdPackage, type MfdReview } from "./mfd-interchange";
 import { MfdImportDraftRecovery } from "./unsent-upload-recovery";
 
 @Component({
-  selector: "weft-mfd-import",
+  selector: "braid-mfd-import",
   imports: [RouterLink],
   templateUrl: "./mfd-import.component.html",
   styleUrl: "./mfd-interchange.component.css",
@@ -433,7 +433,7 @@ export class MfdImportComponent {
     return `/api/v1/organizations/${p.organizationId}/projects/${p.projectId}`;
   }
   private key() {
-    return `weft.mfd.review.v1/${this.owner}`;
+    return `braid.mfd.review.v1/${this.owner}`;
   }
   private persist(review: MfdReview) {
     try {

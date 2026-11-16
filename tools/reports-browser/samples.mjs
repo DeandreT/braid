@@ -23,7 +23,7 @@ export const reportSampleArtifacts = Object.freeze(
       1701,
     ],
     [
-      "dotnet/tests/Weft.Tests/Fixtures/validation-cycle.json",
+      "dotnet/tests/Braid.Tests/Fixtures/validation-cycle.json",
       "54514537939302ceda435e4403da8051935f55c9e684dc2f9dadfb05145f52c2",
       526,
     ],

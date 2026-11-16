@@ -16,29 +16,26 @@ EDI comparison options when evaluating a new revision. Selecting a different
 revision changes neither the saved replay inputs nor the original baseline.
 
 Document results are staged, not passed, by the ordinary run writer. A separate
-`weft_comparison_settler` login reads the locked original case and staged bytes,
+`braid_comparison_settler` login reads the locked original case and staged bytes,
 verifies their digests, and recomputes the saved policy with the same C# comparer
 used for interactive runs. It accepts no caller-supplied pass flag. Its decision
 is bound to that case version, result digest and unexpired execution lease, and
 current authority is checked again before commit. Malformed documents and wrong
 media fail; explicitly ignored EDI fields retain their saved comparison meaning.
-Legacy exact-byte JSON results keep their existing database comparison path.
+Exact-byte JSON results use the database comparison path.
 
 Before reading a staged result and again before settlement, the verifier admits
 the inherited regression-run routines and schema, including the authorization
 helper. These are catalog-only checks; the comparison role receives no run-role
 identity, direct table access or additional execution grants.
 
-The regression worker requires `WEFT_AUTOMATION_COMPARISON_CONNECTION_STRING`
+The regression worker requires `BRAID_AUTOMATION_COMPARISON_CONNECTION_STRING`
 (or its protected `_FILE` form) in addition to its run credentials. Deliver this
 credential only to the trusted worker, never the API host or ordinary run-writer
 clients. It has no table access and can execute only the two settlement entry
 functions. There is no fallback to trusting the ordinary writer when it is absent.
-Provision this distinct CONNECT-only login before applying the comparison
-settlement migration. Fresh local/Azure provisioning includes it; an existing
-local database uses `deploy/local/postgres-add-comparison-role.sh` with a separate
-`WEFT_LOCAL_COMPARISON_PASSWORD`. Existing hosted installations must provision the
-same role with their normal administrator/secret-delivery process before migrating.
+Local/Azure provisioning includes this distinct CONNECT-only login. Deliver its
+credential through the deployment's secret-delivery process.
 
 Cases have independent fenced leases and at most three infrastructure attempts.
 A comparison failure is terminal for that case, but other cases continue. Expired
@@ -61,22 +58,12 @@ case versions and passes on other revisions do not satisfy the policy. Existing
 build approvals and qualification evidence remain immutable; the policy does not
 retroactively erase them or activate a release.
 
-The approval and qualification gate triggers are independent of the evidence
-validation functions. Document-profile migrations replace only those evidence
-functions; they leave the Automation triggers and their exact admission intact.
-
-The gate rechecks durable comparison evidence as well as suite state. Historical
-document passes without trusted settlement are retained as history but cannot
-qualify a build; request a fresh suite under the corrected settlement path.
-
-Database admission verifies each Automation trigger's exact `weft` function
-identity, source, ownership and permissions before excluding the additive triggers
-from historical source fingerprints. Any Automation table, function or named
-trigger requires the complete installation; partial installations are refused.
-Unchanged pre-Automation schemas retain their original source checks.
+The gate rechecks durable comparison evidence as well as suite state. Database
+admission verifies each Automation trigger's exact `braid` function identity,
+source, ownership and permissions. Partial installations are refused.
 
 Use **Run all current cases now** on a revision to create another immutable suite
-after changing a baseline or to check a revision that predates automation. The
+after changing a baseline. The
 caller-chosen suite ID makes a retry idempotent. The new suite evaluates that same
 exact revision and leaves earlier case versions, suites and results intact.
 
@@ -128,7 +115,7 @@ emits once when a window crosses the threshold, not once per failed request.
 
 ## Private host configuration
 
-The API and regression worker read `WEFT_NOTIFICATION_CONFIG_FILE`, an absolute,
+The API and regression worker read `BRAID_NOTIFICATION_CONFIG_FILE`, an absolute,
 owner-readable private JSON file (at most 64 KiB). Do not commit this file. On
 Linux it must be an owned, regular, single-link 0600 file beneath protected
 ancestors; the existing private-host-file reader verifies it before parsing. The worker uses its existing
@@ -136,11 +123,11 @@ regression credentials and starts automation with the regression worker; no new
 database login or pipeline is required.
 
 Notifications can also run independently of mapping execution. Enable
-`WEFT_NOTIFICATIONS_ENABLED=true` in the API and worker, and set
-`WEFT_NOTIFICATION_CONNECTION_STRING` to the existing restricted `weft_run_writer`
+`BRAID_NOTIFICATIONS_ENABLED=true` in the API and worker, and set
+`BRAID_NOTIFICATION_CONNECTION_STRING` to the existing restricted `braid_run_writer`
 profile. In Session hosting use the protected `_FILE` form instead. The existing
 regression writer setting is a supported fallback. A notification-only worker
-sets `WEFT_PREVIEW_WORKER_ENABLED=false`; it needs no worker image, sample-reader
+sets `BRAID_PREVIEW_WORKER_ENABLED=false`; it needs no worker image, sample-reader
 credentials or payload storage. When the regression worker is enabled, it
 already handles notification delivery and no second pump is registered.
 
@@ -150,13 +137,13 @@ or secret keys. Configuration shape (all values below are placeholders):
 
 ```json
 {
-  "origin": "https://weft.example.com",
+  "origin": "https://braid.example.com",
   "hosted": true,
   "webhooks": [{
     "organizationId": "11111111-1111-1111-1111-111111111111",
     "projectId": "22222222-2222-2222-2222-222222222222",
     "id": "operations",
-    "url": "https://hooks.example.com/weft",
+    "url": "https://hooks.example.com/braid",
     "secret": "BASE64_OF_32_TO_64_RANDOM_BYTES"
   }],
   "recipients": [{
@@ -166,7 +153,7 @@ or secret keys. Configuration shape (all values below are placeholders):
   }],
   "email": {
     "provider": "smtp",
-    "sender": "weft@example.com",
+    "sender": "braid@example.com",
     "smtpHost": "smtp.example.com",
     "smtpPort": 587,
     "username": "PRIVATE_USERNAME",
@@ -178,8 +165,7 @@ or secret keys. Configuration shape (all values below are placeholders):
 SMTP uses STARTTLS with normal certificate verification and never uses default
 process credentials. For the configured ACS adapter, use `provider: "acs"`,
 `sender`, `acsEndpoint` (the service's HTTPS `*.communication.azure.com` origin)
-and `acsAccessKey` (Base64 key) instead of SMTP settings. ACS is an optional
-provider implementation, not authorization to provision Azure or send live mail.
+and `acsAccessKey` (Base64 key) instead of SMTP settings.
 
 Webhooks use HTTPS port 443 only, reject userinfo/query/fragment, disable redirects
 and proxies, re-resolve DNS at each attempt, reject any non-public resolved address
@@ -190,37 +176,13 @@ use HTTPS loopback; normal TLS verification still applies. Neither delivery logs
 nor exceptions expose URLs or credentials.
 
 The UTF-8 JSON body is signed with HMAC-SHA256 over ASCII timestamp, a dot, and the
-**exact body bytes**. Headers are `X-Weft-Timestamp` (Unix seconds),
-`X-Weft-Signature: sha256=<lowercase hex>` and `X-Weft-Event-Id`. Receivers should
+**exact body bytes**. Headers are `X-Braid-Timestamp` (Unix seconds),
+`X-Braid-Signature: sha256=<lowercase hex>` and `X-Braid-Event-Id`. Receivers should
 require a short timestamp tolerance (for example five minutes), compare signatures
 in constant time, and reject repeated event IDs after processing.
 
-## HTTP and CLI
+## HTTP API
 
-Generated operations are in `contracts/weft-v1.json`. All routes use the existing
+Generated operations are in `contracts/braid-v1.json`. All routes use the existing
 session/bearer boundary, fresh project authority, CSRF for browser writes,
 bounded input, and `Cache-Control: no-store`.
-
-```sh
-weft automation policy --project PROJECT
-weft automation set-policy --project PROJECT --definition policy.json
-weft automation mapping --project PROJECT --mapping MAPPING
-weft automation set-mapping --project PROJECT --id MAPPING --definition mapping.json
-weft automation suites --project PROJECT --mapping MAPPING
-weft automation suite --project PROJECT --revision REVISION
-weft automation recheck --project PROJECT --id NEW_SUITE_ID --definition recheck.json
-weft automation cases --project PROJECT --suite SUITE_ID
-weft notifications options --project PROJECT
-weft notifications inbox
-weft notifications inbox-read --id EVENT
-weft notifications subscription --project PROJECT
-weft notifications subscribe --project PROJECT --definition subscriptions.json
-weft notifications list --project PROJECT
-weft notifications mark-read --project PROJECT --id EVENT
-weft notifications deliveries --project PROJECT
-weft notifications destinations --project PROJECT
-weft notifications enable-destination --project PROJECT --definition destination.json
-```
-
-Paged commands accept `--limit` and `--after`. Definition files contain the exact
-corresponding generated request shape. `--json` preserves machine-readable output.

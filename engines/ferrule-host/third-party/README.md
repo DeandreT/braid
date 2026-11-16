@@ -11,15 +11,15 @@ in-memory C# source generation to the build operation. `mfd` supplies the closed
 in-memory package importer and exporter. Their upstream package
 metadata declares `GPL-3.0-only`. `ferrule-GPL-3.0-only.txt` retains the license
 text from that exact revision. It is dependency metadata and does not declare a
-license for the Weft repository.
+license for the Braid repository.
 
 The worker image also retains the runtime library copyright files supplied by
 its Ubuntu build environment. Compiler, Rust package, and source identities are
-recorded in the locked worker build and its qualification evidence.
+recorded in the locked worker build.
 
-The inactive XML safety core's BMP name-character ranges are derived from the
+The XML safety core's BMP name-character ranges are derived from the
 .NET runtime v10.0.12 `XmlCharType.CharProperties` table. The source identity and
 derivation are recorded beside the ranges in `src/xml_name_chars.rs`.
 `dotnet-xml-name-tables-MIT.txt` retains the upstream attribution and license;
 the worker image includes this directory unchanged. This is not a license
-declaration for the rest of Weft.
+declaration for the rest of Braid.

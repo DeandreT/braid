@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="../../apps/Braid.Server/Braid.Server.csproj" />
+    <None Include="../../../engines/ferrule-host/tests/fixtures/valid-basic.json"
+          Link="valid-basic.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

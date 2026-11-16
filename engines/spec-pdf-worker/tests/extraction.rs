@@ -1,5 +1,5 @@
+use braid_spec_pdf_worker::{MAX_INPUT_BYTES, MAX_RESULT_BYTES, PageText, Status, encode, extract};
 use sha2::{Digest, Sha256};
-use weft_spec_pdf_worker::{MAX_INPUT_BYTES, MAX_RESULT_BYTES, PageText, Status, encode, extract};
 
 // A real minimal PDF with xref offsets and one separately addressable stream per page.
 fn pdf(texts: &[&str]) -> Vec<u8> {
@@ -122,7 +122,7 @@ fn process_protocol_returns_only_bound_source_and_page_evidence() {
         pdf(&["hello", "", "world"]),
         b"private invalid content".to_vec(),
     ] {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_weft-spec-pdf-worker"))
+        let mut child = Command::new(env!("CARGO_BIN_EXE_braid-spec-pdf-worker"))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

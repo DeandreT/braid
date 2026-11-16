@@ -16,7 +16,7 @@ import {
 } from "./projection-view";
 
 @Component({
-  selector: "weft-mapping-entity",
+  selector: "braid-mapping-entity",
   imports: [MappingDetailsComponent, NativeEvidenceComponent],
   template: `
     @let ref = reference();
@@ -86,7 +86,7 @@ import {
           } @empty {
             <p class="muted">No dependent rule or control is shown.</p>
           }
-          <weft-native-evidence [locator]="field.nativeLocator" />
+          <braid-native-evidence [locator]="field.nativeLocator" />
         }
       }
       @case ("rule") {
@@ -127,12 +127,12 @@ import {
             </p>
           }
           <h4>Rule explanation</h4>
-          <weft-mapping-details
+          <braid-mapping-details
             [details]="rule.details"
             [view]="view()"
             (navigate)="navigate.emit($event)"
           />
-          <weft-native-evidence [locator]="rule.nativeLocator" />
+          <braid-native-evidence [locator]="rule.nativeLocator" />
         }
       }
       @case ("control") {
@@ -169,12 +169,12 @@ import {
           } @empty {
             <p class="muted">No dependencies are shown.</p>
           }
-          <weft-mapping-details
+          <braid-mapping-details
             [details]="control.details"
             [view]="view()"
             (navigate)="navigate.emit($event)"
           />
-          <weft-native-evidence [locator]="control.nativeLocator" />
+          <braid-native-evidence [locator]="control.nativeLocator" />
         }
       }
       @case ("parameter") {
@@ -191,7 +191,7 @@ import {
           </dl>
           @if (parameter.defaultValue; as value) {
             <h4>Default value</h4>
-            <weft-mapping-details
+            <braid-mapping-details
               [details]="[{ kind: 'literal', value }]"
               [view]="view()"
               (navigate)="navigate.emit($event)"
@@ -209,7 +209,7 @@ import {
               {{ entity.summary }}
             </button>
           }
-          <weft-native-evidence [locator]="parameter.nativeLocator" />
+          <braid-native-evidence [locator]="parameter.nativeLocator" />
         }
       }
       @case ("boundary") {
@@ -240,7 +240,7 @@ import {
               </button>
             }
           }
-          <weft-native-evidence [locator]="boundary.nativeLocator" />
+          <braid-native-evidence [locator]="boundary.nativeLocator" />
         }
       }
     }

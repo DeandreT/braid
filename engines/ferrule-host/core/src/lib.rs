@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-//! Ferrule's native codec, deterministic edits and Weft's bounded explanation.
+//! Ferrule's native codec, deterministic edits and Braid's bounded explanation.
 //! This crate has no host, filesystem, transport or browser API.
 
 pub mod authored_document;

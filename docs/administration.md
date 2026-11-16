@@ -3,7 +3,7 @@
 The Administration area manages admitted people, organization roles, invitations,
 project memberships, production-payload read permission, and machine invocation
 grants. It uses the same cookie/CSRF or delegated-bearer admission as the catalog.
-Every operation is described in the generated `contracts/weft-v1.json`.
+Every operation is described in the generated `contracts/braid-v1.json`.
 
 ![Administration page with organization members and the invitation form](images/administration.png)
 
@@ -95,32 +95,29 @@ inviter no longer has the required authority is also refused.
 
 ## Operator setup and bootstrap
 
-Provision the independent `weft_administration` PostgreSQL login before applying
-the administration migration. Existing local installations can use
-`deploy/local/postgres-add-administration-role.sh` with a separately delivered
-`WEFT_LOCAL_ADMINISTRATION_PASSWORD`; do not reuse the migration credential.
-New local installations create the login through `postgres-init.sh`. Without
+Local `postgres-init.sh` creates the independent `braid_administration`
+PostgreSQL login with `BRAID_LOCAL_ADMINISTRATION_PASSWORD`. Without
 the optional password it has no usable password authentication and the feature
 remains disabled.
 
 After migrating, use the owner tool once:
 
 ```text
-Weft.DatabaseTool bootstrap-organization-administrator ORG PRINCIPAL TENANT
+Braid.DatabaseTool bootstrap-organization-administrator ORG PRINCIPAL TENANT
 ```
 
 The principal must already exist and be actively admitted. Bootstrap refuses an
 organization that already has administrative-role rows and fixes the invitation
 tenant; it grants no project membership or project-creation capability. Deliver
 the restricted connection through the protected private-file setting
-`WEFT_ADMINISTRATION_CONNECTION_STRING_FILE`. Plain environment delivery through
-`WEFT_ADMINISTRATION_CONNECTION_STRING` is refused. The pool is lazy and only
+`BRAID_ADMINISTRATION_CONNECTION_STRING_FILE`. Plain environment delivery through
+`BRAID_ADMINISTRATION_CONNECTION_STRING` is refused. The pool is lazy and only
 executes the bounded administration functions, with no direct table privileges.
 
 Migration, first organization/principal admission and binding, first
 organization-administrator bootstrap, project-creation capability bootstrap,
 and emergency recovery remain operator commands. Normal membership, invitation,
 payload and invocation management belongs in the app/API. Run owner commands
-offline from administrative traffic: legacy owner writes do not participate in
+offline from administrative traffic: owner writes do not participate in
 the administrative ETag generation. Do not keep migration-owner credentials in
 the web host.

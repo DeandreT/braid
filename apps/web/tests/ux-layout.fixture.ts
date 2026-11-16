@@ -46,7 +46,7 @@ export async function uxFixture(page: Page, baseURL: string) {
   const projectApi = catalogApi(projectPath(data.project.scope));
   const mappingApi = catalogApi(mappingPath(data.mapping.scope));
   const planJson = JSON.stringify({
-    schema: "weft.creation-plan.v1",
+    schema: "braid.creation-plan.v1",
     format: "json-record",
     source: [{ Name: "code", Type: 1, Required: true }],
     target: [{ Name: "item", Type: 1, Required: true }],
@@ -109,8 +109,8 @@ export async function uxFixture(page: Page, baseURL: string) {
           confirmed: true,
           engineRevision: "synthetic-engine",
           backendBuild: "sha256:" + "c".repeat(64),
-          adapterBuild: "weft.ferrule-preview-adapter.v1",
-          profile: "weft.ferrule-json-preview.v1",
+          adapterBuild: "braid.ferrule-preview-adapter.v1",
+          profile: "braid.ferrule-json-preview.v1",
         }
       : null,
     recordsWritten: finished ? "1" : null,
@@ -137,8 +137,8 @@ export async function uxFixture(page: Page, baseURL: string) {
     backendId: "ferrule",
     engineRevision: "synthetic-engine",
     backendBuild: "sha256:" + "c".repeat(64),
-    adapterBuild: "weft.ferrule-preview-adapter.v1",
-    profile: "weft.ferrule-json-preview.v1",
+    adapterBuild: "braid.ferrule-preview-adapter.v1",
+    profile: "braid.ferrule-json-preview.v1",
   };
   await page.route("**/api/**", async (route) => {
     const request = route.request(),
@@ -226,7 +226,7 @@ export async function uxFixture(page: Page, baseURL: string) {
               maximumArtifacts: 64,
               maximumTextBytes: 2048,
             },
-            comparisonPolicy: "weft.regression.exact-bytes.v1",
+            comparisonPolicy: "braid.regression.exact-bytes.v1",
             readSamples: true,
             publishCases: false,
           },

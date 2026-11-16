@@ -104,12 +104,12 @@ export function displayData(rich = false) {
       role: "namedInput",
     });
     const tier = field("tier", "customers", [
-      { kind: "field", name: "customer", namespaceUri: "urn:weft:customers" },
-      { kind: "field", name: "tier", namespaceUri: "urn:weft:customers" },
+      { kind: "field", name: "customer", namespaceUri: "urn:braid:customers" },
+      { kind: "field", name: "tier", namespaceUri: "urn:braid:customers" },
     ]);
     const identity = field("customer-id", "customers", [
-      { kind: "field", name: "customer", namespaceUri: "urn:weft:customers" },
-      { kind: "attribute", name: "id", namespaceUri: "urn:weft:identity" },
+      { kind: "field", name: "customer", namespaceUri: "urn:braid:customers" },
+      { kind: "attribute", name: "id", namespaceUri: "urn:braid:identity" },
     ]);
     document.controls.push({
       id: "customer-join",

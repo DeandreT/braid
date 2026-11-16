@@ -1,4 +1,4 @@
-CREATE TABLE weft.mappings (
+CREATE TABLE braid.mappings (
     organization_id uuid NOT NULL,
     project_id uuid NOT NULL,
     id uuid NOT NULL,
@@ -15,11 +15,11 @@ CREATE TABLE weft.mappings (
     CONSTRAINT mappings_pk PRIMARY KEY (organization_id, project_id, id),
     CONSTRAINT mappings_backend_key UNIQUE (organization_id, project_id, id, backend_id),
     CONSTRAINT mappings_project_fk FOREIGN KEY (organization_id, project_id)
-        REFERENCES weft.projects(organization_id, id) ON DELETE RESTRICT,
+        REFERENCES braid.projects(organization_id, id) ON DELETE RESTRICT,
     CONSTRAINT mappings_creator_fk FOREIGN KEY (organization_id, project_id, creator_principal_id)
-        REFERENCES weft.project_memberships(organization_id, project_id, principal_id) ON DELETE RESTRICT,
+        REFERENCES braid.project_memberships(organization_id, project_id, principal_id) ON DELETE RESTRICT,
     CONSTRAINT mappings_owner_fk FOREIGN KEY (organization_id, project_id, owner_principal_id)
-        REFERENCES weft.project_memberships(organization_id, project_id, principal_id) ON DELETE RESTRICT,
+        REFERENCES braid.project_memberships(organization_id, project_id, principal_id) ON DELETE RESTRICT,
     CONSTRAINT mappings_ids_check CHECK (id <> '00000000-0000-0000-0000-000000000000' AND head_revision_id <> '00000000-0000-0000-0000-000000000000'),
     CONSTRAINT mappings_name_check CHECK (char_length(name) BETWEEN 1 AND 200 AND name = btrim(name) AND char_length(btrim(name)) > 0),
     CONSTRAINT mappings_description_check CHECK (char_length(description) <= 4000),
@@ -27,7 +27,7 @@ CREATE TABLE weft.mappings (
     CONSTRAINT mappings_metadata_check CHECK (version > 0 AND head_sequence > 0 AND updated_at >= created_at)
 );
 
-CREATE TABLE weft.revision_ingestions (
+CREATE TABLE braid.revision_ingestions (
     organization_id uuid NOT NULL,
     project_id uuid NOT NULL,
     operation_id uuid NOT NULL,
@@ -72,11 +72,11 @@ CREATE TABLE weft.revision_ingestions (
     committed_revision_id uuid,
     CONSTRAINT revision_ingestions_pk PRIMARY KEY (organization_id, project_id, operation_id),
     CONSTRAINT revision_ingestions_project_fk FOREIGN KEY (organization_id, project_id)
-        REFERENCES weft.projects(organization_id, id) ON DELETE RESTRICT,
+        REFERENCES braid.projects(organization_id, id) ON DELETE RESTRICT,
     CONSTRAINT revision_ingestions_actor_fk FOREIGN KEY (organization_id, project_id, actor_principal_id)
-        REFERENCES weft.project_memberships(organization_id, project_id, principal_id) ON DELETE RESTRICT,
+        REFERENCES braid.project_memberships(organization_id, project_id, principal_id) ON DELETE RESTRICT,
     CONSTRAINT revision_ingestions_target_fk FOREIGN KEY (organization_id, project_id, target_mapping_id, backend_id)
-        REFERENCES weft.mappings(organization_id, project_id, id, backend_id) ON DELETE RESTRICT,
+        REFERENCES braid.mappings(organization_id, project_id, id, backend_id) ON DELETE RESTRICT,
     CONSTRAINT revision_ingestions_revision_key UNIQUE (organization_id, project_id, future_mapping_id, future_revision_id),
     CONSTRAINT revision_ingestions_object_key UNIQUE (organization_id, project_id, future_mapping_id, future_revision_id, native_object_id),
     CONSTRAINT revision_ingestions_native_facts_key UNIQUE (organization_id, project_id, operation_id, future_mapping_id, future_revision_id, native_object_id, native_class, native_digest, native_byte_count, backend_id, logical_entry_document, dependency_manifest_id, actor_principal_id),
@@ -84,7 +84,7 @@ CREATE TABLE weft.revision_ingestions (
     CONSTRAINT revision_ingestions_intent_check CHECK (fingerprint_version = 1 AND intent_fingerprint ~ '^[0-9a-f]{64}$' AND operation_kind IN ('create', 'append') AND head_condition IN ('any', 'equal')),
     CONSTRAINT revision_ingestions_kind_check CHECK ((operation_kind = 'create' AND target_mapping_id IS NULL AND create_name IS NOT NULL AND create_description IS NOT NULL AND head_condition = 'any') OR (operation_kind = 'append' AND target_mapping_id = future_mapping_id AND target_mapping_id IS NOT NULL AND create_name IS NULL AND create_description IS NULL)),
     CONSTRAINT revision_ingestions_head_condition_check CHECK ((head_condition = 'any' AND expected_head_revision_id IS NULL) OR (head_condition = 'equal' AND operation_kind = 'append' AND expected_head_revision_id IS NOT NULL)),
-    CONSTRAINT revision_ingestions_native_check CHECK (native_class = 'native' AND native_digest ~ '^[0-9a-f]{64}$' AND native_byte_count BETWEEN 1 AND 4194304 AND effective_native_byte_limit BETWEEN native_byte_count AND 4194304 AND logical_entry_document = 'entry.native.json' AND dependency_manifest_id = 'weft.dependencies.empty.v1'),
+    CONSTRAINT revision_ingestions_native_check CHECK (native_class = 'native' AND native_digest ~ '^[0-9a-f]{64}$' AND native_byte_count BETWEEN 1 AND 4194304 AND effective_native_byte_limit BETWEEN native_byte_count AND 4194304 AND logical_entry_document = 'entry.native.json' AND dependency_manifest_id = 'braid.dependencies.empty.v1'),
     CONSTRAINT revision_ingestions_profile_check CHECK (octet_length(backend_id) BETWEEN 1 AND 128 AND char_length(btrim(backend_id)) > 0 AND octet_length(engine_revision) BETWEEN 1 AND 256 AND char_length(btrim(engine_revision)) > 0 AND octet_length(backend_build) BETWEEN 1 AND 2048 AND char_length(btrim(backend_build)) > 0 AND octet_length(adapter_build) BETWEEN 1 AND 256 AND char_length(btrim(adapter_build)) > 0 AND octet_length(admission_policy_id) BETWEEN 1 AND 128 AND char_length(btrim(admission_policy_id)) > 0),
     CONSTRAINT revision_ingestions_filename_check CHECK (octet_length(display_filename) BETWEEN 1 AND 255 AND display_filename NOT IN ('.', '..') AND display_filename !~ '[/\\[:cntrl:]]'),
     CONSTRAINT revision_ingestions_create_metadata_check CHECK ((create_name IS NULL OR (char_length(create_name) BETWEEN 1 AND 200 AND create_name = btrim(create_name) AND char_length(btrim(create_name)) > 0)) AND (create_description IS NULL OR char_length(create_description) <= 4000)),
@@ -96,11 +96,11 @@ CREATE TABLE weft.revision_ingestions (
     CONSTRAINT revision_ingestions_error_check CHECK (last_error IN ('needs_source', 'storage_integrity', 'storage_io', 'backend_unavailable', 'backend_failure', 'timed_out', 'canceled', 'isolation_failure', 'protocol_failure', 'reserved_profile_unavailable', 'evidence_limit'))
 );
 
-CREATE UNIQUE INDEX revision_ingestions_create_key ON weft.revision_ingestions (organization_id, project_id, actor_principal_id, idempotency_key) WHERE operation_kind = 'create';
-CREATE UNIQUE INDEX revision_ingestions_append_key ON weft.revision_ingestions (organization_id, project_id, actor_principal_id, target_mapping_id, idempotency_key) WHERE operation_kind = 'append';
-CREATE UNIQUE INDEX revision_ingestions_future_mapping_key ON weft.revision_ingestions (organization_id, project_id, future_mapping_id) WHERE operation_kind = 'create';
+CREATE UNIQUE INDEX revision_ingestions_create_key ON braid.revision_ingestions (organization_id, project_id, actor_principal_id, idempotency_key) WHERE operation_kind = 'create';
+CREATE UNIQUE INDEX revision_ingestions_append_key ON braid.revision_ingestions (organization_id, project_id, actor_principal_id, target_mapping_id, idempotency_key) WHERE operation_kind = 'append';
+CREATE UNIQUE INDEX revision_ingestions_future_mapping_key ON braid.revision_ingestions (organization_id, project_id, future_mapping_id) WHERE operation_kind = 'create';
 
-CREATE TABLE weft.revision_ingestion_attempts (
+CREATE TABLE braid.revision_ingestion_attempts (
     organization_id uuid NOT NULL,
     project_id uuid NOT NULL,
     operation_id uuid NOT NULL,
@@ -134,11 +134,11 @@ CREATE TABLE weft.revision_ingestion_attempts (
     last_error text,
     CONSTRAINT revision_ingestion_attempts_pk PRIMARY KEY (organization_id, project_id, operation_id, generation),
     CONSTRAINT revision_ingestion_attempts_ingestion_fk FOREIGN KEY (organization_id, project_id, operation_id)
-        REFERENCES weft.revision_ingestions(organization_id, project_id, operation_id) ON DELETE RESTRICT,
+        REFERENCES braid.revision_ingestions(organization_id, project_id, operation_id) ON DELETE RESTRICT,
     CONSTRAINT revision_ingestion_attempts_claim_key UNIQUE (organization_id, project_id, operation_id, generation, claimant_instance_id, claim_token),
     CONSTRAINT revision_ingestion_attempts_admission_key UNIQUE (organization_id, project_id, operation_id, generation, admission_classification),
     CONSTRAINT revision_ingestion_attempts_reused_fk FOREIGN KEY (organization_id, project_id, operation_id, reused_attempt_generation, reused_admission)
-        REFERENCES weft.revision_ingestion_attempts(organization_id, project_id, operation_id, generation, admission_classification) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED,
+        REFERENCES braid.revision_ingestion_attempts(organization_id, project_id, operation_id, generation, admission_classification) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED,
     CONSTRAINT revision_ingestion_attempts_claim_check CHECK (generation BETWEEN 1 AND 8 AND claimant_instance_id <> '00000000-0000-0000-0000-000000000000' AND claim_token <> '00000000-0000-0000-0000-000000000000'),
     CONSTRAINT revision_ingestion_attempts_completion_check CHECK ((finished_at IS NULL) = (completion_kind IS NULL) AND (completion_kind IS NULL) = (admission_classification IS NULL) AND completion_kind IN ('validation', 'operational_failure', 'reused_evidence') AND admission_classification IN ('eligible_valid', 'eligible_decoded_invalid', 'rejected_native_decode', 'rejected_unsupported', 'rejected_resource_limit', 'retryable_failure', 'reused_evidence')),
     CONSTRAINT revision_ingestion_attempts_status_check CHECK (backend_status IN ('succeeded', 'invalid_mapping', 'unsupported_artifact', 'resource_limit', 'protocol_failure', 'backend_unavailable', 'backend_failure', 'timed_out', 'canceled', 'isolation_failure')),
@@ -148,7 +148,7 @@ CREATE TABLE weft.revision_ingestion_attempts (
     CONSTRAINT revision_ingestion_attempts_evidence_size_check CHECK (evidence IS NULL OR octet_length(evidence::text) <= 8388608),
     CONSTRAINT revision_ingestion_attempts_shape_check CHECK ((
         (completion_kind IS NULL AND num_nonnulls(backend_status, provenance_confirmed, is_valid, total_issue_count, emitted_issue_count, issues_truncated, evidence_version, evidence, reused_attempt_generation, reused_admission, last_error) = 0)
-        OR (completion_kind = 'validation' AND verified_stage_at IS NOT NULL AND backend_status IS NOT NULL AND provenance_confirmed IS NOT NULL AND total_issue_count IS NOT NULL AND emitted_issue_count IS NOT NULL AND issues_truncated IS NOT NULL AND evidence_version = 'weft.ingestion-validation.v1' AND evidence IS NOT NULL AND jsonb_typeof(evidence) = 'object' AND reused_attempt_generation IS NULL AND reused_admission IS NULL AND last_error IS NULL)
+        OR (completion_kind = 'validation' AND verified_stage_at IS NOT NULL AND backend_status IS NOT NULL AND provenance_confirmed IS NOT NULL AND total_issue_count IS NOT NULL AND emitted_issue_count IS NOT NULL AND issues_truncated IS NOT NULL AND evidence_version = 'braid.ingestion-validation.v1' AND evidence IS NOT NULL AND jsonb_typeof(evidence) = 'object' AND reused_attempt_generation IS NULL AND reused_admission IS NULL AND last_error IS NULL)
         OR (completion_kind = 'operational_failure' AND num_nonnulls(backend_status, is_valid, total_issue_count, emitted_issue_count, issues_truncated, evidence_version, evidence, reused_attempt_generation, reused_admission) = 0 AND last_error IS NOT NULL AND ((last_error = 'evidence_limit' AND admission_classification = 'rejected_resource_limit') OR (last_error <> 'evidence_limit' AND provenance_confirmed IS NULL AND admission_classification = 'retryable_failure')))
         OR (completion_kind = 'reused_evidence' AND verified_stage_at IS NOT NULL AND num_nonnulls(backend_status, provenance_confirmed, is_valid, total_issue_count, emitted_issue_count, issues_truncated, evidence_version, evidence, last_error) = 0 AND admission_classification = 'reused_evidence' AND reused_attempt_generation BETWEEN 1 AND generation - 1 AND reused_admission IN ('eligible_valid', 'eligible_decoded_invalid'))
     ) IS TRUE),
@@ -173,7 +173,7 @@ CREATE TABLE weft.revision_ingestion_attempts (
     ) IS TRUE)
 );
 
-CREATE TABLE weft.mapping_revisions (
+CREATE TABLE braid.mapping_revisions (
     organization_id uuid NOT NULL,
     project_id uuid NOT NULL,
     mapping_id uuid NOT NULL,
@@ -195,46 +195,46 @@ CREATE TABLE weft.mapping_revisions (
     CONSTRAINT mapping_revisions_sequence_key UNIQUE (organization_id, project_id, mapping_id, sequence),
     CONSTRAINT mapping_revisions_head_key UNIQUE (organization_id, project_id, mapping_id, id, sequence),
     CONSTRAINT mapping_revisions_backend_fk FOREIGN KEY (organization_id, project_id, mapping_id, backend_id)
-        REFERENCES weft.mappings(organization_id, project_id, id, backend_id) ON DELETE RESTRICT,
+        REFERENCES braid.mappings(organization_id, project_id, id, backend_id) ON DELETE RESTRICT,
     CONSTRAINT mapping_revisions_creator_fk FOREIGN KEY (organization_id, project_id, creator_principal_id)
-        REFERENCES weft.project_memberships(organization_id, project_id, principal_id) ON DELETE RESTRICT,
+        REFERENCES braid.project_memberships(organization_id, project_id, principal_id) ON DELETE RESTRICT,
     CONSTRAINT mapping_revisions_native_facts_fk FOREIGN KEY (organization_id, project_id, ingestion_operation_id, mapping_id, id, native_object_id, native_class, native_digest, native_byte_count, backend_id, logical_entry_document, dependency_manifest_id, creator_principal_id)
-        REFERENCES weft.revision_ingestions(organization_id, project_id, operation_id, future_mapping_id, future_revision_id, native_object_id, native_class, native_digest, native_byte_count, backend_id, logical_entry_document, dependency_manifest_id, actor_principal_id) ON DELETE RESTRICT,
+        REFERENCES braid.revision_ingestions(organization_id, project_id, operation_id, future_mapping_id, future_revision_id, native_object_id, native_class, native_digest, native_byte_count, backend_id, logical_entry_document, dependency_manifest_id, actor_principal_id) ON DELETE RESTRICT,
     CONSTRAINT mapping_revisions_attempt_fk FOREIGN KEY (organization_id, project_id, ingestion_operation_id, initial_attempt_generation, initial_admission)
-        REFERENCES weft.revision_ingestion_attempts(organization_id, project_id, operation_id, generation, admission_classification) ON DELETE RESTRICT,
+        REFERENCES braid.revision_ingestion_attempts(organization_id, project_id, operation_id, generation, admission_classification) ON DELETE RESTRICT,
     CONSTRAINT mapping_revisions_ids_check CHECK (id <> '00000000-0000-0000-0000-000000000000' AND native_object_id <> '00000000-0000-0000-0000-000000000000'),
     CONSTRAINT mapping_revisions_sequence_check CHECK (sequence > 0 AND initial_attempt_generation BETWEEN 1 AND 8),
-    CONSTRAINT mapping_revisions_native_check CHECK (native_class = 'native' AND native_digest ~ '^[0-9a-f]{64}$' AND native_byte_count BETWEEN 1 AND 4194304 AND logical_entry_document = 'entry.native.json' AND dependency_manifest_id = 'weft.dependencies.empty.v1'),
+    CONSTRAINT mapping_revisions_native_check CHECK (native_class = 'native' AND native_digest ~ '^[0-9a-f]{64}$' AND native_byte_count BETWEEN 1 AND 4194304 AND logical_entry_document = 'entry.native.json' AND dependency_manifest_id = 'braid.dependencies.empty.v1'),
     CONSTRAINT mapping_revisions_admission_check CHECK (initial_admission IN ('eligible_valid', 'eligible_decoded_invalid'))
 );
 
-ALTER TABLE weft.mappings ADD CONSTRAINT mappings_head_fk FOREIGN KEY (organization_id, project_id, id, head_revision_id, head_sequence)
-    REFERENCES weft.mapping_revisions(organization_id, project_id, mapping_id, id, sequence) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED;
-ALTER TABLE weft.revision_ingestions ADD CONSTRAINT revision_ingestions_lease_fk FOREIGN KEY (organization_id, project_id, operation_id, lease_generation, lease_owner_id, lease_token)
-    REFERENCES weft.revision_ingestion_attempts(organization_id, project_id, operation_id, generation, claimant_instance_id, claim_token) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED;
-ALTER TABLE weft.revision_ingestions ADD CONSTRAINT revision_ingestions_eligible_fk FOREIGN KEY (organization_id, project_id, operation_id, eligible_attempt_generation, eligible_admission)
-    REFERENCES weft.revision_ingestion_attempts(organization_id, project_id, operation_id, generation, admission_classification) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED;
-ALTER TABLE weft.revision_ingestions ADD CONSTRAINT revision_ingestions_committed_fk FOREIGN KEY (organization_id, project_id, future_mapping_id, committed_revision_id)
-    REFERENCES weft.mapping_revisions(organization_id, project_id, mapping_id, id) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED;
+ALTER TABLE braid.mappings ADD CONSTRAINT mappings_head_fk FOREIGN KEY (organization_id, project_id, id, head_revision_id, head_sequence)
+    REFERENCES braid.mapping_revisions(organization_id, project_id, mapping_id, id, sequence) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED;
+ALTER TABLE braid.revision_ingestions ADD CONSTRAINT revision_ingestions_lease_fk FOREIGN KEY (organization_id, project_id, operation_id, lease_generation, lease_owner_id, lease_token)
+    REFERENCES braid.revision_ingestion_attempts(organization_id, project_id, operation_id, generation, claimant_instance_id, claim_token) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED;
+ALTER TABLE braid.revision_ingestions ADD CONSTRAINT revision_ingestions_eligible_fk FOREIGN KEY (organization_id, project_id, operation_id, eligible_attempt_generation, eligible_admission)
+    REFERENCES braid.revision_ingestion_attempts(organization_id, project_id, operation_id, generation, admission_classification) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED;
+ALTER TABLE braid.revision_ingestions ADD CONSTRAINT revision_ingestions_committed_fk FOREIGN KEY (organization_id, project_id, future_mapping_id, committed_revision_id)
+    REFERENCES braid.mapping_revisions(organization_id, project_id, mapping_id, id) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED;
 
-ALTER TABLE weft.mappings ENABLE ROW LEVEL SECURITY;
-CREATE POLICY mappings_organization_scope ON weft.mappings
-    USING (organization_id = NULLIF(current_setting('weft.organization_id', true), '')::uuid)
-    WITH CHECK (organization_id = NULLIF(current_setting('weft.organization_id', true), '')::uuid);
-ALTER TABLE weft.revision_ingestions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY revision_ingestions_organization_scope ON weft.revision_ingestions
-    USING (organization_id = NULLIF(current_setting('weft.organization_id', true), '')::uuid)
-    WITH CHECK (organization_id = NULLIF(current_setting('weft.organization_id', true), '')::uuid);
-ALTER TABLE weft.revision_ingestion_attempts ENABLE ROW LEVEL SECURITY;
-CREATE POLICY revision_ingestion_attempts_organization_scope ON weft.revision_ingestion_attempts
-    USING (organization_id = NULLIF(current_setting('weft.organization_id', true), '')::uuid)
-    WITH CHECK (organization_id = NULLIF(current_setting('weft.organization_id', true), '')::uuid);
-ALTER TABLE weft.mapping_revisions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY mapping_revisions_organization_scope ON weft.mapping_revisions
-    USING (organization_id = NULLIF(current_setting('weft.organization_id', true), '')::uuid)
-    WITH CHECK (organization_id = NULLIF(current_setting('weft.organization_id', true), '')::uuid);
+ALTER TABLE braid.mappings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY mappings_organization_scope ON braid.mappings
+    USING (organization_id = NULLIF(current_setting('braid.organization_id', true), '')::uuid)
+    WITH CHECK (organization_id = NULLIF(current_setting('braid.organization_id', true), '')::uuid);
+ALTER TABLE braid.revision_ingestions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY revision_ingestions_organization_scope ON braid.revision_ingestions
+    USING (organization_id = NULLIF(current_setting('braid.organization_id', true), '')::uuid)
+    WITH CHECK (organization_id = NULLIF(current_setting('braid.organization_id', true), '')::uuid);
+ALTER TABLE braid.revision_ingestion_attempts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY revision_ingestion_attempts_organization_scope ON braid.revision_ingestion_attempts
+    USING (organization_id = NULLIF(current_setting('braid.organization_id', true), '')::uuid)
+    WITH CHECK (organization_id = NULLIF(current_setting('braid.organization_id', true), '')::uuid);
+ALTER TABLE braid.mapping_revisions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY mapping_revisions_organization_scope ON braid.mapping_revisions
+    USING (organization_id = NULLIF(current_setting('braid.organization_id', true), '')::uuid)
+    WITH CHECK (organization_id = NULLIF(current_setting('braid.organization_id', true), '')::uuid);
 
-CREATE FUNCTION weft.guard_mappings_transition() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path TO pg_catalog, weft AS $guard$
+CREATE FUNCTION braid.guard_mappings_transition() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path TO pg_catalog, braid AS $guard$
 BEGIN
     IF TG_OP = 'DELETE' THEN
         RAISE EXCEPTION 'Mapping deletion is unavailable.' USING ERRCODE = '23514';
@@ -253,7 +253,7 @@ BEGIN
 END;
 $guard$;
 
-CREATE FUNCTION weft.guard_revision_ingestions_transition() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path TO pg_catalog, weft AS $guard$
+CREATE FUNCTION braid.guard_revision_ingestions_transition() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path TO pg_catalog, braid AS $guard$
 BEGIN
     IF TG_OP = 'DELETE' THEN
         RAISE EXCEPTION 'Ingestion deletion is unavailable.' USING ERRCODE = '23514';
@@ -299,9 +299,9 @@ BEGIN
 END;
 $guard$;
 
-CREATE FUNCTION weft.guard_revision_ingestion_attempts_transition() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path TO pg_catalog, weft AS $guard$
+CREATE FUNCTION braid.guard_revision_ingestion_attempts_transition() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path TO pg_catalog, braid AS $guard$
 DECLARE
-    reserved weft.revision_ingestions%ROWTYPE;
+    reserved braid.revision_ingestions%ROWTYPE;
     matched boolean;
     expected_class text;
 BEGIN
@@ -326,7 +326,7 @@ BEGIN
         RETURN NEW;
     END IF;
     IF NEW.completion_kind = 'validation' THEN
-        SELECT * INTO STRICT reserved FROM weft.revision_ingestions
+        SELECT * INTO STRICT reserved FROM braid.revision_ingestions
             WHERE organization_id = NEW.organization_id AND project_id = NEW.project_id AND operation_id = NEW.operation_id;
         matched := ROW(NEW.provenance_organization_id,NEW.provenance_project_id,NEW.provenance_mapping_id,NEW.provenance_revision_id,NEW.provenance_native_digest,NEW.provenance_backend_id,NEW.provenance_engine_revision,NEW.provenance_backend_build,NEW.provenance_adapter_build)
             = ROW(reserved.organization_id,reserved.project_id,reserved.future_mapping_id,reserved.future_revision_id,reserved.native_digest,reserved.backend_id,reserved.engine_revision,reserved.backend_build,reserved.adapter_build)
@@ -356,7 +356,7 @@ BEGIN
 END;
 $guard$;
 
-CREATE FUNCTION weft.guard_mapping_revisions_transition() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path TO pg_catalog, weft AS $guard$
+CREATE FUNCTION braid.guard_mapping_revisions_transition() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path TO pg_catalog, braid AS $guard$
 BEGIN
     IF TG_OP <> 'INSERT' THEN
         RAISE EXCEPTION 'Committed revision facts are immutable.' USING ERRCODE = '23514';
@@ -365,16 +365,16 @@ BEGIN
 END;
 $guard$;
 
-CREATE TRIGGER mappings_transition_guard BEFORE INSERT OR UPDATE OR DELETE ON weft.mappings FOR EACH ROW EXECUTE FUNCTION weft.guard_mappings_transition();
-CREATE TRIGGER revision_ingestions_transition_guard BEFORE INSERT OR UPDATE OR DELETE ON weft.revision_ingestions FOR EACH ROW EXECUTE FUNCTION weft.guard_revision_ingestions_transition();
-CREATE TRIGGER revision_ingestion_attempts_transition_guard BEFORE INSERT OR UPDATE OR DELETE ON weft.revision_ingestion_attempts FOR EACH ROW EXECUTE FUNCTION weft.guard_revision_ingestion_attempts_transition();
-CREATE TRIGGER mapping_revisions_transition_guard BEFORE INSERT OR UPDATE OR DELETE ON weft.mapping_revisions FOR EACH ROW EXECUTE FUNCTION weft.guard_mapping_revisions_transition();
+CREATE TRIGGER mappings_transition_guard BEFORE INSERT OR UPDATE OR DELETE ON braid.mappings FOR EACH ROW EXECUTE FUNCTION braid.guard_mappings_transition();
+CREATE TRIGGER revision_ingestions_transition_guard BEFORE INSERT OR UPDATE OR DELETE ON braid.revision_ingestions FOR EACH ROW EXECUTE FUNCTION braid.guard_revision_ingestions_transition();
+CREATE TRIGGER revision_ingestion_attempts_transition_guard BEFORE INSERT OR UPDATE OR DELETE ON braid.revision_ingestion_attempts FOR EACH ROW EXECUTE FUNCTION braid.guard_revision_ingestion_attempts_transition();
+CREATE TRIGGER mapping_revisions_transition_guard BEFORE INSERT OR UPDATE OR DELETE ON braid.mapping_revisions FOR EACH ROW EXECUTE FUNCTION braid.guard_mapping_revisions_transition();
 
-REVOKE ALL ON FUNCTION weft.guard_mappings_transition(), weft.guard_revision_ingestions_transition(), weft.guard_revision_ingestion_attempts_transition(), weft.guard_mapping_revisions_transition() FROM PUBLIC, weft_runtime, weft_ingest;
-REVOKE ALL ON weft.mappings, weft.revision_ingestions, weft.revision_ingestion_attempts, weft.mapping_revisions FROM PUBLIC, weft_runtime, weft_ingest;
-GRANT USAGE ON SCHEMA weft TO weft_ingest;
-GRANT SELECT ON weft.organizations, weft.principals, weft.organization_memberships, weft.projects, weft.project_memberships, weft.mappings, weft.revision_ingestions, weft.revision_ingestion_attempts, weft.mapping_revisions TO weft_ingest;
-GRANT INSERT ON weft.mappings, weft.revision_ingestions, weft.revision_ingestion_attempts, weft.mapping_revisions TO weft_ingest;
-GRANT UPDATE (head_revision_id, head_sequence, updated_at) ON weft.mappings TO weft_ingest;
-GRANT UPDATE (phase, lease_owner_id, lease_token, lease_generation, lease_expires_at, claim_count, verified_stage_generation, verified_stage_at, eligible_attempt_generation, eligible_admission, last_error, completed_at, committed_revision_id) ON weft.revision_ingestions TO weft_ingest;
-GRANT UPDATE (verified_stage_at, finished_at, completion_kind, backend_status, admission_classification, provenance_confirmed, provenance_organization_id, provenance_project_id, provenance_mapping_id, provenance_revision_id, provenance_native_digest, provenance_backend_id, provenance_engine_revision, provenance_backend_build, provenance_adapter_build, is_valid, total_issue_count, emitted_issue_count, issues_truncated, evidence_version, evidence, reused_attempt_generation, reused_admission, last_error) ON weft.revision_ingestion_attempts TO weft_ingest;
+REVOKE ALL ON FUNCTION braid.guard_mappings_transition(), braid.guard_revision_ingestions_transition(), braid.guard_revision_ingestion_attempts_transition(), braid.guard_mapping_revisions_transition() FROM PUBLIC, braid_runtime, braid_ingest;
+REVOKE ALL ON braid.mappings, braid.revision_ingestions, braid.revision_ingestion_attempts, braid.mapping_revisions FROM PUBLIC, braid_runtime, braid_ingest;
+GRANT USAGE ON SCHEMA braid TO braid_ingest;
+GRANT SELECT ON braid.organizations, braid.principals, braid.organization_memberships, braid.projects, braid.project_memberships, braid.mappings, braid.revision_ingestions, braid.revision_ingestion_attempts, braid.mapping_revisions TO braid_ingest;
+GRANT INSERT ON braid.mappings, braid.revision_ingestions, braid.revision_ingestion_attempts, braid.mapping_revisions TO braid_ingest;
+GRANT UPDATE (head_revision_id, head_sequence, updated_at) ON braid.mappings TO braid_ingest;
+GRANT UPDATE (phase, lease_owner_id, lease_token, lease_generation, lease_expires_at, claim_count, verified_stage_generation, verified_stage_at, eligible_attempt_generation, eligible_admission, last_error, completed_at, committed_revision_id) ON braid.revision_ingestions TO braid_ingest;
+GRANT UPDATE (verified_stage_at, finished_at, completion_kind, backend_status, admission_classification, provenance_confirmed, provenance_organization_id, provenance_project_id, provenance_mapping_id, provenance_revision_id, provenance_native_digest, provenance_backend_id, provenance_engine_revision, provenance_backend_build, provenance_adapter_build, is_valid, total_issue_count, emitted_issue_count, issues_truncated, evidence_version, evidence, reused_attempt_generation, reused_admission, last_error) ON braid.revision_ingestion_attempts TO braid_ingest;

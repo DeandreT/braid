@@ -3,7 +3,7 @@
 # whole /16 or /20 from the daemon's default address pools, which concurrent test runs exhaust; see
 # "Docker test networks" in docs/development.md. Sourced by the Compose test scripts.
 
-test_subnet_range=${WEFT_TEST_SUBNET_RANGE:-198.19.0.0/16}
+test_subnet_range=${BRAID_TEST_SUBNET_RANGE:-198.19.0.0/16}
 test_subnet_prefix=27
 test_subnet_attempts=32
 
@@ -29,7 +29,7 @@ ipv4_bounds() {
 }
 
 # write_test_subnets <override> <network>...: writes a Compose override that gives each network a
-# distinct /27 of WEFT_TEST_SUBNET_RANGE overlapping no existing Docker network. Candidates are
+# distinct /27 of BRAID_TEST_SUBNET_RANGE overlapping no existing Docker network. Candidates are
 # random; each network tries at most 32 before the run fails with an exhaustion error.
 write_test_subnets() {
   local override=$1 network subnet bounds first last count attempts index start end overlaps taken
@@ -38,7 +38,7 @@ write_test_subnets() {
   # The override stays a valid Compose file at every step, so cleanup can still render the stack.
   echo 'networks:' >"$override"
   read -r first last < <(ipv4_bounds "$test_subnet_range") && ((${test_subnet_range#*/} <= test_subnet_prefix)) || {
-    echo "WEFT_TEST_SUBNET_RANGE must be an IPv4 network of /$test_subnet_prefix or larger in canonical form, such as 198.19.0.0/16." >&2
+    echo "BRAID_TEST_SUBNET_RANGE must be an IPv4 network of /$test_subnet_prefix or larger in canonical form, such as 198.19.0.0/16." >&2
     return 1
   }
   count=$(((last - first + 1) >> (32 - test_subnet_prefix)))
@@ -66,7 +66,7 @@ write_test_subnets() {
     done
     [[ -n $subnet ]] || {
       echo "No free /$test_subnet_prefix subnet for the $network test network in $test_subnet_range after $attempts candidates;" \
-        'remove leaked test networks or set WEFT_TEST_SUBNET_RANGE to a free IPv4 range.' >&2
+        'remove leaked test networks or set BRAID_TEST_SUBNET_RANGE to a free IPv4 range.' >&2
       return 1
     }
     taken_first+=("$start")

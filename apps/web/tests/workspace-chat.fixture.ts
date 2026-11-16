@@ -158,7 +158,7 @@ export async function workspaceFixture(
       return route.fulfill({
         json: {
           status: "ok",
-          service: "weft-api",
+          service: "braid-api",
           version: "0.1.0",
           apiVersion: "v1",
         },
@@ -243,7 +243,7 @@ export async function workspaceFixture(
           : {
               json: workspace
                 ? {
-                    schemaVersion: "weft.chat.v1",
+                    schemaVersion: "braid.chat.v1",
                     organizationId: org,
                     limits: {
                       maxTextBytes: 32768,
@@ -258,7 +258,7 @@ export async function workspaceFixture(
                     ],
                   }
                 : {
-                    schemaVersion: "weft.chat.v1",
+                    schemaVersion: "braid.chat.v1",
                     revision: data.revision.scope,
                     toolsEnabled: true,
                     profiles: [profile],

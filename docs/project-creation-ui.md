@@ -48,9 +48,7 @@ membership administration and report derivation remain separate workflows.
 
 ## Qualification
 
-This increment's browser scenario uses an actual packaged API and a restricted
+The browser scenario uses an actual packaged API and a restricted
 project creator database identity, without native workers or private-object
 storage. Controlled response cases supplement actual creation, replay and
 permission checks. See the [fixture instructions](../tools/project-creation-browser/README.md).
-Implementation and current runtime qualification are recorded separately in
-[#81](https://github.com/DeandreT/weft/issues/81).

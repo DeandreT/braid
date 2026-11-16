@@ -7,11 +7,11 @@ use sha2::{Digest, Sha256};
 
 use crate::{decode, framing, protocol::ENGINE_REVISION};
 
-pub const PROTOCOL: &str = "weft.ferrule-mfd.v1";
+pub const PROTOCOL: &str = "braid.ferrule-mfd.v1";
 pub const MAX_PACKAGE: usize = 16 * 1024 * 1024 + 34 * 1024;
 pub const MAX_HEADER: usize = 1024 * 1024;
 pub const MAX_RESPONSE: usize = 18 * 1024 * 1024;
-const MAGIC: &str = "weft.interchange-package.v1";
+const MAGIC: &str = "braid.interchange-package.v1";
 
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

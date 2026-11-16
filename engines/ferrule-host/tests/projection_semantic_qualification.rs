@@ -1,12 +1,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use braid_ferrule_host::protocol::Limits;
 use ferrule_ir::{Instance, ScalarType, SchemaNode, Value as ScalarValue};
 use ferrule_mapping::{
     Binding, Graph, IterationOutput, Node, Project, Scope, ScopeIteration, SequenceExpr,
     project_file,
 };
 use serde_json::{Value, json};
-use weft_ferrule_host::protocol::Limits;
 
 #[test]
 fn an_explicit_empty_frame_at_a_noniterating_root_has_no_root_field_lineage() {
@@ -605,13 +605,13 @@ fn repeated_at<'a>(instance: &'a Instance, path: &[&str]) -> &'a [Instance] {
 
 fn projected(project: &Project) -> (Value, Vec<u8>) {
     let bytes = project_file::encode_pretty(project).unwrap().into_bytes();
-    let decoded = weft_ferrule_host::decode::decode_native(&bytes).unwrap();
+    let decoded = braid_ferrule_host::decode::decode_native(&bytes).unwrap();
     let limits = Limits {
         maximum_diagnostics: 128,
         maximum_items: 8192,
         maximum_text_bytes: 2048,
     };
-    let projection = weft_ferrule_host::projection::project(
+    let projection = braid_ferrule_host::projection::project(
         &decoded.project,
         "entry.native.json",
         &decoded.document_prefix,

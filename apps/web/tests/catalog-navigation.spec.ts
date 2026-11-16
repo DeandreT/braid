@@ -110,7 +110,7 @@ test("controlled UI: opaque page cursor is preserved and Back/First fetch the se
 test("controlled UI: keyboard and mobile keep long Unicode metadata readable as text", async ({
   page,
 }) => {
-  const literal = '<img src=x onerror="window.__weftInjected=true">';
+  const literal = '<img src=x onerror="window.__braidInjected=true">';
   const name = `Synthetic 漢字 🧵 ${"long".repeat(28)} ${literal}`;
   const longProject = {
     ...synthetic.project,
@@ -153,7 +153,7 @@ test("controlled UI: keyboard and mobile keep long Unicode metadata readable as 
       () => document.documentElement.scrollWidth > window.innerWidth,
     ),
   ).toBe(false);
-  expect(await page.evaluate(() => "__weftInjected" in window)).toBe(false);
+  expect(await page.evaluate(() => "__braidInjected" in window)).toBe(false);
 });
 
 test("controlled UI: advisory write flags do not expose mutations in this read-only increment", async ({

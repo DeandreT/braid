@@ -72,13 +72,13 @@ export function document(index: number): Document {
   });
   const later = index > 0;
   return {
-    schemaVersion: "weft.mapping-projection.v1",
+    schemaVersion: "braid.mapping-projection.v1",
     provenance: {
       revision: rev.scope,
       nativeArtifactDigest: rev.nativeDigest,
       backend,
       adapterVersion: "synthetic-adapter",
-      projectionVersion: "weft.ferrule-projection.v1",
+      projectionVersion: "braid.ferrule-projection.v1",
     },
     boundaries: [
       {
@@ -159,7 +159,7 @@ const result = (derivationId: string) => ({
 export function projection(index: number): Projection {
   const rev = revision(index);
   return {
-    schemaVersion: "weft.catalog-revision-report.v1",
+    schemaVersion: "braid.catalog-revision-report.v1",
     operation: "projection",
     revision: rev.scope,
     state: "available",
@@ -187,7 +187,7 @@ export function projection(index: number): Projection {
 export function validation(index: number, valid = index === 0): Validation {
   const rev = revision(index);
   return {
-    schemaVersion: "weft.catalog-revision-report.v1",
+    schemaVersion: "braid.catalog-revision-report.v1",
     operation: "validation",
     revision: rev.scope,
     state: "available",
@@ -420,8 +420,8 @@ export function comparison(options: {
     };
   };
   return {
-    schemaVersion: "weft.revision-comparison.v1",
-    policyVersion: "weft.projection-facts-comparison.v1",
+    schemaVersion: "braid.revision-comparison.v1",
+    policyVersion: "braid.projection-facts-comparison.v1",
     left: citation(l, lv),
     right: citation(r, rv),
     leftCoverage,

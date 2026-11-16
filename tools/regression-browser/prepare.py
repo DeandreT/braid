@@ -44,7 +44,7 @@ def main():
     assert subprocess.check_output([str(args.node), str(args.npm_cli), '--version'], env=environment, text=True).strip() == '12.1.0'
     subprocess.run([str(args.node), str(args.npm_cli), 'run', 'build'], cwd=root, env=environment, check=True)
     identity = str(uuid.uuid4())
-    output = args.work_root / ('weft-' + args.scenario + '-browser-' + identity); output.mkdir(mode=0o700)
+    output = args.work_root / ('braid-' + args.scenario + '-browser-' + identity); output.mkdir(mode=0o700)
     archive = output / 'source.tar'
     subprocess.run(['git', 'archive', '--format=tar', '--output=' + str(archive), 'HEAD'], cwd=root, check=True)
     manifest = []
@@ -64,7 +64,7 @@ def main():
         finally:
             reader.stdin.close()
         assert reader.wait(timeout=10) == 0
-    web = root / 'apps/web/dist/weft/browser'
+    web = root / 'apps/web/dist/braid/browser'
     web_hashes = {path.relative_to(web).as_posix(): sha(path) for path in sorted(web.rglob('*')) if path.is_file()}
     result = output / 'bindings.json'
     data = {'fixtureId': identity, 'scenario': args.scenario, 'archive': linux(archive), 'web': linux(web), 'webHashes': web_hashes,

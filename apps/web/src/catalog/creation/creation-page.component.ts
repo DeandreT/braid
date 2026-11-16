@@ -25,7 +25,7 @@ import {
 } from "./creation-model";
 
 @Component({
-  selector: "weft-creation-page",
+  selector: "braid-creation-page",
   imports: [FormsModule, RouterLink],
   templateUrl: "./creation-page.component.html",
   styleUrl: "./creation-page.component.css",

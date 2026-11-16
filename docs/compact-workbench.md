@@ -111,7 +111,7 @@ traces. The inspector retains coverage gaps and native evidence.
 Existing report, preview, regression and build APIs still own authorization,
 validation, request recovery and mutation semantics. The workbench does not
 automatically derive reports, submit runs, approve builds or accept baselines.
-Successful builds are not active releases. The Releases view separates active
+The Releases view separates active
 state, candidate metadata and qualification/activation gates. Where the connected
 browser API has no release or audit reader, it states that limitation and exposes
 no simulated activation or rollback action.
@@ -124,11 +124,9 @@ and exact downloads on the isolated packaged Session stack provided by
 `deploy/compose/acceptance-test.sh`, with the fixture model provider.
 `playwright.unified-workbench.config.ts` covers the shared shell and preserved
 route, form, chat and workbench workflows on a synthetic API boundary at port
-5186. `WEFT_UI_CAPTURE_DIR` optionally retains its responsive screenshots.
+5186. `BRAID_UI_CAPTURE_DIR` optionally retains its responsive screenshots.
 `playwright.workbench.config.ts` covers the integrated Angular interactions using
-explicitly synthetic API boundary fixtures; these do not establish backend
-authorization or persistence qualification. The existing real-API suites remain
-the separate check for those contracts. Set `WEFT_CHROMIUM_EXECUTABLE` to a verified
+synthetic API boundary fixtures. Set `BRAID_CHROMIUM_EXECUTABLE` to a verified
 installed Chromium browser when the matching Playwright browser is unavailable.
 The workbench tests retain native scrollbars in headless Chromium; hiding them
 would conceal layout differences from headed browsers.

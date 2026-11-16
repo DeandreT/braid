@@ -1,9 +1,9 @@
 import { defineConfig } from "@playwright/test";
 
-const baseURL = process.env.WEFT_CATALOG_BASE_URL;
+const baseURL = process.env.BRAID_CATALOG_BASE_URL;
 if (!baseURL) {
   throw new Error(
-    "Catalog browser qualification requires WEFT_CATALOG_BASE_URL and the private owner fixture; no development proxy is substituted.",
+    "Catalog browser qualification requires BRAID_CATALOG_BASE_URL and the private owner fixture; no development proxy is substituted.",
   );
 }
 const origin = new URL(baseURL);
@@ -14,14 +14,14 @@ if (
   origin.origin !== baseURL
 ) {
   throw new Error(
-    "WEFT_CATALOG_BASE_URL must be the exact admitted packaged-host loopback HTTP origin.",
+    "BRAID_CATALOG_BASE_URL must be the exact admitted packaged-host loopback HTTP origin.",
   );
 }
 for (const name of [
-  "WEFT_CATALOG_BROWSER_OPERATOR",
-  "WEFT_CATALOG_BROWSER_OPERATOR_CONFIG",
-  "WEFT_CATALOG_BROWSER_MANIFEST",
-  "WEFT_CHROMIUM_EXECUTABLE",
+  "BRAID_CATALOG_BROWSER_OPERATOR",
+  "BRAID_CATALOG_BROWSER_OPERATOR_CONFIG",
+  "BRAID_CATALOG_BROWSER_MANIFEST",
+  "BRAID_CHROMIUM_EXECUTABLE",
 ]) {
   if (!process.env[name])
     throw new Error(`Catalog browser qualification requires ${name}.`);
@@ -43,7 +43,7 @@ export default defineConfig({
   use: {
     baseURL,
     headless: false,
-    launchOptions: { executablePath: process.env.WEFT_CHROMIUM_EXECUTABLE },
+    launchOptions: { executablePath: process.env.BRAID_CHROMIUM_EXECUTABLE },
     // Context responses contain framework tokens. Keep raw network bodies out of attachments.
     trace: "off",
     video: "off",

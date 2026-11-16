@@ -1,17 +1,13 @@
 # Explicit project payload permission
 
-The permission contract from [P4b #93](https://github.com/DeandreT/weft/issues/93)
-is implemented in [#105](https://github.com/DeandreT/weft/pull/105). It builds on the
-[external identity foundation](external-identity-bindings.md); migration
-`0009_project_payload_read_grants.sql` adds the separate permission schema.
-Applying the schema or configuring its reader does not grant payload access.
-Operators must explicitly grant the scoped permission, and each payload workflow
-must combine it with its own current authority and ownership checks.
+Operators grant scoped payload permission separately from
+[external identity](external-identity-bindings.md) and project roles. Each payload
+workflow combines the grant with current authority and ownership checks.
 
 ## Permission and current project authority
 
 `run.payload.read` requires an explicit grant for one complete organization,
-project and internal principal tuple. `weft.project_payload_read_grants` stores
+project and internal principal tuple. `braid.project_payload_read_grants` stores
 only `organization_id`, `project_id`, `principal_id`, `active` and a positive
 Int64 `version`. The tuple is immutable and unique, with composite references to
 the exact project and project membership. Rows are retained when revoked.
@@ -39,14 +35,12 @@ not a lease, token or storage capability.
 Revoking principal activity or either admission makes the next observation deny,
 even while the grant row stays active. Restoring that authority can make the same
 still-active grant effective again; it does not issue a new grant. An explicitly
-revoked grant stays inactive until a separate owner regrant. Future sensitive
-payload I/O must freshly combine these facts with the actual run/sample ownership
-policy at its own boundary. This foundation makes no promise about revocation
-racing with an in-flight payload operation.
+revoked grant stays inactive until an explicit regrant. Payload I/O freshly
+combines these facts with its run/sample ownership policy at its own boundary.
 
 ## Restricted reader and separate owner
 
-The dedicated `weft_payload_permission_reader` login receives schema USAGE and
+The dedicated `braid_payload_permission_reader` login receives schema USAGE and
 exactly seventeen non-grantable column SELECT privileges:
 
 | Table | Readable columns |
@@ -86,7 +80,7 @@ needs its own fresh authorization.
 
 ## Explicit owner command
 
-Set `WEFT_MIGRATION_CONNECTION_STRING` privately for the separate migration-owner
+Set `BRAID_MIGRATION_CONNECTION_STRING` privately for the separate migration-owner
 process. Never pass that credential to a server or runtime reader. The selected
 DatabaseTool command is:
 
@@ -97,7 +91,7 @@ set-project-payload-read ORG PROJECT PRINCIPAL EXPECTED_VERSION true|false
 For a source checkout, prefix the argument list with the existing tool entry:
 
 ```sh
-dotnet run --configuration Release --project dotnet/tools/Weft.DatabaseTool --
+dotnet run --configuration Release --project dotnet/tools/Braid.DatabaseTool --
 ```
 
 The three IDs must be canonical nonzero lowercase `D`-format UUIDs.
@@ -121,49 +115,20 @@ use `{"outcome":"category"}`. These are categorical results, not a grant-managem
 HTTP API. Existing identity preparation/binding and Development provisioning
 commands remain separate and never invoke this operation.
 
-## Local initialization and existing-volume upgrade
+## Local initialization
 
-Follow [project ownership setup](project-ownership.md#migrations-and-local-setup)
-and all earlier role prerequisites. The selected new-volume setup adds a separate
-`WEFT_LOCAL_PAYLOAD_PERMISSION_PASSWORD` to `deploy/local/.env.example` and compose.
-First initialization creates the dedicated reader with CONNECT only; the additive
+Follow [project ownership setup](project-ownership.md#migrations-and-local-setup).
+Supply the separate `BRAID_LOCAL_PAYLOAD_PERMISSION_PASSWORD` in `deploy/local/.env`.
+Initialization creates the dedicated reader with CONNECT only; the
 migration supplies its exact schema/column grants. It creates no application
 parent or payload-grant rows.
 
-An existing volume does not rerun initialization when its environment file changes.
-Once this increment is integrated and released, use the explicit coordinated
-stop/migrate/start procedure for an existing identity-prefix database:
+## Workspace chat
 
-1. Stop application processes using that database and retain its volume. Complete
-   any missing earlier role-provisioning prerequisites.
-2. The database administrator explicitly runs
-   `deploy/local/postgres-add-payload-permission-role.sh` with the separate
-   `WEFT_LOCAL_PAYLOAD_PERMISSION_PASSWORD` and the local `POSTGRES_USER`/
-   `POSTGRES_DB` environment, following the
-   [identity upgrade pattern](external-identity-bindings.md#installation-and-upgrade).
-   It creates only the new CONNECT-only login and refuses an existing role; it
-   does not adopt, alter or rotate it.
-3. Run the existing DatabaseTool `migrate` command with the private migration
-   credential, then restart application processes with their separate runtime
-   credentials after the upgrade succeeds.
-
-Migration 0009 is additive. Prior SQL bodies/checksums and strict profiles remain
-unchanged. Fresh and genuinely populated identity-prefix upgrade qualification must preserve old rows, bindings,
-journals, source definitions and effective authority, allowing only the precise
-additive schema/reader/FK metadata and journal entry.
-
-## Scope and qualification
-
-This foundation adds grant facts, fresh observation and explicit owner operations.
-Workspace chat is its consumer: when `WEFT_CHAT_PAYLOAD_PERMISSION_CONNECTION_STRING`
+Workspace chat is its consumer: when `BRAID_CHAT_PAYLOAD_PERMISSION_CONNECTION_STRING`
 is configured, the chat composition registers the restricted reader, offers the
 payload tools only to creators with a grant and observes the grant on every payload
 read (see [Workspace chat](workspace-chat.md#payload-data)). The reader's
 `AnyAsync` answers whether a principal holds any active grant on a project it can
 read in one organization, with the same authority joins. No HTTP route manages
-grants, and no browser control or download token uses them.
-
-Implementation and qualification remain in progress. Planned pure, actual
-PostgreSQL, genuine-prefix upgrade and compiled-tool checks are acceptance work,
-not executed passes. No full-suite, browser, native worker or hosted-auth result
-is established by this document.
+grants.

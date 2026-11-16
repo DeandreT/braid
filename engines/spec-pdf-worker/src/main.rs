@@ -1,5 +1,5 @@
+use braid_spec_pdf_worker::{MAX_INPUT_BYTES, encode, extract};
 use std::io::{Read, Write};
-use weft_spec_pdf_worker::{MAX_INPUT_BYTES, encode, extract};
 
 // Share the reviewed native self-hardening implementation, not the hosted-.NET launcher.
 #[path = "../../ferrule-host/src/sandbox.rs"]

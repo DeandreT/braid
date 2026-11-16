@@ -30,7 +30,7 @@ export interface MetadataState {
   readonly headSequence: string;
 }
 export interface MappingMetadataManifest {
-  readonly schemaVersion: "weft.mapping-metadata-browser-fixture.v1";
+  readonly schemaVersion: "braid.mapping-metadata-browser-fixture.v1";
   readonly fixtureId: string;
   readonly source: { readonly commit: string; readonly tree: string };
   readonly readOrigin: string;
@@ -79,7 +79,7 @@ export type MetadataCommand =
       descriptionSha256: string;
     };
 type AckBase = {
-  schemaVersion: "weft.mapping-metadata-browser-control.v1";
+  schemaVersion: "braid.mapping-metadata-browser-control.v1";
   requestNonce: string;
   fixtureId: string;
 };
@@ -244,7 +244,7 @@ function manifest(value: unknown, origin: string): MappingMetadataManifest {
     "reports",
   ]);
   requireMetadata(
-    row.schemaVersion === "weft.mapping-metadata-browser-fixture.v1" &&
+    row.schemaVersion === "braid.mapping-metadata-browser-fixture.v1" &&
       canonicalId(row.fixtureId) &&
       row.readOrigin === origin &&
       row.initialReadProfile === "publisher" &&
@@ -423,7 +423,7 @@ export class MappingMetadataOwner {
       "profile",
     ]);
     requireMetadata(
-      ready.schemaVersion === "weft.mapping-metadata-browser-ready.v1" &&
+      ready.schemaVersion === "braid.mapping-metadata-browser-ready.v1" &&
         ready.profile === "publisher",
       "incompatible ready response",
     );
@@ -490,7 +490,7 @@ export class MappingMetadataOwner {
           "outcome",
         ];
       requireMetadata(
-        row.schemaVersion === "weft.mapping-metadata-browser-control.v1" &&
+        row.schemaVersion === "braid.mapping-metadata-browser-control.v1" &&
           row.fixtureId === envelope.fixtureId &&
           row.requestNonce === envelope.requestNonce &&
           row.action === command.action,
@@ -648,11 +648,11 @@ export const test = base.extend<
 >({
   mappingMetadataOwner: [
     async ({}, use) => {
-      const operator = process.env.WEFT_MAPPING_METADATA_BROWSER_OPERATOR,
+      const operator = process.env.BRAID_MAPPING_METADATA_BROWSER_OPERATOR,
         configuration =
-          process.env.WEFT_MAPPING_METADATA_BROWSER_OPERATOR_CONFIG,
-        path = process.env.WEFT_MAPPING_METADATA_BROWSER_MANIFEST,
-        origin = process.env.WEFT_MAPPING_METADATA_BASE_URL;
+          process.env.BRAID_MAPPING_METADATA_BROWSER_OPERATOR_CONFIG,
+        path = process.env.BRAID_MAPPING_METADATA_BROWSER_MANIFEST,
+        origin = process.env.BRAID_MAPPING_METADATA_BASE_URL;
       requireMetadata(
         operator && configuration && path && origin && isAbsolute(operator),
         "explicit packaged origin/operator/private configuration/manifest are required",

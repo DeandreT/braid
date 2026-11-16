@@ -13,36 +13,35 @@ UTF-8, not a platform string or a provider wire request.
 
 The exact emitted field order and closed shapes are owned by:
 
-- `ChatOriginalEnvelope`: `weft.chat.original.v1`, explicit request UUID, text,
+- `ChatOriginalEnvelope`: `braid.chat.original.v1`, explicit request UUID, text,
   ordered selectors, explicit grounding-policy ID/version, instruction/tool
   fingerprints, retrieval-node/tool-result-byte/tool-iteration budgets, and
   provider duration/round/request/wire/text/tool/output budgets. Selectors are at
   most 32 distinct typed resources/diagnostic ordinals.
-- `ChatCanonicalEnvelope.Turn`: `weft.chat.turn.v1`, stable creator and complete
+- `ChatCanonicalEnvelope.Turn`: `braid.chat.turn.v1`, stable creator and complete
   scope, conversation UUID, retention instant, exact projection/validation pins,
   turn UUID, embedded original envelope, complete profile pin and fingerprint
   schema, persistence budget and absolute turn deadline. Stored original text,
   request UUID, canonical envelope and fingerprint must match on reopen.
-- A workspace turn's original envelope is `weft.chat.original.v2`: the v1 fields
+- A workspace turn's original envelope is `braid.chat.original.v2`: the v1 fields
   plus the turn's resolved focus (`None`, `Unavailable`, or `Resolved` with its
-  complete revision scope). Its canonical turn is `weft.chat.workspace-turn.v1`:
+  complete revision scope). Its canonical turn is `braid.chat.workspace-turn.v1`:
   the organization, creator, conversation UUID, optional conversation focus and
   retention instant in place of the revision scope and report pins, then the same
   turn fields. Revision turns keep both v1 shapes.
-- `ChatAiBridge.PinProfile`: `weft.chat.profile.v1`, provider ID and **every**
+- `ChatAiBridge.PinProfile`: `braid.chat.profile.v1`, provider ID and **every**
   nonsecret `AiProfileSpec` property: key/version, dialect, model, absolute
   normalized endpoint, loopback-fixture flag, authentication mode, credential
   reference, capabilities, metadata-policy ID/version/allow flag, think-false
-  flag, and the payload flag only when it is set, so profiles without it keep
-  their earlier fingerprints. No secret resolver/value is used. Configuration changes under an existing
+   flag, and the payload flag only when it is set. No secret resolver/value is used. Configuration changes under an existing
   key therefore fail pin matching. The canonical profile body is not persisted;
   its versioned fingerprint and explicit display/policy identity are.
 - `ChatAiBridge.PinGroundingPolicy` pins exact trusted instruction UTF-8 with
-  SHA256, and a fixed-order `weft.chat.tools.v1` manifest containing every approved
+  SHA256, and a fixed-order `braid.chat.tools.v1` manifest containing every approved
   tool name/description/parameter JSON string. The explicit policy version and
-  retrieval bounds are retained in the original envelope. P5c resolves this
+   retrieval bounds are retained in the original envelope. The orchestrator resolves this
   trusted policy, never a browser/model-supplied instruction or tool definition.
-- `ChatAiBridge.PrepareRound`: `weft.chat.round.v1`, full-turn fingerprint,
+- `ChatAiBridge.PrepareRound`: `braid.chat.round.v1`, full-turn fingerprint,
   **the exact `AiRoundRequest.RoundId`**, output-token limit, ordered messages and
   ordered tools. Every system/user/assistant/tool field, ordered assistant intent,
   call/result ID/name, tool description/schema and argument/result JSON string
@@ -50,12 +49,12 @@ The exact emitted field order and closed shapes are owned by:
   including their property order/whitespace; they are not semantically reordered.
 
 Low-level persistence round facts are opaque exact request pins, not a way to
-manufacture an outbound request. P5c dispatch uses the sealed `ChatPreparedRound`
+manufacture an outbound request. Dispatch uses the sealed `ChatPreparedRound`
 produced by this bridge, not reconstruction from a stored string. It accepts only
 the original successful matching reservation acknowledgement and can hand out
 its immutable request once. Replayed/observed/uncertain acknowledgements refuse.
 
-## `Weft.Ai` bridge contract
+## `Braid.Ai` bridge contract
 
 `ChatAiBridge.ProfileKey` verifies the supplied resolved immutable profile against
 the retained profile pin before returning its frozen `AiProfileKey`.
@@ -77,7 +76,7 @@ against the already reserved round, preserving unknown usage and the exact
 NotAttempted/Attempted observation. All failure/dispatch/finish enum cases are
 explicitly mapped; unknown cases refuse.
 
-P5c owns fresh identity/project/data-policy/tool admission, exact retained report
+The orchestrator owns fresh identity/project/data-policy/tool admission, exact retained report
 retrieval, context construction, complete stream enumeration, live lease and
 cancellation ownership. Reserve the first round before even opening the local
 provider turn lease, so both TurnRejected and RoundRejected have a durable round
@@ -88,13 +87,12 @@ UUID/fence on the same already bounded live provider lease and process-instance
 identity. Instance IDs are fresh per process, not rehydrated from stored facts.
 Restart never takes over a turn which already reserved a round, even if the last
 round had completed ToolCalls; it explicitly interrupts instead. A zero-round
-turn has made no provider call under this admission ordering. This is a boundary contract, not HTTP/UI or
-provider qualification.
+turn has made no provider call under this admission ordering.
 
 ## Events and accounting
 
-Existing event numbers remain unchanged: 1 start, 2 text, 3/4 tool activity, 5
-completed, 6 failed, 7 cancelled, 8 interrupted. New kinds are 9 usage, 10 closed
+Event numbers are 1 start, 2 text, 3/4 tool activity, 5
+completed, 6 failed, 7 cancelled, 8 interrupted, 9 usage, 10 closed
 provider failure, 11 validated citation and 12 round completion. Workspace
 conversations add 13 workspace citation and 14 shared data; kind 11 is admitted
 only in revision conversations and kinds 13 and 14 only in workspace
@@ -120,7 +118,7 @@ not increments to sum on reconnect. An open rejection has all-null usage because
 the public rejection exposes none; its dispatch observation may still be Attempted.
 No pricing/cost value is invented.
 
-Provider failures contain round UUID, the closed `Weft.Ai` failure category and
+Provider failures contain round UUID, the closed `Braid.Ai` failure category and
 NotAttempted/Attempted observation. This observation **never** changes a durable
 reservation into retry permission. Terminal/round-completion metadata may also
 retain the closed Stop/ToolCalls/OutputLimit/Refused/ContentFiltered finish.
@@ -151,7 +149,6 @@ rechecking authority, and omits every other candidate. Exact
 report/ordinal addresses can reconstruct native/projection locators from that
 retained report under fresh authority; the controller must never infer a new
 locator, substitute a selected report or render an unvalidated model string.
-This persistence module does not activate or depend on a tool-service instance.
 
 ## Lifecycle and erasure
 
@@ -181,9 +178,8 @@ retirement input is a policy minimum; no automatic expiry, identity recycling or
 physical deletion operation exists. Even after that instant, stale conversation,
 turn, original-request and round identities remain rejected. This preserves
 billed replay safety without retaining prompts, responses, their hashes or model
-configuration. No production duration is selected by this contract.
+configuration.
 
-Live cancellation connects to the future controller's actual cancellation source
+Live cancellation connects to the controller's actual cancellation source
 and `AiTurnLease`. No lifecycle/database method stops an already dispatched
-provider socket by itself. No scheduler, background selector, automatic retry or
-Wolverine job is introduced.
+provider socket by itself.

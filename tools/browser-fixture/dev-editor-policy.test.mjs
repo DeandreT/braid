@@ -17,7 +17,7 @@ const { editorMiddleware } = createRequire(import.meta.url)(
 );
 
 test("only shipped editor assets receive wasm permission and missing paths never serve the shell", async () => {
-  const root = mkdtempSync(join(tmpdir(), "weft-editor-policy-"));
+  const root = mkdtempSync(join(tmpdir(), "braid-editor-policy-"));
   mkdirSync(join(root, "edit"));
   writeFileSync(join(root, "edit/worker.js"), "/* worker */");
   writeFileSync(join(root, "edit/core.wasm"), "wasm");
@@ -84,7 +84,7 @@ test("the dev builder owns editor assets instead of Angular's earlier static mid
     ),
   );
   assert.deepEqual(
-    config.projects.weft.architect.build.configurations.devServer.assets[0]
+    config.projects.braid.architect.build.configurations.devServer.assets[0]
       .ignore,
     ["edit/**"],
   );

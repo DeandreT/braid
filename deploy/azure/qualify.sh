@@ -31,7 +31,7 @@ refuse() {
 subscription='' group='' location='' parameters='' tenant='' client='' chat_profiles=''
 model_credential_file='' audience='' caller_client='' caller_secret_file='' caller_certificate_file='' teardown_run=''
 confirm_provisioning=false assume_yes=false teardown_at_end=false
-state_root=${XDG_STATE_HOME:-$HOME/.local/state}/weft-qualification
+state_root=${XDG_STATE_HOME:-$HOME/.local/state}/braid-qualification
 while (($#)); do
   case $1 in
     --subscription | --resource-group | --location | --parameters | --entra-tenant-id | --entra-client-id | \
@@ -70,7 +70,7 @@ done
 
 uuid_pattern='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
 run_pattern='^wq-[0-9]{8}-[0-9]{6}-[0-9a-f]{6}$'
-tag_name=weft-qualification-run
+tag_name=braid-qualification-run
 
 required() { # value option
   [[ -n $1 ]] || refuse "$2 is required"
@@ -268,11 +268,11 @@ platform_switches=(deployApplication=false nativeWorkEnabled=false chatEnabled=f
 
 step group 'Resource group and what-if'
 # What-if needs the group, so it is created empty first; a declined confirmation deletes it again.
-azs group create --name "$group" --location "$location" --tags "$tag_name=$run_id" "weft-qualification-commit=$commit" --output none
+azs group create --name "$group" --location "$location" --tags "$tag_name=$run_id" "braid-qualification-commit=$commit" --output none
 group_created=true
 record fact group created "$(evidence group "$group" tag "$run_id")"
-WEFT_POSTGRES_ADMIN_PASSWORD=$(<"$work/postgres-admin-password") \
-  azg deployment group what-if --name weft-qualify-platform "${base_parameters[@]}" "${platform_switches[@]}"
+BRAID_POSTGRES_ADMIN_PASSWORD=$(<"$work/postgres-admin-password") \
+  azg deployment group what-if --name braid-qualify-platform "${base_parameters[@]}" "${platform_switches[@]}"
 printf '\nThe run then deploys the application with native work, chat and the Ferrule service, builds the images,\n'
 printf 'provisions the database, and deploys one mapping endpoint and a qualification caller job in %s.\n' "$group"
 if $assume_yes; then
@@ -290,13 +290,13 @@ else
 fi
 
 step platform 'Platform deployment'
-deploy weft-qualify-platform "${base_parameters[@]}" "${platform_switches[@]}"
-save_outputs weft-qualify-platform
-registry=$(deployment_output weft-qualify-platform registryName)
-login_server=$(deployment_output weft-qualify-platform registryLoginServer)
-vault=$(deployment_output weft-qualify-platform keyVaultName)
-database_host=$(deployment_output weft-qualify-platform databaseHost)
-prefix=$(deployment_output weft-qualify-platform applicationName)
+deploy braid-qualify-platform "${base_parameters[@]}" "${platform_switches[@]}"
+save_outputs braid-qualify-platform
+registry=$(deployment_output braid-qualify-platform registryName)
+login_server=$(deployment_output braid-qualify-platform registryLoginServer)
+vault=$(deployment_output braid-qualify-platform keyVaultName)
+database_host=$(deployment_output braid-qualify-platform databaseHost)
+prefix=$(deployment_output braid-qualify-platform applicationName)
 prefix=${prefix%-app}
 workspace=$(azg monitor log-analytics workspace show --workspace-name "$prefix-logs" --query customerId --output tsv)
 pass platform-deployed "$(evidence registry "$registry" vault "$vault" databaseHost "$database_host" prefix "$prefix")"
@@ -306,28 +306,28 @@ certificates=$state/certificates
 mkdir -p -- "$certificates"
 # The operator's Key Vault roles can take minutes to apply after the platform deployment; the script is rerunnable.
 for attempt in 1 2 3 4 5 6; do
-  if WEFT_AZURE_SUBSCRIPTION=$subscription "$repository/deploy/azure/initialize-secrets.sh" "$vault" "$database_host" "$certificates"; then break; fi
+  if BRAID_AZURE_SUBSCRIPTION=$subscription "$repository/deploy/azure/initialize-secrets.sh" "$vault" "$database_host" "$certificates"; then break; fi
   ((attempt < 6)) || fail secrets-initialized 'initialize-secrets.sh did not complete'
   sleep 60
 done
 declare -A pins
-for certificate in weft-ferrule-service weft-ferrule-service-client weft-ferrule-worker-client weft-ferrule-endpoint-client; do
+for certificate in braid-ferrule-service braid-ferrule-service-client braid-ferrule-worker-client braid-ferrule-endpoint-client; do
   pins[$certificate]=$(<"$certificates/$certificate.sha256")
   [[ ${pins[$certificate]} =~ ^[0-9a-f]{64}$ ]] || fail secrets-initialized "the $certificate pin is malformed"
 done
-azs keyvault secret set --vault-name "$vault" --name weft-chat-profiles --file "$chat_profiles" --encoding utf-8 \
+azs keyvault secret set --vault-name "$vault" --name braid-chat-profiles --file "$chat_profiles" --encoding utf-8 \
   --content-type application/json --output none
 if [[ -n $model_credential_file ]]; then
-  azs keyvault secret set --vault-name "$vault" --name weft-model-provider-credential --file "$model_credential_file" \
+  azs keyvault secret set --vault-name "$vault" --name braid-model-provider-credential --file "$model_credential_file" \
     --encoding utf-8 --content-type text/plain --output none
 fi
 entra_der() {
-  openssl x509 -in "$certificates/weft-entra-client.pem" -outform DER
+  openssl x509 -in "$certificates/braid-entra-client.pem" -outform DER
 }
 entra_thumbprint=$(entra_der | openssl dgst -sha1 -r | cut -d' ' -f1)
 entra_thumbprint_b64=$(entra_der | openssl dgst -sha1 -binary | base64 -w0)
-pass secrets-initialized "$(evidence ferruleService "${pins[weft-ferrule-service]}" sessionClient "${pins[weft-ferrule-service-client]}" \
-  workerClient "${pins[weft-ferrule-worker-client]}" endpointClient "${pins[weft-ferrule-endpoint-client]}" \
+pass secrets-initialized "$(evidence ferruleService "${pins[braid-ferrule-service]}" sessionClient "${pins[braid-ferrule-service-client]}" \
+  workerClient "${pins[braid-ferrule-worker-client]}" endpointClient "${pins[braid-ferrule-endpoint-client]}" \
   entraClientThumbprint "$entra_thumbprint" chatProfiles replaced modelCredential "$([[ -n $model_credential_file ]] && echo replaced || echo placeholder)")"
 
 step images "Images from commit $commit"
@@ -335,7 +335,7 @@ source_tree=$work/source
 mkdir -- "$source_tree"
 git -C "$repository" archive --format=tar "$commit" | tar -x -C "$source_tree"
 tag=${commit:0:12}
-for image in weft:weft edge:weft-edge weft-worker:weft-worker weft-mapping-endpoint:weft-mapping-endpoint; do
+for image in braid:braid edge:braid-edge braid-worker:braid-worker braid-mapping-endpoint:braid-mapping-endpoint; do
   target=${image%%:*} repository_name=${image#*:}
   azs acr build --registry "$registry" --file deploy/container/Dockerfile --target "$target" --image "$repository_name:$tag" \
     "$source_tree" >"$work/acr-$repository_name.log" 2>&1 ||
@@ -345,57 +345,57 @@ for image in weft:weft edge:weft-edge weft-worker:weft-worker weft-mapping-endpo
   record fact image recorded "$(evidence repository "$repository_name" tag "$tag" digest "$digest" commit "$commit")"
 done
 # The Ferrule images need BuildKit, so they are built here from the same tree and the service image is pushed.
-docker build --quiet --tag "weft-ferrule-native:$run_id" "$source_tree/engines/ferrule-host" >/dev/null
-built_images+=("weft-ferrule-native:$run_id")
-container=$(docker create "weft-ferrule-native:$run_id")
+docker build --quiet --tag "braid-ferrule-native:$run_id" "$source_tree/engines/ferrule-host" >/dev/null
+built_images+=("braid-ferrule-native:$run_id")
+container=$(docker create "braid-ferrule-native:$run_id")
 docker cp "$container:/ferrule-host" "$work/ferrule-host" >/dev/null
 docker rm "$container" >/dev/null
 native_digest=$(sha256sum "$work/ferrule-host" | cut -d' ' -f1)
 rm -f -- "$work/ferrule-host"
-docker build --quiet --tag "weft-ferrule-service:$run_id" --file "$source_tree/engines/ferrule-service/Dockerfile" \
-  --build-arg "WEFT_NATIVE_IMAGE=weft-ferrule-native:$run_id" --build-arg "WEFT_NATIVE_BINARY_SHA256=$native_digest" \
+docker build --quiet --tag "braid-ferrule-service:$run_id" --file "$source_tree/engines/ferrule-service/Dockerfile" \
+  --build-arg "BRAID_NATIVE_IMAGE=braid-ferrule-native:$run_id" --build-arg "BRAID_NATIVE_BINARY_SHA256=$native_digest" \
   "$source_tree" >/dev/null
-built_images+=("weft-ferrule-service:$run_id")
-[[ $(docker image inspect --format '{{index .Config.Labels "io.weft.ferrule.worker-sha256"}}' "weft-ferrule-service:$run_id") == "$native_digest" ]] ||
+built_images+=("braid-ferrule-service:$run_id")
+[[ $(docker image inspect --format '{{index .Config.Labels "io.braid.ferrule.worker-sha256"}}' "braid-ferrule-service:$run_id") == "$native_digest" ]] ||
   fail ferrule-identity 'the service image label differs from its native worker'
 service_identity=sha256:$native_digest
 # The trusted local image is measured with no network, mounts or capabilities.
 measure() { # command output
   docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
-    --tmpfs /tmp:size=256m,mode=1777 --memory 3g --pids-limit 256 "weft-ferrule-service:$run_id" "$1" >"$work/$2"
+    --tmpfs /tmp:size=256m,mode=1777 --memory 3g --pids-limit 256 "braid-ferrule-service:$run_id" "$1" >"$work/$2"
 }
 measure identity compiler-identity.json
 toolchain=$(jq -er --arg native "$service_identity" '
-  select(.schema == "weft.compiler-image-identity.v1" and .native == $native and (.toolchain | test("^sha256:[0-9a-f]{64}$"))
+  select(.schema == "braid.compiler-image-identity.v1" and .native == $native and (.toolchain | test("^sha256:[0-9a-f]{64}$"))
     and .build != .native) | .toolchain' "$work/compiler-identity.json") || fail ferrule-identity 'the compiler identity'
-compiler=sha256:$(printf 'weft.compiler-identity.v1\nnative=%s\ntoolchain=%s\n' "$service_identity" "$toolchain" | sha256sum | cut -d' ' -f1)
+compiler=sha256:$(printf 'braid.compiler-identity.v1\nnative=%s\ntoolchain=%s\n' "$service_identity" "$toolchain" | sha256sum | cut -d' ' -f1)
 [[ $(jq -r .build "$work/compiler-identity.json") == "$compiler" ]] || fail ferrule-identity 'the combined compiler identity'
 measure runtime-identity runtime-identity.json
 runtime_identity=$(jq -er --arg native "$service_identity" '
-  select(.schema == "weft.compiled-runtime-image-identity.v1" and .native == $native and (.runtime | test("^sha256:[0-9a-f]{64}$")))
+  select(.schema == "braid.compiled-runtime-image-identity.v1" and .native == $native and (.runtime | test("^sha256:[0-9a-f]{64}$")))
   | .runtime' "$work/runtime-identity.json") || fail ferrule-identity 'the compiled runtime identity'
 mkdir -m 700 -- "$work/docker"
 DOCKER_CONFIG=$work/docker azs acr login --name "$registry"
-docker tag "weft-ferrule-service:$run_id" "$login_server/weft-ferrule-service:$tag"
-built_images+=("$login_server/weft-ferrule-service:$tag")
-DOCKER_CONFIG=$work/docker docker push --quiet "$login_server/weft-ferrule-service:$tag" >/dev/null
+docker tag "braid-ferrule-service:$run_id" "$login_server/braid-ferrule-service:$tag"
+built_images+=("$login_server/braid-ferrule-service:$tag")
+DOCKER_CONFIG=$work/docker docker push --quiet "$login_server/braid-ferrule-service:$tag" >/dev/null
 rm -rf -- "$work/docker"
-service_digest=$(azs acr repository show --name "$registry" --image "weft-ferrule-service:$tag" --query digest --output tsv)
+service_digest=$(azs acr repository show --name "$registry" --image "braid-ferrule-service:$tag" --query digest --output tsv)
 [[ $service_digest =~ ^sha256:[0-9a-f]{64}$ ]] || fail images-built 'no digest for the Ferrule service image'
-record fact image recorded "$(evidence repository weft-ferrule-service tag "$tag" digest "$service_digest" commit "$commit")"
+record fact image recorded "$(evidence repository braid-ferrule-service tag "$tag" digest "$service_digest" commit "$commit")"
 pass images-built "$(evidence commit "$commit" tag "$tag" ferruleServiceIdentity "$service_identity" \
   compileToolchain "$toolchain" compilerIdentity "$compiler" compiledRuntimeIdentity "$runtime_identity")"
 
 step application 'Application, worker, database and storage'
 app_parameters=("${base_parameters[@]}" deployApplication=true "imageTag=$tag" ferruleRunner=service
-  "ferruleServiceImage=weft-ferrule-service@$service_digest" "ferruleServiceIdentity=$service_identity"
-  "ferruleServiceCertificateSha256=${pins[weft-ferrule-service]}" "ferruleServiceClientCertificateSha256=${pins[weft-ferrule-service-client]}"
+  "ferruleServiceImage=braid-ferrule-service@$service_digest" "ferruleServiceIdentity=$service_identity"
+  "ferruleServiceCertificateSha256=${pins[braid-ferrule-service]}" "ferruleServiceClientCertificateSha256=${pins[braid-ferrule-service-client]}"
   nativeWorkEnabled=true ferruleServiceCompile=true "ferruleCompileToolchain=$toolchain"
-  "ferruleServiceWorkerClientCertificateSha256=${pins[weft-ferrule-worker-client]}" chatEnabled=true 'mappingEndpoints=[]')
-deploy weft-qualify-application "${app_parameters[@]}"
-save_outputs weft-qualify-application
-public_host=$(deployment_output weft-qualify-application publicHost)
-worker_name=$(deployment_output weft-qualify-application workerName)
+  "ferruleServiceWorkerClientCertificateSha256=${pins[braid-ferrule-worker-client]}" chatEnabled=true 'mappingEndpoints=[]')
+deploy braid-qualify-application "${app_parameters[@]}"
+save_outputs braid-qualify-application
+public_host=$(deployment_output braid-qualify-application publicHost)
+worker_name=$(deployment_output braid-qualify-application workerName)
 [[ -n $public_host && -n $worker_name ]] || fail application-deployed 'the deployment did not report the public host and the worker'
 pass application-deployed "$(evidence publicHost "$public_host" worker "$worker_name")"
 
@@ -435,7 +435,7 @@ if [[ $status != 200 || -z $hsts ]] || ! jq -e '.status == "ok"' "$work/health.b
   fail health-hsts "health answered $status${hsts:+ with HSTS}" "$(evidence status "$status" hsts "$hsts")"
 fi
 pass health-hsts "$(evidence status "$status" hsts "$hsts")"
-http_get session "https://$public_host/api/auth/session" --header 'X-Weft-Session: 1'
+http_get session "https://$public_host/api/auth/session" --header 'X-Braid-Session: 1'
 jq -c . "$work/session.body" >"$work/session.compact" 2>/dev/null || : >"$work/session.compact"
 if [[ $status != 200 ]] || ! grep -q '"mode":"session"' "$work/session.compact" ||
   ! grep -q '"state":"anonymous"' "$work/session.compact"; then
@@ -448,8 +448,8 @@ foreign_origins=$(grep -Eo '(src|href)="https?://[^/"]+' "$work/catalog.body" | 
 [[ $status == 200 && $content_type == text/html && -z $foreign_origins ]] ||
   fail catalog-same-origin "the catalog answered $status $content_type" "$(evidence status "$status" contentType "$content_type")"
 pass catalog-same-origin "$(evidence status "$status" contentType "$content_type")"
-wait_for 1200 30 app_lines "$prefix-app" "$started" 'WeftSessionHostReady' "$work/session-host.lines" ||
-  fail session-host-ready 'no WeftSessionHostReady line after the start'
+wait_for 1200 30 app_lines "$prefix-app" "$started" 'BraidSessionHostReady' "$work/session-host.lines" ||
+  fail session-host-ready 'no BraidSessionHostReady line after the start'
 pass session-host-ready "$(evidence app "$prefix-app" since "$started")"
 
 replicas_ready() { # app count
@@ -483,25 +483,25 @@ docker_free no-docker-socket
 
 step administrator 'First administrator'
 principal=$(uuid)
-owner_env=(WEFT_MIGRATION_CONNECTION_STRING=secretref:migrator-connection WEFT_DELIVER_OWNER_INPUT=secretref:owner-input)
+owner_env=(BRAID_MIGRATION_CONNECTION_STRING=secretref:migrator-connection BRAID_DELIVER_OWNER_INPUT=secretref:owner-input)
 job_step owner-identity "$prefix-owner" 'requested admission are current' --container-name owner \
-  --args database provision-development-identity --env-vars "${owner_env[@]}" "WEFT_DEV_ORGANIZATION_ID=$organization" \
-  "WEFT_DEV_PRINCIPAL_ID=$principal" "WEFT_DEV_ORGANIZATION_NAME=Weft qualification $run_id"
+  --args database provision-development-identity --env-vars "${owner_env[@]}" "BRAID_DEV_ORGANIZATION_ID=$organization" \
+  "BRAID_DEV_PRINCIPAL_ID=$principal" "BRAID_DEV_ORGANIZATION_NAME=Braid qualification $run_id"
 job_step owner-project-creation "$prefix-owner" 'Project creation capability granted' --container-name owner \
   --args database set-project-creation-capability "$organization" "$principal" true
 # The binding key reaches the job only through Key Vault; the placeholder is restored afterwards.
 jq -cn --arg tenant "$tenant" --arg object "$owner_object" '{tenantId: $tenant, objectId: $object}' >"$work/owner-input.json"
-azs keyvault secret set --vault-name "$vault" --name weft-owner-input --file "$work/owner-input.json" --encoding utf-8 \
+azs keyvault secret set --vault-name "$vault" --name braid-owner-input --file "$work/owner-input.json" --encoding utf-8 \
   --content-type application/json --output none
 rm -f -- "$work/owner-input.json"
 vault_uri=$(azg keyvault show --name "$vault" --query properties.vaultUri --output tsv)
 identity_id=$(azg identity show --name "$prefix-identity" --query id --output tsv)
 azg containerapp job secret set --name "$prefix-owner" \
-  --secrets "owner-input=keyvaultref:${vault_uri}secrets/weft-owner-input,identityref:$identity_id" --output none
+  --secrets "owner-input=keyvaultref:${vault_uri}secrets/braid-owner-input,identityref:$identity_id" --output none
 job_step owner-binding "$prefix-owner" '"outcome":"(created|existing)"' --container-name owner \
   --args database bind-entra-user "$principal"
 printf '{}' >"$work/owner-input.json"
-azs keyvault secret set --vault-name "$vault" --name weft-owner-input --file "$work/owner-input.json" --encoding utf-8 \
+azs keyvault secret set --vault-name "$vault" --name braid-owner-input --file "$work/owner-input.json" --encoding utf-8 \
   --content-type application/json --output none
 record fact administrator provisioned "$(evidence principal "$principal" organization "$organization")"
 
@@ -518,8 +518,8 @@ if ! registration_ready; then
   confirm_item registration-updated \
     "Before sign-in, the app registration $client needs:" \
     "- the Web redirect URI $redirect" \
-    "- the certificate $certificates/weft-entra-client.pem, for example:" \
-    "  az ad app credential reset --id $client --cert @$certificates/weft-entra-client.pem --append --subscription $subscription" \
+    "- the certificate $certificates/braid-entra-client.pem, for example:" \
+    "  az ad app credential reset --id $client --cert @$certificates/braid-entra-client.pem --append --subscription $subscription" \
     'Answer yes once both are in place.'
   registration_ready || fail registration 'the redirect URI or the certificate credential is still missing'
 fi
@@ -563,9 +563,9 @@ confirm_item regression-passed \
 confirm_item build-completed \
   'Register the offered build environment, verify the regression evidence, approve and request a build.' \
   'The build completes and shows its artifact digest.'
-query_database browser-evidence "SELECT (SELECT count(*) FROM weft.projects), (SELECT count(*) FROM weft.mapping_revisions),
-  (SELECT count(*) FROM weft.revision_derivations), (SELECT count(*) FROM weft.chat_turns), (SELECT count(*) FROM weft.preview_runs),
-  (SELECT count(*) FROM weft.regression_runs), (SELECT count(*) FROM weft.build_runs WHERE state = 'succeeded')"
+query_database browser-evidence "SELECT (SELECT count(*) FROM braid.projects), (SELECT count(*) FROM braid.mapping_revisions),
+  (SELECT count(*) FROM braid.revision_derivations), (SELECT count(*) FROM braid.chat_turns), (SELECT count(*) FROM braid.preview_runs),
+  (SELECT count(*) FROM braid.regression_runs), (SELECT count(*) FROM braid.build_runs WHERE state = 'succeeded')"
 read -r projects revisions derivations turns previews runs builds <"$work/browser-evidence.rows"
 counts=$(evidence projects "$projects" revisions "$revisions" derivations "$derivations" chatTurns "$turns" \
   previewRuns "$previews" regressionRuns "$runs" succeededBuilds "$builds")
@@ -575,7 +575,7 @@ done
 pass browser-corroborated "$counts"
 query_database build "SELECT a.project_id, a.mapping_id, a.build_id, a.environment_id, a.environment_version, r.artifact_digest,
   (position('$compiler' in convert_from(a.intent_body, 'UTF8')) > 0)
-  FROM weft.build_runs r JOIN weft.build_approvals a USING (organization_id, build_id)
+  FROM braid.build_runs r JOIN braid.build_approvals a USING (organization_id, build_id)
   WHERE r.state = 'succeeded' AND r.organization_id = '$organization' AND r.actor_id = '$principal'"
 (($(wc -l <"$work/build.rows") == 1)) || fail build-provenance "expected one completed build, found $(wc -l <"$work/build.rows")"
 read -r project_id mapping_id build_id environment_id environment_version artifact_digest names_compiler <"$work/build.rows"
@@ -605,13 +605,13 @@ endpoints=$(jq -cn --arg project "$project_id" --arg mapping "$mapping_id" --arg
   --arg name "$endpoint_name" '[{name: $name, projectId: $project, mappingId: $mapping, environmentId: $environment,
     environmentVersion: $version, targetId: $target, callers: [{grantId: $grant, objectId: $caller}]}]')
 endpoint_parameters=("${app_parameters[@]}" "mappingEndpoints=$endpoints" "mappingEndpointAudience=$audience"
-  "mappingEndpointAdministratorId=$principal" "ferruleServiceEndpointClientCertificateSha256=${pins[weft-ferrule-endpoint-client]}"
+  "mappingEndpointAdministratorId=$principal" "ferruleServiceEndpointClientCertificateSha256=${pins[braid-ferrule-endpoint-client]}"
   "compiledRuntimeIdentity=$runtime_identity")
 endpoints_started=$(now)
-deploy weft-qualify-endpoints "${endpoint_parameters[@]}"
-save_outputs weft-qualify-endpoints
-origin=$(deployment_output weft-qualify-endpoints mappingEndpointOrigins | jq -r '.[0] // empty')
-read -r -a grant_arguments <<<"$(deployment_output weft-qualify-endpoints mappingEndpointGrantArguments | jq -r '.[0] // empty')"
+deploy braid-qualify-endpoints "${endpoint_parameters[@]}"
+save_outputs braid-qualify-endpoints
+origin=$(deployment_output braid-qualify-endpoints mappingEndpointOrigins | jq -r '.[0] // empty')
+read -r -a grant_arguments <<<"$(deployment_output braid-qualify-endpoints mappingEndpointGrantArguments | jq -r '.[0] // empty')"
 [[ $origin == https://* && ${grant_arguments[1]:-} == grant-machine-invocation ]] ||
   fail endpoint-deployed 'the deployment did not report the endpoint origin and its grant'
 pass endpoint-deployed "$(evidence app "$endpoint_app" origin "$origin" target "$target")"
@@ -623,7 +623,7 @@ deploy_caller() {
     '{"$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#", contentVersion: "1.0.0.0",
       parameters: {callerToken: {value: $caller}, foreignToken: {value: $foreign}, expiringToken: {value: $expiring}}}' \
     >"$work/caller-parameters.json"
-  azg deployment group create --name weft-qualify-caller \
+  azg deployment group create --name braid-qualify-caller \
     --template-file "$source_tree/deploy/azure/qualification/caller.bicep" --parameters "@$work/caller-parameters.json" \
     --parameters "name=$caller_job" "environmentName=$prefix-env" "image=$node_image" "tags=$tags_json" --output none
   rm -f -- "$work/caller-parameters.json"
@@ -645,15 +645,15 @@ call() { # name request credential
   esac
   ! $refreshed || deploy_caller
   run_job "call-$1" "$caller_job" --container-name caller --args invoke "$1" "$origin" "$2" "$3"
-  await_lines "call-$1" "$last_execution" '^weft-qualify-call '
-  sed -n 's/^weft-qualify-call //p' "$work/call-$1.lines" | tail -n 1 >"$work/calls/$1.json"
+  await_lines "call-$1" "$last_execution" '^braid-qualify-call '
+  sed -n 's/^braid-qualify-call //p' "$work/call-$1.lines" | tail -n 1 >"$work/calls/$1.json"
 }
 
 # A completed call names its release, build and artifact, and both outputs equal independently authored bytes.
 completed() { # name release replayed
   local file=$work/calls/$1.json generated
   jq -e --arg release "$2" --arg build "$build_id" --arg artifact "$artifact_digest" --arg replayed "$3" '
-    .status == 200 and .replayed == $replayed and .body.schema == "weft.mapping-invocation-response.v1"
+    .status == 200 and .replayed == $replayed and .body.schema == "braid.mapping-invocation-response.v1"
     and .body.releaseId == $release and .body.buildId == $build and .body.artifactDigest == $artifact
     and (.body.outputs | length) == 2' "$file" >/dev/null ||
     fail "$1" "the call did not complete with release $2" "$(jq -c '{status, replayed, outcome: .body.outcome?, releaseId: .body.releaseId?}' "$file")"
@@ -687,7 +687,7 @@ same_body() { # check first second
 }
 
 audit() { # label request
-  query_database "$1" "SELECT sequence, kind, coalesce(release_id::text, '-') FROM weft.machine_invocation_audit
+  query_database "$1" "SELECT sequence, kind, coalesce(release_id::text, '-') FROM braid.machine_invocation_audit
     WHERE organization_id = '$organization' AND target_id = '$target' AND request_id = '$2' ORDER BY sequence"
 }
 
@@ -720,10 +720,10 @@ tool_outcome grant "$prefix-endpoint-grants" grants Succeeded "${grant_arguments
 [[ $outcome == granted ]] || fail caller-granted "the grant answered $outcome"
 pass caller-granted "$(evidence grant "$grant" callerObject "$caller_object")"
 
-wait_for 1200 30 app_lines "$endpoint_app" "$endpoints_started" 'WeftMappingEndpointReady' "$work/endpoint.lines" ||
-  fail endpoint-ready 'no WeftMappingEndpointReady line'
+wait_for 1200 30 app_lines "$endpoint_app" "$endpoints_started" 'BraidMappingEndpointReady' "$work/endpoint.lines" ||
+  fail endpoint-ready 'no BraidMappingEndpointReady line'
 run_job ready "$caller_job" --container-name caller --args ready ready "$origin"
-await_lines ready "$last_execution" '^weft-qualify-call '
+await_lines ready "$last_execution" '^braid-qualify-call '
 grep -q '"status":204' "$work/ready.lines" || fail endpoint-ready 'the endpoint is not ready'
 pass endpoint-ready "$(evidence app "$endpoint_app" ready 204)"
 
@@ -767,7 +767,7 @@ completed after-refused-activation "$rollback_release" false
 serving=$(azg containerapp revision list --name "$endpoint_app" --query '[?properties.active].name | [0]' --output tsv)
 broken=$endpoint_app--broken-${run_id##*-}
 azg containerapp update --name "$endpoint_app" --revision-suffix "broken-${run_id##*-}" \
-  --set-env-vars WEFT_ENDPOINT_CONCURRENCY=0 --output none || true
+  --set-env-vars BRAID_ENDPOINT_CONCURRENCY=0 --output none || true
 revision_failed() {
   azg containerapp revision show --name "$endpoint_app" --revision "$broken" \
     --query '{health: properties.healthState, running: properties.runningState}' --output json >"$work/broken.json" &&
@@ -783,7 +783,7 @@ call during-broken-revision "$(uuid)" caller
 completed during-broken-revision "$rollback_release" false
 pass broken-revision "$(evidence refused "$broken" serving "$serving" brokenHealth "$(jq -r .health "$work/broken.json")" \
   brokenRunning "$(jq -r .running "$work/broken.json")")"
-deploy weft-qualify-endpoints "${endpoint_parameters[@]}"
+deploy braid-qualify-endpoints "${endpoint_parameters[@]}"
 call after-redeployment "$(uuid)" caller
 completed after-redeployment "$rollback_release" false
 
@@ -792,9 +792,9 @@ call wrong-audience "$(uuid)" foreign
 refused wrong-audience 401 unauthorized
 
 step restart 'Restart and scale recovery'
-snapshot="SELECT (SELECT count(*) FROM weft.projects), (SELECT count(*) FROM weft.mapping_revisions),
-  (SELECT count(*) FROM weft.chat_conversations), (SELECT count(*) FROM weft.chat_turns), (SELECT count(*) FROM weft.preview_runs),
-  (SELECT count(*) FROM weft.regression_runs), (SELECT count(*) FROM weft.build_runs)"
+snapshot="SELECT (SELECT count(*) FROM braid.projects), (SELECT count(*) FROM braid.mapping_revisions),
+  (SELECT count(*) FROM braid.chat_conversations), (SELECT count(*) FROM braid.chat_turns), (SELECT count(*) FROM braid.preview_runs),
+  (SELECT count(*) FROM braid.regression_runs), (SELECT count(*) FROM braid.build_runs)"
 query_database before-restart "$snapshot"
 confirm_item work-open \
   'Keep the signed-in browser open on the conversation and on the completed preview while the server restarts,' \
@@ -802,8 +802,8 @@ confirm_item work-open \
 restarted=$(now)
 restart_active "$prefix-app"
 wait_for 900 20 healthy || fail server-restarted 'health did not return after the restart'
-wait_for 1200 30 app_lines "$prefix-app" "$restarted" 'WeftSessionHostReady' "$work/restart.lines" ||
-  fail server-restarted 'no WeftSessionHostReady line after the restart'
+wait_for 1200 30 app_lines "$prefix-app" "$restarted" 'BraidSessionHostReady' "$work/restart.lines" ||
+  fail server-restarted 'no BraidSessionHostReady line after the restart'
 pass server-restarted "$(evidence since "$restarted")"
 read -r scale_min scale_max <<<"$(azg containerapp show --name "$prefix-ferrule" \
   --query '{min: properties.template.scale.minReplicas, max: properties.template.scale.maxReplicas}' --output json |
@@ -852,7 +852,7 @@ refused revoked-replay 403 refused
 step isolation 'Isolation evidence'
 azg containerapp show --name "$prefix-ferrule" --output json >"$work/ferrule.json"
 jq -e '.properties.configuration.ingress.external == false
-  and ([.properties.template.containers[0].env[] | select(.name == "WEFT_FERRULE_SERVICE_COMPILE_ENABLED" or .name == "WEFT_FERRULE_SERVICE_EXECUTION_ENABLED") | .value] == ["true", "true"])
+  and ([.properties.template.containers[0].env[] | select(.name == "BRAID_FERRULE_SERVICE_COMPILE_ENABLED" or .name == "BRAID_FERRULE_SERVICE_EXECUTION_ENABLED") | .value] == ["true", "true"])
   and any(.properties.template.containers[0].probes[]; .type == "Readiness" and .httpGet.path == "/v1/health/ready")' \
   "$work/ferrule.json" >/dev/null || fail ferrule-sandbox-admission 'the Ferrule service configuration'
 replicas_ready "$prefix-ferrule" 1 || fail ferrule-sandbox-admission 'no Ferrule service replica is ready'

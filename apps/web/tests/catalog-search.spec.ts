@@ -526,7 +526,7 @@ test("session search keeps retained navigation and MFD warning ownership separat
     await expect(
       page.getByRole("complementary", { name: "Context inspector" }),
     ).toContainText(source.data.projection.report!.document!.fields[0]!.name);
-    const exporter = page.locator("weft-mfd-export");
+    const exporter = page.locator("braid-mfd-export");
     await exporter
       .getByRole("button", { name: "Review .mfd export", exact: true })
       .click();

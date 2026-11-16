@@ -8,7 +8,7 @@ type SavedCase = Pick<
 >;
 const owner = new ExecutionOwner(
   "regression",
-  () => process.env.WEFT_REGRESSION_BINDINGS,
+  () => process.env.BRAID_REGRESSION_BINDINGS,
 );
 const input = Buffer.from(
   '{"code":"A1","a.b":"dot","nested":{"b":"x"}}',
@@ -22,7 +22,7 @@ const expected = Buffer.from(
 const region = (page: Page) =>
   page.getByRole("region", { name: "Regression tests", exact: true });
 async function captureWorkbench(page: Page, name: string): Promise<void> {
-  const directory = process.env.WEFT_WORKBENCH_CAPTURE_DIR;
+  const directory = process.env.BRAID_WORKBENCH_CAPTURE_DIR;
   if (!directory) return;
   expect(isAbsolute(directory)).toBe(true);
   const resize = page.getByRole("separator", {

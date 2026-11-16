@@ -9,9 +9,7 @@ scan. Each returned review link must match its organization, project, proposal
 and lowercase fingerprint exactly. Duplicate/backward pages and changed
 fingerprints for previously observed immutable proposals are refused.
 
-Opening, refreshing or paging the library never approves a mapping. Approval
-continues through the existing exact-fingerprint review page, including current
-content permission, required acknowledgements and its durable receipt.
+Open a proposal's review page to review its exact fingerprint and required acknowledgements.
 
 ## Feedback handoff
 
@@ -23,11 +21,11 @@ requested changes and explicitly sends it. Preparing may create an empty
 workspace conversation, but creates no model turn. Replacing an existing unsent
 question requires confirmation. Declining keeps the draft.
 
-Feedback uses a workspace conversation, not revision-pinned legacy chat.
-Selecting legacy chat drops the creation-query family so the URL remains valid.
+Feedback uses a workspace conversation. Selecting revision-pinned chat drops the
+creation-query family so the URL remains valid.
 Both browser and server return-path validators accept the complete creation
 identity tuple, optionally with a workspace conversation ID, and refuse mixed
-legacy or incomplete tuples.
+revision-chat or incomplete tuples.
 
 Pending preparation is fenced by the proposal selection, page lifetime, current
 identity lineage, panel, requested conversation and draft. An obsolete async
@@ -38,10 +36,10 @@ a new immutable proposal. Each replacement still requires its own exact review
 and approval. Tool authorization, model-sharing grants, bounded retained context
 and auditing are enforced by the separate feedback API implementation.
 
-## Qualification
+## Verification
 
 `playwright.creation-library.config.ts` runs the closed-page checks and actual
 Chromium library, capability and feedback navigation tests using synthetic
-fixtures. Browser transport fixtures are not live-provider acceptance. The
+fixtures. The
 shared `contracts/browser-return-paths.json` vectors exercise the paired browser
 and server return-path rules.

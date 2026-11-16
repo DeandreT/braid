@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
+    <ProjectReference Include="../Braid.Contracts/Braid.Contracts.csproj" />
+    <ProjectReference Include="../Braid.Application/Braid.Application.csproj" />
+    <ProjectReference Include="../Braid.Domain/Braid.Domain.csproj" />
+    <ProjectReference Include="../Braid.Deployment/Braid.Deployment.csproj" />
+    <ProjectReference Include="../Braid.Identity/Braid.Identity.csproj" />
+    <ProjectReference Include="../Braid.MappingBackends/Braid.MappingBackends.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The user guide ships inside the server build; nothing is read from disk at run time. -->
+    <UserGuideSource Include="../../../docs/user-guide/*.md" />
+    <EmbeddedResource Include="@(UserGuideSource)"
+                      LogicalName="Braid.Api.UserGuide.%(Filename)%(Extension)" />
+  </ItemGroup>
+  <Target Name="RequireUserGuideSources" BeforeTargets="CoreCompile">
+    <Error Condition="'@(UserGuideSource)' == ''" Text="The user guide source files are required to build Braid.Api." />
+  </Target>
+</Project>

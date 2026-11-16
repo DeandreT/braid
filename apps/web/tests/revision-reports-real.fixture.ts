@@ -22,7 +22,7 @@ export type Sample = (typeof reportSampleNames)[number];
 export type HostMode = "full" | "readOnlyNoWorker" | "profileUnavailable";
 
 export interface ReportsBrowserManifest {
-  readonly schemaVersion: "weft.reports-browser-fixture.v1";
+  readonly schemaVersion: "braid.reports-browser-fixture.v1";
   readonly fixtureId: string;
   readonly source: { readonly commit: string; readonly tree: string };
   readonly readOrigin: string;
@@ -78,7 +78,7 @@ type Command =
   | { action: "revoke-project" | "revoke-org" | "shutdown" };
 
 type AckBase = {
-  schemaVersion: "weft.reports-browser-control.v1";
+  schemaVersion: "braid.reports-browser-control.v1";
   requestNonce: string;
   fixtureId: string;
 };
@@ -232,7 +232,7 @@ export function parseReportsManifest(
     "samples",
   ]);
   requireFixture(
-    row.schemaVersion === "weft.reports-browser-fixture.v1" &&
+    row.schemaVersion === "braid.reports-browser-fixture.v1" &&
       uuid(row.fixtureId) &&
       row.readOrigin === origin &&
       row.initialReadProfile === "viewer" &&
@@ -406,7 +406,7 @@ export class ReportsOwner {
       "profile",
     ]);
     requireFixture(
-      ready.schemaVersion === "weft.reports-browser-ready.v1" &&
+      ready.schemaVersion === "braid.reports-browser-ready.v1" &&
         ready.profile === "viewer",
       "incompatible ready response",
     );
@@ -459,7 +459,7 @@ export class ReportsOwner {
       );
       const ack = value as Ack;
       requireFixture(
-        ack.schemaVersion === "weft.reports-browser-control.v1" &&
+        ack.schemaVersion === "braid.reports-browser-control.v1" &&
           ack.fixtureId === envelope.fixtureId &&
           ack.requestNonce === envelope.requestNonce &&
           ack.action === command.action,
@@ -667,10 +667,10 @@ export class ReportsOwner {
 export const test = base.extend<{}, { reportsOwner: ReportsOwner }>({
   reportsOwner: [
     async ({}, use) => {
-      const operator = process.env.WEFT_REPORTS_BROWSER_OPERATOR;
-      const configuration = process.env.WEFT_REPORTS_BROWSER_OPERATOR_CONFIG;
-      const path = process.env.WEFT_REPORTS_BROWSER_MANIFEST;
-      const origin = process.env.WEFT_REPORTS_BASE_URL;
+      const operator = process.env.BRAID_REPORTS_BROWSER_OPERATOR;
+      const configuration = process.env.BRAID_REPORTS_BROWSER_OPERATOR_CONFIG;
+      const path = process.env.BRAID_REPORTS_BROWSER_MANIFEST;
+      const origin = process.env.BRAID_REPORTS_BASE_URL;
       requireFixture(
         operator && configuration && path && origin && isAbsolute(operator),
         "explicit packaged origin/operator/private configuration/manifest are required",
@@ -739,7 +739,7 @@ export function expectReport(
     "mappingId",
     "revisionId",
   ]);
-  expect(value.schemaVersion).toBe("weft.catalog-revision-report.v1");
+  expect(value.schemaVersion).toBe("braid.catalog-revision-report.v1");
   expect(value.operation).toBe(operation);
   expect(value.revision).toEqual(revision.scope);
   expect(["notDerived", "pending", "available", "failed"]).toContain(
@@ -834,7 +834,7 @@ export function expectReport(
     expect(provenance?.backend.buildId).toBe(
       "sha256:439291fb4d665e3ba9c086e88214a73fd44552af80932a9b40c97f5816c7047e",
     );
-    expect(provenance?.adapterVersion).toBe("weft.ferrule-adapter.v3");
+    expect(provenance?.adapterVersion).toBe("braid.ferrule-adapter.v3");
     if (value.operation === "projection") {
       expect(value.report.document).not.toBeNull();
       expect(value.report.document?.provenance.revision).toEqual(
@@ -847,10 +847,10 @@ export function expectReport(
         provenance?.backend,
       );
       expect(value.report.document?.provenance.adapterVersion).toBe(
-        "weft.ferrule-adapter.v3",
+        "braid.ferrule-adapter.v3",
       );
       expect(value.report.document?.provenance.projectionVersion).toBe(
-        "weft.ferrule-projection.v1",
+        "braid.ferrule-projection.v1",
       );
     }
   } else if (value.readOutcome !== "observed")

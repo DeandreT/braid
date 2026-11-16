@@ -8,7 +8,7 @@ const tenant = randomUUID();
 const client = {
   clientId: randomUUID(),
   audience: randomUUID(),
-  scope: "weft.api",
+  scope: "braid.api",
 };
 const user = {
   objectId: randomUUID(),
@@ -69,7 +69,7 @@ function assertTokens(body) {
   const access = claims(body.access_token);
   assert.equal(access.aud, client.audience);
   assert.equal(access.azp, client.clientId);
-  assert.equal(access.scp, "weft.api");
+  assert.equal(access.scp, "braid.api");
   assert.equal(access.oid, user.objectId);
   assert.equal(access.tid, tenant);
   assert.equal(access.ver, "2.0");

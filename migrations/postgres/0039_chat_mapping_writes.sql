@@ -3,15 +3,15 @@
 -- conversation erasure: who wrote which version of which mapping from which base, with which profile.
 DO $chat_mapping_writes_owner$
 BEGIN
-    IF current_user <> 'weft_migrator' OR session_user <> current_user THEN
+    IF current_user <> 'braid_migrator' OR session_user <> current_user THEN
         RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Chat mapping writes require the separately provisioned owner login.';
     END IF;
 END;
 $chat_mapping_writes_owner$;
 
-LOCK TABLE weft.chat_conversations,weft.chat_turns,weft.chat_rounds,weft.chat_events,weft.chat_identities,weft.chat_payload_audit IN ACCESS EXCLUSIVE MODE;
+LOCK TABLE braid.chat_conversations,braid.chat_turns,braid.chat_rounds,braid.chat_events,braid.chat_identities,braid.chat_payload_audit IN ACCESS EXCLUSIVE MODE;
 
-ALTER TABLE weft.chat_events DROP CONSTRAINT chat_events_kind_check, DROP CONSTRAINT chat_events_check,
+ALTER TABLE braid.chat_events DROP CONSTRAINT chat_events_kind_check, DROP CONSTRAINT chat_events_check,
     ADD CONSTRAINT chat_events_kind_check CHECK(kind BETWEEN 1 AND 15),
     ADD CONSTRAINT chat_events_check CHECK((kind IN (2,3,4) AND round_id IS NOT NULL AND dispatch_fence IS NOT NULL AND metadata_json IS NULL AND octet_length(private_text) BETWEEN 1 AND 8192 AND btrim(private_text)<>'')
         OR (kind IN (9,10,11,12,13,14,15) AND round_id IS NOT NULL AND dispatch_fence IS NOT NULL AND metadata_json IS NOT NULL AND private_text='')
@@ -19,7 +19,7 @@ ALTER TABLE weft.chat_events DROP CONSTRAINT chat_events_kind_check, DROP CONSTR
         OR (kind IN (5,6,7,8) AND round_id IS NULL AND dispatch_fence IS NULL AND private_text='' AND (metadata_json IS NULL OR octet_length(metadata_json)<=2048)));
 
 -- One row per mapping write event, with identities and versions only: no edit, change text or conversation text.
-CREATE TABLE weft.chat_mapping_write_audit (
+CREATE TABLE braid.chat_mapping_write_audit (
     organization_id uuid NOT NULL, creator_id uuid NOT NULL, event_id uuid NOT NULL,
     conversation_id uuid NOT NULL, turn_id uuid NOT NULL, round_id uuid NOT NULL, project_id uuid NOT NULL, mapping_id uuid NOT NULL,
     base_revision_id uuid NOT NULL, base_sequence bigint NOT NULL, revision_id uuid, revision_sequence bigint,
@@ -28,32 +28,32 @@ CREATE TABLE weft.chat_mapping_write_audit (
     metadata_policy_id text NOT NULL, metadata_policy_version integer NOT NULL, recorded_at timestamptz NOT NULL,
     PRIMARY KEY(organization_id,creator_id,event_id)
 );
-ALTER TABLE weft.chat_mapping_write_audit ENABLE ROW LEVEL SECURITY;
-CREATE POLICY creator_scope ON weft.chat_mapping_write_audit USING (organization_id=NULLIF(current_setting('weft.organization_id',true),'')::uuid AND creator_id=NULLIF(current_setting('weft.chat_principal_id',true),'')::uuid) WITH CHECK (organization_id=NULLIF(current_setting('weft.organization_id',true),'')::uuid AND creator_id=NULLIF(current_setting('weft.chat_principal_id',true),'')::uuid);
-REVOKE ALL ON weft.chat_mapping_write_audit FROM PUBLIC;
+ALTER TABLE braid.chat_mapping_write_audit ENABLE ROW LEVEL SECURITY;
+CREATE POLICY creator_scope ON braid.chat_mapping_write_audit USING (organization_id=NULLIF(current_setting('braid.organization_id',true),'')::uuid AND creator_id=NULLIF(current_setting('braid.chat_principal_id',true),'')::uuid) WITH CHECK (organization_id=NULLIF(current_setting('braid.organization_id',true),'')::uuid AND creator_id=NULLIF(current_setting('braid.chat_principal_id',true),'')::uuid);
+REVOKE ALL ON braid.chat_mapping_write_audit FROM PUBLIC;
 
-CREATE FUNCTION weft.guard_chat_mapping_write_audit() RETURNS trigger
-LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE SECURITY INVOKER SET search_path=pg_catalog,weft,pg_temp
+CREATE FUNCTION braid.guard_chat_mapping_write_audit() RETURNS trigger
+LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE SECURITY INVOKER SET search_path=pg_catalog,braid,pg_temp
 AS $guard_chat_mapping_write_audit$
 BEGIN
     RAISE EXCEPTION 'Chat mapping write audit is append-only.' USING ERRCODE='23514';
 END;
 $guard_chat_mapping_write_audit$;
-CREATE TRIGGER chat_mapping_write_audit_guard BEFORE UPDATE OR DELETE ON weft.chat_mapping_write_audit FOR EACH ROW EXECUTE FUNCTION weft.guard_chat_mapping_write_audit();
-CREATE TRIGGER chat_mapping_write_audit_truncate BEFORE TRUNCATE ON weft.chat_mapping_write_audit FOR EACH STATEMENT EXECUTE FUNCTION weft.guard_chat_mapping_write_audit();
+CREATE TRIGGER chat_mapping_write_audit_guard BEFORE UPDATE OR DELETE ON braid.chat_mapping_write_audit FOR EACH ROW EXECUTE FUNCTION braid.guard_chat_mapping_write_audit();
+CREATE TRIGGER chat_mapping_write_audit_truncate BEFORE TRUNCATE ON braid.chat_mapping_write_audit FOR EACH STATEMENT EXECUTE FUNCTION braid.guard_chat_mapping_write_audit();
 
 -- The audit row is written in the same statement as its event, by the owner, from the admitted event and turn.
-CREATE FUNCTION weft.audit_chat_mapping_write() RETURNS trigger
-LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE SECURITY DEFINER SET search_path=pg_catalog,weft,pg_temp
+CREATE FUNCTION braid.audit_chat_mapping_write() RETURNS trigger
+LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE SECURITY DEFINER SET search_path=pg_catalog,braid,pg_temp
 AS $audit_chat_mapping_write$
-DECLARE j jsonb; t weft.chat_turns%ROWTYPE;
+DECLARE j jsonb; t braid.chat_turns%ROWTYPE;
 BEGIN
     IF NEW.kind<>15 THEN RETURN NULL; END IF;
-    SELECT * INTO t FROM weft.chat_turns x WHERE x.organization_id=NEW.organization_id AND x.creator_id=NEW.creator_id
+    SELECT * INTO t FROM braid.chat_turns x WHERE x.organization_id=NEW.organization_id AND x.creator_id=NEW.creator_id
         AND x.conversation_id=NEW.conversation_id AND x.turn_id=NEW.turn_id;
     IF NOT FOUND THEN RAISE EXCEPTION 'Missing chat turn.' USING ERRCODE='23514'; END IF;
     j:=NEW.metadata_json::jsonb;
-    INSERT INTO weft.chat_mapping_write_audit(organization_id,creator_id,event_id,conversation_id,turn_id,round_id,project_id,mapping_id,
+    INSERT INTO braid.chat_mapping_write_audit(organization_id,creator_id,event_id,conversation_id,turn_id,round_id,project_id,mapping_id,
         base_revision_id,base_sequence,revision_id,revision_sequence,outcome,reason,operation_count,edit_digest,
         profile_id,profile_version,provider_id,model_id,metadata_policy_id,metadata_policy_version,recorded_at)
         VALUES(NEW.organization_id,NEW.creator_id,NEW.event_id,NEW.conversation_id,NEW.turn_id,NEW.round_id,(j->>'project')::uuid,
@@ -63,11 +63,11 @@ BEGIN
     RETURN NULL;
 END;
 $audit_chat_mapping_write$;
-REVOKE ALL ON FUNCTION weft.guard_chat_mapping_write_audit(),weft.audit_chat_mapping_write() FROM PUBLIC;
-CREATE TRIGGER chat_mapping_write_audit AFTER INSERT ON weft.chat_events FOR EACH ROW EXECUTE FUNCTION weft.audit_chat_mapping_write();
+REVOKE ALL ON FUNCTION braid.guard_chat_mapping_write_audit(),braid.audit_chat_mapping_write() FROM PUBLIC;
+CREATE TRIGGER chat_mapping_write_audit AFTER INSERT ON braid.chat_events FOR EACH ROW EXECUTE FUNCTION braid.audit_chat_mapping_write();
 
-CREATE OR REPLACE FUNCTION weft.chat_metadata_valid(kind integer, value text, expected_round uuid) RETURNS boolean
-LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE SECURITY INVOKER SET search_path=pg_catalog,weft,pg_temp
+CREATE OR REPLACE FUNCTION braid.chat_metadata_valid(kind integer, value text, expected_round uuid) RETURNS boolean
+LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE SECURITY INVOKER SET search_path=pg_catalog,braid,pg_temp
 AS $chat_metadata_valid$
 DECLARE j jsonb; keys text[]; k text; n numeric; usage jsonb; failure jsonb; c integer; t integer;
 BEGIN
@@ -219,8 +219,8 @@ BEGIN
         IF jsonb_typeof(j->'finish') IS NULL OR jsonb_typeof(j->'finish') NOT IN ('number','null') THEN RETURN false; END IF;
         usage:=j->'usage'; failure:=j->'failure';
         IF usage='null'::jsonb AND failure='null'::jsonb THEN RETURN false; END IF;
-        IF usage<>'null'::jsonb AND weft.chat_metadata_valid(9,usage::text,expected_round) IS NOT TRUE THEN RETURN false; END IF;
-        IF failure<>'null'::jsonb AND weft.chat_metadata_valid(10,failure::text,expected_round) IS NOT TRUE THEN RETURN false; END IF;
+        IF usage<>'null'::jsonb AND braid.chat_metadata_valid(9,usage::text,expected_round) IS NOT TRUE THEN RETURN false; END IF;
+        IF failure<>'null'::jsonb AND braid.chat_metadata_valid(10,failure::text,expected_round) IS NOT TRUE THEN RETURN false; END IF;
         IF usage<>'null'::jsonb AND failure<>'null'::jsonb AND usage->>'round' IS DISTINCT FROM failure->>'round' THEN RETURN false; END IF;
         IF j->'finish'<>'null'::jsonb AND (j->>'finish' !~ '^[1-5]$' OR usage='null'::jsonb OR failure<>'null'::jsonb) THEN RETURN false; END IF;
         RETURN true;
@@ -230,31 +230,31 @@ EXCEPTION WHEN OTHERS THEN RETURN false;
 END;
 $chat_metadata_valid$;
 
-CREATE OR REPLACE FUNCTION weft.guard_chat_child() RETURNS trigger
-LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE SECURITY INVOKER SET search_path=pg_catalog,weft,pg_temp
+CREATE OR REPLACE FUNCTION braid.guard_chat_child() RETURNS trigger
+LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE SECURITY INVOKER SET search_path=pg_catalog,braid,pg_temp
 AS $guard_chat_child$
-DECLARE c weft.chat_conversations%ROWTYPE; t weft.chat_turns%ROWTYPE; r weft.chat_rounds%ROWTYPE; lifecycle_allowed boolean:=false; j jsonb;
+DECLARE c braid.chat_conversations%ROWTYPE; t braid.chat_turns%ROWTYPE; r braid.chat_rounds%ROWTYPE; lifecycle_allowed boolean:=false; j jsonb;
 BEGIN
     IF TG_OP='TRUNCATE' THEN RAISE EXCEPTION 'Chat truncate refused.' USING ERRCODE='23514'; END IF;
     IF TG_OP='DELETE' THEN
         -- Only the guarded parent cascade may delete child content; no child DELETE is granted.
-        IF EXISTS(SELECT 1 FROM weft.chat_conversations x WHERE x.organization_id=OLD.organization_id AND x.creator_id=OLD.creator_id AND x.conversation_id=OLD.conversation_id) THEN
+        IF EXISTS(SELECT 1 FROM braid.chat_conversations x WHERE x.organization_id=OLD.organization_id AND x.creator_id=OLD.creator_id AND x.conversation_id=OLD.conversation_id) THEN
             RAISE EXCEPTION 'Chat child deletion refused.' USING ERRCODE='23514';
         END IF;
         RETURN OLD;
     END IF;
-    SELECT * INTO c FROM weft.chat_conversations x WHERE x.organization_id=NEW.organization_id AND x.creator_id=NEW.creator_id AND x.conversation_id=NEW.conversation_id;
-    IF weft.chat_is_lifecycle() THEN
+    SELECT * INTO c FROM braid.chat_conversations x WHERE x.organization_id=NEW.organization_id AND x.creator_id=NEW.creator_id AND x.conversation_id=NEW.conversation_id;
+    IF braid.chat_is_lifecycle() THEN
         IF TG_TABLE_NAME='chat_turns' THEN lifecycle_allowed:=TG_OP='UPDATE' AND NEW.phase IN (4,5);
         ELSIF TG_TABLE_NAME='chat_events' THEN lifecycle_allowed:=TG_OP='INSERT' AND NEW.kind IN (7,8); END IF;
     END IF;
-    IF c.conversation_id IS NULL OR (weft.chat_authorized(c.organization_id,c.project_id,c.creator_id) IS NOT TRUE AND NOT lifecycle_allowed) THEN
+    IF c.conversation_id IS NULL OR (braid.chat_authorized(c.organization_id,c.project_id,c.creator_id) IS NOT TRUE AND NOT lifecycle_allowed) THEN
         RAISE EXCEPTION 'Chat authority unavailable.' USING ERRCODE='42501';
     END IF;
     IF TG_TABLE_NAME='chat_turns' THEN
         IF TG_OP='INSERT' THEN
-            IF NOT EXISTS(SELECT 1 FROM weft.chat_identities i WHERE i.organization_id=NEW.organization_id AND i.creator_id=NEW.creator_id AND i.conversation_id=NEW.conversation_id AND i.turn_id=NEW.turn_id AND i.identity_kind=2 AND i.identity_id=NEW.turn_id AND i.erased_at IS NULL)
-                OR NOT EXISTS(SELECT 1 FROM weft.chat_identities i WHERE i.organization_id=NEW.organization_id AND i.creator_id=NEW.creator_id AND i.conversation_id=NEW.conversation_id AND i.turn_id=NEW.turn_id AND i.identity_kind=3 AND i.identity_id=NEW.request_id AND i.erased_at IS NULL) THEN
+            IF NOT EXISTS(SELECT 1 FROM braid.chat_identities i WHERE i.organization_id=NEW.organization_id AND i.creator_id=NEW.creator_id AND i.conversation_id=NEW.conversation_id AND i.turn_id=NEW.turn_id AND i.identity_kind=2 AND i.identity_id=NEW.turn_id AND i.erased_at IS NULL)
+                OR NOT EXISTS(SELECT 1 FROM braid.chat_identities i WHERE i.organization_id=NEW.organization_id AND i.creator_id=NEW.creator_id AND i.conversation_id=NEW.conversation_id AND i.turn_id=NEW.turn_id AND i.identity_kind=3 AND i.identity_id=NEW.request_id AND i.erased_at IS NULL) THEN
                 RAISE EXCEPTION 'Chat turn/request identity unavailable.' USING ERRCODE='23514';
             END IF;
             IF NEW.created_at<>statement_timestamp() OR NEW.deadline>c.retain_until OR c.retain_until<=statement_timestamp()
@@ -271,7 +271,7 @@ BEGIN
             END IF;
             IF NEW.phase<>1 THEN
                 IF NEW.finished_at IS DISTINCT FROM statement_timestamp() OR NEW.event_count<>OLD.event_count+1 OR NEW.event_bytes<>OLD.event_bytes OR NEW.round_count<>OLD.round_count
-                    OR (NEW.phase=2 AND (statement_timestamp()>=OLD.deadline OR NOT EXISTS(SELECT 1 FROM weft.chat_rounds x WHERE x.organization_id=NEW.organization_id AND x.creator_id=NEW.creator_id AND x.conversation_id=NEW.conversation_id AND x.turn_id=NEW.turn_id AND x.ordinal=NEW.round_count AND x.outcome=3))) THEN
+                    OR (NEW.phase=2 AND (statement_timestamp()>=OLD.deadline OR NOT EXISTS(SELECT 1 FROM braid.chat_rounds x WHERE x.organization_id=NEW.organization_id AND x.creator_id=NEW.creator_id AND x.conversation_id=NEW.conversation_id AND x.turn_id=NEW.turn_id AND x.ordinal=NEW.round_count AND x.outcome=3))) THEN
                     RAISE EXCEPTION 'Invalid chat terminal publication.' USING ERRCODE='23514';
                 END IF;
             ELSIF statement_timestamp()>=OLD.deadline OR statement_timestamp()>=c.retain_until OR NEW.event_count>=NEW.max_events THEN
@@ -284,10 +284,10 @@ BEGIN
         END IF;
         RETURN NEW;
     END IF;
-    SELECT * INTO t FROM weft.chat_turns x WHERE x.organization_id=NEW.organization_id AND x.creator_id=NEW.creator_id AND x.conversation_id=NEW.conversation_id AND x.turn_id=NEW.turn_id;
+    SELECT * INTO t FROM braid.chat_turns x WHERE x.organization_id=NEW.organization_id AND x.creator_id=NEW.creator_id AND x.conversation_id=NEW.conversation_id AND x.turn_id=NEW.turn_id;
     IF NOT FOUND THEN RAISE EXCEPTION 'Missing chat turn.' USING ERRCODE='23514'; END IF;
     IF TG_TABLE_NAME='chat_rounds' THEN
-        IF NEW.result_metadata IS NOT NULL AND (weft.chat_metadata_valid(12,NEW.result_metadata,NEW.round_id) IS NOT TRUE
+        IF NEW.result_metadata IS NOT NULL AND (braid.chat_metadata_valid(12,NEW.result_metadata,NEW.round_id) IS NOT TRUE
             OR (NEW.result_metadata::jsonb->'failure'<>'null'::jsonb AND NEW.outcome<>4)) THEN
             RAISE EXCEPTION 'Invalid closed round metadata.' USING ERRCODE='23514';
         END IF;
@@ -296,7 +296,7 @@ BEGIN
             IF (j->'usage'<>'null'::jsonb AND (j->'usage'->>'origin')::integer NOT IN (2,3))
                 OR ((j->'usage'->>'origin')::integer=3 AND (NEW.outcome<>4 OR j->'failure'='null'::jsonb))
                 OR (j->'finish'<>'null'::jsonb AND (NEW.outcome=4 OR ((NEW.outcome=2)<>((j->>'finish')::integer=2))))
-                OR NOT EXISTS(SELECT 1 FROM weft.chat_events e WHERE e.organization_id=NEW.organization_id AND e.creator_id=NEW.creator_id
+                OR NOT EXISTS(SELECT 1 FROM braid.chat_events e WHERE e.organization_id=NEW.organization_id AND e.creator_id=NEW.creator_id
                     AND e.conversation_id=NEW.conversation_id AND e.turn_id=NEW.turn_id AND e.sequence=t.event_count AND e.kind=12
                     AND e.round_id=NEW.round_id AND e.dispatch_fence=NEW.fence AND e.metadata_json=NEW.result_metadata) THEN
                 RAISE EXCEPTION 'Round accounting publication is inconsistent.' USING ERRCODE='23514';
@@ -306,10 +306,10 @@ BEGIN
             RAISE EXCEPTION 'Chat round closed.' USING ERRCODE='23514';
         END IF;
         IF TG_OP='INSERT' THEN
-            IF NOT EXISTS(SELECT 1 FROM weft.chat_identities i WHERE i.organization_id=NEW.organization_id AND i.creator_id=NEW.creator_id AND i.conversation_id=NEW.conversation_id AND i.turn_id=NEW.turn_id AND i.identity_kind=4 AND i.identity_id=NEW.round_id AND i.erased_at IS NULL)
+            IF NOT EXISTS(SELECT 1 FROM braid.chat_identities i WHERE i.organization_id=NEW.organization_id AND i.creator_id=NEW.creator_id AND i.conversation_id=NEW.conversation_id AND i.turn_id=NEW.turn_id AND i.identity_kind=4 AND i.identity_id=NEW.round_id AND i.erased_at IS NULL)
                 OR NEW.result_metadata IS NOT NULL THEN RAISE EXCEPTION 'Chat round identity unavailable.' USING ERRCODE='23514'; END IF;
             IF NEW.ordinal<>t.round_count OR NEW.outcome<>1 OR NEW.finished_at IS NOT NULL OR NEW.reserved_at<>statement_timestamp()
-                OR (NEW.ordinal>1 AND NOT EXISTS(SELECT 1 FROM weft.chat_rounds x WHERE x.organization_id=NEW.organization_id AND x.creator_id=NEW.creator_id AND x.conversation_id=NEW.conversation_id AND x.turn_id=NEW.turn_id AND x.ordinal=NEW.ordinal-1 AND x.outcome=2 AND x.instance_id=NEW.instance_id)) THEN
+                OR (NEW.ordinal>1 AND NOT EXISTS(SELECT 1 FROM braid.chat_rounds x WHERE x.organization_id=NEW.organization_id AND x.creator_id=NEW.creator_id AND x.conversation_id=NEW.conversation_id AND x.turn_id=NEW.turn_id AND x.ordinal=NEW.ordinal-1 AND x.outcome=2 AND x.instance_id=NEW.instance_id)) THEN
                 RAISE EXCEPTION 'Chat round cannot be replayed.' USING ERRCODE='23514';
             END IF;
         ELSIF (to_jsonb(NEW)-ARRAY['outcome','finished_at','result_metadata']) IS DISTINCT FROM (to_jsonb(OLD)-ARRAY['outcome','finished_at','result_metadata'])
@@ -319,12 +319,12 @@ BEGIN
         RETURN NEW;
     END IF;
     IF TG_OP<>'INSERT' OR NEW.sequence<>t.event_count THEN RAISE EXCEPTION 'Immutable ordered chat event.' USING ERRCODE='23514'; END IF;
-    IF NEW.metadata_json IS NOT NULL AND weft.chat_metadata_valid(NEW.kind,NEW.metadata_json,NEW.round_id) IS NOT TRUE THEN
+    IF NEW.metadata_json IS NOT NULL AND braid.chat_metadata_valid(NEW.kind,NEW.metadata_json,NEW.round_id) IS NOT TRUE THEN
         RAISE EXCEPTION 'Invalid typed chat metadata.' USING ERRCODE='23514';
     END IF;
     IF NEW.kind IN (5,6,7,8) AND NEW.metadata_json IS NOT NULL THEN
         j:=NEW.metadata_json::jsonb;
-        IF NOT EXISTS(SELECT 1 FROM weft.chat_rounds x WHERE x.organization_id=NEW.organization_id AND x.creator_id=NEW.creator_id
+        IF NOT EXISTS(SELECT 1 FROM braid.chat_rounds x WHERE x.organization_id=NEW.organization_id AND x.creator_id=NEW.creator_id
             AND x.conversation_id=NEW.conversation_id AND x.turn_id=NEW.turn_id AND x.ordinal=t.round_count
             AND x.round_id=coalesce(j->'usage'->>'round',j->'failure'->>'round')::uuid)
             OR (NEW.kind=5 AND j->'failure'<>'null'::jsonb) THEN
@@ -332,7 +332,7 @@ BEGIN
         END IF;
     END IF;
     IF NEW.kind IN (5,6,7,8) THEN
-        SELECT * INTO r FROM weft.chat_rounds x WHERE x.organization_id=NEW.organization_id AND x.creator_id=NEW.creator_id
+        SELECT * INTO r FROM braid.chat_rounds x WHERE x.organization_id=NEW.organization_id AND x.creator_id=NEW.creator_id
             AND x.conversation_id=NEW.conversation_id AND x.turn_id=NEW.turn_id AND x.ordinal=t.round_count;
         IF r.result_metadata IS NOT NULL AND NEW.metadata_json IS DISTINCT FROM r.result_metadata THEN
             RAISE EXCEPTION 'Committed round accounting is immutable.' USING ERRCODE='23514';
@@ -346,7 +346,7 @@ BEGIN
         IF (j->>'organization')::uuid IS DISTINCT FROM c.organization_id THEN
             RAISE EXCEPTION 'Citation belongs to another organization.' USING ERRCODE='23514';
         END IF;
-        IF (j->>'kind')::integer=4 AND NOT EXISTS(SELECT 1 FROM weft.revision_derivations d JOIN weft.revision_derivation_attempts a
+        IF (j->>'kind')::integer=4 AND NOT EXISTS(SELECT 1 FROM braid.revision_derivations d JOIN braid.revision_derivation_attempts a
             ON a.organization_id=d.organization_id AND a.project_id=d.project_id AND a.mapping_id=d.mapping_id
             AND a.revision_id=d.revision_id AND a.cache_entry_id=d.cache_entry_id
             WHERE d.organization_id=c.organization_id AND d.project_id=(j->>'project')::uuid AND d.mapping_id=(j->>'mapping')::uuid
@@ -356,13 +356,13 @@ BEGIN
             RAISE EXCEPTION 'Citation does not identify an exact retained report.' USING ERRCODE='23514';
         END IF;
     END IF;
-    IF NEW.kind=14 AND weft.chat_authorized(c.organization_id,(NEW.metadata_json::jsonb->>'project')::uuid,c.creator_id) IS NOT TRUE THEN
+    IF NEW.kind=14 AND braid.chat_authorized(c.organization_id,(NEW.metadata_json::jsonb->>'project')::uuid,c.creator_id) IS NOT TRUE THEN
         RAISE EXCEPTION 'Shared data requires current project authority.' USING ERRCODE='42501';
     END IF;
     IF NEW.kind=15 THEN
         j:=NEW.metadata_json::jsonb;
         IF (j->>'organization')::uuid IS DISTINCT FROM c.organization_id
-            OR weft.chat_authorized(c.organization_id,(j->>'project')::uuid,c.creator_id) IS NOT TRUE THEN
+            OR braid.chat_authorized(c.organization_id,(j->>'project')::uuid,c.creator_id) IS NOT TRUE THEN
             RAISE EXCEPTION 'A mapping write record requires current project authority.' USING ERRCODE='42501';
         END IF;
     END IF;
@@ -381,7 +381,7 @@ BEGIN
     ELSIF NEW.kind IN (5,6,7,8) THEN
         IF NEW.kind<>t.phase+3 OR t.phase=1 THEN RAISE EXCEPTION 'Invalid chat terminal event.' USING ERRCODE='23514'; END IF;
     ELSE
-        SELECT * INTO r FROM weft.chat_rounds x WHERE x.organization_id=NEW.organization_id AND x.creator_id=NEW.creator_id AND x.conversation_id=NEW.conversation_id AND x.turn_id=NEW.turn_id AND x.round_id=NEW.round_id;
+        SELECT * INTO r FROM braid.chat_rounds x WHERE x.organization_id=NEW.organization_id AND x.creator_id=NEW.creator_id AND x.conversation_id=NEW.conversation_id AND x.turn_id=NEW.turn_id AND x.round_id=NEW.round_id;
         IF NOT FOUND OR t.phase<>1 OR r.outcome<>1 OR r.ordinal<>t.round_count OR r.fence<>NEW.dispatch_fence
             OR statement_timestamp()>=t.deadline OR statement_timestamp()>=c.retain_until OR NEW.sequence>=t.max_events THEN
             RAISE EXCEPTION 'Chat event fence refused.' USING ERRCODE='23514';
@@ -391,15 +391,15 @@ BEGIN
 END;
 $guard_chat_child$;
 
-CREATE OR REPLACE FUNCTION weft.chat_schema_lock() RETURNS void
-LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE SECURITY DEFINER SET search_path=pg_catalog,weft,pg_temp
+CREATE OR REPLACE FUNCTION braid.chat_schema_lock() RETURNS void
+LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE SECURITY DEFINER SET search_path=pg_catalog,braid,pg_temp
 AS $chat_schema_lock$
 BEGIN
-    IF current_user<>'weft_migrator' OR session_user NOT IN ('weft_chat_reader','weft_chat_writer','weft_chat_lifecycle') THEN
+    IF current_user<>'braid_migrator' OR session_user NOT IN ('braid_chat_reader','braid_chat_writer','braid_chat_lifecycle') THEN
         RAISE EXCEPTION 'Restricted chat profile required.' USING ERRCODE='42501';
     END IF;
-    LOCK TABLE ONLY weft.schema_migrations,ONLY weft.principals,ONLY weft.organization_memberships,ONLY weft.project_memberships,
-        ONLY weft.chat_conversations,ONLY weft.chat_turns,ONLY weft.chat_rounds,ONLY weft.chat_events,ONLY weft.chat_identities,ONLY weft.chat_payload_audit,ONLY weft.chat_mapping_write_audit,
-        ONLY weft.revision_derivations,ONLY weft.revision_derivation_attempts IN ACCESS SHARE MODE;
+    LOCK TABLE ONLY braid.schema_migrations,ONLY braid.principals,ONLY braid.organization_memberships,ONLY braid.project_memberships,
+        ONLY braid.chat_conversations,ONLY braid.chat_turns,ONLY braid.chat_rounds,ONLY braid.chat_events,ONLY braid.chat_identities,ONLY braid.chat_payload_audit,ONLY braid.chat_mapping_write_audit,
+        ONLY braid.revision_derivations,ONLY braid.revision_derivation_attempts IN ACCESS SHARE MODE;
 END;
 $chat_schema_lock$;

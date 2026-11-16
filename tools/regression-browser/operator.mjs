@@ -1,4 +1,4 @@
-// Real regression API, immutable cases and the ordinary Weft.Worker process. No scripted execution output.
+// Real regression API, immutable cases and the ordinary Braid.Worker process. No scripted execution output.
 import { runBrowserFixture } from "../browser-fixture/runtime.mjs";
 import { setTimeout as pause } from "node:timers/promises";
 import { reportSetupDiagnostic } from "../browser-fixture/safe-diagnostics.mjs";
@@ -270,7 +270,7 @@ await runBrowserFixture({
         }
         original = snapshot();
         return {
-          schemaVersion: "weft.regression-browser-fixture.v1",
+          schemaVersion: "braid.regression-browser-fixture.v1",
           fixtureId,
           source: { commit: cfg.source.commit, tree: cfg.source.tree },
           readOrigin: cfg.readOrigin,

@@ -204,8 +204,8 @@
     >
       Refresh chat
     </button>
-    <weft-help-link [section]="'chat'" (click)="closeMenu()"
-      >About chat</weft-help-link
+    <braid-help-link [section]="'chat'" (click)="closeMenu()"
+      >About chat</braid-help-link
     >
   </div>
 
@@ -793,7 +793,7 @@
                       }
                     </div>
                     @if (write.outcome === "saved") {
-                      <weft-regression-status
+                      <braid-regression-status
                         [context]="context()"
                         [scope]="mapping"
                         [revisionId]="write.revisionId!"

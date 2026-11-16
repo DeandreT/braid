@@ -239,7 +239,7 @@ for (const delayed of [false, true]) {
         await gate;
         await r.fulfill({
           json: [
-            "weft.spec-evidence.v1",
+            "braid.spec-evidence.v1",
             "complete",
             [0, "late private source", null, 0, 19, 1, 1],
           ],
@@ -338,20 +338,20 @@ test("lost source-version deletion acknowledgement reconciles only that version"
 test("strict evidence and inventory parsers refuse untrusted shapes", () => {
   expect(() =>
     evidence([
-      "weft.spec-evidence.v1",
+      "braid.spec-evidence.v1",
       "complete",
       [0, "text", null, -1, 1, 1, 1],
     ]),
   ).toThrow();
   expect(() =>
     evidence([
-      "weft.spec-evidence.v1",
+      "braid.spec-evidence.v1",
       "complete",
       [0, "text", null, 0, 1, 2, 1],
     ]),
   ).toThrow();
   expect(
-    evidence(["weft.spec-evidence.v1", "serialized-evidence-bytes"]).chunks,
+    evidence(["braid.spec-evidence.v1", "serialized-evidence-bytes"]).chunks,
   ).toEqual([]);
   expect(() =>
     inventory(
@@ -416,8 +416,8 @@ async function setup(page: Page) {
             extractorVersion:
               format === "pdf" ? 4 : ["docx", "xlsx"].includes(format) ? 3 : 2,
             evidenceFormat: ["docx", "xlsx", "pdf"].includes(format)
-              ? "weft.spec-evidence.v2"
-              : "weft.spec-evidence.v1",
+              ? "braid.spec-evidence.v2"
+              : "braid.spec-evidence.v1",
           })),
         },
       });
@@ -449,7 +449,7 @@ async function setup(page: Page) {
     if (request.method() === "POST") {
       const upload: Upload = url.pathname.endsWith("/text")
         ? request.postDataJSON().upload
-        : JSON.parse(request.headers()["x-weft-spec-upload"]!);
+        : JSON.parse(request.headers()["x-braid-spec-upload"]!);
       state.writes.push(upload);
       expect(request.headers()["x-xsrf-token"]).toBe(
         synthetic.context.requestToken,
@@ -464,7 +464,7 @@ async function setup(page: Page) {
       const text = bytes.toString("utf8");
       let offset = 0;
       let extraction: unknown[] = [
-        "weft.spec-evidence.v1",
+        "braid.spec-evidence.v1",
         "complete",
         ...text.split("\n").map((line, ordinal) => {
           const length = Buffer.byteLength(line, "utf8");
@@ -484,7 +484,7 @@ async function setup(page: Page) {
       const structural = ["docx", "xlsx", "pdf"].includes(upload.format);
       if (structural)
         extraction = [
-          "weft.spec-evidence.v2",
+          "braid.spec-evidence.v2",
           upload.format === "docx"
             ? "office-body-text-only"
             : upload.format === "xlsx"
@@ -517,11 +517,11 @@ async function setup(page: Page) {
         extraction =
           state.pdfStatus === "needsOcr"
             ? [
-                "weft.spec-evidence.v2",
+                "braid.spec-evidence.v2",
                 "pdf-needs-ocr",
                 [0, "", ["pdf-page", 1], null, true],
               ]
-            : ["weft.spec-evidence.v2", "pdf-encrypted"];
+            : ["braid.spec-evidence.v2", "pdf-encrypted"];
       const resultOutcome =
         upload.format === "pdf" && state.pdfStatus !== "partial"
           ? "Unsupported"
@@ -531,7 +531,7 @@ async function setup(page: Page) {
       // Utf8JsonWriter's canonical Unicode escaping for the multibyte fixture.
       const extractionBody =
         text === "café\n東京"
-          ? '["weft.spec-evidence.v1","complete",[0,"caf\\u00E9",null,0,5,1,1],[1,"\\u6771\\u4EAC",null,6,6,2,2]]'
+          ? '["braid.spec-evidence.v1","complete",[0,"caf\\u00E9",null,0,5,1,1],[1,"\\u6771\\u4EAC",null,6,6,2,2]]'
           : JSON.stringify(extraction);
       const extractionBytes = Buffer.from(extractionBody);
       state.evidence.set(upload.extractionObjectId, extraction);
@@ -636,7 +636,7 @@ test("v2 DOCX body and table citations stay inert, accessible and upload admissi
 }) => {
   const source = "<img src=x onerror=alert(1)> café 東京 https://inert.invalid";
   const { state } = await structural(page, "Docx", [
-    "weft.spec-evidence.v2",
+    "braid.spec-evidence.v2",
     "office-body-text-only",
     [
       0,
@@ -708,7 +708,7 @@ test("v2 XLSX displays literal formulas, missing caches, empty caches and raw st
   const formula =
     'HYPERLINK("https://inert.invalid","<img src=x onerror=alert(1)>")';
   await structural(page, "Xlsx", [
-    "weft.spec-evidence.v2",
+    "braid.spec-evidence.v2",
     "office-stored-cells-only",
     [0, "3", location("A1", "Number", true), "SUM(1,2)"],
     [1, "", location("B1", "Blank"), formula],
@@ -754,7 +754,7 @@ test("v2 reads reject mismatched exact bytes and invalid coordinates without dis
   page,
 }) => {
   const value = [
-    "weft.spec-evidence.v2",
+    "braid.spec-evidence.v2",
     "office-body-text-only",
     [
       0,
@@ -780,7 +780,7 @@ test("v2 reads reject mismatched exact bytes and invalid coordinates without dis
   await expect(page.getByText(/Request could not be confirmed/)).toBeVisible();
   await expect(page.locator(".citation")).toHaveCount(0);
   const invalid = JSON.stringify([
-    "weft.spec-evidence.v2",
+    "braid.spec-evidence.v2",
     "office-body-text-only",
     [
       0,
@@ -806,7 +806,7 @@ test("revoked project scope fences an otherwise valid late v2 response", async (
   page,
 }) => {
   const { body } = await structural(page, "Docx", [
-    "weft.spec-evidence.v2",
+    "braid.spec-evidence.v2",
     "office-body-text-only",
     [
       0,

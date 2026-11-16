@@ -18,7 +18,7 @@ import {
 } from "../src/workbench/csv-document";
 
 const dialect: CsvDocumentDialect = {
-  schema: "weft.csv-dialect.v1",
+  schema: "braid.csv-dialect.v1",
   delimiter: ",",
   quote: '"',
   quoteDisabled: false,

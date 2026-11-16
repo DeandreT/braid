@@ -36,7 +36,7 @@ type Intent =
   | { kind: "delete"; key: string; version: number; suffix: string }
   | { kind: "create" };
 @Component({
-  selector: "weft-spec-page",
+  selector: "braid-spec-page",
   imports: [FormsModule, RouterLink],
   templateUrl: "./spec-page.component.html",
   styleUrl: "./spec-page.component.css",
@@ -580,7 +580,7 @@ export class SpecPageComponent {
                       ? {}
                       : {
                           "Content-Type": "application/octet-stream",
-                          "X-Weft-Spec-Upload": JSON.stringify(intent.upload),
+                          "X-Braid-Spec-Upload": JSON.stringify(intent.upload),
                         }),
                   },
                 },

@@ -4,7 +4,7 @@
 //     product admits only on loopback (the Azurite emulator account, a plain-HTTP model).
 //   relay.mjs tls LISTEN=TARGET
 //     The platform ingress in front of the edge: terminates TLS for the public host with
-//     WEFT_ACCEPTANCE_INGRESS_PEM (HTTP/1.1 only) and forwards to the edge listener.
+//     BRAID_ACCEPTANCE_INGRESS_PEM (HTTP/1.1 only) and forwards to the edge listener.
 import { connect, createServer } from "node:net";
 import { createServer as createTlsServer } from "node:tls";
 
@@ -38,10 +38,10 @@ function pipe(incoming, target) {
 
 let tls;
 if (mode === "tls") {
-  const bundle = process.env.WEFT_ACCEPTANCE_INGRESS_PEM;
-  delete process.env.WEFT_ACCEPTANCE_INGRESS_PEM;
+  const bundle = process.env.BRAID_ACCEPTANCE_INGRESS_PEM;
+  delete process.env.BRAID_ACCEPTANCE_INGRESS_PEM;
   if (!bundle)
-    throw new Error("The TLS relay requires WEFT_ACCEPTANCE_INGRESS_PEM.");
+    throw new Error("The TLS relay requires BRAID_ACCEPTANCE_INGRESS_PEM.");
   tls = {
     key: bundle.match(
       /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]+?-----END [A-Z ]*PRIVATE KEY-----/,

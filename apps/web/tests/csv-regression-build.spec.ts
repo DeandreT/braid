@@ -132,7 +132,7 @@ test("saved CSV regression retains its native dialect and offers row comparison 
     .getByRole("button", { name: "View expected primary", exact: true })
     .click();
   await expect(
-    page.locator("weft-document-view table").getByRole("columnheader"),
+    page.locator("braid-document-view table").getByRole("columnheader"),
   ).toHaveText(["code", "description"]);
   await page
     .getByRole("button", { name: "Run saved version", exact: true })
@@ -167,7 +167,7 @@ test("CSV compiler registration submits only the explicitly advertised profile",
 }) => {
   const state = await buildFixture(page);
   const profile = {
-    id: "weft.synthetic-build",
+    id: "braid.synthetic-build",
     version: "1",
     runtime: "dotnet",
     runtimeVersion: "10.0.12",
@@ -177,7 +177,7 @@ test("CSV compiler registration submits only the explicitly advertised profile",
   const csvProfile = {
     ...profile,
     id: csvBuildProfile,
-    artifactFormat: "weft.dotnet-assembly.v1",
+    artifactFormat: "braid.dotnet-assembly.v1",
   };
   await page.route(`**${projectRoot}/build-environment-capabilities`, (route) =>
     route.fulfill({ json: { profile, csvProfile, canCreateVersions: true } }),

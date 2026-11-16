@@ -38,7 +38,7 @@ async function captureMany(
   expected: readonly ExpectedRequest[],
   action: () => Promise<unknown>,
 ): Promise<Exchange[]> {
-  const origin = process.env.WEFT_REPORTS_BASE_URL;
+  const origin = process.env.BRAID_REPORTS_BASE_URL;
   if (!origin) throw new Error("Expected explicit packaged reports origin");
   const requests = new Map<Request, number>();
   const observe = (request: Request) => {
@@ -110,7 +110,7 @@ async function captureMetadataRefusal(
     const url = new URL(request.url());
     if (
       request.method() === "GET" &&
-      url.origin === process.env.WEFT_REPORTS_BASE_URL &&
+      url.origin === process.env.BRAID_REPORTS_BASE_URL &&
       paths.includes(url.pathname) &&
       url.search === ""
     )
@@ -181,7 +181,7 @@ async function expectSaved(page: Page, value: Report): Promise<void> {
   });
   const href = await link.getAttribute("href");
   expect(href).not.toBeNull();
-  const url = new URL(href!, process.env.WEFT_REPORTS_BASE_URL);
+  const url = new URL(href!, process.env.BRAID_REPORTS_BASE_URL);
   expect(url.pathname).toBe(revisionPath({ scope: value.revision }));
   expect([...url.searchParams.entries()]).toEqual([
     [`${value.operation}DerivationId`, value.result.derivationId],

@@ -1,32 +1,30 @@
 # Saved-report browser fixture
 
 `operator.mjs` provides the actual persisted-report scenario used by the report
-browser tests. It uses the shared, source-admitted Node-core mechanics in
-`../browser-fixture/runtime.mjs`. The catalog operator remains a separate scenario
-with its original public protocol. Neither executable imports the other.
+browser tests. It uses the shared Node-core runtime in
+`../browser-fixture/runtime.mjs`.
 
 Build Angular and publish the ordinary Server, DatabaseTool and StorageTool from
 the exact committed source first. Run this fixture in an exclusive worker window,
-with an already admitted `../catalog-browser/observe-host.py` event/resource
-observer. That observer is unchanged. Root owns execution, alternate-display
-browser setup, private release records and all actual qualification decisions.
+with the `../catalog-browser/observe-host.py` event/resource observer and an
+isolated browser display.
 
 Use the catalog fixture's documented private configuration shape, with these
 scenario-specific values:
 
-- `schemaVersion`: `weft.reports-browser-operator-config.v1`.
-- Release `schemaVersion`: `weft.reports-browser-release.v1`.
+- `schemaVersion`: `braid.reports-browser-operator-config.v1`.
+- Release `schemaVersion`: `braid.reports-browser-release.v1`.
 - Release `operatorSha256`: the exact reports entrypoint bytes.
 - `source.manifest`: every committed source file, including both scenario
   entrypoints and the shared runtime, with exact body hashes and 644/755 modes.
 - `publications`: the actual complete Server/DatabaseTool/StorageTool file maps,
-  including the packaged Angular assets; no copied historical/current substitute.
+  including the packaged Angular assets.
 - `outerObserverAdmission`: this fixture UUID's actual open observer admission.
 - Two distinct, fixed, available concrete HTTP loopback origins for read and
   mutation APIs; no during-run fallback, proxy or port retarget.
 - A fresh owned private directory, configuration and release with modes0700/0600.
-  `runtimeReleased` and the separate release booleans remain false until root
-  accepts the exact source, publication and outer-observer inputs.
+  Set `runtimeReleased` and the release booleans after verifying the source,
+  publication and observer inputs.
 
 The immutable images, fixed Docker daemon, PostgreSQL loopback binding, dedicated
 credentials, one-volume normal restart and resource bounds are the catalog
@@ -36,8 +34,8 @@ record is included in the public manifest or control acknowledgements.
 
 The browser's Node fixture spawns the absolute operator path using
 `node [operator, '--config', configuration]`. Its environment uses
-`WEFT_REPORTS_BROWSER_OPERATOR`, `WEFT_REPORTS_BROWSER_OPERATOR_CONFIG`,
-`WEFT_REPORTS_BROWSER_MANIFEST` and `WEFT_REPORTS_BASE_URL`. The last two must match
+`BRAID_REPORTS_BROWSER_OPERATOR`, `BRAID_REPORTS_BROWSER_OPERATOR_CONFIG`,
+`BRAID_REPORTS_BROWSER_MANIFEST` and `BRAID_REPORTS_BASE_URL`. The last two must match
 the private configuration exactly. These are Node-only values; no product control
 endpoint or browser-accessible private configuration is added.
 
@@ -51,16 +49,16 @@ provide independently uncached and pending samples. Setup asserts zero
 report cache keys/attempts/results. Browser Ensure requests create saved reports;
 no successful report, payload, claim or receipt is seeded through SQL.
 
-The ready record is `weft.reports-browser-ready.v1`, with fixture UUID, immutable
+The ready record is `braid.reports-browser-ready.v1`, with fixture UUID, immutable
 manifest digest and initial viewer profile. The bounded public manifest contains
 only source identity, origin, four role identities, project scope and twelve
 actual revision metadata records nested under `samples.*.revision`.
 
 `npm run test:mapping-viewer-browser` uses the same source-admitted owner with a
 dedicated workbench rendering suite. It checks real retained report semantics and
-explicitly controlled presentation states separately; it does not use public
-example routes. Supply the same private operator configuration and manifest
-environment as the report suite, and run on an isolated display.
+controlled presentation states separately. Supply the same private operator
+configuration and manifest environment as the report suite, and run on an isolated
+display.
 
 Controls are serialized private JSON lines with canonical UUID request nonces,
 maximum1024 bytes/64 distinct nonces, and closed acknowledgements maximum4096
@@ -114,6 +112,4 @@ removal. The worker's10-second and service's original deadlines are unchanged.
 This short physical timing fixture proves real pending reconciliation. Controlled
 response cases separately prove the long polling budgets; no long hold is used.
 
-Retain every failed attempt and categorical private ledger. Source preparation is
-not runtime acceptance. This increment adds no Rust/image build, schema upgrade,
-production test hook or physical maintenance/deletion command.
+Retain failed-attempt records and private ledgers for investigation.

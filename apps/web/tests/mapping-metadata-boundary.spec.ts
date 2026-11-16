@@ -214,23 +214,23 @@ class ControlledMetadata {
           method === "GET" &&
           !url.search &&
           (request.postDataBuffer()?.length ?? 0) === 0 &&
-          headers["x-weft-session"] === "1" &&
+          headers["x-braid-session"] === "1" &&
           ![
             "content-type",
             "authorization",
             "x-xsrf-token",
-            "x-weft-auth-token",
+            "x-braid-auth-token",
             "idempotency-key",
             "if-match",
             "if-none-match",
             "identitycontext",
             "identity-context",
-            "x-weft-identity-context",
-            "x-weft-actor",
-            "x-weft-role",
-            "x-weft-login",
-            "x-weft-logout",
-            "x-weft-forget-local",
+            "x-braid-identity-context",
+            "x-braid-actor",
+            "x-braid-role",
+            "x-braid-login",
+            "x-braid-logout",
+            "x-braid-forget-local",
           ].some((name) => name in headers);
         if (!admitted) ++this.unexpected;
         await route.fulfill(
@@ -352,7 +352,7 @@ class ControlledMetadata {
     this.wires.push({
       correctHeaders:
         headers["content-type"] ===
-          "application/vnd.weft.mapping-metadata-edit.v1+json" &&
+          "application/vnd.braid.mapping-metadata-edit.v1+json" &&
         headers["x-xsrf-token"] === this.#token &&
         ![
           "authorization",
@@ -362,8 +362,8 @@ class ControlledMetadata {
           "if-unmodified-since",
           "if-range",
           "content-encoding",
-          "x-weft-actor",
-          "x-weft-role",
+          "x-braid-actor",
+          "x-braid-role",
         ].some((header) => header in headers),
       closedBody,
       exactDraft:
@@ -535,7 +535,7 @@ test("controlled metadata: complete route scope and fresh capability gate the ed
           headers: {
             ...fixture.readReply().headers,
             "Accept-Patch":
-              "application/vnd.weft.mapping-metadata-edit.v1+json",
+              "application/vnd.braid.mapping-metadata-edit.v1+json",
           },
         };
         await current.goto(path);

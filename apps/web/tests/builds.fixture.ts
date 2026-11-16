@@ -8,7 +8,7 @@ export const scope = synthetic.revision.scope;
 const project = `/api/v1/organizations/${scope.organizationId}/projects/${scope.projectId}`;
 const mapping = project + `/mappings/${scope.mappingId}`;
 const profile = {
-  id: "weft.synthetic-build",
+  id: "braid.synthetic-build",
   version: "1",
   runtime: "dotnet",
   runtimeVersion: "10.0.12",
@@ -21,10 +21,10 @@ const backend = {
   engineBuild: "sha256:" + "c".repeat(64),
   adapterVersion: "adapter",
 };
-const documentProfile = { ...profile, id: "weft.ferrule-csharp-document.v1" };
+const documentProfile = { ...profile, id: "braid.ferrule-csharp-document.v1" };
 const interchangeProfile = {
   ...profile,
-  id: "weft.ferrule-csharp-x12-interchanges.v1",
+  id: "braid.ferrule-csharp-x12-interchanges.v1",
 };
 type Environment = components["schemas"]["BuildEnvironmentV1"];
 type Approval = components["schemas"]["BuildApprovalV1"];
@@ -158,7 +158,7 @@ export async function buildFixture(
     previewStatus: "succeeded",
     outputs: [{ name: null, bytesBase64Url: "e30" }],
     comparison: {
-      policy: "weft.regression.exact-bytes.v1",
+      policy: "braid.regression.exact-bytes.v1",
       outcome: "passed",
       notEvaluatedReason: "none",
       expectedOutputs: 1,

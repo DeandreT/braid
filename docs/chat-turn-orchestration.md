@@ -1,8 +1,7 @@
 # Private chat turn orchestration
 
 `ChatTurnOrchestrator` composes the creator-private chat ledger with the concrete
-`Weft.Ai.AiRoundClient`. It does not own another provider adapter, persistence
-implementation, scheduler or request protocol. Host/API composition supplies an
+`Braid.Ai.AiRoundClient`. Host/API composition supplies an
 authenticated actor and trusted turn/profile/grounding policy facts.
 
 ## Admission and dispatch
@@ -24,7 +23,7 @@ in explicit oldest-first order, and must be completed, nonoverlapping exchanges
 from this conversation. History uses the final Stop round's text, not intermediate
 tool-round prose. No history is reconstructed from browser-supplied messages.
 
-Each round is built using the `Weft.Ai` factories and `ChatAiBridge.PrepareRound`.
+Each round is built using the `Braid.Ai` factories and `ChatAiBridge.PrepareRound`.
 The ledger persists its exact request, round ID, fence and server instance before
 outbound work. `ChatPreparedRound.TakeAfterAcknowledgement` consumes only the
 original exact Applied reservation. Additional version/counter/conservation
@@ -128,7 +127,7 @@ terminal close may be attempted at the last acknowledged version; it is not
 retried or reconstructed after an uncertain acknowledgement. If authority has
 been revoked, the version changed, or a publication committed without an
 acknowledgement, the existing separate lifecycle recovery lane must mark the
-abandoned turn interrupted. No owner-store administrator bypass is introduced.
+abandoned turn interrupted.
 
 ## Lifetime and diagnostics
 
@@ -145,12 +144,12 @@ and grants nothing else.
 execution and its borrowed dependency scope; it cannot release or recreate the
 provider client, profile or tool ports while original work remains pending.
 
-Stream and turn disposal use the real retained `Weft.Ai` cleanup tasks. Cancellation
+Stream and turn disposal use the real retained `Braid.Ai` cleanup tasks. Cancellation
 callbacks, timer and caller registration also join before `ReleaseSafe` becomes
 true. Failed cleanup keeps `ReleaseSafe` false permanently and retains original
 tasks/owners for quarantine. Cleanup is never treated as successful because a
 socket closed or an observation timed out. Shared provider capacity is still
-controlled exclusively by `Weft.Ai`. The host owns the shared client and stores, must
+controlled exclusively by `Braid.Ai`. The host owns the shared client and stores, must
 not dispose them per turn, and must retain a failed execution's dependency scope.
 Trusted ports must not detach work behind returned tasks. Noncooperative work can
 hold Completion indefinitely; this is deliberate ownership, not bounded latency.
@@ -163,8 +162,8 @@ with ReleaseSafe permanently false; they do not claim a per-turn cleanup join or
 dispose the borrowed global client. Its owner must retain the shared scope through
 real shutdown. Known non-Cancelled pre-admission refusals have no hidden lease.
 
-Public results contain closed outcomes and acknowledged phases only. All newly
-introduced fact/result types have categorical `ToString` implementations. No
+Public results contain closed outcomes and acknowledged phases only. Fact/result
+types have categorical `ToString` implementations. No
 prompts, results, raw provider bodies, exception messages, endpoint or credential
 values enter routine diagnostics through this module.
 
@@ -173,5 +172,3 @@ manifest, read port and citation port. The [chat HTTP API](chat-http.md)
 composes this orchestrator with the stores, shared provider client and
 registered tools. A citation shows that a tool retrieved that resource from the
 pinned report; it does not check which resources the answer text relies on.
-HTTP/SSE, UI, payloads, edits, preview/execution, deployment and live model
-activation are outside this module.

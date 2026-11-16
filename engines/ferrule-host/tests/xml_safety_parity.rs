@@ -2,9 +2,9 @@
 //! execution qualification or a replacement for resource-boundary tests.
 use std::collections::BTreeSet;
 
+use braid_ferrule_host::xml_document::{self as xml, Error, Safety};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
-use weft_ferrule_host::xml_document::{self as xml, Error, Safety};
 
 #[path = "../src/xml_name_chars.rs"]
 mod name_chars;
@@ -91,7 +91,7 @@ impl NativeOutcome {
 fn authored_physical_safety_corpus_matches_native_categories()
 -> Result<(), Box<dyn std::error::Error>> {
     let corpus: Corpus = serde_json::from_slice(CORPUS)?;
-    assert_eq!(corpus.schema, "weft.xml-safety-cases.v1");
+    assert_eq!(corpus.schema, "braid.xml-safety-cases.v1");
     assert!(!corpus.description.is_empty());
     assert_eq!(corpus.limits.maximum_bytes, xml::MAX_DOCUMENT_BYTES);
     assert_eq!(corpus.limits.maximum_depth, xml::MAX_DEPTH);

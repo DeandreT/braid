@@ -23,14 +23,12 @@ or narrowing its read authority to the panel's open revision.
 
 The browser opens workspace conversations at `/chat`. New conversations in a
 workbench panel use the exact open revision as their focus; **Open in chat**
-continues the same conversation. Older revision-pinned conversations keep their
-original routes and report pins. The [CLI](cli.md) exposes the same workspace
-operations under `weft chat workspace`, with explicit IDs for send recovery,
-bounded list continuation, stream resumption and cancellation.
+continues the same conversation. Revision-pinned conversations use their
+original routes and report pins.
 
 ## Conversations and focus
 
-`weft.chat_conversations.conversation_kind` distinguishes the two kinds:
+`braid.chat_conversations.conversation_kind` distinguishes the two kinds:
 
 | Kind | Bound to | Pins | Focus |
 | --- | --- | --- | --- |
@@ -40,12 +38,11 @@ bounded list continuation, stream resumption and cancellation.
 `chat_conversations_kind_check` requires every revision and report pin column on
 a revision conversation and none on a workspace conversation. The focus columns
 (`focus_project_id`, `focus_mapping_id`, `focus_revision_id`) carry foreign keys
-to `mappings` and `mapping_revisions`. Existing revision conversations keep their
-rows, pins and rules unchanged.
+to `mappings` and `mapping_revisions`.
 
 Ownership, retention, private content, lifecycle and erasure are identical for
 both kinds. Conversations remain private to their creator; administrator roles
-do not expose their content. `weft.chat_authorized(org, NULL, creator)` is the
+do not expose their content. `braid.chat_authorized(org, NULL, creator)` is the
 organization-level authority of a workspace conversation: an active creator with
 a current organization admission. The identity, lifecycle and erasure routines
 compare the nullable scope columns with `IS [NOT] DISTINCT FROM`, so a revision
@@ -67,10 +64,10 @@ resolves it freshly as the creator:
 - A focus the creator can no longer read, or a mapping without a readable head,
   is `Unavailable`.
 
-The result is recorded in the turn's original envelope (`weft.chat.original.v2`,
+The result is recorded in the turn's original envelope (`braid.chat.original.v2`,
 `ChatTurnFocus`: `None`, `Resolved` or `Unavailable`), so later rounds and
 reconnects never silently follow a newer head. Revision turns keep the
-`weft.chat.original.v1` envelope.
+`braid.chat.original.v1` envelope.
 
 ## User guide
 
@@ -83,7 +80,7 @@ content from a model-supplied URL or reads guide files at runtime.
 
 The pinned system message contains the trusted instructions only. When a turn has
 a resolved focus or selectors, `IChatTurnContextPort.DescribeAsync` adds one
-user-role data message before the question (`weft.workspace-turn-context.v1`, at
+user-role data message before the question (`braid.workspace-turn-context.v1`, at
 most 16 KiB): the focused project, mapping and revision by name, sequence and
 whether it is the head, plus the user's selection. It is read freshly as the
 creator, marked as data rather than instruction, and an unreadable focus is
@@ -91,7 +88,7 @@ described only as `unavailable`.
 
 ## Grounding policy
 
-Every workspace turn pins the `weft.workspace-assistant` policy, version 8,
+Every workspace turn pins the `braid.workspace-assistant` policy, version 8,
 together with the exact manifest the host offers:
 
 | Bound | Value |
@@ -131,10 +128,9 @@ repaired, so a weak model fails visibly instead of answering from invented data.
 
 The opt-in `WorkspaceLiveOllamaTests` uses the real local Ollama transport and
 the complete workspace tool manifest against an explicitly synthetic catalog.
-Set `WEFT_LIVE_OLLAMA_ENDPOINT` to the loopback `/api/chat` URL and
-`WEFT_LIVE_OLLAMA_MODEL` to an installed function-tool model, then run that test.
-It requires an actual tool-backed answer and freshly verified mapping citation;
-it does not qualify a remote model, live identity provider or production data.
+Set `BRAID_LIVE_OLLAMA_ENDPOINT` to the loopback `/api/chat` URL and
+`BRAID_LIVE_OLLAMA_MODEL` to an installed function-tool model, then run that test.
+It requires a tool-backed answer and freshly verified mapping citation.
 
 ## Tools
 
@@ -156,7 +152,6 @@ organization, actor, report selection and every scope come from trusted context.
 | `get_capabilities` | What the user can do with a mapping on this server |
 | `search_user_guide`, `get_user_guide_section` | The user guide shipped with the server |
 | `propose_mapping_edit` | Retains an exact-base proposal for separate authenticated review and approval; requires proposal persistence |
-| `save_mapping_edit` | Legacy direct save, offered only with explicit `WEFT_CHAT_LEGACY_DIRECT_SAVE_ENABLED=true` |
 
 Run kinds of a disabled family (previews, regression tests, builds) are not
 offered; `list_runs` and `get_run` are absent when all three are disabled, and the
@@ -177,7 +172,7 @@ The report tools never derive a report. They read the revision's current
 retained, verified projection (and validation for `get_validation_issues`). When
 one has not been produced, the result is `notDerived` with the revision and the
 report it lacks, and the model is told not to guess its content. Available report
-results use the mapping tool result format (`weft.mapping-tool-result.v1`,
+results use the mapping tool result format (`braid.mapping-tool-result.v1`,
 explanation only, not execution evidence).
 
 Catalog search uses `ICatalogSearch`, the same service as the search page and
@@ -189,7 +184,7 @@ and report; verification reads that retained report before publishing a citation
 The cursor is returned only when every item in the service page fits the tool's
 remaining budget, so truncation cannot silently skip results.
 
-Every other result is a `weft.workspace-tool-result.v1` envelope:
+Every other result is a `braid.workspace-tool-result.v1` envelope:
 `schema`, `tool`, `outcome`, `truncated` and `data`. Outcomes are `available`,
 `notFound`, `notDerived`, `invalidCall`, `unavailable`, `notPermitted`,
 `unsupportedContent`, `resourceLimit`, `busy` and `timedOut`. Failure envelopes
@@ -226,22 +221,18 @@ literal values are never cropped. A result that cannot fit even empty is
 
 Revoked membership, a lost organization admission or a disabled principal takes
 effect on the next call. By default the edit tool only retains proposals; approval is a separate authenticated action.
-The legacy direct-save port requires an explicit server capability;
-there is no activation, derivation, run, build or provider port. Caller cancellation
+There is no activation, derivation, run, build or provider port. Caller cancellation
 propagates instead of becoming a result.
 
-## Mapping approval, legacy saves and recovery
+## Mapping approval and recovery
 
 The default runtime requires exact proposal approval. See
-[the runtime cutover contract](chat-proposal-runtime.md) for proposal listing,
+[the proposal runtime contract](chat-proposal-runtime.md) for proposal listing,
 complete-operation review and approval/recovery routes. The integrated persistence
 and host requirements are described in [approval composition](chat-edit-approval-composition.md),
 and [proposal review](chat-proposal-review-ui.md) describes the browser workflow.
-The direct-save flow below is compatibility behavior
-behind a default-false server capability, not approval of a proposal or a turn.
-
-`save_mapping_edit` accepts a `ferrule.edit.v1` script, never arbitrary native
-bytes. The server replays it against the named immutable base and derives bounded
+The proposal contains a `ferrule.edit.v1` script, never arbitrary native bytes.
+The server replays it against the named immutable base and derives bounded
 before/after summaries from verified projections. Current edit authority is checked
 again by storage and ingestion. Appending requires that exact base to remain the head.
 
@@ -283,7 +274,7 @@ acknowledgement does not prevent other independent saves from being recovered.
 The browser reads these receipts when opening or finishing an answer and merges
 confirmed versions with immediate stream cards without changing stream sequence
 numbers. The current proposal UI recovers only the exact identified proposal;
-unidentified legacy pending receipts are read-only. It does not offer turn-wide
+unidentified pending receipts are read-only. It does not offer turn-wide
 **Continue pending save**. See [proposal review](chat-proposal-review-ui.md#review-and-approval)
 for status refresh, exact recovery and explicit repeat approval. Saved cards provide
 Undo (another exact-head conditional append), Diff and Open version. Saving never
@@ -329,7 +320,7 @@ payload tools:
 
 They exist only on a host that serves previews or regression tests and is
 configured with the restricted payload-permission reader
-(`WEFT_CHAT_PAYLOAD_PERMISSION_CONNECTION_STRING`, see
+(`BRAID_CHAT_PAYLOAD_PERMISSION_CONNECTION_STRING`, see
 [Chat turn HTTP API](chat-http.md)). Together with the other tools they form a
 separate payload manifest with its own grounding pin.
 
@@ -384,7 +375,7 @@ outlives erasure.
 Ledger event kind 14 (`DataShared`) records that a tool result in a workspace
 turn contained payload data: the project, payload source, run identity and byte
 count, never the bytes. Its insert trigger `audit_chat_payload` writes a row to
-the append-only `weft.chat_payload_audit` in the same statement: the creator,
+the append-only `braid.chat_payload_audit` in the same statement: the creator,
 organization, conversation, turn and round, project, payload source, run or case
 identity, byte count, the turn's profile, provider, model and metadata policy, and
 the time. The audit has no foreign keys,
@@ -395,7 +386,7 @@ shared data; a tool result that reports shared data in one denies the turn.
 ## Preview reads
 
 The preview reader has submitter-only history and input reads. `list_runs` uses
-the history: `weft.preview_history` pages a mapping's runs newest first,
-`weft.preview_input_documents` lists a run's submitted documents and
-`weft.preview_input` reads one. They apply the same fresh authority as
+the history: `braid.preview_history` pages a mapping's runs newest first,
+`braid.preview_input_documents` lists a run's submitted documents and
+`braid.preview_input` reads one. They apply the same fresh authority as
 `preview_read`; unauthorized and missing runs are indistinguishable.

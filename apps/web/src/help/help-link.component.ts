@@ -4,7 +4,7 @@ import { helpRoute, type HelpSectionId } from "./help-sections";
 
 /** A contextual link to one user guide section, opened in a new tab. */
 @Component({
-  selector: "weft-help-link",
+  selector: "braid-help-link",
   imports: [RouterLink],
   // A new tab keeps unsent work and request recovery on the current page.
   template: `<a

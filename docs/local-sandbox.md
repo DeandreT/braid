@@ -1,7 +1,7 @@
 # Local deployment sandbox
 
-The local sandbox is a simulation for trying deployments and mappings on a local or
-demo instance. It deploys a completed build to a sandbox release target, sends sample
+The local sandbox runs deployments and mappings on a local instance. It deploys a
+completed build to a sandbox release target, sends sample
 messages to the active release and keeps their results, all on the one machine. It is
 available only to a Development host; a Session host refuses every sandbox setting at
 startup, so no hosted configuration can turn it on.
@@ -89,7 +89,7 @@ disabling the target stops sends as it stops endpoint calls.
 ## History and retention
 
 Each message's inputs, parameters, outputs, status, stable error outcome and timing are written to
-`WEFT_LOCAL_SANDBOX_HISTORY_DIRECTORY`, one JSON file per message under its target, in a
+`BRAID_LOCAL_SANDBOX_HISTORY_DIRECTORY`, one JSON file per message under its target, in a
 directory only the server user can read. At most 100 messages are kept per target; the
 oldest are removed first. A message that ended as `unavailable` recorded nothing final and
 is replaced when retried; a final message (`completed`, `failed` or `expired`) is never
@@ -107,18 +107,18 @@ History directories belong to one running instance and must not be shared by ser
 
 | Setting | Value |
 | --- | --- |
-| `WEFT_LOCAL_SANDBOX_ENABLED` | `true` to enable. Requires a Development host with builds and release operations enabled. |
-| `WEFT_LOCAL_SANDBOX_HISTORY_DIRECTORY` | Absolute path of the history directory. |
-| `WEFT_LOCAL_SANDBOX_RUNTIME_IMAGE` | `sha256:` image ID of the Docker compiled runtime, the `engines/build-worker` image. |
-| `WEFT_LOCAL_SANDBOX_DOCKER_EXECUTABLE` | Optional absolute path of the Docker CLI (default `/usr/bin/docker`). |
-| `WEFT_LOCAL_SANDBOX_QUALIFICATION_WRITER_CONNECTION_STRING` | `weft_qualification_writer` |
-| `WEFT_LOCAL_SANDBOX_BUILD_READER_CONNECTION_STRING` | `weft_build_reader` |
-| `WEFT_LOCAL_SANDBOX_INVOCATION_WRITER_CONNECTION_STRING` | `weft_invocation_writer` |
-| `WEFT_LOCAL_SANDBOX_INVOCATION_GRANT_WRITER_CONNECTION_STRING` | `weft_invocation_grant_writer` |
+| `BRAID_LOCAL_SANDBOX_ENABLED` | `true` to enable. Requires a Development host with builds and release operations enabled. |
+| `BRAID_LOCAL_SANDBOX_HISTORY_DIRECTORY` | Absolute path of the history directory. |
+| `BRAID_LOCAL_SANDBOX_RUNTIME_IMAGE` | `sha256:` image ID of the Docker compiled runtime, the `engines/build-worker` image. |
+| `BRAID_LOCAL_SANDBOX_DOCKER_EXECUTABLE` | Optional absolute path of the Docker CLI (default `/usr/bin/docker`). |
+| `BRAID_LOCAL_SANDBOX_QUALIFICATION_WRITER_CONNECTION_STRING` | `braid_qualification_writer` |
+| `BRAID_LOCAL_SANDBOX_BUILD_READER_CONNECTION_STRING` | `braid_build_reader` |
+| `BRAID_LOCAL_SANDBOX_INVOCATION_WRITER_CONNECTION_STRING` | `braid_invocation_writer` |
+| `BRAID_LOCAL_SANDBOX_INVOCATION_GRANT_WRITER_CONNECTION_STRING` | `braid_invocation_grant_writer` |
 
 Each login must name exactly its role with an explicit password. The sandbox also uses
 the build, regression and release operations logins those features already configure.
-Setting any of these without `WEFT_LOCAL_SANDBOX_ENABLED=true` refuses startup.
+Setting any of these without `BRAID_LOCAL_SANDBOX_ENABLED=true` refuses startup.
 The sandbox's Docker runner also uses the server's
 [Docker CLI budgets](development.md#busy-docker-hosts), and the server drains it on stop.
 
@@ -137,12 +137,9 @@ Administrator role; deploying needs Administrator.
 | `GET /sandbox/{targetId}/messages/{messageId}` | One message with its inputs and outputs (Base64). |
 | `POST /sandbox/{targetId}/messages/{messageId}` | Send a message. The body names one source: `{"source": "case", "reference": "CASE/VERSION"}`, `{"source": "inline", "inputs": [{"name": null, "content": "…"}], "parameters": []}` or `{"source": "replay", "replayOf": "MESSAGE"}`. |
 
-The `weft` CLI does not have sandbox commands: it signs in with Microsoft Entra and talks
-to Session hosts, which never run the sandbox.
-
 ## Extending it
 
-Sample sources and delivery sinks are small interfaces in `Weft.Deployment.Sandbox`.
+Sample sources and delivery sinks are small interfaces in `Braid.Deployment.Sandbox`.
 `ISandboxSampleSource` lists and resolves samples of one kind; saved regression cases
 are the first source. `ISandboxSink` receives every finished message; the file history is
 the first sink. Another source or sink plugs in at host composition without changing the

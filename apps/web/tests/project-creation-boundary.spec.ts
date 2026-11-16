@@ -144,23 +144,23 @@ class ControlledCreation {
           method === "GET" &&
           !url.search &&
           (request.postDataBuffer()?.length ?? 0) === 0 &&
-          headers["x-weft-session"] === "1" &&
+          headers["x-braid-session"] === "1" &&
           ![
             "content-type",
             "authorization",
             "x-xsrf-token",
-            "x-weft-auth-token",
+            "x-braid-auth-token",
             "idempotency-key",
             "if-match",
             "if-none-match",
             "identitycontext",
             "identity-context",
-            "x-weft-identity-context",
-            "x-weft-actor",
-            "x-weft-role",
-            "x-weft-login",
-            "x-weft-logout",
-            "x-weft-forget-local",
+            "x-braid-identity-context",
+            "x-braid-actor",
+            "x-braid-role",
+            "x-braid-login",
+            "x-braid-logout",
+            "x-braid-forget-local",
           ].some((name) => name in headers);
         if (!admitted) ++this.unexpectedRequests;
         await route.fulfill(
@@ -252,15 +252,15 @@ class ControlledCreation {
     this.wires.push({
       correctHeaders:
         headers["content-type"] ===
-          "application/vnd.weft.project-create.v1+json" &&
+          "application/vnd.braid.project-create.v1+json" &&
         canonicalId(key) &&
         token === this.#lastToken &&
         ![
           "authorization",
           "if-match",
           "if-none-match",
-          "x-weft-actor",
-          "x-weft-role",
+          "x-braid-actor",
+          "x-braid-role",
           "content-encoding",
         ].some((header) => header in headers),
       closedBody,

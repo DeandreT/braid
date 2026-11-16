@@ -127,8 +127,8 @@ export type Input = {
 export const digest = (bytes: Buffer) =>
   createHash("sha256").update(bytes).digest("hex");
 export function input(): Input {
-  const path = process.env.WEFT_AUTH_BROWSER_INPUT,
-    root = process.env.WEFT_AUTH_BROWSER_ROOT;
+  const path = process.env.BRAID_AUTH_BROWSER_INPUT,
+    root = process.env.BRAID_AUTH_BROWSER_ROOT;
   requireOwned(
     path &&
       root &&

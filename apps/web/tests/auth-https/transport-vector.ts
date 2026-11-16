@@ -126,7 +126,7 @@ export class TransportVector {
     return [
       ...base,
       {
-        name: "x-weft-qualification-admission",
+        name: "x-braid-qualification-admission",
         value: this.name === "duplicate" ? proof + "," + proof : proof,
       },
     ];

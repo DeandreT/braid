@@ -39,10 +39,7 @@ Choose **Recover original operation**. Recovery uses the same action and conditi
 it does not repeat an older state change against today's target. Do not submit a
 replacement with a new ID just because the first response was uncertain.
 Closing or reloading the page loses this in-memory request. Keep its displayed
-operation ID and original arguments if you need to recover from the command line.
-
-The command line also supports these views and actions through `weft operations`.
-Keep the original command arguments for recovery.
+operation ID and original request details for recovery through the API.
 
 ## Caller administration
 

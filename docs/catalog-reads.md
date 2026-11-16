@@ -5,15 +5,9 @@ Development request boundary. [Revision uploads](catalog-revision-uploads.md),
 [project creation HTTP](project-creation-http.md) and [saved reports](saved-reports.md)
 own their separate actions. [Session host](session-host.md) owns protected Session
 configuration; do not reuse the local HTTP identity recipe for hosted sign-in.
-The original requirements are indexed in the
-[catalog contract-owner map](catalog-persistence-plan.md#current-contract-owners).
-
 The API reads saved projects, mapping metadata and immutable revision history.
 It does not need private storage or a running mapping worker. A committed
-decoded-invalid revision remains visible history; admission is not permission to
-preview, edit or deploy it. The [catalog browser](catalog-browser.md) and
-[saved reports](saved-reports.md) describe their own workflow and verification
-boundaries.
+decoded-invalid revision remains visible with its validation findings.
 
 ## HTTP surface
 
@@ -52,12 +46,9 @@ foreign and inaccessible project resources share the same 404 response. Database
 or schema failures return a closed failure category and never an invented empty
 catalog. No caller actor, role, proxy header or digest establishes access.
 
-Read availability does not enable writes. Explicitly enabled metadata editing is
-available on mappings to current Publishers and Administrators. Creation, uploads,
-reports, chat, preview and administration have their own feature and authority
-gates; a read-only deployment must not advertise them as usable. This metadata
-endpoint edits mappings, not projects. Submitted edits recheck fresh authority
-rather than trusting advisory action flags.
+Mapping metadata editing requires its feature flag and current Publisher or
+Administrator authority. Submitted edits recheck authority rather than trusting
+advisory action flags. This endpoint edits mappings, not projects.
 
 ## Conditional mapping metadata
 
@@ -74,7 +65,7 @@ The quoted tag's opaque value is
 select a revision, not this independent metadata version.
 
 When editing is enabled, `PATCH M/metadata` requires the custom media type
-`application/vnd.weft.mapping-metadata-edit.v1+json`, a cookie-bound request token,
+`application/vnd.braid.mapping-metadata-edit.v1+json`, a cookie-bound request token,
 the canonical browser Origin and one strong metadata `If-Match` tag. Its document
 contains exactly the case-sensitive string properties `name` and `description`;
 both are required. This is a complete metadata replacement edit. Name is trimmed
@@ -107,37 +98,27 @@ configuration rejects an explicitly enabled local provider even when catalog
 routes are disabled. All routes remain in the generated OpenAPI contract when
 disabled, and requests cannot resolve a reader pool or create an anonymous actor.
 
-Provision the separate `weft_catalog_reader` login before applying migration 0003
-and `weft_catalog_editor` before migration 0004.
-New local Compose installations require `WEFT_LOCAL_CATALOG_PASSWORD` along with
-the existing separate passwords. For an existing installation, deliberately run
-`deploy/local/postgres-add-catalog-reader.sh` with the local database administrator
-and its environment before running the owner migration command. That script creates
-only the new login and CONNECT grant; it does not replace existing credentials.
-Likewise, existing installations deliberately run
-`deploy/local/postgres-add-metadata-editor.sh` with
-`WEFT_LOCAL_METADATA_PASSWORD` before applying 0004. New local Compose installs
-require that distinct password too. These one-shot role creation scripts refuse
-an existing login rather than silently changing credentials or grants. Stop old
-hosts, provision, migrate and start the new host; strict old binaries are not
-admitted against the changed mapping guard.
+Local Compose provisions separate `braid_catalog_reader` and
+`braid_catalog_editor` logins using distinct `BRAID_LOCAL_CATALOG_PASSWORD` and
+`BRAID_LOCAL_METADATA_PASSWORD` values. Apply the database schema before starting
+the API:
 
 ```sh
-dotnet run --project dotnet/tools/Weft.DatabaseTool -- migrate
+dotnet run --project dotnet/tools/Braid.DatabaseTool -- migrate
 ```
 
-The owner tool requires `WEFT_MIGRATION_CONNECTION_STRING`. Configure explicit
-nonzero `WEFT_DEV_ORGANIZATION_ID`, `WEFT_DEV_PRINCIPAL_ID` and
-`WEFT_DEV_ORGANIZATION_NAME`, then deliberately provision the local identity:
+The owner tool requires `BRAID_MIGRATION_CONNECTION_STRING`. Configure explicit
+nonzero `BRAID_DEV_ORGANIZATION_ID`, `BRAID_DEV_PRINCIPAL_ID` and
+`BRAID_DEV_ORGANIZATION_NAME`, then deliberately provision the local identity:
 
 ```sh
-dotnet run --project dotnet/tools/Weft.DatabaseTool -- provision-development-identity
+dotnet run --project dotnet/tools/Braid.DatabaseTool -- provision-development-identity
 ```
 
 This atomic operation creates the supplied organization, principal and admission
 when absent. Matching repeats preserve existing facts. It refuses inactive
 identities/admission or conflicting organization metadata. It creates no projects.
-An optional paired `WEFT_DEV_PROJECT_ID` and `WEFT_DEV_PROJECT_ROLE` grants the
+An optional paired `BRAID_DEV_PROJECT_ID` and `BRAID_DEV_PROJECT_ROLE` grants the
 explicit role on an existing project in that organization; an inactive or different
 existing grant is refused. Roles are `viewer`, `runner`, `publisher` or
 `administrator`. Runtime, catalog and ingestion logins cannot run this operation.
@@ -146,12 +127,12 @@ The provisioner is never registered or invoked by the web host.
 For the API, configure all of these values:
 
 - `ASPNETCORE_ENVIRONMENT=Development`.
-- `WEFT_CATALOG_ENABLED=true` and `WEFT_DEV_IDENTITY_ENABLED=true`.
-- The explicitly provisioned `WEFT_DEV_ORGANIZATION_ID` and `WEFT_DEV_PRINCIPAL_ID`.
-- `WEFT_DEV_LISTEN_ADDR=127.0.0.1:4100` and
-  `WEFT_DEV_BROWSER_ORIGIN=http://127.0.0.1:4100`, or matching concrete loopback
+- `BRAID_CATALOG_ENABLED=true` and `BRAID_DEV_IDENTITY_ENABLED=true`.
+- The explicitly provisioned `BRAID_DEV_ORGANIZATION_ID` and `BRAID_DEV_PRINCIPAL_ID`.
+- `BRAID_DEV_LISTEN_ADDR=127.0.0.1:4100` and
+  `BRAID_DEV_BROWSER_ORIGIN=http://127.0.0.1:4100`, or matching concrete loopback
   IPv6 address and port.
-- `WEFT_CATALOG_CONNECTION_STRING` for the separate catalog login, without migration
+- `BRAID_CATALOG_CONNECTION_STRING` for the separate catalog login, without migration
   or ingestion credentials.
 
 The browser origin must exactly match the configured listener's address and effective
@@ -163,8 +144,8 @@ enablement accepts explicit `true`/`false`, and malformed identity configuration
 fails rather than becoming a default account.
 
 Metadata edits default to disabled. Enable them explicitly with
-`WEFT_METADATA_EDITS_ENABLED=true` and the separate restricted editor connection
-string in `WEFT_POSTGRES_METADATA_CONNECTION_STRING`. Catalog enablement is also
+`BRAID_METADATA_EDITS_ENABLED=true` and the separate restricted editor connection
+string in `BRAID_POSTGRES_METADATA_CONNECTION_STRING`. Catalog enablement is also
 required. Read-only hosts need no editor credentials or writer pool; credentials
 never fall back to catalog, ingestion or owner profiles.
 
@@ -185,13 +166,13 @@ fallback. Metadata PATCH uses this boundary before media or body handling.
 use the same request boundary and retain their own body and mutation checks.
 Hosted sessions and secure cookie/key lifecycle belong to [Session host](session-host.md).
 
-`weft_catalog_reader` receives seven full-table SELECT grants: the five ownership
+`braid_catalog_reader` receives seven full-table SELECT grants: the five ownership
 tables, mappings and mapping revisions. Its reservation access is column-only SELECT
 on organization ID, project ID, operation ID and display filename. It cannot read
 attempts, evidence, reservation worker profiles or lease data, or write
 catalog/ownership facts. Full revision-table grants include stored native object IDs;
 the catalog queries and public DTOs omit those IDs and do not expose private object
-I/O. Existing runtime and ingestion profiles remain unchanged.
+I/O.
 
 The dedicated pool leases short read-only, bounded, organization-scoped transactions.
 It checks exact effective rights and trusted permanent source tables, ancestry,
@@ -207,35 +188,3 @@ updated-at only. It cannot advance heads or write revisions, reservations,
 memberships, grants or DDL. Its short scoped transaction checks exact effective
 rights and the current guard, then locks the admitted mapping and checks the
 expected version. Concurrent metadata edits and head appends preserve both facts.
-
-Qualification must distinguish synthetic contracts/setup from actual PostgreSQL and
-Kestrel transport. Native upload HTTP, preview, identity, hosting and catalog-browser
-qualification are separate boundaries, not implied by read or metadata checks.
-
-## Historical implementation checkpoint
-
-The following records P3d1/P3d2 evidence only. Counts and statements about later
-increments are not current availability or setup instructions.
-
-Status: P3d1 is qualified and merged in [PR #33](https://github.com/DeandreT/weft/pull/33)
-at `e5915598d608b4df4b19c113d53a8bbda326cf9f`, closing
-[#28](https://github.com/DeandreT/weft/issues/28). Local and independent fresh-build
-runs each passed 1,162 tests with no skips; the independent run included 138 actual
-PostgreSQL cases, fresh/0002-upgrade owner CLI and published API checks, and 22
-browser cases. All 105 workers created by that run were automatically removed.
-The PR records the frozen evidence and its limits. P3d2 metadata editing is
-qualified and merged in [PR #38](https://github.com/DeandreT/weft/pull/38) at
-`2a0557e554eafcd72bf7d0f71b34d9b23d2de398`, closing
-[#29](https://github.com/DeandreT/weft/issues/29). Local and independent runs each
-passed 1,246 C# cases with zero skips, including 193 PostgreSQL-gated cases. The
-independent run also passed 22 browser cases without retries and fresh/upgrade
-published CLI/API checks. All 110 actual workers were automatically removed.
-These checks do not qualify the following raw-upload increment or a metadata
-editing frontend.
-The accepted sequence is in [Catalog API plan](catalog-api-plan.md).
-
-The API reads saved projects, mapping metadata and immutable revision history.
-It does not need private storage or a running mapping worker. A committed
-decoded-invalid revision remains visible history; its admission is not permission
-to preview, edit or deploy it. Projection and validation reports follow in P3e,
-and the Angular catalog follows in P3g.

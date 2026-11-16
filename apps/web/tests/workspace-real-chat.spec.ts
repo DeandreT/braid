@@ -92,7 +92,7 @@ test("workspace page and exact-focused workbench use real authority, persistence
   await page.reload();
   await expect(panel(page)).toContainText("Workspace sources checked.");
   await expect(page).toHaveURL(thread);
-  const path = process.env.WEFT_WORKSPACE_CHAT_REVISION_PATH;
+  const path = process.env.BRAID_WORKSPACE_CHAT_REVISION_PATH;
   if (!path || !path.startsWith("/catalog/organizations/"))
     throw new Error("The owned revision is required.");
   await page.goto(path);

@@ -2,20 +2,19 @@
 
 The database test fixture can use either its pinned Linux Docker image or an
 explicit native Windows PostgreSQL installation. Native mode exercises the real
-server, migrations, grants, transactions and restart behavior. It does not
-qualify Docker networking, resource isolation, Ferrule workers or Linux hosting.
+server, migrations, grants, transactions and restart behavior.
 
-Set `WEFT_POSTGRES_BIN` to an absolute directory containing PostgreSQL 16.15
+Set `BRAID_POSTGRES_BIN` to an absolute directory containing PostgreSQL 16.15
 `postgres.exe`, `initdb.exe` and `pg_ctl.exe`. Every executable must report that
-exact version. Set `WEFT_POSTGRES_WORK_ROOT` to an existing absolute directory
+exact version. Set `BRAID_POSTGRES_WORK_ROOT` to an existing absolute directory
 for disposable clusters, or leave it unset to use the current process's temporary
-directory. Do not combine native mode with `WEFT_POSTGRES_IMAGE`,
-`WEFT_TEST_CLIENT_CONTAINER` or `WEFT_DOCKER_EXECUTABLE`; mixed configuration fails.
+directory. Do not combine native mode with `BRAID_POSTGRES_IMAGE`,
+`BRAID_TEST_CLIENT_CONTAINER` or `BRAID_DOCKER_EXECUTABLE`; mixed configuration fails.
 
 ```powershell
-$env:WEFT_POSTGRES_BIN = 'C:/tools/postgresql-16.15/pgsql/bin'
-$env:WEFT_POSTGRES_WORK_ROOT = 'C:/temp/weft-tests'
-dotnet test dotnet/tests/Weft.Tests/Weft.Tests.csproj --filter 'FullyQualifiedName~PostgresOwnershipTests'
+$env:BRAID_POSTGRES_BIN = 'C:/tools/postgresql-16.15/pgsql/bin'
+$env:BRAID_POSTGRES_WORK_ROOT = 'C:/temp/braid-tests'
+dotnet test dotnet/tests/Braid.Tests/Braid.Tests.csproj --filter 'FullyQualifiedName~PostgresOwnershipTests'
 ```
 
 Use the repository's pinned SDK and isolated native build outputs. Installing

@@ -1,8 +1,7 @@
 # Build control HTTP API
 
 The default-off build module exposes retained metadata and approved queue
-operations. It does not compile a mapping, derive reports, discover machine work,
-publish artifacts or deploy an endpoint from an HTTP request. Optional CSV build
+operations. A separate worker compiles queued builds. Optional CSV build
 approval performs read-only native boundary inspection as described below.
 
 ## Routes
@@ -32,7 +31,7 @@ than the requested count and retain a continuation cursor.
 
 ## Immutable requests and recovery
 
-Approval PUT uses `application/vnd.weft.build-approval.v1+json`:
+Approval PUT uses `application/vnd.braid.build-approval.v1+json`:
 
 ```json
 {
@@ -58,7 +57,7 @@ The same selectors return its original intent even after an image change,
 approval revocation or environment replacement. Different selectors conflict.
 Recovery never renews approval or selects a replacement environment/runtime.
 
-Run PUT uses `application/vnd.weft.build-run.v1+json`:
+Run PUT uses `application/vnd.braid.build-run.v1+json`:
 
 ```json
 { "approvalId": "<uuid>" }
@@ -83,23 +82,23 @@ is admitted before body reads or build-service resolution. Authority and full
 scope are checked again before response delivery. Responses are `no-store` with
 no ETag and closed error categories.
 
-`WEFT_BUILDS_ENABLED=true` requires enabled catalog, the exact immutable
-`WEFT_FERRULE_WORKER_IMAGE` and the [private storage selection](private-storage-blob.md#host-selection)
-(a canonical `WEFT_PRIVATE_STORAGE_ROOT`, or the Azure Blob settings) for
+`BRAID_BUILDS_ENABLED=true` requires enabled catalog, the exact immutable
+`BRAID_FERRULE_WORKER_IMAGE` and the [private storage selection](private-storage-blob.md#host-selection)
+(a canonical `BRAID_PRIVATE_STORAGE_ROOT`, or the Azure Blob settings) for
 authorized stored-report reads. Session startup snapshots those scalars before
 opening protected resources. Disabled mode delivers no build credentials or
 services. Enabled composition uses these independent connection inputs:
 
 | Input | Database role |
 | --- | --- |
-| `WEFT_BUILD_METADATA_CONNECTION_STRING` | `weft_build_metadata_reader` |
-| `WEFT_BUILD_CONTROL_CONNECTION_STRING` | `weft_build_writer` |
-| `WEFT_BUILD_ACCESS_CONNECTION_STRING` | `weft_runtime` |
-| `WEFT_BUILD_REPORT_CONNECTION_STRING` | `weft_report_reader` |
-| `WEFT_BUILD_CASE_READER_CONNECTION_STRING` | `weft_case_reader` |
-| `WEFT_BUILD_EVIDENCE_READER_CONNECTION_STRING` | `weft_run_reader` |
-| `WEFT_BUILD_RUN_READER_CONNECTION_STRING` | `weft_build_run_reader` |
-| `WEFT_BUILD_RUN_WRITER_CONNECTION_STRING` | `weft_build_run_writer` |
+| `BRAID_BUILD_METADATA_CONNECTION_STRING` | `braid_build_metadata_reader` |
+| `BRAID_BUILD_CONTROL_CONNECTION_STRING` | `braid_build_writer` |
+| `BRAID_BUILD_ACCESS_CONNECTION_STRING` | `braid_runtime` |
+| `BRAID_BUILD_REPORT_CONNECTION_STRING` | `braid_report_reader` |
+| `BRAID_BUILD_CASE_READER_CONNECTION_STRING` | `braid_case_reader` |
+| `BRAID_BUILD_EVIDENCE_READER_CONNECTION_STRING` | `braid_run_reader` |
+| `BRAID_BUILD_RUN_READER_CONNECTION_STRING` | `braid_build_run_reader` |
+| `BRAID_BUILD_RUN_WRITER_CONNECTION_STRING` | `braid_build_run_writer` |
 
 Session mode reads the corresponding `_FILE` deliveries through the protected
 connection loader. The control role retains its existing database publication
@@ -108,16 +107,16 @@ services. It receives no machine dispatch credential or claim capability.
 
 ### Optional CSV build registration
 
-`WEFT_BUILDS_CSV_ENABLED=true` separately enables the
-`weft.ferrule-csharp-csv.v1` profile and `FerruleCsvBuildBoundaryReader`. It is off
+`BRAID_BUILDS_CSV_ENABLED=true` separately enables the
+`braid.ferrule-csharp-csv.v1` profile and `FerruleCsvBuildBoundaryReader`. It is off
 when absent or `false`; an unsupported value refuses configuration. It does not
 change the existing JSON/EDI profiles or turn on the build module itself.
 
-CSV inspection uses the selected `WEFT_FERRULE_RUNNER`: Docker in development,
+CSV inspection uses the selected `BRAID_FERRULE_RUNNER`: Docker in development,
 or the Ferrule service or Azure dynamic sessions. The inspection-worker-only
 transport does not serve compiler frames and is refused for CSV. Session hosts
 remain remote-only. Service/Sessions selection requires the exact
-`WEFT_FERRULE_COMPILE_TOOLCHAIN` pin as well as the native worker identity; CSV
+`BRAID_FERRULE_COMPILE_TOOLCHAIN` pin as well as the native worker identity; CSV
 approval, regression provenance and queued builds must share their combined
 compiler identity.
 
@@ -136,21 +135,15 @@ certificate delivery or managed-identity settings. Shutdown joins its runner
 before releasing any owned connector or certificate; stopped readers do not
 start new work.
 
-Migration 0020 adds the dedicated read-only metadata role, narrow query function
-and history indexes. Exact function/schema guards admit the new contract without
-changing earlier migration bodies. Existing local installations explicitly run
-`deploy/local/postgres-add-build-metadata-role.sh` as an administrator before
-migrating. Applications never install schema or credentials themselves.
-
 ## Environment administration and approval revocation
 
 `GET /build-environment-capabilities` on a project returns the server's selectable
-runtime profile and current administrator capability. It does not test compilation
-or authorize a later mutation.
+runtime profile and current administrator capability. Mutations recheck current
+authority.
 
 Administrators create the next sequential version with
 `PUT /build-environments/{environmentId}/versions/{version}` and
-`application/vnd.weft.build-environment.v1+json`:
+`application/vnd.braid.build-environment.v1+json`:
 
 ```json
 { "profileId": "<server-offered-profile-id>", "profileVersion": "1" }
@@ -166,5 +159,4 @@ Publishers can explicitly revoke their own approvals using empty-body
 `POST /build-approvals/{approvalId}/revoke` on the mapping. Repeating the request
 returns retained revoked metadata; it cannot renew execution admission. The
 underlying administrative database privilege does not expose another actor's
-approval through this own-record HTTP route. Neither administration operation
-starts a worker, deploys a target or downloads an artifact.
+approval through this own-record HTTP route.
