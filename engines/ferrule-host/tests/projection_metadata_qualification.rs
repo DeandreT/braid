@@ -1,5 +1,5 @@
-use serde_json::{Value, json};
 use braid_ferrule_host::protocol::Limits;
+use serde_json::{Value, json};
 
 fn base() -> Value {
     json!({

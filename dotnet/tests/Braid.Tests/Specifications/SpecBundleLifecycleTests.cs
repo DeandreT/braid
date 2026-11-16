@@ -9,7 +9,7 @@ public sealed class SpecBundleLifecycleTests
     [Fact]
     public void Intake_inventory_migration_checksum_supersedes_the_reviewed_registry()
     {
-        Assert.Equal("565c6fd7abf7c296a985691967a30b50ca7b94483c4fef17a4898160a030ed54",
+        Assert.Equal("78c86ad3b972cab04e972004a5e2ba5a9ad983ae3037867f70011aa91e7a5cd8",
             Sha256Digest.FromBytes(System.Text.Encoding.UTF8.GetBytes(SpecSchemaAdmission.MigrationSql)).Value);
     }
 
@@ -41,7 +41,7 @@ public sealed class SpecBundleLifecycleTests
         Assert.Equal(bytes, SpecTemporaryEvidence.Decode(bytes).Encode());
         Assert.Equal(evidence.File, SpecTemporaryEvidence.Decode(bytes).File);
         bytes[0] = 0;
-        Assert.Equal((byte)'W', evidence.Encode()[0]);
+        Assert.Equal((byte)'B', evidence.Encode()[0]);
         Assert.Throws<ArgumentException>(() => SpecTemporaryEvidence.Decode(bytes));
         Assert.Throws<ArgumentException>(() => SpecTemporaryEvidence.Decode(evidence.Encode()[..^1]));
         Assert.Throws<ArgumentException>(() => SpecTemporaryEvidence.Decode([.. evidence.Encode(), 0]));

@@ -3,11 +3,11 @@ mod support;
 use std::io::{Read, Write};
 use std::process::{Command, Stdio};
 
-use serde_json::{Value, json};
-use support::*;
 use braid_ferrule_host::protocol::{
     MAX_HEADER_BYTES, MAX_NATIVE_BYTES, MAX_RESPONSE_BYTES, PROTOCOL_VERSION, Response,
 };
+use serde_json::{Value, json};
+use support::*;
 
 #[test]
 fn framing_roundtrip_emits_one_structured_response() {
@@ -325,9 +325,13 @@ fn direct_inspection_bounds_both_boundary_and_resource_native_locators() {
     let mut header = request("inspect", RESOURCES);
     header.limits.maximum_text_bytes = 64;
     let prefix = format!("/{}", "x".repeat(64));
-    let inventory =
-        braid_ferrule_host::inspect::inspect(&project, "entry.native.json", &prefix, &header.limits)
-            .unwrap();
+    let inventory = braid_ferrule_host::inspect::inspect(
+        &project,
+        "entry.native.json",
+        &prefix,
+        &header.limits,
+    )
+    .unwrap();
     let inventory = serde_json::to_value(inventory).unwrap();
     for locator in inventory["boundaries"]
         .as_array()

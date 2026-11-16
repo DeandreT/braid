@@ -2,8 +2,8 @@
 //! this request shape; framing and execution limits remain owned by its core handler.
 use std::io::{self, Read, Write};
 
-use serde::Deserialize;
 use braid_ferrule_core::authored_document::transport;
+use serde::Deserialize;
 
 pub const MAX_HEADER_BYTES: usize = transport::MAX_HEADER_BYTES;
 

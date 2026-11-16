@@ -12,7 +12,7 @@ internal static class CreationSchemaAdmission
         @"CREATE FUNCTION braid\.creation_ingestion_guard\(\).*?AS \$body\$(.*?)\$body\$;", System.Text.RegularExpressions.RegexOptions.Singleline).Groups[1].Value;
     // Catalog shape captured from the actual complete migration, independent of its journal claim.
     // ACL entries are hashed in sorted order: PostgreSQL moves a re-granted entry, which changes no authority.
-    internal const string ShapeDigest = "7c9c6463c7e2368b7068ded3dcda8e81f37c9d8cea60ee9db3c43d75023149d2";
+    internal const string ShapeDigest = "8efab69655b3506134a8dee5f82d74706e53e4525923575c5f7b0a1f015e0afc";
     internal static readonly string[] Tables = ["creation_proposals", "creation_sources", "creation_approvals"];
     internal static readonly string[] Functions = System.Text.RegularExpressions.Regex.Matches(
         MigrationRunner.EmbeddedMigrations.Single(m => m.Version == 45).Sql + DocumentEvidenceSchemaAdmission.MigrationSql, @"CREATE (?:OR REPLACE )?FUNCTION braid\.((?:creation_|document_evidence_)\w+)\(")

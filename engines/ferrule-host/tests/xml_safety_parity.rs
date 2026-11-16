@@ -2,9 +2,9 @@
 //! execution qualification or a replacement for resource-boundary tests.
 use std::collections::BTreeSet;
 
+use braid_ferrule_host::xml_document::{self as xml, Error, Safety};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
-use braid_ferrule_host::xml_document::{self as xml, Error, Safety};
 
 #[path = "../src/xml_name_chars.rs"]
 mod name_chars;

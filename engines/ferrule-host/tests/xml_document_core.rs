@@ -1,10 +1,10 @@
 //! Self-authored fixtures. These tests exercise the dormant core only: they do
 //! not assert that preview/compiled XML or native/generated parity is qualified.
-use ferrule_mapping::FormatOptions;
-use serde_json::{Value, json};
 use braid_ferrule_host::xml_document::{
     self as xml, Error, Metadata, Resource, Role, Safety, SchemaHints, SchemaLocation,
 };
+use ferrule_mapping::FormatOptions;
+use serde_json::{Value, json};
 
 const NATIVE: &[u8] = include_bytes!("fixtures/xml-closed.native.json");
 

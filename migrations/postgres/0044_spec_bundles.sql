@@ -283,7 +283,7 @@ BEGIN
     SELECT * INTO o FROM braid.spec_object_gate(p_actor,p_org,p_project,p_bundle,p_object,p_attempt,'publish');
     IF NOT EXISTS(SELECT 1 FROM ONLY braid.spec_stores WHERE id=o.store_id AND kind='filesystem') THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='Native temporary requires filesystem store.'; END IF;
     IF o.state<>'pending' OR p_phase NOT BETWEEN 1 AND 3 OR p_phase IS NULL OR octet_length(p_evidence)<>196 OR p_evidence IS NULL
-        OR substring(p_evidence from 1 for 4)<>convert_to('WST1','UTF8') THEN RAISE EXCEPTION USING ERRCODE='23514',MESSAGE='Invalid temporary evidence.'; END IF;
+        OR substring(p_evidence from 1 for 4)<>convert_to('BST1','UTF8') THEN RAISE EXCEPTION USING ERRCODE='23514',MESSAGE='Invalid temporary evidence.'; END IF;
     IF (p_phase=1)<>(substring(p_evidence from 169 for 28)=decode(repeat('00',28),'hex'))
         OR (p_phase>1 AND (substring(p_evidence from 177 for 8)=decode(repeat('00',8),'hex') OR substring(p_evidence from 185 for 8)=decode(repeat('00',8),'hex'))) THEN
         RAISE EXCEPTION USING ERRCODE='23514',MESSAGE='Temporary file evidence does not match phase.';

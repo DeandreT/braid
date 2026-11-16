@@ -2,10 +2,10 @@ mod support;
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use braid_ferrule_host::protocol::Limits;
 use ferrule_mapping::project_file;
 use serde_json::{Value, json};
 use support::{digest, process, request, success};
-use braid_ferrule_host::protocol::Limits;
 
 const BASIC: &[u8] = include_bytes!("fixtures/projection-basic.json");
 const CONTROLS: &[u8] = include_bytes!("fixtures/projection-controls.json");

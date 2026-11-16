@@ -11,7 +11,7 @@ public sealed class PostgresMigrationTests(PostgresFixture fixture)
     private const string CatalogChecksum = "79d47c70c5131cd2973f98337815edd801f505b668f0f26561b1db1b955fb33b";
     private const string MetadataChecksum = "08e63461c49e7dabd64a951f0b0d0c4501f55e669cfec5b1fefb105732b807bd";
     internal const string MappingCreationChecksum = "7756574c6fd95a5799fe1fea20c8055f627d55ba36dd41a4071180c9dbb36906";
-    internal const string DocumentEvidenceChecksum = "4b06cc6bb2e934a68c8e942195d845cf40258b83e28f3722863b94b14647ce60";
+    internal const string DocumentEvidenceChecksum = "36fcbda4ef9bf4ac1442d5f9971f45e69f8b7068b98bdc027b38f45c6c012829";
     private static string ProjectCreationChecksum => ProjectCreationTestSupport.MigrationChecksum;
     private static string RevisionDerivationChecksum => RevisionDerivationSchemaContract.MigrationChecksum;
     private static string MaintenanceChecksum => MaintenanceSchemaContract.MigrationChecksum;

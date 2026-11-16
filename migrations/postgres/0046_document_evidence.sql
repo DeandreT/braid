@@ -3,7 +3,7 @@
 DO $history$
 BEGIN
     IF current_user<>'braid_migrator' OR session_user<>current_user
-        OR NOT EXISTS(SELECT 1 FROM braid.schema_migrations WHERE version=44 AND checksum='565c6fd7abf7c296a985691967a30b50ca7b94483c4fef17a4898160a030ed54')
+        OR NOT EXISTS(SELECT 1 FROM braid.schema_migrations WHERE version=44 AND checksum='78c86ad3b972cab04e972004a5e2ba5a9ad983ae3037867f70011aa91e7a5cd8')
         OR NOT EXISTS(SELECT 1 FROM braid.schema_migrations WHERE version=45 AND checksum='7756574c6fd95a5799fe1fea20c8055f627d55ba36dd41a4071180c9dbb36906') THEN
         RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='Document evidence requires its exact migration prefix.';
     END IF;
@@ -274,7 +274,7 @@ GRANT EXECUTE ON FUNCTION braid.creation_proposals_discover_v1(uuid,uuid,uuid,uu
 CREATE FUNCTION braid.document_evidence_schema_version() RETURNS text
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,braid,pg_temp AS $body$
 SELECT checksum FROM ONLY braid.schema_migrations WHERE version=46
-    AND EXISTS(SELECT 1 FROM ONLY braid.schema_migrations WHERE version=44 AND checksum='565c6fd7abf7c296a985691967a30b50ca7b94483c4fef17a4898160a030ed54')
+    AND EXISTS(SELECT 1 FROM ONLY braid.schema_migrations WHERE version=44 AND checksum='78c86ad3b972cab04e972004a5e2ba5a9ad983ae3037867f70011aa91e7a5cd8')
     AND EXISTS(SELECT 1 FROM ONLY braid.schema_migrations WHERE version=45 AND checksum='7756574c6fd95a5799fe1fea20c8055f627d55ba36dd41a4071180c9dbb36906')
 $body$;
 REVOKE ALL ON FUNCTION braid.document_evidence_schema_version() FROM PUBLIC;

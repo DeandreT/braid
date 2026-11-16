@@ -3,10 +3,10 @@ mod support;
 use std::io::{Cursor, Write};
 use std::process::{Command, Stdio};
 
-use serde_json::{Value, json};
-use support::{BASIC, digest, request};
 use braid_ferrule_core::edit::{MAX_OPERATIONS, MAX_OPERATIONS_BYTES, Session, parse_script};
 use braid_ferrule_host::edit::{PROTOCOL, Request, Response};
+use serde_json::{Value, json};
+use support::{BASIC, digest, request};
 
 fn script() -> Vec<u8> {
     serde_json::to_vec(&json!({"format":"ferrule.edit.v1","operations":[{

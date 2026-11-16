@@ -1,5 +1,5 @@
-use sha2::{Digest, Sha256};
 use braid_spec_pdf_worker::{MAX_INPUT_BYTES, MAX_RESULT_BYTES, PageText, Status, encode, extract};
+use sha2::{Digest, Sha256};
 
 // A real minimal PDF with xref offsets and one separately addressable stream per page.
 fn pdf(texts: &[&str]) -> Vec<u8> {

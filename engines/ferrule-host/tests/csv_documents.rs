@@ -1,12 +1,12 @@
 //! Self-authored boundary fixtures, intentionally independent of Ferrule's corpus.
 mod support;
 
-use serde_json::{Value, json};
 use braid_ferrule_host::preview::protocol::{
     CSV_PREVIEW_PROTOCOL_VERSION, DOCUMENT_PREVIEW_PROTOCOL_VERSION, MAX_PREVIEW_INPUT_BYTES,
     MAX_PREVIEW_OUTPUT_BYTES, PreviewInput, PreviewLimits, PreviewRequestHeader, PreviewTarget,
 };
 use braid_ferrule_host::preview::{PreviewOutcome, process_preview};
+use serde_json::{Value, json};
 
 const NATIVE: &[u8] = include_bytes!("fixtures/csv-flat.native.json");
 

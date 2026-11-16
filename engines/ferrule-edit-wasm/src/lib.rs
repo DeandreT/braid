@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
-use wasm_bindgen::prelude::*;
 use braid_ferrule_core::edit::{EditFailure, Session};
+use wasm_bindgen::prelude::*;
 
 /// The only JavaScript-facing document is Braid's view. Native project JSON
 /// remains opaque bytes and is decoded exclusively by Ferrule.

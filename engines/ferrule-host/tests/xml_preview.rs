@@ -1,12 +1,12 @@
 //! Authored protocol fixtures. These do not enable a host feature or qualify C14N.
 mod support;
 
-use serde_json::{Value, json};
 use braid_ferrule_host::preview::protocol::{
     DOCUMENT_PREVIEW_PROTOCOL_VERSION, MAX_PREVIEW_INPUT_BYTES, MAX_PREVIEW_OUTPUT_BYTES,
     PreviewInput, PreviewLimits, PreviewRequestHeader, PreviewTarget, XML_PREVIEW_PROTOCOL_VERSION,
 };
 use braid_ferrule_host::preview::{PreviewOutcome, process_preview};
+use serde_json::{Value, json};
 
 const NATIVE: &[u8] = include_bytes!("fixtures/xml-closed.native.json");
 const INPUT: &[u8] = b"<Order><code>A</code><quantity>2</quantity></Order>";
@@ -258,9 +258,9 @@ fn serializer_ceiling_mapping(named: bool) -> Vec<u8> {
 
 #[test]
 fn real_cli_serializer_ceiling_on_primary_and_named_outputs_is_a_resource_refusal() {
+    use braid_ferrule_host::xml_document as xml;
     use ferrule_cli::{PayloadDocument, PayloadRunOptions};
     use std::path::{Path, PathBuf};
-    use braid_ferrule_host::xml_document as xml;
 
     // 1,024 ordinary scalar bindings amplify a 64 KiB source string beyond the
     // real 64 MiB CLI ceiling. This does not lower or replace an upstream limit.

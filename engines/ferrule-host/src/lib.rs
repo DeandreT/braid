@@ -67,7 +67,8 @@ pub fn handle_stream(reader: &mut impl Read, writer: &mut impl Write) -> io::Res
         protocol_version: Option<String>,
     }
     if serde_json::from_slice::<ProtocolProbe>(&header_bytes).is_ok_and(|probe| {
-        probe.protocol_version.as_deref() == Some(braid_ferrule_core::authoring::transport::PROTOCOL)
+        probe.protocol_version.as_deref()
+            == Some(braid_ferrule_core::authoring::transport::PROTOCOL)
     }) {
         return braid_ferrule_core::authoring::transport::handle(&header_bytes, reader, writer);
     }

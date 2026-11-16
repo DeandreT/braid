@@ -5,6 +5,7 @@ mod support;
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use braid_ferrule_host::protocol::Limits;
 use ferrule_ir::{Instance, ScalarType, SchemaNode, Value as ScalarValue};
 use ferrule_mapping::{
     AggregateOp, Binding, DynamicSourcePath, FailureIteration, FailureRule, FailureSelection,
@@ -16,7 +17,6 @@ use ferrule_mapping::{
 };
 use serde_json::Value;
 use support::*;
-use braid_ferrule_host::protocol::Limits;
 
 const OWNED: &[u8] = include_bytes!("fixtures/projection-owned-context.json");
 

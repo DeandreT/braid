@@ -525,13 +525,13 @@ fn function_identity_exceeding_json_precision_remains_exact_in_worker_diagnostic
 
 #[test]
 fn every_native_owner_variant_and_structural_step_preserves_typed_identity() {
+    use braid_ferrule_host::validation::{owner_locator, owner_to_wire};
     use ferrule_engine::{
         ValidationEndpoint as Endpoint, ValidationOwner as Owner, ValidationSchemaLocation,
         ValidationSchemaStep as SchemaStep, ValidationScopeLocation,
         ValidationScopeStep as ScopeStep,
     };
     use ferrule_mapping::FunctionId;
-    use braid_ferrule_host::validation::{owner_locator, owner_to_wire};
 
     let endpoints = [
         Endpoint::Source,

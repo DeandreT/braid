@@ -2,9 +2,9 @@
 
 use std::io::Cursor;
 
+use braid_ferrule_host::protocol::{Limits, PROTOCOL_VERSION, RequestHeader, Revision};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use braid_ferrule_host::protocol::{Limits, PROTOCOL_VERSION, RequestHeader, Revision};
 
 pub const BASIC: &[u8] = include_bytes!("../fixtures/valid-basic.json");
 pub const INVALID: &[u8] = include_bytes!("../fixtures/invalid-graph.json");

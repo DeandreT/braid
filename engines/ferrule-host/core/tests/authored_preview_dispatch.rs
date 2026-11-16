@@ -3,9 +3,9 @@
 #[path = "../../src/authored_preview.rs"]
 mod authored_preview;
 
+use braid_ferrule_core::{authored_document::transport, authoring};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use braid_ferrule_core::{authored_document::transport, authoring};
 
 fn frame(bytes: &[u8]) -> Vec<u8> {
     let mut result = (bytes.len() as u32).to_be_bytes().to_vec();

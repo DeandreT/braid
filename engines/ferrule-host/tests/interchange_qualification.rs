@@ -1,9 +1,9 @@
 mod support;
 
-use std::io::{Cursor, Write};
-use std::process::{Command, Stdio};
 use braid_ferrule_host::interchange::{self, Request, Response};
 use braid_ferrule_host::protocol::ENGINE_REVISION;
+use std::io::{Cursor, Write};
+use std::process::{Command, Stdio};
 
 fn request(operation: &str, payload: &[u8]) -> Vec<u8> {
     support::framed_bytes(

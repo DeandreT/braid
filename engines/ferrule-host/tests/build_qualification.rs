@@ -1,8 +1,8 @@
 mod support;
+use braid_ferrule_host::build::{PROFILE, PROTOCOL, Request};
 use serde_json::{Value, json};
 use std::io::Cursor;
 use support::{BASIC, INVALID, digest};
-use braid_ferrule_host::build::{PROFILE, PROTOCOL, Request};
 
 #[test]
 fn document_compiler_uses_explicit_formats_and_retains_the_json_byte_api_for_json_only() {

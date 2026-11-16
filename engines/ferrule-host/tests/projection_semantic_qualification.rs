@@ -1,12 +1,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use braid_ferrule_host::protocol::Limits;
 use ferrule_ir::{Instance, ScalarType, SchemaNode, Value as ScalarValue};
 use ferrule_mapping::{
     Binding, Graph, IterationOutput, Node, Project, Scope, ScopeIteration, SequenceExpr,
     project_file,
 };
 use serde_json::{Value, json};
-use braid_ferrule_host::protocol::Limits;
 
 #[test]
 fn an_explicit_empty_frame_at_a_noniterating_root_has_no_root_field_lineage() {

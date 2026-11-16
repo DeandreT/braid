@@ -1,6 +1,6 @@
 //! Qualification-only portable wire harness. NOT an isolated production worker.
-use std::io::{self, Read};
 use braid_ferrule_core::{authoring::transport, protocol::MAX_HEADER_BYTES};
+use std::io::{self, Read};
 
 fn main() -> io::Result<()> {
     let mut input = io::stdin().lock();
