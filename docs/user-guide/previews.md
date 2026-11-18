@@ -106,6 +106,17 @@ expected baseline using exact-byte comparison; a successful preview never become
 a baseline automatically. To use ordered row/cell comparison instead, edit the
 case as a new version in [Regression tests](regression-tests.md#csv-and-tsv-comparison).
 
+## Reading FlexText and EDI output
+
+For FlexText, expand **Saved FlexText layout (read only)** to see the saved
+output settings alongside the raw text. A present, zero-byte output is labeled
+as empty; it is not a missing artifact. [Synthetic FlexText example](../images/formats/flextext-saved-layout.png).
+
+For X12 and EDIFACT, **EDI segments** marks each interchange in document order.
+Switch to **Raw text** to see the original separators. A truncated byte window
+is not presented as a complete segment list. Neither view changes the bytes
+used for download. [Synthetic EDIFACT example](../images/formats/edi-interchanges.png).
+
 ## If you reload the page
 
 This tab remembers your last preview of the revision, so after a reload braid

@@ -8,6 +8,7 @@ import { ediSegments } from "../catalog/previews/edi-segments";
 import { parseCsvDocument, type CsvDocumentResult } from "./csv-document";
 import { xmlOutline, type XmlOutlineLine } from "./xml-outline";
 import { xmlMetadata } from "../catalog/previews/xml-contract";
+import { nativeSettings } from "../catalog/previews/native-document-contract";
 
 /** Dialect metadata belongs to this exact artifact, never its filename or a sibling output. */
 export type WorkbenchDocument = RegressionDocument & {
@@ -25,6 +26,7 @@ export interface DocumentRepresentation {
   csvDocument?: CsvDocumentResult | null;
   xmlOutline?: readonly XmlOutlineLine[] | null;
   xmlMetadataText?: string | null;
+  flexLayout?: string | null;
 }
 export interface DocumentDisplay extends DocumentRepresentation {
   document: WorkbenchDocument;
@@ -50,6 +52,8 @@ export function displayDocument(document: WorkbenchDocument): DocumentDisplay {
       document.name,
       document.mediaType,
       document.authoritativeCsvDocumentDialect ?? document.csvDialect,
+      document.xmlMetadata,
+      document.documentSettings,
     ),
     document,
   };
@@ -62,6 +66,7 @@ export function displayBytes(
   mediaType?: string | null,
   authoritativeCsvDocumentDialect?: unknown,
   authoritativeXmlMetadata?: unknown,
+  documentSettings?: WorkbenchDocument["documentSettings"],
 ): DocumentRepresentation {
   const bounded = bytes.subarray(0, 65536);
   let text: string,
@@ -93,7 +98,15 @@ export function displayBytes(
     format,
     mediaType: mediaType ?? null,
     segments:
-      format === "utf8" && mediaType ? ediSegments(text, mediaType) : null,
+      bytes.length <= bounded.length && format === "utf8" && mediaType
+        ? ediSegments(text, mediaType)
+        : null,
+    flexLayout:
+      mediaType === "text/plain" &&
+      documentSettings &&
+      nativeSettings(mediaType, documentSettings)
+        ? documentSettings.optionsJson
+        : null,
     csvDocument,
     xmlOutline:
       mediaType === "application/xml" &&

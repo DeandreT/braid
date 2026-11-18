@@ -66,6 +66,9 @@ public sealed class LifecycleOrderConservationTests(PostgresFixture fixture)
         await using var jobs = new PostgresDeletionJobStore(db.RegressionConnectionString("braid_lifecycle_worker"));
         var archive = await admin.ChangeAsync(test.Actor, new(key, ResourceLifecycleAction.Archive, Guid.NewGuid(), new(1, 1)), token);
         Assert.Equal(ResourceLifecycleOutcome.Archived, archive.Outcome);
+        Assert.Equal(ResourcePurgeOutcome.ActiveRelease,
+            (await admin.RequestAsync(test.Actor, new(key, Guid.NewGuid(), Guid.NewGuid(), archive.Receipt!.Version), token)).Outcome);
+        Assert.Equal(0L, await db.ScalarAsync<long>("SELECT count(*) FROM braid.deletion_jobs"));
         var version = await db.ScalarAsync<long>("SELECT max(version) FROM braid.release_target_events WHERE target_id=$1", target.TargetId);
         var retired = await admin.RetireAsync(test.Actor, new(org, project, target.TargetId, Guid.NewGuid(), version, test.Invocation.Release.ReleaseId), token);
         Assert.Equal(TargetRetirementOutcome.Retired, retired.Outcome);

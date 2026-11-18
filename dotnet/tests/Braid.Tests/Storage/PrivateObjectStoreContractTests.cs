@@ -1,6 +1,7 @@
 using System.Runtime.Versioning;
 using Braid.Application;
 using Braid.Domain;
+using Braid.Application.Lifecycle;
 
 namespace Braid.Tests;
 
@@ -17,6 +18,37 @@ public sealed class PrivateObjectStoreContractTests(AzuriteFixture azurite)
         var stores = new TheoryData<string> { StoreHarness.FileSystem };
         if (AzuriteFixture.IsConfigured) stores.Add(StoreHarness.Blob);
         return stores;
+    }
+
+    [Theory, MemberData(nameof(Stores))]
+    public async Task CatalogPurgeRecoversAfterPhysicalDeleteBeforeAcknowledgement(string kind)
+    {
+        await using var harness = await StoreHarness.CreateAsync(kind, azurite);
+        var registry = new PrivateStorageV2PhysicalRegistry();
+        var bytes = "synthetic purge recovery"u8.ToArray();
+        var reference = PrivateStorageData.Reference(bytes);
+        var owner = PrivateStorageV2Data.Owner(reference);
+        var target = PrivateStorageV2Data.FinalClaim(reference, owner).Retirement.Target;
+        var job = Guid.NewGuid();
+        var objectTarget = Guid.NewGuid();
+        CatalogObjectDeletionClaim Claim(long generation) => new(job, objectTarget, generation, Guid.NewGuid(), Guid.NewGuid(),
+            DateTimeOffset.UtcNow.AddMinutes(1), target, null);
+        await using (var first = await harness.InitializeAsync(() => registry))
+        {
+            await first.PublishAsync(owner, reference, new MemoryStream(bytes));
+            var deletion = (IPrivateObjectDeletionStore)first.Retirement;
+            await using (await harness.HoldObjectGateAsync(reference.Id))
+                Assert.Equal(PrivateObjectRetirementOutcome.Busy, await deletion.DeleteAsync(Claim(1)));
+            Assert.Equal(bytes, await harness.FinalBytesAsync(reference));
+            Assert.Equal(PrivateObjectRetirementOutcome.Deleted, await deletion.DeleteAsync(Claim(1)));
+            // The worker stops here, before reporting the physical observation.
+        }
+        await using var restarted = await harness.OpenAsync(() => registry);
+        Assert.Equal(PrivateObjectRetirementOutcome.Missing, await ((IPrivateObjectDeletionStore)restarted.Retirement).DeleteAsync(Claim(2)));
+        Assert.Null(await harness.FinalBytesAsync(reference));
+        using var source = new PrivateStorageInput(bytes);
+        await PrivateStorageData.ErrorAsync(PrivateObjectStorageError.Missing, () => restarted.PublishAsync(owner, reference, source));
+        Assert.Equal(0, source.ReadCalls);
     }
 
     [Theory, MemberData(nameof(Stores))]

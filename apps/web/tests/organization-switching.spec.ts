@@ -41,6 +41,7 @@ async function install(
   page: Page,
   state: "authenticated" | "anonymous" = "authenticated",
   fallback = false,
+  sessionCookie?: string,
 ) {
   const fixture = {
     state,
@@ -53,6 +54,11 @@ async function install(
     const url = new URL(request.url());
     const path = url.pathname;
     fixture.reads.push(path);
+    if (
+      sessionCookie &&
+      (await request.headerValue("cookie")) !== sessionCookie
+    )
+      return route.fulfill({ status: 401, json: { code: "identityRejected" } });
     if (path === "/api/v1/health")
       return route.fulfill({
         json: { status: "ok", service: "braid-api", apiVersion: "v1" },
@@ -329,13 +335,18 @@ test("a late response for the organization left behind never appears under the n
 
 test("two tabs under one session keep independent organizations", async ({
   context: browser,
-}) => {
+  baseURL,
+}, testInfo) => {
+  const cookie = { name: "synthetic_session", value: "member-a-and-b" };
+  await browser.addCookies([{ ...cookie, url: baseURL!, httpOnly: true }]);
   const first = await browser.newPage();
   const second = await browser.newPage();
-  await install(first);
-  await install(second);
+  const sharedCookie = `${cookie.name}=${cookie.value}`;
+  await install(first, "authenticated", false, sharedCookie);
+  await install(second, "authenticated", false, sharedCookie);
   await first.goto(projects(rootOrg));
-  await second.goto(projects(otherOrg));
+  await second.goto(projects(rootOrg));
+  await switchTo(second, names[otherOrg]);
   await expect(first.getByRole("link", { name: "Root project" })).toBeVisible();
   await expect(
     second.getByRole("link", { name: "Second project" }),
@@ -346,6 +357,18 @@ test("two tabs under one session keep independent organizations", async ({
   await expect(
     second.getByRole("link", { name: "Second project" }),
   ).toBeVisible();
+  await expect(first).toHaveURL(projects(rootOrg));
+  await expect(second).toHaveURL(projects(otherOrg));
+  await expect(first.getByRole("link", { name: "Second project" })).toHaveCount(
+    0,
+  );
+  await expect(second.getByRole("link", { name: "Root project" })).toHaveCount(
+    0,
+  );
+  await testInfo.attach("second-tab-organization", {
+    body: await second.screenshot(),
+    contentType: "image/png",
+  });
 });
 
 test("malformed qualified standalone routes never fall back to the root", async ({

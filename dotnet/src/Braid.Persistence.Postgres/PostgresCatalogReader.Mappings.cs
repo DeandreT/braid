@@ -57,6 +57,8 @@ public sealed partial class PostgresCatalogReader
                 FROM braid.mappings source
                 WHERE source.organization_id = authorized.organization_id AND source.project_id = authorized.project_id
                   AND (@afterId::uuid IS NULL OR source.id > @afterId)
+                AND NOT EXISTS (SELECT 1 FROM ONLY braid.resource_lifecycles l WHERE l.organization_id=source.organization_id
+                    AND l.project_id=source.project_id AND (l.mapping_id IS NULL OR l.mapping_id=source.id) AND l.state='archived')
                 ORDER BY source.id LIMIT @fetchLimit
             ) mapping ON true
             """, HeadJoin, "ORDER BY mapping.id"));

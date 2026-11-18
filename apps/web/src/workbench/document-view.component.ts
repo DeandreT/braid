@@ -7,6 +7,12 @@ import { csvDocumentLimits } from "./csv-document";
   selector: "braid-document-view",
   template: `
     <section aria-label="Document bytes">
+      @if (data().flexLayout; as layout) {
+        <details class="saved-layout">
+          <summary>Saved FlexText layout (read only)</summary>
+          <pre tabindex="0">{{ layout }}</pre>
+        </details>
+      }
       @if (data().xmlMetadataText; as metadata) {
         <details>
           <summary>Saved XML metadata (read only)</summary>
@@ -154,6 +160,9 @@ import { csvDocumentLimits } from "./csv-document";
         <ol aria-label="EDI segments">
           @for (segment of data().segments; track $index) {
             <li>
+              @if (interchangeStarts().get($index); as number) {
+                <strong class="interchange">Interchange {{ number }}</strong>
+              }
               <code>{{ segment }}</code>
             </li>
           }
@@ -172,7 +181,11 @@ import { csvDocumentLimits } from "./csv-document";
         @if (csvUnavailableMessage(); as message) {
           <p>{{ message }}</p>
         }
-        <pre tabindex="0">{{ data().text }}</pre>
+        @if (data().flexLayout && data().byteCount === 0) {
+          <p>Present, empty FlexText document.</p>
+        } @else {
+          <pre tabindex="0">{{ data().text }}</pre>
+        }
       }
       @if (data().truncated && !tableView()) {
         <p>
@@ -197,6 +210,13 @@ import { csvDocumentLimits } from "./csv-document";
       gap: 0.5rem;
       margin-bottom: 0.5rem;
       color: var(--wb-evidence-text);
+    }
+    .saved-layout {
+      margin-bottom: 0.75rem;
+    }
+    .interchange {
+      display: block;
+      margin-block: 0.5rem 0.2rem;
     }
     button {
       color: var(--wb-selection-text);
@@ -289,6 +309,14 @@ import { csvDocumentLimits } from "./csv-document";
   `,
 })
 export class DocumentViewComponent {
+  readonly interchangeStarts = computed(() => {
+    const starts = new Map<number, number>();
+    const tag = this.data().mediaType === "application/edi-x12" ? "ISA" : "UNB";
+    this.data().segments?.forEach((segment, index) => {
+      if (segment.startsWith(tag)) starts.set(index, starts.size + 1);
+    });
+    return starts;
+  });
   readonly data = input.required<DocumentRepresentation>();
   readonly csvRowLimit = csvDocumentLimits.maximumDisplayedRows;
   readonly mode = signal<"formatted" | "raw">("formatted");

@@ -179,6 +179,10 @@ public sealed class EdiRegressionComparisonTests
         {
             Assert.Equal(RegressionComparisonOutcome.Failed, Compare(expected, actual, media).Outcome);
             Assert.Equal(RegressionComparisonOutcome.Passed, Compare(expected, actual, media, new(true, true, true)).Outcome);
+            var businessChange = actual.Replace("BRAID-330", "ORDER-B", StringComparison.Ordinal);
+            var mismatch = Compare(expected + expected, expected + businessChange, media, new(true, true, true));
+            Assert.Equal(RegressionComparisonOutcome.Failed, mismatch.Outcome);
+            Assert.Equal(2, Assert.Single(mismatch.Differences).Location!.Interchange);
             var broken = actual.Replace(media == "application/edi-x12" ? "IEA*1*000000331" : "UNZ+1+331",
                 media == "application/edi-x12" ? "IEA*1*000000999" : "UNZ+1+999", StringComparison.Ordinal);
             var result = Compare(expected, broken, media, new(true, true, true));

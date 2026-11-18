@@ -56,7 +56,12 @@ import { xmlPreviewProfile } from "./xml-contract";
 
 @Component({
   selector: "braid-revision-preview",
-  imports: [DeleteItemComponent, StatusChipComponent, HelpLinkComponent, DocumentViewComponent],
+  imports: [
+    DeleteItemComponent,
+    StatusChipComponent,
+    HelpLinkComponent,
+    DocumentViewComponent,
+  ],
   templateUrl: "./revision-preview.component.html",
   styleUrl: "./revision-preview.component.css",
 })
@@ -469,6 +474,7 @@ export class RevisionPreviewComponent {
               output.mediaType,
               output.csvDialect,
               output.xmlMetadata,
+              output.documentSettings,
             ),
           });
           this.outputSelected.emit();
