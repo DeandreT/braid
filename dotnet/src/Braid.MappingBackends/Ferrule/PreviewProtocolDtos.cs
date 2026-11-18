@@ -24,6 +24,9 @@ internal sealed record PreviewHostArtifact(
     uint ByteLength,
     string Sha256,
     CsvDocumentDialect? CsvDialect = null,
-    System.Text.Json.JsonElement? XmlMetadata = null);
+    System.Text.Json.JsonElement? XmlMetadata = null,
+    System.Text.Json.JsonElement? FlexTextSettings = null,
+    System.Text.Json.JsonElement? XlsxSettings = null,
+    System.Text.Json.JsonElement? DocumentSettings = null);
 
 internal sealed record PreviewHostFailure(string Code, string Message, bool MessageTruncated, string? Subject, bool SubjectTruncated);

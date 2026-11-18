@@ -5,6 +5,7 @@ using Azure.Storage;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Specialized;
 using Braid.Application;
+using Braid.Application.Lifecycle;
 using Braid.Domain;
 
 namespace Braid.Storage.Blob;
@@ -14,7 +15,7 @@ namespace Braid.Storage.Blob;
 /// actual original workflow claim; physical retirement consumes an already issued retirement.
 /// </summary>
 public sealed partial class BlobPrivateObjectStore : IPrivateObjectPublicationStore,
-    IPrivateObjectRetirementStore, IDisposable, IAsyncDisposable
+    IPrivateObjectRetirementStore, IPrivateObjectDeletionStore, IDisposable, IAsyncDisposable
 {
     /// <summary>The explicit kind this store registers; it selects the Blob publication format.</summary>
     public const PrivatePublicationStoreKind PublicationStoreKind = PrivatePublicationStoreKind.AzureBlob;
@@ -72,12 +73,12 @@ public sealed partial class BlobPrivateObjectStore : IPrivateObjectPublicationSt
         CancellationToken cancellationToken = default) =>
         OpenConfiguredAsync(options, container, registryFactory, observer, initialize: false, cancellationToken);
 
-    internal static BlobContainerClient CreateContainerClient(BlobStorageOptions options)
+    internal static BlobContainerClient CreateContainerClient(BlobStorageOptions options, int maxRetries = 3)
     {
         ArgumentNullException.ThrowIfNull(options);
         var clientOptions = new BlobClientOptions();
         clientOptions.Retry.Mode = RetryMode.Exponential;
-        clientOptions.Retry.MaxRetries = 3;
+        clientOptions.Retry.MaxRetries = maxRetries;
         clientOptions.Retry.Delay = TimeSpan.FromMilliseconds(200);
         clientOptions.Retry.MaxDelay = TimeSpan.FromSeconds(4);
         clientOptions.Retry.NetworkTimeout = TimeSpan.FromSeconds(30);

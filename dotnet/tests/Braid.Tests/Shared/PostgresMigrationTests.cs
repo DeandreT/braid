@@ -34,7 +34,21 @@ public sealed class PostgresMigrationTests(PostgresFixture fixture)
         ChatSchemaContract.WorkspaceMigrationChecksum, PreviewSchemaTestContract.ReadsMigrationChecksum,
         RegressionSchemaTestContract.DocumentPreviewsChecksum, RegressionSchemaTestContract.X12InterchangeBuildsChecksum, RegressionSchemaTestContract.ComparisonSettlementChecksum, MappingDraftSchemaTestContract.DraftChecksum, MappingDraftSchemaTestContract.PreviewChecksum, ChatSchemaContract.MappingWriteMigrationChecksum, ChatSchemaContract.WriteJournalMigrationChecksum, RegressionSchemaTestContract.CsvDocumentsChecksum, XmlPreviewSchemaAdmission.MigrationChecksum,
         ChatSchemaContract.EditProposalMigrationChecksum, SpecSchemaTestContract.Checksum, MappingCreationChecksum, DocumentEvidenceChecksum,
-        DocumentJsonSchemaAdmission.MigrationChecksum];
+        DocumentJsonSchemaAdmission.MigrationChecksum, MachineInvocationRoleGuard.HostOrderChecksum, LocalReleaseRoleGuard.ReplicaMigrationChecksum,
+        TriggerRoleGuard.MigrationChecksum, TriggerRoleGuard.ScheduleMigrationChecksum, TriggerRoleGuard.OperationsMigrationChecksum,
+        "83a6006f4bc55199c9d292b0f2d9c1609b0811ce6058e7b7298410ac929e9428", // AS2 send fence
+        "7fa579dba2b2a974c7ee2389a3940c752908df2504ec6938e1901d61fe31aa19", // pilot quarantine
+        AuditLogSchemaAdmission.MigrationChecksum, AiUsageSchemaAdmission.MigrationChecksum,
+        "327c6d2068d1b27c5f27d1d4c3d9b0a2e432fd506c4c51a998f3791be3d68152", // organization switching
+        "aa3158893a2527406a97d40ba3e546b35c7fe28d99d063ef42cfbefb0bd5c4c3", // 0058_resource_lifecycle
+        "35ce67e7d6d8c6ef4dcc18c5f077646b4d09f648d3311905dcb881d7166e3b5c", // 0059_resource_deletion
+        "76c50ed5190d4dd5c62b7bb07c82890792949db81414fca54d8e87218435f8fe", // 0060_retention_policies
+        "fd2cdcb86a18e861119283e9556f4892e4d74298b3f321c502b58e6113af78c7", // 0061_resource_purge
+        "fcc470a90b97ece9509353ad66a0357b58cd6359253b25888bf30b6566edab79", // 0062_retention_enforcement
+        "e55a49d1d580e09ae6280115a3fda9fc69d569b465695c90ab1e6fc3e9f6bb04", // 0063_retention_completion
+        "b2bd388dd5221a51a0e4bb615212ac6cc79bca35449e6fc9dc83d4abd0438f94", // 0064_order_retention_constraints
+        "7bf1013d631501692a858e0c9928b76ac0d373cbba554981ac48912808bcc6c6", // 0065_native_document_profiles
+        "ed429f73a7ce9b6accddff123fb018ad1b0cadefe62d8b91b3a9c7ba1d9ca3e6"]; // 0066_project_creation_retention_hooks
     [PostgresFact]
     public async Task EmptyInstallationAndRepeatedMigrationPreserveOriginalFactsAndJournal()
     {

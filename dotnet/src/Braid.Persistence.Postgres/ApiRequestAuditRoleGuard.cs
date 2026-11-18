@@ -43,6 +43,9 @@ internal static class ApiRequestAuditRoleGuard
             if (await command.ExecuteScalarAsync(token) is not true) throw Invalid();
         }
         await BuildRoleGuard.ValidateFunctionsAsync(connection, transaction, Names, Definitions.Value, token);
+        // Lifecycle rewrote automation routines inspected by the older projection. Its
+        // pinned catalog covers the installed audit relation, grants and capture trigger.
+        if (await LifecycleCatalogAdmission.ValidateIfInstalledAsync(connection, transaction, token)) return;
         if (await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, Tables, token) != Fingerprint) throw Invalid();
     }
 

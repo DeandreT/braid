@@ -17,6 +17,12 @@ import {
   type Observable,
 } from "rxjs";
 import { BrowserSessionState } from "../../auth/browser-session-state";
+import {
+  nativeFormats,
+  nativeProfile,
+  nativeMedia,
+  nativeSettings,
+} from "./native-document-contract";
 import { xmlPreflightProblem } from "./xml-problem";
 import { isCatalogId, type CatalogRevisionScope } from "../catalog-types";
 import {
@@ -314,7 +320,15 @@ function failure(error: unknown): PreviewError {
 
 function run(value: unknown, scope: CatalogRevisionScope): boolean {
   const body = object(value);
-  if (!exactKeys(body, runKeys)) return false;
+  if (
+    !exactKeys(body, [
+      ...runKeys,
+      ...(body && Object.hasOwn(body, "primaryDocumentSettings")
+        ? ["primaryDocumentSettings"]
+        : []),
+    ])
+  )
+    return false;
   const revision = object(body["revision"]);
   const state = body["state"];
   const outcome = body["outcome"];
@@ -349,6 +363,20 @@ function run(value: unknown, scope: CatalogRevisionScope): boolean {
     (body["recordsWritten"] === null || decimal(body["recordsWritten"])) &&
     Array.isArray(outputs) &&
     outputs.length <= previewLimits.outputs &&
+    (nativeProfile(object(body["provenance"])?.["profile"])
+      ? nativeSettings(
+          nativeProfile(object(body["provenance"])?.["profile"])!.media,
+          body["primaryDocumentSettings"],
+        ) &&
+        outputs.every(
+          (o) =>
+            object(o)?.["mediaType"] ===
+              nativeProfile(object(body["provenance"])?.["profile"])!.media &&
+            object(o)?.["boundaryId"] === "primary-output",
+        ) &&
+        outputs.length <= 1
+      : body["primaryDocumentSettings"] === undefined &&
+        outputs.every((o) => !nativeMedia(object(o)?.["mediaType"]))) &&
     (!outputs.some(
       (output) => object(output)?.["mediaType"] === "application/xml",
     ) ||
@@ -384,6 +412,9 @@ function outputDescriptor(value: unknown): value is PreviewOutput {
   return (
     exactKeys(output, [
       ...outputKeys,
+      ...(output && Object.hasOwn(output, "documentSettings")
+        ? ["documentSettings"]
+        : []),
       ...(output && Object.hasOwn(output, "csvDialect") ? ["csvDialect"] : []),
       ...(output && Object.hasOwn(output, "xmlMetadata")
         ? ["xmlMetadata"]
@@ -400,12 +431,20 @@ function outputDescriptor(value: unknown): value is PreviewOutput {
       "application/edifact",
       "text/csv",
       "text/tab-separated-values",
+      ...nativeFormats.map((f) => f.media),
       "application/xml",
     ].includes(output["mediaType"] as string) &&
-    (output["mediaType"] === "application/xml"
-      ? output["csvDialect"] === undefined && xmlMetadata(output["xmlMetadata"])
-      : output["xmlMetadata"] === undefined &&
-        csvMetadata(output["mediaType"], output["csvDialect"])) &&
+    (nativeMedia(output["mediaType"])
+      ? nativeSettings(output["mediaType"], output["documentSettings"]) &&
+        output["xmlMetadata"] === undefined &&
+        output["csvDialect"] === undefined
+      : output["documentSettings"] !== undefined
+        ? false
+        : output["mediaType"] === "application/xml"
+          ? output["csvDialect"] === undefined &&
+            xmlMetadata(output["xmlMetadata"])
+          : output["xmlMetadata"] === undefined &&
+            csvMetadata(output["mediaType"], output["csvDialect"])) &&
     decimal(output["recordsWritten"]) &&
     (!csvMedia(output["mediaType"]) ||
       BigInt(output["recordsWritten"] as string) <=

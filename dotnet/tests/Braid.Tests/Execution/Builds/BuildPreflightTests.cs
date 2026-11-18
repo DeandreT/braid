@@ -37,6 +37,18 @@ public sealed class BuildPreflightTests
     }
 
     [Theory]
+    [InlineData("flexText", BuildPreflightReason.UnsupportedFlexTextBuild)]
+    [InlineData("xlsx", BuildPreflightReason.UnsupportedXlsxBuild)]
+    [InlineData("protobuf", BuildPreflightReason.UnsupportedProtobufBuild)]
+    [InlineData("xbrl", BuildPreflightReason.UnsupportedXbrlBuild)]
+    public void Native_document_output_cannot_be_promoted_by_claimed_compiled_support(string format, BuildPreflightReason expected)
+    {
+        var intent = Intent(boundaries: [new(BuildBoundaryKind.PrimaryInput, null, "json"), new(BuildBoundaryKind.PrimaryOutput, null, format)]);
+        Assert.Equal(new BuildPreflightResult(BuildPreflightOutcome.Unsupported, expected), service.Evaluate(intent, Capability(intent)));
+        AssertFailure(BuildContractFailure.CapabilityUnavailable, () => BuildArtifactReference.Create(intent, Capability(intent), Digest(), 1));
+    }
+
+    [Theory]
     [InlineData(CapabilityStatus.Unsupported, BuildPreflightOutcome.Unsupported)]
     [InlineData(CapabilityStatus.NotQualified, BuildPreflightOutcome.NotQualified)]
     [InlineData(CapabilityStatus.Conditional, BuildPreflightOutcome.ConditionsRequired)]

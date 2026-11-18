@@ -1,3 +1,4 @@
+import { LifecyclePanelComponent } from "./lifecycle/lifecycle-panel.component";
 import { DatePipe } from "@angular/common";
 import { Component, DestroyRef, effect, inject } from "@angular/core";
 import { WorkspaceConversation } from "../workbench/workspace-conversation";
@@ -24,6 +25,7 @@ interface MappingScreen {
 @Component({
   selector: "braid-mapping-page",
   imports: [
+    LifecyclePanelComponent,
     DatePipe,
     RouterLink,
     CatalogStatusComponent,

@@ -3,6 +3,7 @@ import { ActivatedRoute, RouterLink } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { firstValueFrom, from } from "rxjs";
 import { CatalogApi } from "../catalog/catalog-api";
+import { OrganizationSelection } from "../catalog/organization-selection";
 import { createCatalogRead } from "../catalog/catalog-state";
 import { CatalogStatusComponent } from "../catalog/catalog-shell.component";
 import {
@@ -55,7 +56,7 @@ type ResourceView = {
     }
     <p>
       <a
-        routerLink="/chat"
+        [routerLink]="selection.link('/chat')"
         [queryParams]="
           returnConversation() ? { conversationId: returnConversation() } : {}
         "
@@ -108,6 +109,7 @@ type ResourceView = {
 export class ChatResourcePageComponent {
   readonly returnConversation = signal<string | null>(null);
   readonly read = createCatalogRead<ResourceView>();
+  readonly selection = inject(OrganizationSelection);
   private readonly catalog = inject(CatalogApi);
   private readonly previews = inject(PreviewApi);
   private readonly regressions = inject(RegressionApi);

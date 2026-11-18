@@ -5,6 +5,12 @@ import type {
 import { encodeBytes } from "../regression/regression-api";
 import { csvMetadata, csvPreviewProfile } from "./csv-contract";
 import type { PreviewRun, PreviewSubmission } from "./preview-types";
+import {
+  nativeFormats,
+  nativeProfile,
+  nativeMedia,
+  nativeSettings,
+} from "./native-document-contract";
 import { xmlMetadata, xmlPreviewProfile } from "./xml-contract";
 
 export interface PreviewCasePending {
@@ -29,14 +35,19 @@ export function previewCaseDefinition(
   name: string,
 ): CaseDefinition {
   const xml = submission.profile === xmlPreviewProfile;
-  const runtime = xml ? capabilities.xmlRuntime : capabilities.csvRuntime;
+  const native = nativeProfile(submission.profile);
+  const runtime = native
+    ? capabilities.nativeRuntimes?.find((r) => r.profile === native.profile)
+    : xml
+      ? capabilities.xmlRuntime
+      : capabilities.csvRuntime;
   const provenance = run.provenance;
   if (
     !capabilities.publishCases ||
     !run.revision ||
     !!run.draft ||
     !runtime ||
-    (!xml && submission.profile !== csvPreviewProfile) ||
+    (!native && !xml && submission.profile !== csvPreviewProfile) ||
     run.state !== "completed" ||
     run.outcome !== "succeeded" ||
     run.outputs.length < 1 ||
@@ -48,12 +59,17 @@ export function previewCaseDefinition(
     run.outputs.some(
       (output, index) =>
         output.byteCount !== bytes[index]!.length ||
-        (xml
-          ? output.mediaType !== "application/xml" ||
-            !xmlMetadata(output.xmlMetadata) ||
-            (output.boundaryId !== "primary-output" &&
-              output.targetNameTruncated)
-          : !csvMetadata(output.mediaType, output.csvDialect)),
+        (native
+          ? !nativeSettings(native.media, run.primaryDocumentSettings) ||
+            !nativeSettings(native.media, output.documentSettings) ||
+            output.mediaType !== native.media ||
+            output.boundaryId !== "primary-output"
+          : xml
+            ? output.mediaType !== "application/xml" ||
+              !xmlMetadata(output.xmlMetadata) ||
+              (output.boundaryId !== "primary-output" &&
+                output.targetNameTruncated)
+            : !csvMetadata(output.mediaType, output.csvDialect)),
     ) ||
     !provenance?.confirmed ||
     provenance.profile !== runtime.profile ||
@@ -76,6 +92,13 @@ export function previewCaseDefinition(
       kind: submission.target.kind,
       name: submission.target.name ?? null,
     },
+    ...(native
+      ? {
+          primaryDocumentSettings: structuredClone(
+            run.primaryDocumentSettings!,
+          ),
+        }
+      : {}),
     primaryBase64Url: base64Url(submission.inputs[0]!.content),
     namedInputs: submission.inputs.slice(1).map((input) => ({
       name: input.name!,
@@ -89,9 +112,11 @@ export function previewCaseDefinition(
       name: output.boundaryId === "primary-output" ? null : output.targetName,
       bytesBase64Url: encodeBytes(bytes[index]!),
       mediaType: output.mediaType,
-      ...(xml
-        ? { xmlMetadata: structuredClone(output.xmlMetadata!) }
-        : { csvDialect: { ...output.csvDialect! } }),
+      ...(native
+        ? { documentSettings: structuredClone(output.documentSettings!) }
+        : xml
+          ? { xmlMetadata: structuredClone(output.xmlMetadata!) }
+          : { csvDialect: { ...output.csvDialect! } }),
     })),
   };
 }

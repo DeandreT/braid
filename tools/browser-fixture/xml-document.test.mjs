@@ -39,7 +39,7 @@ test("XML metadata is closed and schema locations stay lexical", () => {
     false,
   );
   assert.equal(xmlMetadata({ ...metadata, safetyProfile: null }), false);
-  assert.equal(xmlMetadataBytes(metadata), 102);
+  assert.equal(xmlMetadataBytes(metadata), 104);
 });
 test("lexical XML outline retains escaped markup without a DOM or entity resolver", () => {
   const source =

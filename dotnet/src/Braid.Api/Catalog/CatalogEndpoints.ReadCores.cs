@@ -54,7 +54,7 @@ public static partial class CatalogEndpoints
                     .Concat(options.CsvRuntime is null ? [] : new[] { RegressionComparisonService.CsvRowsPolicy }).ToArray()
                 : null,
             options.CsvRuntime is { } csvRuntime ? Runtime(csvRuntime) : null,
-            options.XmlRuntime is { } xmlRuntime ? Runtime(xmlRuntime) : null);
+            options.XmlRuntime is { } xmlRuntime ? Runtime(xmlRuntime) : null, options.NativeRuntimes.Count == 0 ? null : options.NativeRuntimes.Select(Runtime).ToArray());
     }
 
     internal static async Task<RegressionCasePage?> RegressionCasePageAsync(IServiceProvider services, ActorContext actor, MappingScope mapping,

@@ -54,6 +54,7 @@ public static partial class CatalogEndpoints
             .Produces<CatalogPreviewSubmitResultV1>(StatusCodes.Status201Created)
             .Produces<CatalogErrorV1>(StatusCodes.Status409Conflict)
             .Produces<CatalogErrorV1>(StatusCodes.Status413PayloadTooLarge)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .Produces<CatalogXmlPreviewProblemV1>(StatusCodes.Status422UnprocessableEntity)
             .Produces<CatalogErrorV1>(StatusCodes.Status415UnsupportedMediaType);
         DescribePreview<CatalogPreviewRunV1>(endpoints.MapGet(organization + "/previews/{runId}", GetCatalogPreview),
@@ -100,7 +101,7 @@ public static partial class CatalogEndpoints
             {
                 Type = JsonSchemaType.String | JsonSchemaType.Null,
                 Description = "Omitted or null preserves legacy JSON admission. XML is a separately enabled safe native-preview profile with saved metadata and named targets. CSV/TSV is a separately enabled primary-only profile; an explicit empty content string is present input. Formats and settings come from saved native boundaries, never filenames or caller overrides. XML regression compares exact bytes; compiled XML execution is unavailable.",
-                Enum = [JsonValue.Create(PreviewPolicy.Profile)!, JsonValue.Create(DocumentPreviewPolicy.Profile)!, JsonValue.Create(CsvDocumentPolicy.Profile)!, JsonValue.Create(XmlPreviewAdmission.Profile)!, null!]
+                Enum = [JsonValue.Create(PreviewPolicy.Profile)!, JsonValue.Create(DocumentPreviewPolicy.Profile)!, JsonValue.Create(CsvDocumentPolicy.Profile)!, JsonValue.Create(XmlPreviewAdmission.Profile)!, ..NativeDocumentFormat.CatalogFormats.Select(f => JsonValue.Create(f.Profile)!), null!]
             };
         foreach (var path in document.Paths.Values)
             foreach (var operation in path.Operations?.Values.AsEnumerable() ?? Enumerable.Empty<OpenApiOperation>())
@@ -108,7 +109,7 @@ public static partial class CatalogEndpoints
                     && response is OpenApiResponse output)
                 {
                     output.Content = new Dictionary<string, OpenApiMediaType>();
-                    foreach (var media in new[] { "application/json", "application/edi-x12", "application/edifact", "text/csv", "text/tab-separated-values", "application/xml" })
+                    foreach (var media in new[] { "application/json", "application/edi-x12", "application/edifact", "text/csv", "text/tab-separated-values", "application/xml" }.Concat(NativeDocumentFormat.CatalogFormats.Select(f => f.MediaType)))
                         output.Content[media] = new OpenApiMediaType { Schema = new OpenApiSchema { Type = JsonSchemaType.String, Format = "binary" } };
                     output.Headers = new Dictionary<string, IOpenApiHeader>
                     {
@@ -152,11 +153,14 @@ public static partial class CatalogEndpoints
             if (!revision.Access.Can(ProjectAction.SubmitPreview))
                 return NotFound();
             var body = await ReadPreviewBodyAsync(context.Request, options.BodyByteLimit, context.RequestAborted);
+            if (body.Profile == NativeDocumentFormat.Xlsx.Profile)
+                return Results.Problem(statusCode: StatusCodes.Status501NotImplemented, title: "XLSX output is unavailable", detail: NativeDocumentFormat.XlsxOutputRefusal);
             var submission = PreviewSubmission(new RevisionPreviewSubject(scope), key, body);
             var service = context.RequestServices.GetRequiredService<PreviewRunService>();
-            if (submission.Profile is PreviewExecutionProfile.CsvDocument or PreviewExecutionProfile.XmlDocument)
+            var native = NativeDocumentFormat.FromExecution(submission.Profile);
+            if (native is not null || submission.Profile is PreviewExecutionProfile.CsvDocument or PreviewExecutionProfile.XmlDocument)
             {
-                if (submission.Profile == PreviewExecutionProfile.XmlDocument ? !options.XmlEnabled : !options.CsvEnabled) throw new CatalogInvalidRequestException();
+                if (native is not null ? !options.NativeFormats.Contains(native) : submission.Profile == PreviewExecutionProfile.XmlDocument ? !options.XmlEnabled : !options.CsvEnabled) throw new CatalogInvalidRequestException();
                 if (submission.Profile != PreviewExecutionProfile.XmlDocument && (submission.NamedInputs.Count != 0 || submission.Target.Kind == PreviewTargetKind.Named)) throw new CatalogInvalidRequestException();
                 // All native-preflight profiles use the trusted preview store boundary
                 // before any private source I/O. Submission repeats admission atomically
@@ -187,6 +191,11 @@ public static partial class CatalogEndpoints
                         var inputs = XmlPreviewAdmission.BindInputs(artifact, submission.NamedInputs.Prepend(submission.Primary).ToArray());
                         XmlPreviewAdmission.Outputs(artifact, submission.Target);
                         submission = submission with { Primary = inputs[0], NamedInputs = inputs.Skip(1).ToArray() };
+                    }
+                    else if (native is not null)
+                    {
+                        native.CheckBytes(submission.Primary.Bytes);
+                        submission = submission with { Primary = new(null, submission.Primary.Bytes, documentSettings: NativeDocumentNativeSettings.Read(artifact, native).Input) };
                     }
                     else submission = submission with
                     {
@@ -263,7 +272,7 @@ public static partial class CatalogEndpoints
             context.Response.Headers["Content-Digest"] = "sha-256=:" + Convert.ToBase64String(Convert.FromHexString(output.Digest.Value)) + ":";
             context.Response.Headers.ContentDisposition = "attachment";
             context.Response.Headers.XContentTypeOptions = "nosniff";
-            if (output.XmlMetadata is not null ? output.CsvDialect is not null || !XmlDocumentPolicy.Admits(output.XmlMetadata, XmlDocumentRole.Output, output.MediaType)
+            if (output.DocumentSettings is not null ? !output.DocumentSettings.Admits(output.MediaType) : output.XmlMetadata is not null ? output.CsvDialect is not null || !XmlDocumentPolicy.Admits(output.XmlMetadata, XmlDocumentRole.Output, output.MediaType)
                 : CsvDocumentPolicy.AdmitsMediaType(output.MediaType) ? !CsvDocumentPolicy.Admits(output.CsvDialect, output.MediaType)
                 : !DocumentPreviewPolicy.AdmitsMediaType(output.MediaType) || output.CsvDialect is not null)
                 throw new InvalidOperationException("Stored preview media type is not admitted.");
@@ -360,7 +369,7 @@ public static partial class CatalogEndpoints
 
     private static PreviewRunSubmission PreviewSubmission(PreviewSubject subject, Guid key, CatalogPreviewSubmissionV1 body)
     {
-        var profile = body.Profile switch
+        var profile = NativeDocumentFormat.FromProfile(body.Profile)?.Execution ?? body.Profile switch
         {
             null or PreviewPolicy.Profile => PreviewExecutionProfile.LegacyJson,
             DocumentPreviewPolicy.Profile => PreviewExecutionProfile.Document,
@@ -392,11 +401,11 @@ public static partial class CatalogEndpoints
             if (input is null || (index == 0) != (input.Name is null) || input.Content is null)
                 throw new CatalogInvalidRequestException();
             var bytes = new byte[(input.Content.Length / 4 * 3) + 3];
-            if (!Convert.TryFromBase64String(input.Content, bytes, out var length) || length == 0 && profile != PreviewExecutionProfile.CsvDocument)
+            if (!Convert.TryFromBase64String(input.Content, bytes, out var length) || length == 0 && !NativeDocumentPolicy.AllowsEmpty(profile))
                 throw new CatalogInvalidRequestException();
             return new PreviewInputDocument(input.Name, bytes.AsSpan(0, length));
         }).ToArray();
-        if (subject is DraftPreviewSubject && profile == PreviewExecutionProfile.CsvDocument)
+        if (subject is DraftPreviewSubject && (profile == PreviewExecutionProfile.CsvDocument || NativeDocumentFormat.FromExecution(profile) is not null))
             throw new CatalogInvalidRequestException();
         return new PreviewRunSubmission(subject, key, target, inputs[0], inputs[1..], parameters) { Profile = profile };
     }
@@ -427,7 +436,7 @@ public static partial class CatalogEndpoints
         run.RecordsWritten?.ToString(CultureInfo.InvariantCulture),
         run.Outputs.Select(output => new CatalogPreviewOutputV1(output.Ordinal, output.BoundaryId, output.TargetName,
             output.TargetNameTruncated, output.MediaType, output.RecordsWritten.ToString(CultureInfo.InvariantCulture),
-            output.Digest.Value, output.ByteCount, CsvDialect(output.CsvDialect), XmlMetadata(output.XmlMetadata))).ToArray(),
+            output.Digest.Value, output.ByteCount, CsvDialect(output.CsvDialect), XmlMetadata(output.XmlMetadata), DocumentSettings(output.DocumentSettings))).ToArray(),
         run.CreatedAtUtc,
         run.StartedAtUtc,
         run.FinishedAtUtc,
@@ -435,11 +444,12 @@ public static partial class CatalogEndpoints
         run.Subject is DraftPreviewSubject draft ? new CatalogPreviewDraftSubjectV1(
             CatalogPublicMapper.MappingScope(new(draft.ExecutionScope.OrganizationId, draft.ExecutionScope.ProjectId, draft.ExecutionScope.MappingId)),
             draft.DraftId.ToString("D"), draft.Version.ToString(CultureInfo.InvariantCulture), CatalogPublicMapper.RevisionScope(draft.ExecutionScope),
-            draft.NativeDigest.Value, draft.NativeByteCount) : null);
+            draft.NativeDigest.Value, draft.NativeByteCount) : null, DocumentSettings(run.PrimaryDocumentSettings));
 
     private static CsvDocumentDialectV1? CsvDialect(CsvDocumentDialect? value) => value is null ? null :
         new(value.Schema, value.Delimiter, value.Quote, value.QuoteDisabled, value.HasHeaderRow, value.Utf8Bom, value.PreserveEmptyStrings);
 
+    private static NativeDocumentSettingsV1? DocumentSettings(NativeDocumentSettings? s) => s is null ? null : new(s.Schema,s.OptionsJson);
     private static XmlDocumentMetadataV1? XmlMetadata(XmlDocumentMetadata? value) => value is null ? null : new(value.Schema, value.SafetyProfile,
         value.SchemaHints is { } hints ? new(hints.NoNamespaceLocation, hints.Locations.Select(pair => new XmlSchemaLocationV1(pair.Namespace, pair.Location)).ToArray()) : null);
 

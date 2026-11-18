@@ -112,6 +112,7 @@ internal static class MappingMetadataRoleGuard
         await using (var protect = new NpgsqlCommand("LOCK TABLE " +
             string.Join(", ", reads.Select(name => "ONLY braid." + name)) + " IN ACCESS SHARE MODE", connection, transaction))
             await protect.ExecuteNonQueryAsync(cancellationToken);
+        if (await LifecycleCatalogAdmission.ValidateIfInstalledAsync(connection, transaction, cancellationToken)) return;
         await ValidateRelationsAsync(connection, transaction, sources, cancellationToken);
         await ValidateConstraintTriggersAsync(connection, transaction, sources, cancellationToken);
         await ValidatePoliciesAsync(connection, transaction, sources, cancellationToken);
@@ -278,8 +279,9 @@ internal static class MappingMetadataRoleGuard
         if (table.FunctionBody is null)
         {
             await using var absent = new NpgsqlCommand(
-                "SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_trigger WHERE tgrelid = ('braid.' || $1)::regclass AND NOT tgisinternal)", connection, transaction);
+                "SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_trigger WHERE tgrelid = ('braid.' || $1)::regclass AND NOT tgisinternal AND NOT tgname = ANY($2::text[]))", connection, transaction);
             absent.Parameters.AddWithValue(table.Name);
+            absent.Parameters.AddWithValue(await OrganizationSwitchingSchemaAdmission.AdmitTriggersAsync(connection, transaction, table.Name, cancellationToken));
             if (await absent.ExecuteScalarAsync(cancellationToken) is not false)
                 throw Refusal("The mapping metadata ownership sources must not have additional transition triggers.");
             await ValidateNoRulesAsync(connection, transaction, table.Name, cancellationToken);

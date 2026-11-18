@@ -231,6 +231,21 @@
         <h3 id="regression-case-title">
           {{ value.definition.name }} · Version {{ value.version }}
         </h3>
+        @if (capabilities()?.publishCases) {
+          <braid-delete-item
+            [context]="context()"
+            [target]="{
+              kind: 'regressionCase',
+              organizationId: mapping().scope.organizationId,
+              projectId: mapping().scope.projectId,
+              mappingId: mapping().scope.mappingId,
+              caseId: value.caseId,
+              version: value.version,
+            }"
+            label="this case and all its versions"
+            (deleted)="selected.set(null); loadCases()"
+          />
+        }
         <dl class="catalog-facts">
           <dt>Case ID</dt>
           <dd>

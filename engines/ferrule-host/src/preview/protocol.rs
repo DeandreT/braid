@@ -9,6 +9,8 @@ pub const DOCUMENT_PREVIEW_PROFILE: &str = "braid.ferrule-document-preview.v1";
 pub const CSV_PREVIEW_PROTOCOL_VERSION: &str = "braid.ferrule-csv-preview.v1";
 pub const CSV_PREVIEW_PROFILE: &str = "braid.ferrule-csv-preview.v1";
 pub const XML_PREVIEW_PROTOCOL_VERSION: &str = "braid.ferrule-xml-preview.v1";
+pub const FLEXTEXT_PREVIEW_PROTOCOL_VERSION: &str = crate::flextext_document::PROFILE;
+pub const XLSX_PREVIEW_PROTOCOL_VERSION: &str = crate::xlsx_document::PROFILE;
 pub const MAX_PREVIEW_INPUTS: usize = 16;
 pub const MAX_PREVIEW_INPUT_BYTES: usize = 8 * 1024 * 1024;
 pub const MAX_PREVIEW_OUTPUT_BYTES: usize = 8 * 1024 * 1024;
@@ -43,11 +45,30 @@ impl PreviewRequestHeader {
             DOCUMENT_PREVIEW_PROTOCOL_VERSION
                 | CSV_PREVIEW_PROTOCOL_VERSION
                 | XML_PREVIEW_PROTOCOL_VERSION
+                | crate::flextext_document::PROFILE
+                | crate::xlsx_document::PROFILE
+                | crate::xlsx_document::READ_JSON_PROFILE
+                | crate::native_document::PROTOBUF_PROFILE
+                | crate::native_document::XBRL_PROFILE
         )
     }
 
     pub fn is_csv_preview(&self) -> bool {
         self.protocol_version == CSV_PREVIEW_PROTOCOL_VERSION
+    }
+    pub fn native_format(&self) -> Option<crate::native_document::NativeFormat> {
+        crate::native_document::NativeFormat::from_profile(&self.protocol_version)
+    }
+
+    pub fn is_flextext_preview(&self) -> bool {
+        self.protocol_version == FLEXTEXT_PREVIEW_PROTOCOL_VERSION
+    }
+
+    pub fn reads_xlsx(&self) -> bool {
+        self.is_xlsx_preview() || self.protocol_version == crate::xlsx_document::READ_JSON_PROFILE
+    }
+    pub fn is_xlsx_preview(&self) -> bool {
+        self.protocol_version == XLSX_PREVIEW_PROTOCOL_VERSION
     }
     pub fn is_xml_preview(&self) -> bool {
         self.protocol_version == XML_PREVIEW_PROTOCOL_VERSION
@@ -161,6 +182,12 @@ pub struct PreviewArtifact {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub csv_dialect: Option<crate::csv_document::CsvDialect>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub flex_text_settings: Option<crate::flextext_document::Settings>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub xlsx_settings: Option<crate::xlsx_document::Settings>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub document_settings: Option<crate::native_document::Settings>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub xml_metadata: Option<crate::xml_document::Metadata>,
 }
 
@@ -191,7 +218,12 @@ impl PreviewResponse {
         Self {
             protocol_version: header
                 .map_or(PREVIEW_PROTOCOL_VERSION, |header| {
-                    if header.is_xml_preview() {
+                    if header.is_flextext_preview()
+                        || header.reads_xlsx()
+                        || header.native_format().is_some()
+                    {
+                        &header.protocol_version
+                    } else if header.is_xml_preview() {
                         XML_PREVIEW_PROTOCOL_VERSION
                     } else if header.is_csv_preview() {
                         CSV_PREVIEW_PROTOCOL_VERSION
@@ -209,7 +241,12 @@ impl PreviewResponse {
             engine_revision: ENGINE_REVISION.into(),
             profile: header
                 .map_or(PREVIEW_PROFILE, |header| {
-                    if header.is_xml_preview() {
+                    if header.is_flextext_preview()
+                        || header.reads_xlsx()
+                        || header.native_format().is_some()
+                    {
+                        &header.protocol_version
+                    } else if header.is_xml_preview() {
                         XML_PREVIEW_PROTOCOL_VERSION
                     } else if header.is_csv_preview() {
                         CSV_PREVIEW_PROFILE

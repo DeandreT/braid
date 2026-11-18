@@ -22,6 +22,35 @@ public sealed partial class PostgresLocalReleaseStore(string connectionString, b
     public async Task<bool> DisableAsync(ActorContext actor, ReleaseTargetReference target, CancellationToken token = default) =>
         await WriteAsync(actor, target, null, "disable", null, token) is 0 or 1;
 
+    /// <summary>Atomic registration and immutable roster enrollment, with no unguarded activation window.</summary>
+    public async Task<bool> RegisterReplicasAsync(ActorContext actor, LocalReleaseTarget target, string[] roster, CancellationToken token = default)
+    {
+        if (!writer || roster.Length is < 1 or > 32) return false;
+        await using var tx = await BeginAsync(actor, target.Reference.Mapping.OrganizationId, true, token);
+        await using var command = tx.CreateCommand("SELECT braid.write_local_target('register',@org,@project,@mapping,@environment,@version,@target,@body)");
+        Scope(command, target.Reference);
+        command.Parameters.AddWithValue("body", target.CopyCanonicalBytes());
+        if (await command.ExecuteScalarAsync(token) is not (0 or 1)) return false;
+        command.CommandText = "SELECT braid.enroll_release_replicas(@org,@project,@mapping,@environment,@version,@target,@roster)";
+        command.Parameters.AddWithValue("roster", roster);
+        if (await command.ExecuteScalarAsync(token) is not true) return false;
+        await tx.CommitAsync(token);
+        return true;
+    }
+
+    public async Task<bool> RecordReplicaAsync(ActorContext actor, ReleaseTargetReference target, Guid? qualification, byte[] credential, CancellationToken token = default)
+    {
+        if (!writer || qualification == Guid.Empty || credential.Length != 32) return false;
+        await using var tx = await BeginAsync(actor, target.Mapping.OrganizationId, true, token);
+        await using var command = tx.CreateCommand("SELECT braid.record_release_replica(@org,@project,@mapping,@environment,@version,@target,@proof,@credential)");
+        Scope(command, target);
+        command.Parameters.AddWithValue("proof", NpgsqlDbType.Uuid, (object?)qualification ?? DBNull.Value);
+        command.Parameters.AddWithValue("credential", credential);
+        var ready = await command.ExecuteScalarAsync(token) is true;
+        await tx.CommitAsync(token);
+        return ready;
+    }
+
     public async Task<ReleaseWriteOutcome> RequestAsync(ActorContext actor, ReleaseIntent intent, CancellationToken token = default)
     {
         ArgumentNullException.ThrowIfNull(intent);

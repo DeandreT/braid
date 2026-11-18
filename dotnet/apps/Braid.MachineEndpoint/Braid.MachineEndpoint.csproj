@@ -11,6 +11,9 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
     <PackageReference Include="Microsoft.Extensions.ApiDescription.Server" Version="10.0.12" PrivateAssets="all" />
+    <ProjectReference Include="../../src/Braid.Triggers.As2/Braid.Triggers.As2.csproj" />
+    <ProjectReference Include="../../src/Braid.Triggers.Emulators/Braid.Triggers.Emulators.csproj" />
+    <ProjectReference Include="../../src/Braid.Triggers.Sftp/Braid.Triggers.Sftp.csproj" />
     <ProjectReference Include="../../src/Braid.Deployment/Braid.Deployment.csproj" />
     <ProjectReference Include="../../src/Braid.Identity/Braid.Identity.csproj" />
     <ProjectReference Include="../../src/Braid.MappingBackends/Braid.MappingBackends.csproj" />

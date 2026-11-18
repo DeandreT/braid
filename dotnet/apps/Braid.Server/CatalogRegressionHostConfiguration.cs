@@ -76,7 +76,7 @@ public static class CatalogRegressionHostConfiguration
             FerrulePreviewBackend.CsvAdapterBuild, CsvDocumentPolicy.Profile) : null;
         var xmlRuntime = xmlEnabled ? new RegressionRuntimeIdentity("ferrule", FerruleInspectionBackend.EngineRevision, image,
             FerrulePreviewBackend.XmlAdapterBuild, XmlPreviewAdmission.Profile) : null;
-        services.AddBraidRegressionCases(new(true, runtime, documentRuntime, csvRuntime, xmlRuntime));
+        services.AddBraidRegressionCases(new(true, runtime, documentRuntime, csvRuntime, xmlRuntime, NativeDocumentFormat.EnabledFormats(environment, true).Select(f => new RegressionRuntimeIdentity(runtime.BackendId, runtime.EngineRevision, runtime.BackendBuild, f.AdapterBuild, f.Profile)).ToArray()));
         services.AddBraidRegressionRuns(new(true));
         Automation(runWriter);
         services.AddSingleton<IRegressionCaseReader>(_ => new PostgresRegressionCaseStore(caseReader, RegressionCaseDatabaseProfile.Reader));

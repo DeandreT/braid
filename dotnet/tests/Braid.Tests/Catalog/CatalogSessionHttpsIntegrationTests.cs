@@ -56,19 +56,31 @@ public sealed class CatalogSessionHttpsIntegrationTests(PostgresFixture fixture)
                 var tamperedSession = renewed.Copy(); tamperedSession.Session = "invalid-owned-carrier";
                 var absentAf = renewed.Copy(); absentAf.Antiforgery = null;
                 var cases = new[] {
-                    (Cookies: renewed, Token: (string?)null, Origins: (string[]?)null, Status: HttpStatusCode.Forbidden),
-                    (Cookies: renewed, Token: (string?)old.Token, Origins: (string[]?)null, Status: HttpStatusCode.Forbidden),
-                    (Cookies: renewed, Token: (string?)current.Token, Origins: new string[] { "https://foreign-origin.invalid" }, Status: HttpStatusCode.Forbidden),
-                    (Cookies: renewed, Token: (string?)current.Token, Origins: new string[] { test.Origin.GetLeftPart(UriPartial.Authority), test.Origin.GetLeftPart(UriPartial.Authority) }, Status: HttpStatusCode.Forbidden),
-                    (Cookies: absentSession, Token: (string?)current.Token, Origins: (string[]?)null, Status: HttpStatusCode.Unauthorized),
-                    (Cookies: tamperedSession, Token: (string?)current.Token, Origins: (string[]?)null, Status: HttpStatusCode.Unauthorized),
-                    (Cookies: absentAf, Token: (string?)current.Token, Origins: (string[]?)null, Status: HttpStatusCode.Forbidden)
+                    (Name: "missing-token", Cookies: renewed, Token: (string?)null, Origins: (string[]?)null, Status: HttpStatusCode.Forbidden, AdmissionReads: 1),
+                    (Name: "old-epoch-token", Cookies: renewed, Token: (string?)old.Token, Origins: (string[]?)null, Status: HttpStatusCode.Forbidden, AdmissionReads: 1),
+                    (Name: "foreign-origin", Cookies: renewed, Token: (string?)current.Token, Origins: new string[] { "https://foreign-origin.invalid" }, Status: HttpStatusCode.Forbidden, AdmissionReads: 1),
+                    (Name: "duplicate-origin", Cookies: renewed, Token: (string?)current.Token, Origins: new string[] { test.Origin.GetLeftPart(UriPartial.Authority), test.Origin.GetLeftPart(UriPartial.Authority) }, Status: HttpStatusCode.Forbidden, AdmissionReads: 1),
+                    (Name: "missing-session", Cookies: absentSession, Token: (string?)current.Token, Origins: (string[]?)null, Status: HttpStatusCode.Unauthorized, AdmissionReads: 0),
+                    (Name: "tampered-session", Cookies: tamperedSession, Token: (string?)current.Token, Origins: (string[]?)null, Status: HttpStatusCode.Unauthorized, AdmissionReads: 0),
+                    (Name: "missing-af-cookie", Cookies: absentAf, Token: (string?)current.Token, Origins: (string[]?)null, Status: HttpStatusCode.Forbidden, AdmissionReads: 1)
                 };
                 foreach (var item in cases)
                 {
                     var reply = await test.HeadersOnlyAsync(route, item.Cookies, item.Token, tag, item.Origins);
                     CatalogSessionHttpsFixture.Error(reply, item.Status, "identityRejected");
-                    CatalogSessionHttpsFixture.NoBodyOrBusiness(reply);
+                    if (item.AdmissionReads == 0)
+                        CatalogSessionHttpsFixture.NoBodyOrBusiness(reply);
+                    else
+                    {
+                        var value = reply.Record;
+                        CatalogSessionHttpsFixture.Check(value.CatalogReads == item.AdmissionReads
+                            && value.Actor?.PrincipalId == test.Data.Actor.PrincipalId
+                            && value.Order.SequenceEqual(new[] { "catalog", "organization-completed" })
+                            && value.BodyReads == 0 && value.BodyBytes == 0 && value.CapabilityReads == 0
+                            && value.MetadataWrites == 0 && value.CreatorCalls == 0 && value.DeferredResolutions == 0
+                            && value.DeferredCalls == 0 && value.DownstreamPaths == 0 && value.SessionRenews == 0,
+                            $"Refused unsafe vector {route.Family}/{item.Name} did work beyond its single fresh organization admission.");
+                    }
                 }
             }
             CatalogSessionHttpsFixture.Check(before == await test.Data.RowSnapshotAsync() && Enumerable.SequenceEqual(immutable, await test.Data.ImmutableSnapshotAsync()),
@@ -95,7 +107,9 @@ public sealed class CatalogSessionHttpsIntegrationTests(PostgresFixture fixture)
                 "Organization denial exposed a new request token/cookie or advanced to capability admission.");
             var deniedMapping = await test.SendAsync(test.MappingPath, cookies, observation: test.NewObservation(seedEtag: true));
             CatalogSessionHttpsFixture.Error(deniedMapping, HttpStatusCode.NotFound, "notFound");
-            await test.SetOrganizationAsync(true); await test.SetMembershipAsync(false);
+            await test.SetOrganizationAsync(true);
+            // Reactivation advances the admission incarnation, so only a fresh context's token authorizes.
+            context = await test.ContextAsync(cookies); await test.SetMembershipAsync(false);
             var route = test.UnsafeRoutes().Single(value => value.Family == "metadata-patch");
             var patch = await test.HeadersOnlyAsync(route, cookies, context.Token, tag);
             CatalogSessionHttpsFixture.Error(patch, HttpStatusCode.NotFound, "notFound");
@@ -184,6 +198,9 @@ public sealed class CatalogSessionHttpsIntegrationTests(PostgresFixture fixture)
         await CatalogSessionHttpsFixture.RunAsync(fixture, async test =>
         {
             var cookies = await test.IssueAsync(); await test.ContextAsync(cookies);
+            // The principal is also admitted to B; a scope without a current admission stays hidden.
+            await test.Data.Case.ExecuteAsync("UPDATE braid.organization_memberships SET active=false WHERE organization_id=$1 AND principal_id=$2",
+                test.Data.Seed.OrganizationB, test.Data.Seed.Alice);
             var foreign = $"/api/v1/organizations/{test.Data.Seed.OrganizationB:D}/projects/{test.Data.Seed.ProjectB:D}";
             var reply = await test.SendAsync(foreign, cookies, observation: test.NewObservation(seedEtag: true));
             CatalogSessionHttpsFixture.Error(reply, HttpStatusCode.NotFound, "notFound");
@@ -196,6 +213,57 @@ public sealed class CatalogSessionHttpsIntegrationTests(PostgresFixture fixture)
             CatalogSessionHttpsFixture.NoBodyOrBusiness(reply, noRenew: false);
         }, mismatchedCatalogOrganization: true);
     }
+
+    [PostgresFact]
+    public Task RouteSelectedOrganizationNeverFallsBackAndBindsItsRequestTokenToTheAdmission() =>
+        CatalogSessionHttpsFixture.RunAsync(fixture, async test =>
+        {
+            var seed = test.Data.Seed;
+            var cookies = await test.IssueAsync(); var root = await test.ContextAsync(cookies);
+            static string Context(string organization) => $"/api/v1/organizations/{organization}/context";
+            // Non-canonical forms are invalid, not an unknown organization (404).
+            foreach (string malformed in new[] { "not-an-id", "AAAAAAAA-1111-4111-8111-111111111111",
+                seed.OrganizationB.ToString("N"), seed.OrganizationB.ToString("B"), Guid.Empty.ToString("D") })
+                CatalogSessionHttpsFixture.Error(await test.SendAsync(Context(malformed), cookies), HttpStatusCode.BadRequest, "invalidRequest");
+            var unadmitted = Guid.NewGuid();
+            await test.Data.Case.ExecuteAsync("INSERT INTO braid.organizations(id,name) VALUES($1,$2)", unadmitted, "Organization C");
+            foreach (var missing in new[] { Guid.NewGuid(), unadmitted })
+                CatalogSessionHttpsFixture.Error(await test.SendAsync(Context(missing.ToString("D")), cookies), HttpStatusCode.NotFound, "notFound");
+
+            async Task<string> SelectedAsync(Guid organization, string admission)
+            {
+                var reply = await test.SendAsync(Context(organization.ToString("D")), cookies);
+                var json = reply.Json(); var catalog = json.GetProperty("catalog");
+                CatalogSessionHttpsFixture.Check(reply.Status == HttpStatusCode.OK && reply.NoStore
+                    && json.GetProperty("schemaVersion").GetString() == "braid.organization-context.v1"
+                    && json.GetProperty("admissionVersion").GetString() == admission
+                    && catalog.GetProperty("allowedOrganizationId").GetString() == organization.ToString("D"),
+                    "The qualified context did not present exactly the selected organization and admission.");
+                cookies.Apply(reply); return catalog.GetProperty("requestToken").GetString()!;
+            }
+            var b = await SelectedAsync(seed.OrganizationB, "1");
+            var createA = test.UnsafeRoutes().Single(value => value.Family == "project-create");
+            var createB = new CatalogSessionUnsafeRoute("project-create", "POST", $"/api/v1/organizations/{seed.OrganizationB:D}/projects",
+                createA.MediaType, key: true);
+            // A valid token passes CSRF and stops at the missing capability; another scope's token never gets that far.
+            CatalogSessionHttpsFixture.Error(await test.HeadersOnlyAsync(createB, cookies, b), HttpStatusCode.Forbidden, "permissionDenied");
+            foreach (var (route, token) in new[] { (createB, root.Token), (createA, b) })
+            {
+                var reply = await test.HeadersOnlyAsync(route, cookies, token);
+                CatalogSessionHttpsFixture.Error(reply, HttpStatusCode.Forbidden, "identityRejected");
+                CatalogSessionHttpsFixture.NoBodyAfterAdmission(reply, test.Data.Actor);
+            }
+
+            Task SetB(bool active) => test.Data.Case.ExecuteAsync(
+                "UPDATE braid.organization_memberships SET active=$1 WHERE organization_id=$2 AND principal_id=$3", active, seed.OrganizationB, seed.Alice);
+            await SetB(false);
+            CatalogSessionHttpsFixture.Error(await test.SendAsync(Context(seed.OrganizationB.ToString("D")), cookies), HttpStatusCode.NotFound, "notFound");
+            await test.ContextAsync(cookies);
+            await SetB(true);
+            CatalogSessionHttpsFixture.Error(await test.HeadersOnlyAsync(createB, cookies, b), HttpStatusCode.Forbidden, "identityRejected");
+            var fresh = await SelectedAsync(seed.OrganizationB, "3");
+            CatalogSessionHttpsFixture.Error(await test.HeadersOnlyAsync(createB, cookies, fresh), HttpStatusCode.Forbidden, "permissionDenied");
+        });
 
     [PostgresFact]
     public Task SessionActorStillNeedsFreshIndependentPayloadGrantAndCurrentProjectAccess() =>

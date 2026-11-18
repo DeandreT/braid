@@ -23,6 +23,12 @@ import {
   csvMaximumRecords,
   csvMaximumColumns,
 } from "../previews/csv-contract";
+import {
+  nativeFormats,
+  nativeProfile,
+  nativeMedia,
+  nativeSettings,
+} from "../previews/native-document-contract";
 import { xmlMetadata, xmlPreviewProfile } from "../previews/xml-contract";
 import {
   isCatalogId,
@@ -106,9 +112,21 @@ export class RegressionApi {
               "comparisonPolicies",
               "csvRuntime",
               "xmlRuntime",
+              "nativeRuntimes",
             ],
           ) ||
           !runtime(v.runtime) ||
+          (v.nativeRuntimes !== undefined &&
+            (!Array.isArray(v.nativeRuntimes) ||
+              v.nativeRuntimes.length > 4 ||
+              !v.nativeRuntimes.every(
+                (r) =>
+                  runtime(r) &&
+                  nativeProfile(r.profile) &&
+                  ["backendId", "engineRevision", "backendBuild"].every(
+                    (k) => r[k] === (v.runtime as Obj)[k],
+                  ),
+              ))) ||
           (v.xmlRuntime !== undefined &&
             (!runtime(v.xmlRuntime) ||
               (v.xmlRuntime as Obj).profile !== xmlPreviewProfile ||
@@ -574,13 +592,13 @@ function documents(
         ? optionalShape(
             item,
             ["name", "bytesBase64Url", "mediaType"],
-            ["csvDialect", "xmlMetadata"],
+            ["csvDialect", "xmlMetadata", "documentSettings"],
           )
         : optionalShape(
             item,
             ["name", "bytesBase64Url"],
             media === "optional"
-              ? ["mediaType", "csvDialect", "xmlMetadata"]
+              ? ["mediaType", "csvDialect", "xmlMetadata", "documentSettings"]
               : [],
           )) ||
       (item.mediaType !== undefined &&
@@ -590,12 +608,19 @@ function documents(
           "application/edifact",
           "text/csv",
           "text/tab-separated-values",
+          ...nativeFormats.map((f) => f.media),
           "application/xml",
         ])) ||
-      (item.mediaType === "application/xml"
-        ? item.csvDialect !== undefined || !xmlMetadata(item.xmlMetadata)
-        : item.xmlMetadata !== undefined ||
-          !csvMetadata(item.mediaType, item.csvDialect)) ||
+      (nativeMedia(item.mediaType)
+        ? !nativeSettings(item.mediaType, item.documentSettings) ||
+          item.xmlMetadata !== undefined ||
+          item.csvDialect !== undefined
+        : item.documentSettings !== undefined
+          ? true
+          : item.mediaType === "application/xml"
+            ? item.csvDialect !== undefined || !xmlMetadata(item.xmlMetadata)
+            : item.xmlMetadata !== undefined ||
+              !csvMetadata(item.mediaType, item.csvDialect)) ||
       !(item.name === null || (text(item.name, 256) && item.name.length > 0)) ||
       typeof item.bytesBase64Url !== "string" ||
       names.has(item.name)
@@ -624,7 +649,7 @@ function definition(v: unknown): v is CaseDefinition {
         "comparisonPolicy",
         "expected",
       ],
-      ["comparisonOptions"],
+      ["comparisonOptions", "primaryDocumentSettings"],
     ) &&
     text(v.name, 256) &&
     isCatalogId(v.revisionId) &&
@@ -642,6 +667,21 @@ function definition(v: unknown): v is CaseDefinition {
     shape(v.target, ["kind", "name"]) &&
     ((oneOf(v.target.kind, ["all", "primary"]) && v.target.name === null) ||
       (v.target.kind === "named" && text(v.target.name, 256))) &&
+    (nativeProfile((v.runtime as Obj).profile)
+      ? nativeSettings(
+          nativeProfile((v.runtime as Obj).profile)!.media,
+          v.primaryDocumentSettings,
+        ) &&
+        v.comparisonPolicy === exactPolicy &&
+        Array.isArray(v.namedInputs) &&
+        !v.namedInputs.length &&
+        v.target.kind !== "named" &&
+        Array.isArray(v.expected) &&
+        v.expected.length === 1 &&
+        v.expected[0]?.name === null &&
+        v.expected[0]?.mediaType ===
+          nativeProfile((v.runtime as Obj).profile)!.media
+      : v.primaryDocumentSettings === undefined) &&
     typeof v.primaryBase64Url === "string" &&
     decodeBytes(v.primaryBase64Url).length <= maxBytes &&
     documents(v.namedInputs, 15, "none") &&
@@ -649,9 +689,12 @@ function definition(v: unknown): v is CaseDefinition {
     documents(
       v.expected,
       64,
-      [documentProfile, csvPreviewProfile, xmlPreviewProfile].includes(
-        (v.runtime as Obj).profile as string,
-      )
+      [
+        documentProfile,
+        csvPreviewProfile,
+        xmlPreviewProfile,
+        ...nativeFormats.map((f) => f.profile),
+      ].includes((v.runtime as Obj).profile as string)
         ? "required"
         : "none",
     ) &&

@@ -47,6 +47,7 @@ internal static class QualificationRoleGuard
 
     internal static async Task ValidateContractAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken token)
     {
+        if (await LifecycleCatalogAdmission.ValidateIfInstalledAsync(connection, transaction, token)) return;
         await BuildRoleGuard.ValidateContractAsync(connection, transaction, token);
         var definitions = Definitions.Value;
         if (await BuildRoleGuard.HasCsvBuildsAsync(connection, transaction, token))

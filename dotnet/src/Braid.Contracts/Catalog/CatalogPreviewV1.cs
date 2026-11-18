@@ -49,7 +49,8 @@ public sealed record CatalogPreviewRunV1(
     DateTimeOffset? StartedAtUtc,
     DateTimeOffset? FinishedAtUtc,
     DateTimeOffset ExpiresAtUtc,
-    CatalogPreviewDraftSubjectV1? Draft = null)
+    CatalogPreviewDraftSubjectV1? Draft = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] NativeDocumentSettingsV1? PrimaryDocumentSettings = null)
 {
     public string SubjectKind => Draft is null ? "revision" : "draft";
 }
@@ -72,7 +73,10 @@ public sealed record CatalogPreviewOutputV1(
     string Sha256,
     int ByteCount,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CsvDocumentDialectV1? CsvDialect = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] XmlDocumentMetadataV1? XmlMetadata = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] XmlDocumentMetadataV1? XmlMetadata = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] NativeDocumentSettingsV1? DocumentSettings = null);
+
+public sealed record NativeDocumentSettingsV1(string Schema, string OptionsJson);
 
 public sealed record XmlDocumentMetadataV1(string Schema, string SafetyProfile, XmlSchemaHintsV1? SchemaHints);
 public sealed record XmlSchemaHintsV1(string? NoNamespaceLocation, IReadOnlyList<XmlSchemaLocationV1> Locations);

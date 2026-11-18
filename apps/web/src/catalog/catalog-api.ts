@@ -33,10 +33,19 @@ import {
 import { trimCatalogName } from "./catalog-text";
 import { BrowserSessionState } from "../auth/browser-session-state";
 import type { CatalogSearchPage } from "./search/catalog-search";
+import { OrganizationSelection } from "./organization-selection";
+import type { components } from "../api/generated";
 import {
   isIdentityContext,
   isSessionRequestToken,
 } from "../auth/browser-session-types";
+
+type OrganizationContextV1 = components["schemas"]["OrganizationContextV1"];
+export type OrganizationPage = components["schemas"]["OrganizationPageV1"];
+export type OrganizationContextRead = {
+  context: CatalogContext;
+  admissionVersion: string;
+};
 
 const pageSize = 10;
 const actionKeys = [
@@ -61,6 +70,7 @@ const featureKeys = [
 export class CatalogApi {
   private readonly http = inject(HttpClient);
   private readonly sessions = inject(BrowserSessionState);
+  private readonly selection = inject(OrganizationSelection);
 
   context(): Observable<CatalogContext> {
     return this.sessions.observe().pipe(
@@ -74,6 +84,46 @@ export class CatalogApi {
       }),
       catchError((error: unknown) => throwError(() => catalogFailure(error))),
     );
+  }
+
+  /** The qualified context of one route-selected organization and its admission incarnation. */
+  organizationContext(
+    organizationId: string,
+  ): Observable<OrganizationContextRead> {
+    return defer(() => {
+      requireId(organizationId);
+      return this.sessions.observe();
+    }).pipe(
+      switchMap(() =>
+        this.get(
+          `/api/v1/organizations/${organizationId}/context`,
+          (value): value is OrganizationContextV1 =>
+            isOrganizationContext(value, organizationId),
+        ),
+      ),
+      map((value) => {
+        const context = value.catalog as CatalogContext;
+        if (!this.sessions.accepts(context)) {
+          this.sessions.invalidate();
+          throw new CatalogReadError("unavailable");
+        }
+        return { context, admissionVersion: value.admissionVersion };
+      }),
+      catchError((error: unknown) => throwError(() => catalogFailure(error))),
+    );
+  }
+
+  /** One bounded page of the caller's current admissions, read only for explicit choice. */
+  organizations(cursor: string | null = null): Observable<OrganizationPage> {
+    return defer(() => {
+      let params = new HttpParams().set("limit", 100);
+      if (cursor !== null) {
+        if (!isOrganizationCursor(cursor))
+          throw new CatalogReadError("invalidLink");
+        params = params.set("cursor", cursor);
+      }
+      return this.get("/api/v1/organizations", isOrganizationPage, params);
+    });
   }
 
   projects(
@@ -172,6 +222,7 @@ export class CatalogApi {
       catchError(() => throwError(() => new CatalogReadError("rejected"))),
       switchMap(() => {
         const generation = this.sessions.generation();
+        const organization = this.selection.generation();
         const sessionMode = this.sessions.state().kind === "authenticated";
         return this.http.get<unknown>(url, { params }).pipe(
           timeout(timeoutMs),
@@ -181,8 +232,10 @@ export class CatalogApi {
             return value;
           }),
           catchError((error: unknown) => {
+            // A refusal for an organization this tab has since left classifies nothing.
             if (
               generation === this.sessions.generation() &&
+              organization === this.selection.generation() &&
               sessionMode &&
               error instanceof HttpErrorResponse &&
               (error.status === 401 || error.status === 403)
@@ -321,6 +374,54 @@ function isContext(value: unknown): value is CatalogContext {
     value["requestToken"].length > 0 &&
     value["requestToken"].length <= 4096
   );
+}
+
+function isOrganizationContext(
+  value: unknown,
+  organizationId: string,
+): value is OrganizationContextV1 {
+  return (
+    object(value) &&
+    value["schemaVersion"] === "braid.organization-context.v1" &&
+    typeof value["admissionVersion"] === "string" &&
+    /^[1-9][0-9]{0,18}$/.test(value["admissionVersion"]) &&
+    BigInt(value["admissionVersion"]) <= 9223372036854775807n &&
+    isContext(value["catalog"]) &&
+    value["catalog"].allowedOrganizationId === organizationId
+  );
+}
+
+function isOrganizationCursor(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.length > 0 &&
+    value.length <= 512 &&
+    /^[A-Za-z0-9_-]+$/.test(value)
+  );
+}
+
+function isOrganizationPage(value: unknown): value is OrganizationPage {
+  if (
+    !object(value) ||
+    value["schemaVersion"] !== "braid.organizations.v1" ||
+    !Array.isArray(value["organizations"]) ||
+    value["organizations"].length > 100 ||
+    !(value["nextCursor"] == null || isOrganizationCursor(value["nextCursor"]))
+  )
+    return false;
+  let previous = "";
+  // Canonical organization-ID order: strictly ascending, so duplicates fail.
+  return value["organizations"].every((item: unknown) => {
+    if (
+      !object(item) ||
+      !isCatalogId(item["organizationId"]) ||
+      !text(item["name"], 200, true) ||
+      item["organizationId"] <= previous
+    )
+      return false;
+    previous = item["organizationId"];
+    return true;
+  });
 }
 
 function access(value: unknown): boolean {

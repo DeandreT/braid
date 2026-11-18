@@ -8,7 +8,7 @@ namespace Braid.Api.Catalog;
 public sealed record CatalogRegressionCaseOptions
 {
     public CatalogRegressionCaseOptions(bool enabled = false, RegressionRuntimeIdentity? runtime = null, RegressionRuntimeIdentity? documentRuntime = null,
-        RegressionRuntimeIdentity? csvRuntime = null, RegressionRuntimeIdentity? xmlRuntime = null)
+        RegressionRuntimeIdentity? csvRuntime = null, RegressionRuntimeIdentity? xmlRuntime = null, IReadOnlyList<RegressionRuntimeIdentity>? nativeRuntimes = null)
     {
         if (enabled && (runtime is null || runtime.Profile != PreviewPolicy.Profile))
             throw new ArgumentException("Regression cases require an explicit supported runtime selection.");
@@ -25,8 +25,11 @@ public sealed record CatalogRegressionCaseOptions
         if (xmlRuntime is not null && (!enabled || runtime is null || xmlRuntime.Profile != XmlPreviewAdmission.Profile ||
             xmlRuntime.BackendId != runtime.BackendId || xmlRuntime.EngineRevision != runtime.EngineRevision || xmlRuntime.BackendBuild != runtime.BackendBuild))
             throw new ArgumentException("XML cases require an enabled, separately pinned runtime.");
+        NativeRuntimes = nativeRuntimes?.Where(r => r.Profile != NativeDocumentFormat.Xlsx.Profile).ToArray() ?? [];
+        if (NativeRuntimes.Any(r => !enabled || runtime is null || NativeDocumentFormat.FromProfile(r.Profile)?.AdapterBuild != r.AdapterBuild || r.BackendBuild != runtime.BackendBuild || r.BackendId != runtime.BackendId || r.EngineRevision != runtime.EngineRevision)) throw new ArgumentException("Invalid native runtime.");
         XmlRuntime = xmlRuntime;
     }
+    public IReadOnlyList<RegressionRuntimeIdentity> NativeRuntimes { get; }
     public bool Enabled { get; }
     public RegressionRuntimeIdentity? Runtime { get; }
     public RegressionRuntimeIdentity? DocumentRuntime { get; }
@@ -35,7 +38,7 @@ public sealed record CatalogRegressionCaseOptions
 
     internal RegressionRuntimeIdentity? SelectRuntime(RegressionRuntimeIdentity candidate) => !Enabled ? null :
         candidate == Runtime ? Runtime : candidate == DocumentRuntime ? DocumentRuntime : candidate == CsvRuntime ? CsvRuntime :
-        candidate == XmlRuntime ? XmlRuntime : null;
+        candidate == XmlRuntime ? XmlRuntime : NativeRuntimes.FirstOrDefault(r => r == candidate);
 }
 
 public static class CatalogRegressionCaseRegistration
@@ -43,7 +46,7 @@ public static class CatalogRegressionCaseRegistration
     public static IServiceCollection AddBraidRegressionCases(this IServiceCollection services, CatalogRegressionCaseOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(services);
-        if (options is { Enabled: true } && (options.CsvRuntime is not null || options.XmlRuntime is not null))
+        if (options is { Enabled: true } && (options.CsvRuntime is not null || options.XmlRuntime is not null || options.NativeRuntimes.Count != 0))
             CatalogPreviewSourceAdmission.RequireNativeSources(services);
         services.AddSingleton(options ?? new CatalogRegressionCaseOptions());
         return services;

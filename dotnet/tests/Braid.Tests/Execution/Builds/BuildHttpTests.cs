@@ -199,6 +199,72 @@ public sealed class BuildHttpTests(PostgresFixture fixture)
         Assert.Equal("queued", await data.Runs.Cases.Case.ScalarAsync<string>("SELECT state FROM braid.build_runs"));
     }
 
+    [PostgresFact]
+    public async Task Package_manifest_is_canonical_owned_metadata_not_an_execution_or_publication_action()
+    {
+        await using var data = await BuildPersistenceTests.Context.CreateAsync(fixture);
+        Assert.Equal(BuildControlOutcome.Created, await data.Approve());
+        var test = data.Runs.Cases.Case;
+        await using var writer = new PostgresBuildRunStore(test.RegressionConnectionString("braid_build_run_writer"), BuildRunDatabaseProfile.Writer);
+        await using var dispatcher = new PostgresBuildRunStore(test.RegressionConnectionString("braid_build_dispatcher"), BuildRunDatabaseProfile.Dispatcher);
+        Assert.Equal(BuildRunSubmitOutcome.Created, await writer.SubmitAsync(data.Actor, data.Intent));
+        await using var host = await Host.StartAsync(data);
+        await host.TokenAsync();
+        var path = host.MappingPath + "/build-runs/" + data.Intent.BuildId.ToString("D") + "/package-manifest";
+        using (var queued = await host.Client.GetAsync(path)) Assert.Equal(HttpStatusCode.NotFound, queued.StatusCode);
+
+        var claim = (await dispatcher.ClaimAsync(data.Intent.Revision.OrganizationId, data.Intent.BuildId, Guid.NewGuid()))!;
+        Assert.NotNull(claim);
+        await using var publisher = new PostgresBuildStore(data.Connection, true, claim);
+        var bytes = new BuildBytes([7, 8, 9], data.Intent.Profile.MaximumArtifactBytes);
+        var artifact = BuildArtifactReference.Restore(data.Intent, bytes.Digest, bytes.Length);
+        var publication = new BuildPublication(data.Actor.PrincipalId, artifact,
+            new(PrivateObjectId.Restore(data.Intent.Revision, data.Intent.BuildId, PrivateObjectClass.DerivedArtifact), bytes.Digest, bytes.Length));
+        Assert.NotNull(await publisher.StageAsync(data.Actor, new(publication, bytes)));
+        var objects = new PostgresBuildObjectStore(publisher, new NoPackageNative(), data.Actor);
+        using (var source = new MemoryStream(bytes.Copy(), false))
+            Assert.Equal(PrivateObjectPublishResult.Created, await objects.PublishCreateOnlyAsync(data.Intent.Revision, publication.Object, source));
+        Assert.Equal(BuildPublicationOutcome.Created, await publisher.PublishAsync(data.Actor, publication));
+        Assert.True(await dispatcher.CompleteAsync(claim, new(BuildExecutionOutcome.Created, publication)));
+
+        using (var response = await host.Client.GetAsync(path))
+        {
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Contains("no-store", response.Headers.CacheControl!.ToString());
+            Assert.Null(response.Headers.ETag);
+            var encoded = await response.Content.ReadAsByteArrayAsync();
+            Assert.Equal(publication.Manifest.CopyCanonicalBytes(), encoded);
+            Assert.True(MappingPackageManifest.Decode(encoded).Matches(artifact, bytes));
+        }
+        using (var query = await host.Client.GetAsync(path + "?anything=true")) Assert.Equal(HttpStatusCode.BadRequest, query.StatusCode);
+        var foreign = path.Replace(data.Intent.Revision.MappingId.ToString("D"), Guid.NewGuid().ToString("D"), StringComparison.Ordinal);
+        using (var hidden = await host.Client.GetAsync(foreign)) Assert.Equal(HttpStatusCode.NotFound, hidden.StatusCode);
+        var otherPrincipal = data.Runs.Cases.Seed.Admitted;
+        await data.Runs.Cases.Seed.AddMembershipAsync(test, data.Intent.Revision.OrganizationId,
+            data.Intent.Revision.ProjectId, otherPrincipal, "publisher");
+        await using (var otherHost = await Host.StartAsync(data, principalOverride: otherPrincipal))
+        {
+            await otherHost.TokenAsync();
+            using (var admitted = await otherHost.Client.GetAsync(otherHost.MappingPath + "/build-capabilities"))
+                Assert.Equal(HttpStatusCode.OK, admitted.StatusCode);
+            using var hidden = await otherHost.Client.GetAsync(path);
+            Assert.Equal(HttpStatusCode.NotFound, hidden.StatusCode);
+        }
+        await data.Runs.Cases.RoleAsync("viewer");
+        using (var denied = await host.Client.GetAsync(path)) Assert.Equal(HttpStatusCode.NotFound, denied.StatusCode);
+        Assert.Equal(0, host.IntentResolutions);
+        Assert.Equal(0, host.ActiveApprovalWrites);
+        Assert.Equal(0, host.BodyReads);
+    }
+
+    private sealed class NoPackageNative : IPrivateObjectStore
+    {
+        public Task<byte[]> ReadVerifiedAsync(RevisionScope scope, PrivateObjectReference reference, CancellationToken token = default) =>
+            throw new InvalidOperationException("Package metadata must not read native source.");
+        public Task<PrivateObjectPublishResult> PublishCreateOnlyAsync(RevisionScope scope, PrivateObjectReference reference, Stream bytes,
+            CancellationToken token = default) => throw new InvalidOperationException("Package metadata must not publish native source.");
+    }
+
     private static string ApprovalBody(BuildIntent intent) => JsonSerializer.Serialize(new
     {
         buildId = intent.BuildId.ToString("D"),

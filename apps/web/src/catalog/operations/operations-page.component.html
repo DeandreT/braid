@@ -23,6 +23,10 @@
           <option value="invocations">Invocations</option>
           <option value="summary">Failure and latency summary</option>
           <option value="callers">Caller grants</option>
+          <option value="triggers">Triggers</option>
+          <option value="runs">Trigger runs</option>
+          <option value="quarantine">Quarantined inputs and orders</option>
+          <option value="deliveries">Trigger deliveries</option>
         </select></label
       >
       <details>
@@ -65,7 +69,11 @@
                 @for (key of columns(page.items); track key) {
                   <th scope="col">{{ columnLabel(key) }}</th>
                 }
-                @if (page.items[0].kind === "target") {
+                @if (
+                  page.items[0].kind === "target" ||
+                  page.items[0].kind === "delivery" ||
+                  page.items[0].kind === "trigger"
+                ) {
                   <th scope="col"><span class="ops-sr-only">Actions</span></th>
                 }
               </tr>
@@ -81,6 +89,30 @@
                       <button class="catalog-button" (click)="select(row)">
                         Operate this target
                       </button>
+                    </td>
+                  }
+                  @if (row.kind === "trigger") {
+                    <td>
+                      <button
+                        class="catalog-button"
+                        [disabled]="busy() || visiblePending() !== null"
+                        (click)="selectPilot(row)"
+                      >
+                        Manage pilot route
+                      </button>
+                    </td>
+                  }
+                  @if (row.kind === "delivery") {
+                    <td class="braid-table-actions">
+                      @if (row["phase"] === "unknown") {
+                        <button
+                          class="catalog-button"
+                          [disabled]="busy() || visiblePending() !== null"
+                          (click)="selectDelivery(row)"
+                        >
+                          Resolve this delivery
+                        </button>
+                      }
                     </td>
                   }
                 </tr>
@@ -118,6 +150,21 @@
         Administrator. Activation and rollback use your own existing qualified
         build and preserve its approval checks.
       </p>
+      @if (section === "quarantine") {
+        <p>
+          Rejected versions and failed orders are held, not sent. Correct the
+          input and publish a new digest-named file. Do not resend a successful
+          sibling or rerun a mapping to recover a delivery.
+        </p>
+      }
+      @if (!pilotOpen && !visiblePending() && !delivery && target) {
+        <button
+          class="catalog-button"
+          (click)="pilotOpen = true; confirming = false; draftChanged()"
+        >
+          Author local trigger route
+        </button>
+      }
       @if (visiblePending(); as original) {
         <p>
           An operation may already have committed. Recovery reuses exactly the
@@ -127,6 +174,188 @@
         <button class="catalog-button" [disabled]="busy()" (click)="send()">
           Recover original operation
         </button>
+      } @else if (pilotOpen) {
+        <form (ngSubmit)="send()" aria-label="Pilot route">
+          <h3>Local trigger route</h3>
+          <label
+            >Trigger ID
+            <input name="pilotTrigger" required [(ngModel)]="pilotTrigger"
+          /></label>
+          <label
+            >Reviewed trigger generation (0 for new)
+            <input
+              name="pilotGeneration"
+              required
+              [(ngModel)]="pilotGeneration"
+          /></label>
+          <label
+            >Environment ID
+            <input name="environment" required [(ngModel)]="environment"
+          /></label>
+          <label
+            >Environment version
+            <input
+              name="environmentVersion"
+              required
+              [(ngModel)]="environmentVersion"
+          /></label>
+          <label
+            >Route action
+            <select
+              name="pilotAction"
+              [(ngModel)]="pilotAction"
+              (ngModelChange)="confirming = false"
+            >
+              <option value="configure">Configure SFTP to AS2 pilot</option>
+              <option value="configureQueue">
+                Configure queue or subscription
+              </option>
+              <option value="configureBlob">Configure Blob schedule</option>
+              <option value="enable">Enable route</option>
+              <option value="pause">Pause and fence admitted work</option>
+            </select></label
+          >
+          @if (configuring) {
+            @if (pilotAction !== "configure") {
+              <label
+                >Destination kind
+                <select
+                  name="destinationKind"
+                  required
+                  [(ngModel)]="pilotValues['destinationKind']"
+                >
+                  <option value="blob">Blob</option>
+                  <option value="https">HTTPS</option>
+                  <option value="sftp">SFTP</option>
+                  <option value="serviceBusTopic">Service Bus topic</option>
+                </select></label
+              >
+              <label
+                >Input media type
+                <select
+                  name="inputMediaType"
+                  required
+                  [(ngModel)]="pilotValues['inputMediaType']"
+                >
+                  <option value="application/json">JSON</option>
+                  <option value="application/edi-x12">X12</option>
+                  <option value="application/edifact">EDIFACT</option>
+                </select></label
+              >
+              <label
+                >Envelope
+                <select
+                  name="envelope"
+                  required
+                  [(ngModel)]="pilotValues['envelope']"
+                >
+                  <option value="singleOrder">Single order</option>
+                  <option value="batch">Keyed batch</option>
+                </select></label
+              >
+            }
+            <p>
+              At most two sends in four hours; unknown delivery requires
+              reconciliation. For schedules: one-hour scan lookback, two
+              catch-up runs. Backlog: 100 orders or 32 MiB. Per file: 1 MiB.
+              Retain bytes for one day.
+            </p>
+            @for (field of pilotFields; track field[0]) {
+              <label
+                >{{ field[1] }}
+                <input
+                  [name]="field[0]"
+                  [(ngModel)]="pilotValues[field[0]]"
+                  [required]="!field[0].startsWith('reference')"
+              /></label>
+            }
+          }
+          <label
+            ><input
+              type="checkbox"
+              name="confirmPilot"
+              [(ngModel)]="confirming"
+            />
+            I reviewed this route, action and generation.</label
+          >
+          <button class="catalog-button" [disabled]="busy() || !confirming">
+            Apply route action
+          </button>
+          <button
+            type="button"
+            class="catalog-button"
+            (click)="pilotOpen = false; confirming = false; draftChanged()"
+          >
+            Back to target
+          </button>
+        </form>
+      } @else if (delivery) {
+        <form (ngSubmit)="send()" aria-labelledby="ops-resolve-title">
+          <h3 id="ops-resolve-title">Resolve unknown delivery</h3>
+          <p class="ops-selected">
+            Delivery <code class="catalog-code">{{ delivery }}</code> · reviewed
+            version {{ deliveryVersion }}
+          </p>
+          <p>
+            Administrator only. The receiver may or may not hold this delivery.
+            Mark it accepted only with evidence from the receiver.
+          </p>
+          <label
+            >Resolution
+            <select
+              name="resolution"
+              [(ngModel)]="resolution"
+              (ngModelChange)="acknowledgeDuplicateRisk = false"
+            >
+              <option value="accepted">Accepted by the receiver</option>
+              <option value="abandoned">Abandon, send no more</option>
+              <option value="resend">Send the same delivery again</option>
+            </select></label
+          >
+          <label
+            >Environment ID
+            <input name="environment" [(ngModel)]="environment" required
+          /></label>
+          <label
+            >Environment version
+            <input
+              name="environmentVersion"
+              [(ngModel)]="environmentVersion"
+              required
+          /></label>
+          @if (resolution === "resend") {
+            <label
+              ><input
+                type="checkbox"
+                name="acknowledgeDuplicateRisk"
+                [(ngModel)]="acknowledgeDuplicateRisk"
+              />
+              I accept that the receiver may get this delivery twice.</label
+            >
+          }
+          <label
+            ><input type="checkbox" name="confirm" [(ngModel)]="confirming" /> I
+            reviewed this delivery, resolution and version.</label
+          >
+          <button
+            class="catalog-button catalog-button-primary"
+            [disabled]="
+              busy() ||
+              !confirming ||
+              (resolution === 'resend' && !acknowledgeDuplicateRisk)
+            "
+          >
+            Record resolution
+          </button>
+          <button
+            type="button"
+            class="catalog-button"
+            [disabled]="busy()"
+            (click)="clearDelivery()"
+          >
+            Cancel
+          </button>
+        </form>
       } @else {
         <form (ngSubmit)="send()">
           <label
@@ -186,7 +415,9 @@
     </section>
     <p>
       Machine caller changes remain administrator-only. See
-      <a routerLink="/administration">caller administration</a>.
+      <a [routerLink]="selection.link('/administration')"
+        >caller administration</a
+      >.
     </p>
   </div>
 </section>

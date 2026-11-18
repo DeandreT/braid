@@ -28,16 +28,29 @@
       >
         Menu
       </button>
-      <div class="workspace-organization">
-        @if (contexts.canPresent(contexts.context())) {
-          <strong>{{ contexts.context()?.organizationName }}</strong>
-        }
-        <span>{{
-          session.state().kind === "development"
-            ? "Development workspace"
-            : "Workspace"
-        }}</span>
-      </div>
+      @if (
+        session.visible() &&
+        (session.state().kind === "authenticated" ||
+          session.state().kind === "development")
+      ) {
+        <braid-organization-switcher
+          [current]="contexts.organizationId()"
+          [name]="
+            contexts.canPresent(contexts.context())
+              ? (contexts.context()?.organizationName ?? null)
+              : null
+          "
+          [label]="
+            session.state().kind === 'development'
+              ? 'Development workspace'
+              : 'Workspace'
+          "
+        />
+      } @else {
+        <div class="workspace-organization">
+          <span>Workspace</span>
+        </div>
+      }
       @if (session.visible()) {
         <braid-header-search />
         <braid-notification-popover />
@@ -118,7 +131,7 @@
         >
         @if (session.visible() && contexts.context()?.features?.chat) {
           <a
-            routerLink="/chat"
+            [routerLink]="selection.link('/chat')"
             routerLinkActive="active"
             ariaCurrentWhenActive="page"
             aria-label="Conversations"
@@ -129,7 +142,7 @@
           >
         }
         <a
-          routerLink="/notifications"
+          [routerLink]="selection.link('/notifications')"
           routerLinkActive="active"
           ariaCurrentWhenActive="page"
           aria-label="Notifications"
@@ -155,7 +168,34 @@
         >
         @if (session.visible()) {
           <a
-            routerLink="/administration"
+            [routerLink]="selection.link('/quotas')"
+            routerLinkActive="active"
+            ariaCurrentWhenActive="page"
+            aria-label="AI quotas"
+            title="AI quotas"
+            ><span class="rail-icon" aria-hidden="true">◴</span
+            ><span class="rail-label">Quotas</span></a
+          >
+          <a
+            [routerLink]="selection.link('/usage')"
+            routerLinkActive="active"
+            ariaCurrentWhenActive="page"
+            aria-label="AI usage"
+            title="AI usage"
+            ><span class="rail-icon" aria-hidden="true">▥</span
+            ><span class="rail-label">Usage</span></a
+          >
+          <a
+            [routerLink]="selection.link('/audit')"
+            routerLinkActive="active"
+            ariaCurrentWhenActive="page"
+            aria-label="Audit log"
+            title="Audit log"
+            ><span class="rail-icon" aria-hidden="true">≡</span
+            ><span class="rail-label">Audit</span></a
+          >
+          <a
+            [routerLink]="selection.link('/administration')"
             routerLinkActive="active"
             ariaCurrentWhenActive="page"
             aria-label="Administration"

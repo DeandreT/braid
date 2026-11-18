@@ -13,7 +13,9 @@ public sealed partial class BearerHttpIntegrationTests
     {
         var token = Token(test);
         var jar = await test.LoginAsync();
-        var epoch = (await test.StatusAsync(jar)).Epoch;
+        // Business mutations take the organization-bound context token, never the auth-status token.
+        var scoped = await test.SendAsync($"/api/v1/organizations/{test.Data.Seed.OrganizationA:D}/context", jar); jar.Apply(scoped);
+        var epoch = scoped.Json().GetProperty("catalog").GetProperty("requestToken").GetString();
         var path = $"/api/v1/organizations/{test.Data.Seed.OrganizationA:D}/chat";
         var available = await BearerAsync(test, path, token);
         Assert.Equal(HttpStatusCode.OK, available.Status);

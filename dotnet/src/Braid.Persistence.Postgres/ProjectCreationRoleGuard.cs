@@ -164,8 +164,13 @@ internal static class ProjectCreationRoleGuard
         // Function/role/ACL checks are admission checks, not commit fences. The
         // owner-only helper takes source relation locks inside each entrypoint;
         // the creator is deliberately not granted SELECT merely to take locks.
+        if (await LifecycleCatalogAdmission.ValidateIfInstalledAsync(connection, transaction, cancellationToken)) return;
+        var switching = await OrganizationSwitchingSchemaAdmission.InstalledAsync(connection, transaction, cancellationToken);
         foreach (var function in ProjectCreationSchemaContract.Functions.Values)
-            await ValidateFunctionAsync(connection, transaction, function, cancellationToken);
+            await ValidateFunctionAsync(connection, transaction,
+                switching && function.Name == "assert_project_creation_contract_v1"
+                    ? function with { Body = ProjectCreationSchemaContract.SwitchingAssertionBody } : function,
+                cancellationToken);
         await ValidateTransitionAsync(connection, transaction, cancellationToken);
     }
 

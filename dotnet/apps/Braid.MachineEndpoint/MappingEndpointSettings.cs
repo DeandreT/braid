@@ -125,7 +125,7 @@ internal sealed class MappingEndpointSettings
             selection.CompilerIdentity, selection.Docker, connections, selection);
     }
 
-    private static string Connection(string path, string role, Func<string, string?> environment)
+    internal static string Connection(string path, string role, Func<string, string?> environment)
     {
         var delivered = ProtectedHostFiles.ReadText(path, 16_384, removeTerminalLf: true);
         var connection = new NpgsqlConnectionStringBuilder(delivered);

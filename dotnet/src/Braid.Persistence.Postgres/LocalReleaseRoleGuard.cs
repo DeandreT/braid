@@ -6,15 +6,19 @@ namespace Braid.Persistence.Postgres;
 internal static class LocalReleaseRoleGuard
 {
     internal const string Fingerprint = "a794cb940b522b27a025b35a4e08c149f0ae5c19a74dbc638d991aadacbf05e3";
+    internal const string ReplicaFingerprint = "46ffd6774697087de06cf4abb6618ab525368707726a6228603b47654fbe7788";
+    internal const string ReplicaMigrationChecksum = "ede981818af893b06342dbf0a3235b2fa9b33b4018e79521da14db773a164766";
     internal static readonly string[] Tables = ["local_release_targets", "local_releases", "local_release_audit"];
     internal static readonly string[] Names = ["local_release_canonical", "lock_local_release_scope", "local_release_admitted",
         "guard_local_release", "guard_local_release_history", "write_local_target", "write_local_release",
         "transition_local_release", "read_local_target", "read_local_release"];
     private static readonly Lazy<Dictionary<string, Match>> Definitions = new(() => BuildRoleGuard.LoadFunctions("0022_local_releases.sql", Names.Length));
+    private static readonly Lazy<Dictionary<string, Match>> ReplicaDefinitions = new(() => BuildRoleGuard.LoadFunctions("0049_replica_readiness.sql", 3));
 
     internal static async Task ValidateAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, bool writer, CancellationToken token)
     {
         var operations = await ReleaseOperationsRoleGuard.InstalledAsync(connection, transaction, token);
+        var replicas = await ReplicasInstalledAsync(connection, transaction, token);
         await using (var command = new NpgsqlCommand("""
             SELECT current_user=session_user AND current_user=@role AND r.rolcanlogin AND NOT r.rolsuper AND NOT r.rolbypassrls
                 AND NOT r.rolinherit AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolreplication AND r.rolconfig IS NULL AND r.rolvaliduntil IS NULL
@@ -46,13 +50,36 @@ internal static class LocalReleaseRoleGuard
                 ? ["read_local_target", "read_local_release", "write_local_target", "write_local_release", "transition_local_release"]
                 : ["read_local_target", "read_local_release"];
             if (operations) functions = [.. functions, "read_release_operations", .. writer ? new[] { "operate_release_target", "read_release_operation" } : []];
+            if (replicas && writer) functions = [.. functions, "enroll_release_replicas", "record_release_replica"];
+            if (await TriggerRoleGuard.InstalledAsync(connection, transaction, token))
+                functions = [.. functions, .. writer ? TriggerRoleGuard.AdministrationFunctions : [], TriggerRoleGuard.OperationsRead];
             command.Parameters.AddWithValue("functions", functions);
             if (await command.ExecuteScalarAsync(token) is not true) throw Invalid();
         }
+        if (await LifecycleCatalogAdmission.ValidateIfInstalledAsync(connection, transaction, token)) return;
         await QualificationRoleGuard.ValidateContractAsync(connection, transaction, token);
-        await BuildRoleGuard.ValidateFunctionsAsync(connection, transaction, Names, Definitions.Value, token);
+        await ValidateFunctionsAsync(connection, transaction, replicas, token);
         if (operations) await ReleaseOperationsRoleGuard.ValidateAsync(connection, transaction, token);
         else if (await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, Tables, token) != Fingerprint) throw Invalid();
+    }
+
+    internal static async Task<bool> ReplicasInstalledAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken token)
+    {
+        await using var installed = new NpgsqlCommand("SELECT to_regclass('braid.release_replica_rosters') IS NOT NULL", connection, transaction);
+        return await installed.ExecuteScalarAsync(token) is true;
+    }
+
+    internal static async Task ValidateFunctionsAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, bool replicas, CancellationToken token)
+    {
+        var definitions = Definitions.Value;
+        if (replicas)
+        {
+            if (await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, ["release_replica_rosters", "release_replica_receipts"], token) != ReplicaFingerprint)
+                throw Invalid();
+            definitions = new(definitions) { ["qualified_release_admitted"] = definitions["local_release_admitted"] };
+            foreach (var (name, definition) in ReplicaDefinitions.Value) definitions[name] = definition;
+        }
+        await BuildRoleGuard.ValidateFunctionsAsync(connection, transaction, definitions.Keys.ToArray(), definitions, token);
     }
     private static InvalidOperationException Invalid() => new("Local release database contract unavailable.");
 }

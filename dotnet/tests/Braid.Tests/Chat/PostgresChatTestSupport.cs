@@ -61,12 +61,12 @@ internal sealed class PostgresChatTestSupport : IAsyncDisposable
         }
         catch { if (support is null) await reports.DisposeAsync(); else await support.DisposeAsync(); throw; }
     }
-    internal async Task<ChatTurnIntent> IntentAsync(Guid? id = null, string original = "private original", ChatTurnBudget? budget = null)
+    internal async Task<ChatTurnIntent> IntentAsync(Guid? id = null, string original = "private original", ChatTurnBudget? budget = null, ChatProviderBudget? providerBudget = null)
     {
         var now = new DateTimeOffset(await Case.ScalarAsync<DateTime>("SELECT statement_timestamp()"));
         var deadline = now.AddMinutes(1);
         var turnId = id ?? Guid.NewGuid();
-        return new(turnId, new ChatOriginalEnvelope(turnId, original, [], ChatTurnPolicyTests.ProviderBudget(), ChatTurnPolicyTests.Grounding()), ChatTurnPolicyTests.Profile(), budget ?? new(16, 65536, 3),
+        return new(turnId, new ChatOriginalEnvelope(turnId, original, [], providerBudget ?? ChatTurnPolicyTests.ProviderBudget(), ChatTurnPolicyTests.Grounding()), ChatTurnPolicyTests.Profile(), budget ?? new(16, 65536, 3),
             deadline < Conversation.RetainUntilUtc ? deadline : Conversation.RetainUntilUtc);
     }
     internal async Task<ChatTurnFacts> StartAsync(ChatTurnIntent? intent = null)

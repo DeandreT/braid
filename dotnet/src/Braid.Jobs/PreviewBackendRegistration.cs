@@ -9,14 +9,15 @@ namespace Braid.Jobs;
 public static class PreviewBackendRegistration
 {
     public static IServiceCollection AddBraidPreviewBackends(this IServiceCollection services,
-        Func<IServiceProvider, IInspectionWorkerRunner> runner, bool xmlPreview = false, bool xmlRegression = false)
+        Func<IServiceProvider, IInspectionWorkerRunner> runner, bool xmlPreview = false, bool xmlRegression = false,
+        IReadOnlyList<NativeDocumentFormat>? nativePreview = null, IReadOnlyList<NativeDocumentFormat>? nativeRegression = null)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(runner);
         services.AddSingleton<IMappingPreviewBackend>(provider => new FerrulePreviewBackend(runner(provider),
-            PreviewExecutionProfile.LegacyJson, xmlEnabled: xmlPreview));
+            PreviewExecutionProfile.LegacyJson, xmlEnabled: xmlPreview, nativeFormats: nativePreview));
         services.AddKeyedSingleton<IMappingPreviewBackend>(RegressionWorkerRegistration.PreviewBackendKey,
-            (provider, _) => new FerrulePreviewBackend(runner(provider), PreviewExecutionProfile.LegacyJson, xmlEnabled: xmlRegression));
+            (provider, _) => new FerrulePreviewBackend(runner(provider), PreviewExecutionProfile.LegacyJson, xmlEnabled: xmlRegression, nativeFormats: nativeRegression));
         return services;
     }
 }

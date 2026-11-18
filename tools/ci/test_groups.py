@@ -13,7 +13,7 @@ from pathlib import Path
 # Includes test/helper/attribute initializers, linked probe sources, production
 # dependencies and build inputs. A changed source needs a classification audit,
 # not an automatic fingerprint refresh. See test-groups.md.
-AUDITED_SOURCE_SHA256 = "2f92cba0f9e9c3f2cb873c465aa3f6f9fe89b0a6e777ed08d711d47d199b19ff"
+AUDITED_SOURCE_SHA256 = "7a2df6eb5ec7745d7815031146f7a26ef56afb447ec61c244a06c681aa96bb63"
 
 GROUP_CLASSES = {
     "fast": """
@@ -22,6 +22,10 @@ ProjectPayloadPermissionContractTests
 """,
     "live-provider": "AiProviderTests WorkspaceLiveOllamaTests",
     "packaged-browser": "AuthBrowserHttpsQualificationTests ChatWorkspaceBrowserTests",
+    "host-replica-pilot": "HostReplicaPilotTests",
+    "native-shipment-pilot": "NativeShipmentPackagePilot",
+    "sftp-loopback": "SftpAs2RouteTests SftpOutputLoopbackTests",
+    "trigger-emulators": "ServiceBusQueueTriggerAcceptanceTests TriggerDestinationAcceptanceTests LocalBrokerRecoveryTests",
     "native-windows": "NativePostgresFixtureTests RegressionDeploymentProvisioningTests",
     "incremental-build": "OpenApiIncrementalBuildTests",
     "installed-documents": """
@@ -37,6 +41,12 @@ SpecDocumentInstalledResourceProbeTests SpecDocumentInstalledSharedProfileProbeT
     # their names or their use of ordinary Fact/Theory attributes.
     "integration": """
 AdministrationContractTests AdministrationEnrollmentHttpsTests AdministrationHttpTests
+AuditLogHttpTests AuditLogPersistenceTests AuditLogUnitTests
+LifecycleOrderConservationTests NativeDocumentRecoveryTests NativePreviewReplayHttpTests
+PostgresOrganizationSwitchingTests TriggerContractPolicyTests TriggerPersistenceTests
+BlobOutputDestinationTests HttpsOutputDestinationTests TriggerQueueProcessingTests TriggerRuntimeTests TriggerScheduleTests
+AiQuotaAdmissionPersistenceTests AiQuotaPersistenceTests AiTokenAdmissionTests AiTurnQuotaTests
+AiUsageHttpTests AiUsagePersistenceTests AiUsageQueryTests AiUsageTotalsTests AiUsageWireTests
 AdministrationPersistenceTests ApiRequestAuditPersistenceTests AuthHttpCompositionTests AuthHttpContractTests
 AuthHttpDevelopmentModeTests AuthHttpDisabledModeTests AuthHttpDisplayMetadataTests AuthHttpIntegrationTests
 AuthenticatedMfdHttpTests AuthenticationOpenApiTests AutomationBuildGateTests AutomationComparisonSettlementTests AutomationEventTests
@@ -47,7 +57,7 @@ BearerSecurityContractTests BlobPrivateObjectStoreTests BlobPrivateStorageHostTe
 BrowserContentPolicyOriginTests BrowserContentPolicyTests BrowserReturnPathFlowTests BrowserReturnPathTests
 BrowserSecurityHeadersTests BuildAdministrationHttpTests BuildAdministrationParserTests
 BuildAdministrationServiceTests BuildApprovalRecoveryTests BuildCsvContractTests BuildDispatchLiveTests
-BuildHostConfigurationTests BuildHttpTests BuildIntentCodecTests BuildMetadataPersistenceTests
+BuildHostConfigurationTests BuildHttpTests BuildIntentCodecTests MappingPackageManifestTests BuildMetadataPersistenceTests
 BuildMetadataSchemaTests BuildPersistenceTests BuildPreflightTests BuildQualificationPersistenceTests
 BuildQualificationServiceTests BuildQualificationTests BuildRequestParserTests BuildRunExecutorTests
 BuildRunPersistenceTests BuildRunSchemaTests BuildWorkerRegistrationTests BuildWorkflowTests

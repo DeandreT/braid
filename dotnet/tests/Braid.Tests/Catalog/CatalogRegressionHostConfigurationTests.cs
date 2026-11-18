@@ -63,7 +63,8 @@ public sealed class CatalogRegressionHostConfigurationTests
             "BRAID_NOTIFICATIONS_ENABLED" or "BRAID_NOTIFICATION_CONFIG_FILE" => null,
             "BRAID_FERRULE_RUNNER" or "BRAID_FERRULE_COMPILE_TOOLCHAIN" => null,
             CsvDocumentPolicy.RegressionEnabledSetting or XmlPreviewAdmission.RegressionEnabledSetting => null,
-            _ => "private-synthetic"
+            _ when name.EndsWith("_CONNECTION_STRING", StringComparison.Ordinal) => "private-synthetic",
+            _ => null
         }, true);
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IRegressionRunReader));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IRegressionRunStore));
@@ -90,7 +91,8 @@ public sealed class CatalogRegressionHostConfigurationTests
             "BRAID_FERRULE_WORKER_IMAGE" => image,
             "BRAID_CATALOG_AUTH_MODE" => "development",
             "BRAID_NOTIFICATIONS_ENABLED" or "BRAID_NOTIFICATION_CONFIG_FILE" or "BRAID_FERRULE_RUNNER" or "BRAID_FERRULE_COMPILE_TOOLCHAIN" => null,
-            _ => "private-synthetic"
+            _ when name.EndsWith("_CONNECTION_STRING", StringComparison.Ordinal) => "private-synthetic",
+            _ => null
         }, true);
         using var provider = services.BuildServiceProvider();
         var selected = provider.GetRequiredService<CatalogRegressionCaseOptions>();

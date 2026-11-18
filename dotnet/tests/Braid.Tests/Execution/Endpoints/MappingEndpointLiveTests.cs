@@ -118,12 +118,15 @@ public sealed class MappingEndpointLiveTests(PostgresFixture fixture, ITestOutpu
         await using var qualifications = new PostgresBuildQualificationStore(native.Case.RegressionConnectionString("braid_qualification_writer"), true);
         async Task<BuildQualification> Qualify(BuildIntent intent)
         {
-            var result = await execution.ExecuteAsync(native.Actor, scope, intent.BuildId, value.Replay);
-            Assert.Equal(CompiledBuildOutcome.Completed, result.Outcome);
-            var qualification = BuildQualification.Create(Guid.NewGuid(), native.Actor.PrincipalId, (await history.ReadAsync(native.Actor, revision.OrganizationId, intent.BuildId))!,
-                (await runReader.ReadAsync(native.Actor, revision.OrganizationId, runId))!, value, execution.RuntimeImage, result);
-            Assert.Equal(BuildQualificationWriteOutcome.Created, await qualifications.SaveAsync(native.Actor, qualification));
-            return qualification;
+            var published = (await controls.ReadPublishedPackageAsync(native.Actor, revision.OrganizationId, intent.BuildId))!;
+            using var wire = new MemoryStream();
+            await new MappingPackage(published.Publication.Manifest, published.Bytes).WriteAsync(wire, default);
+            wire.Position = 0;
+            var package = await MappingPackage.ReadAsync(wire, PostgresBuildStore.MaximumArtifactBytes, default);
+            var service = new BuildQualificationService(qualifications, history, runReader, caseReader, execution, new PostgresProjectReader(native.Native.ReaderDatabase));
+            var result = await service.PutAsync(native.Actor, scope, Guid.NewGuid(), intent.BuildId, package: package);
+            Assert.Equal(BuildQualificationRequestOutcome.Created, result.Outcome);
+            return result.Qualification!;
         }
         var firstProof = await Qualify(first); var secondProof = await Qualify(second);
         await using var releases = new PostgresLocalReleaseStore(native.Case.RegressionConnectionString("braid_release_writer"), true);

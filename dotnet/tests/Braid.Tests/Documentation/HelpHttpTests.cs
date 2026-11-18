@@ -32,7 +32,7 @@ public sealed class HelpHttpTests
         Assert.Equal(Canonical(JsonSerializer.SerializeToElement(UserGuide.Embedded.Contents, Json)), Canonical(body));
         var ids = body.GetProperty("sections").EnumerateArray().Select(section => section.GetProperty("id").GetString()).ToArray();
         Assert.Equal("overview", ids[0]);
-        Assert.Equal(1, host.Reader.AdmissionReads);
+        Assert.Equal(0, host.Reader.AdmissionReads);
     }
 
     [Fact]
@@ -99,21 +99,16 @@ public sealed class HelpHttpTests
     }
 
     [Fact]
-    public async Task OrganizationAuthorityIsReadFreshlyForEveryRequest()
+    public async Task AuthenticatedGuideIsIndependentOfBusinessAdmission()
     {
         await using var host = await HelpHost.StartAsync();
         host.Reader.Admitted = false;
-        using var list = await host.Client.GetAsync("/api/v1/help/sections");
-        await ErrorAsync(list, HttpStatusCode.NotFound, "notFound");
-        using var section = await host.Client.GetAsync("/api/v1/help/sections/overview");
-        await ErrorAsync(section, HttpStatusCode.NotFound, "notFound");
-        host.Reader.Admitted = true;
-        using var restored = await host.Client.GetAsync("/api/v1/help/sections/overview");
-        await BodyAsync(restored, HttpStatusCode.OK);
-        Assert.Equal(3, host.Reader.AdmissionReads);
         host.Reader.Failing = true;
-        using var failing = await host.Client.GetAsync("/api/v1/help/sections");
-        await ErrorAsync(failing, HttpStatusCode.InternalServerError, "persistenceFailure");
+        using var list = await host.Client.GetAsync("/api/v1/help/sections");
+        await BodyAsync(list, HttpStatusCode.OK);
+        using var section = await host.Client.GetAsync("/api/v1/help/sections/overview");
+        await BodyAsync(section, HttpStatusCode.OK);
+        Assert.Equal(0, host.Reader.AdmissionReads);
     }
 
     [Fact]

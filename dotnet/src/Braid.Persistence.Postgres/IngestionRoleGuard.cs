@@ -115,6 +115,13 @@ internal static class IngestionRoleGuard
             string.Join(", ", scoped.Select(name => "ONLY braid." + name)) + " IN ACCESS SHARE MODE", connection, transaction))
             await protect.ExecuteNonQueryAsync(cancellationToken);
 
+        // Lifecycle replaces transition functions and adds fences on these locked sources.
+        // Its pinned complete catalog describes the post-upgrade schema; the login,
+        // privileges and relation locks above remain mandatory on both paths.
+        if (await LifecycleCatalogAdmission.ValidateIfInstalledAsync(connection, transaction, cancellationToken))
+        {
+            return;
+        }
         await SupplementalMaintenanceSchemaAdmission.ValidateAsync(connection, transaction, cancellationToken);
         await ValidatePoliciesAsync(connection, transaction, scoped, cancellationToken);
         foreach (var table in IngestionSchemaContract.Tables.Values)

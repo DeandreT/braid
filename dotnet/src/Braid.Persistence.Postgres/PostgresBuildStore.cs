@@ -58,7 +58,10 @@ public sealed class PostgresBuildStore(string connectionString, bool writer, Bui
     }
 
     public async Task<BuildPublication?> ReadAsync(ActorContext actor, Guid organizationId, Guid buildId, CancellationToken token = default) =>
-        (await ReadStageAsync(actor, "published", organizationId, buildId, token))?.Publication;
+        (await ReadPublishedPackageAsync(actor, organizationId, buildId, token))?.Publication;
+
+    public Task<StagedBuild?> ReadPublishedPackageAsync(ActorContext actor, Guid organizationId, Guid buildId, CancellationToken token = default) =>
+        ReadStageAsync(actor, "published", organizationId, buildId, token);
 
     public Task<StagedBuild?> ReadStagedAsync(ActorContext actor, Guid organizationId, Guid buildId, CancellationToken token = default) =>
         ReadStageAsync(actor, "staged", organizationId, buildId, token);

@@ -93,6 +93,13 @@ public sealed class PreviewRunService
             try { foreach (var input in submission.NamedInputs.Prepend(submission.Primary)) XmlDocumentSafety.Validate(input.Bytes); }
             catch (XmlDocumentException error) { return error.Message; }
         }
+        var native = NativeDocumentFormat.FromExecution(submission.Profile);
+        if (native != submission.Primary.DocumentSettings?.Format || submission.NamedInputs.Any(i => i?.DocumentSettings is not null)) return "Inconsistent native settings.";
+        if (native is not null)
+        {
+            if (!_options.NativeFormats.Contains(native) || submission.Subject is not RevisionPreviewSubject || submission.NamedInputs.Count != 0 || submission.Target.Kind == PreviewTargetKind.Named) return "Native document preview is unavailable.";
+            native.CheckBytes(submission.Primary.Bytes);
+        }
         var csv = submission.Profile == PreviewExecutionProfile.CsvDocument;
         if (csv && (submission.NamedInputs.Count != 0 || submission.Target.Kind == PreviewTargetKind.Named))
             return "CSV preview requires a primary-only CSV plan.";
@@ -103,7 +110,7 @@ public sealed class PreviewRunService
             return "A preview request key is required.";
         if (submission.Target.Kind == PreviewTargetKind.Named && !BoundedName(submission.Target.Name))
             return "The selected target name is outside its bounds.";
-        if (submission.Primary.Name is not null || !csv && submission.Primary.ByteCount == 0)
+        if (submission.Primary.Name is not null || !NativeDocumentPolicy.AllowsEmpty(submission.Profile) && submission.Primary.ByteCount == 0)
             return "The primary input must be a nonempty unnamed document.";
         if (submission.NamedInputs.Count + 1 > PreviewPolicy.MaximumInputDocuments)
             return "The request exceeds the input document count limit.";
@@ -210,7 +217,8 @@ public sealed class PreviewRunExecutor : IExecutionAdmission
             try
             {
                 result = await _backend.PreviewAsync(request, execution.Token).ConfigureAwait(false);
-                var expectedProfile = request.Profile switch
+                var native = NativeDocumentFormat.FromExecution(request.Profile ?? PreviewExecutionProfile.LegacyJson);
+                var expectedProfile = native?.Profile ?? request.Profile switch
                 {
                     PreviewExecutionProfile.Document => DocumentPreviewPolicy.Profile,
                     PreviewExecutionProfile.XmlDocument => XmlPreviewAdmission.Profile,
@@ -221,12 +229,14 @@ public sealed class PreviewRunExecutor : IExecutionAdmission
                     request.Profile != PreviewExecutionProfile.XmlDocument && output.XmlMetadata is not null ||
                     (request.Profile switch
                     {
+                        _ when native is not null => output.DocumentSettings?.Format != native || output.MediaType != native.MediaType,
                         PreviewExecutionProfile.XmlDocument => output.CsvDialect is not null || !XmlDocumentPolicy.Admits(output.XmlMetadata, XmlDocumentRole.Output, output.MediaType),
                         PreviewExecutionProfile.CsvDocument => !CsvDocumentPolicy.Admits(output.CsvDialect, output.MediaType),
                         PreviewExecutionProfile.Document => output.CsvDialect is not null || !DocumentPreviewPolicy.AdmitsMediaType(output.MediaType),
                         _ => output.CsvDialect is not null || output.MediaType != PreviewPolicy.MediaType
                     })))
                     throw new PreviewRunException("The preview backend did not preserve the requested admission profile.");
+                if (native is not null && result.Status == MappingPreviewStatus.Succeeded && (result.Artifacts.Count != 1 || result.Artifacts[0].BoundaryId != "primary-output" || result.Artifacts[0].DocumentSettings != NativeDocumentNativeSettings.Read(request.Artifact, native).Output)) throw new PreviewRunException("Native output settings mismatch.");
                 if (request.Profile == PreviewExecutionProfile.XmlDocument && result.Status == MappingPreviewStatus.Succeeded)
                     XmlPreviewAdmission.VerifyResult(request, result);
                 if (request.Profile == PreviewExecutionProfile.CsvDocument)
@@ -274,6 +284,8 @@ public sealed class PreviewRunExecutor : IExecutionAdmission
     private async Task<MappingPreviewRequest?> PrepareAsync(PreviewRunClaim claim, CancellationToken cancellationToken)
     {
         var description = PreviewRequestDocument.Decode(claim.RequestDocument);
+        if (NativeDocumentFormat.FromExecution(description.Profile) is { } nativeProfile && !_options.NativeFormats.Contains(nativeProfile))
+            throw new PreviewRunException("Native document profile is not enabled.");
         if (description.Profile == PreviewExecutionProfile.XmlDocument && !_options.XmlEnabled)
             throw new PreviewRunException("XML previews are not enabled.");
         if (description.Subject != claim.Subject)
@@ -307,10 +319,11 @@ public sealed class PreviewRunExecutor : IExecutionAdmission
                 throw new PreviewRunException("The native object does not match the run's revision.");
         }
         else throw new PreviewRunException("The native source does not match the run's subject kind.");
+        if (NativeDocumentFormat.FromExecution(description.Profile) is { } format && (!_options.NativeFormats.Contains(format) || NativeDocumentNativeSettings.Read(artifact, format).Input != description.Inputs[0].DocumentSettings)) throw new PreviewRunException("Native input settings mismatch or disabled profile.");
         if (description.Profile == PreviewExecutionProfile.CsvDocument && CsvNativeDialect.Read(artifact).Input != description.Inputs[0].CsvDialect)
             throw new PreviewRunException("The input dialect does not match the saved native revision.");
         var documents = inputs.Select((input, index) => new PreviewInputDocument(input.Name, input.Content, description.Inputs[index].CsvDialect,
-            description.Inputs[index].XmlMetadata)).ToArray();
+            description.Inputs[index].XmlMetadata, description.Inputs[index].DocumentSettings)).ToArray();
         if (description.Profile == PreviewExecutionProfile.XmlDocument) XmlPreviewAdmission.BindInputs(artifact, documents);
         return new MappingPreviewRequest(artifact, description.Target, documents[0], documents.Skip(1).ToArray(),
             description.Parameters, claim.CurrentDateTime, description.Limits)

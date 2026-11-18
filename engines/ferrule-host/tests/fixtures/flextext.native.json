@@ -1,0 +1,10 @@
+{
+  "source":{"name":"Document","kind":{"kind":"group","children":[{"name":"text","kind":{"kind":"scalar","ty":"string"}}]}},
+  "target":{"name":"Document","kind":{"kind":"group","children":[{"name":"text","kind":{"kind":"scalar","ty":"string"}}]}},
+  "source_path":"never-read.json",
+  "target_path":"never-write.xml",
+  "source_options":{"flextext":{"root_name":"Document","command":{"kind":"store","name":"text","ty":"string"},"output_line_ending":"lf","write_bom":false}},
+  "target_options":{"flextext":{"root_name":"Document","command":{"kind":"store","name":"text","ty":"string"},"output_line_ending":"lf","write_bom":false}},
+  "graph":{"nodes":{"1":{"kind":"source_field","path":["text"]}}},
+  "root":{"target_field":"","source":null,"bindings":[{"target_field":"text","node":1}],"children":[]}
+}

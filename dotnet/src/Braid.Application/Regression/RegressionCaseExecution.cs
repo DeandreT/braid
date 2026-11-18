@@ -61,12 +61,13 @@ public sealed class RegressionCaseExecutionService : IRegressionCaseExecutor, IR
     private readonly RegressionRuntimeIdentity? csvRuntime;
     private readonly RegressionRuntimeIdentity? xmlRuntime;
 
+    private readonly IReadOnlyList<RegressionRuntimeIdentity> nativeRuntimes;
     public bool CanExecute => backend is not IExecutionAdmission { CanExecute: false };
 
     public RegressionCaseExecutionService(IRegressionCaseReader cases, IProjectReader projects,
         IRevisionReportMetadataReader sources, IPrivateObjectStore objects, IMappingPreviewBackend backend,
         RegressionRuntimeIdentity runtime, RegressionRuntimeIdentity? documentRuntime = null, RegressionRuntimeIdentity? csvRuntime = null,
-        RegressionRuntimeIdentity? xmlRuntime = null)
+        RegressionRuntimeIdentity? xmlRuntime = null, IReadOnlyList<RegressionRuntimeIdentity>? nativeRuntimes = null)
     {
         this.cases = cases ?? throw new ArgumentNullException(nameof(cases));
         this.projects = projects ?? throw new ArgumentNullException(nameof(projects));
@@ -86,6 +87,8 @@ public sealed class RegressionCaseExecutionService : IRegressionCaseExecutor, IR
         this.csvRuntime = csvRuntime;
         if (xmlRuntime is not null && (xmlRuntime.Profile != XmlPreviewAdmission.Profile || xmlRuntime.BackendId != runtime.BackendId ||
             xmlRuntime.EngineRevision != runtime.EngineRevision || xmlRuntime.BackendBuild != runtime.BackendBuild)) throw new ArgumentException("Invalid XML runtime.");
+        this.nativeRuntimes = nativeRuntimes?.ToArray() ?? [];
+        if (this.nativeRuntimes.Any(r => NativeDocumentFormat.FromProfile(r.Profile)?.AdapterBuild != r.AdapterBuild || r.BackendBuild != runtime.BackendBuild || r.BackendId != runtime.BackendId || r.EngineRevision != runtime.EngineRevision)) throw new ArgumentException("Invalid native runtime.");
         this.xmlRuntime = xmlRuntime;
     }
 
@@ -114,7 +117,7 @@ public sealed class RegressionCaseExecutionService : IRegressionCaseExecutor, IR
             if (new RegressionCaseEnvelopeCodec().Encode(value, cancellationToken).Reference != expected)
                 return Refused(RegressionCaseExecutionOutcome.CaseChanged);
             var selectedRuntime = value.Runtime == runtime ? runtime : value.Runtime == documentRuntime ? documentRuntime :
-                value.Runtime == csvRuntime ? csvRuntime : value.Runtime == xmlRuntime ? xmlRuntime : null;
+                value.Runtime == csvRuntime ? csvRuntime : value.Runtime == xmlRuntime ? xmlRuntime : nativeRuntimes.FirstOrDefault(r => r == value.Runtime);
             if (selectedRuntime is null) return Refused(RegressionCaseExecutionOutcome.RuntimeMismatch);
 
             var source = await AdmitAsync(actor, target, cancellationToken).ConfigureAwait(false);
@@ -122,6 +125,7 @@ public sealed class RegressionCaseExecutionService : IRegressionCaseExecutor, IR
             var native = NativeArtifact.Admit(target.Revision, bytes, PreviewPolicy.MaximumNativeBytes);
             if (native.Digest != target.NativeDigest || native.ByteCount != source.NativeObject.ByteCount)
                 return Refused(RegressionCaseExecutionOutcome.SourceMismatch);
+            if (NativeDocumentFormat.FromProfile(selectedRuntime.Profile) is { } format && NativeDocumentNativeSettings.Read(native, format) != (value.Replay.Primary.DocumentSettings,value.Expected.Outputs.Single().DocumentSettings)) return Refused(RegressionCaseExecutionOutcome.SourceMismatch);
             if (selectedRuntime.Profile == CsvDocumentPolicy.Profile)
             {
                 var dialect = CsvNativeDialect.Read(native);
@@ -140,7 +144,7 @@ public sealed class RegressionCaseExecutionService : IRegressionCaseExecutor, IR
             var request = new MappingPreviewRequest(native, value.Replay.Target, value.Replay.Primary,
                 value.Replay.NamedInputs, value.Replay.Parameters, value.Replay.CurrentDateTime, value.Replay.Limits)
             {
-                Profile = selectedRuntime.Profile switch
+                Profile = NativeDocumentFormat.FromProfile(selectedRuntime.Profile)?.Execution ?? selectedRuntime.Profile switch
                 {
                     XmlPreviewAdmission.Profile => PreviewExecutionProfile.XmlDocument,
                     CsvDocumentPolicy.Profile => PreviewExecutionProfile.CsvDocument,

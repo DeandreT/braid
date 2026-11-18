@@ -5,13 +5,13 @@ Docker socket requirement without changing the invocation or release contract.
 
 `Braid.MachineEndpoint` (`braid-mapping-endpoint`) is the machine-facing HTTP host for one
 registered release target. Machine callers send mapping inputs and receive the outputs
-of the target's current release. It is separate from the Session host: it serves no
+of the release pinned when their order was accepted. It is separate from the Session host: it serves no
 browser session, cookie, static file or redirect, and has no default authentication
 scheme.
 
 Each call authenticates the caller with a bearer token, requires a current invocation
-grant, claims the request in the invocation ledger and resolves the current release
-again. See [Machine authorization](machine-authorization.md) for tokens, grants and the
+grant and claims or replays the request in the invocation ledger.
+See [Machine authorization](machine-authorization.md) for tokens, grants and the
 ledger, and [Local release activation](local-releases.md) for the release pointer.
 
 ## HTTP contract
@@ -25,7 +25,7 @@ specification alongside the endpoint tests.
 
 | Route | Purpose |
 | --- | --- |
-| `POST /v1/invocations` | Invoke the target's current release. |
+| `POST /v1/invocations` | Pin and invoke the target's current release, or retry the same order. |
 | `GET /v1/health/live` | `204` while the process serves requests. |
 | `GET /v1/health/ready` | `204` once started; `503` before start, while stopping and once the compiled runtime has closed. |
 
@@ -125,15 +125,29 @@ nothing on an expired token, and it does not deliver an outcome recorded after t
 token expired. A retry under the same request ID with a valid token replays a recorded
 outcome, or runs a released attempt again.
 
-A claimed call runs as the current release's publisher through the existing
-`LocalReleaseInvocation`. That path checks the pointer, the publisher's current
-authority, the build approval and the artifact bytes before and after execution, and only
-the isolated compiled runtime loads the artifact. The endpoint reads the pointer before
-and after the call. A release ID never becomes current again, so an unchanged pointer
-identifies the release that ran. A rollback, new activation or disable during the call
-releases the attempt instead of delivering stale output. Revoking the grant, rolling back
-or disabling the target applies to the next call, including a replay. Expired retained
-responses are purged every ten minutes.
+On schema 0048 the first accepted claim pins the target's activated release and its
+publisher in the same transaction as the order identity and input digest. Activation
+or rollback affects new orders. A retry of an accepted order runs the original
+release, under its publisher's current authority, through `LocalReleaseInvocation`;
+only the isolated compiled runtime loads the verified artifact. Revoking the grant
+or disabling the target also blocks replay. An unfinished order from before 0048
+that needs a new claim is refused: its original release cannot be proved.
+
+At most two orders execute per target across all replicas, independently of the
+per-process HTTP limit. A saturated target returns `503` without queuing an order
+or consuming its retry budget. Other targets have their own slots. A slot can be
+reused after its claim finishes or expires; expiry fences the lost replica from
+recording output even if it returns later. Expired retained responses are purged
+every ten minutes.
+
+For the local replica-loss rehearsal, select `HostReplicaPilotTests` with the
+task-owned PostgreSQL test fixture and `BRAID_HOST_REPLICA_PILOT=1`. Two child
+processes run the machine service with a synthetic mapping runtime. The test kills
+one after dispatch, measures complete B invocation round trips during A admission
+bursts, and waits for the database's actual lease expiry before retrying A on the
+survivor. It reports raw samples and kill-to-result time. Its 30-second B call
+and 150-second recovery ceilings are local test budgets, not partner SLAs. This
+doesn't exercise HTTP, native mapping execution, SFTP or delivery.
 
 ## Configuration
 

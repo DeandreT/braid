@@ -474,7 +474,8 @@ main:focus {
     display: block;
     order: -1;
   }
-  .workspace-organization {
+  .workspace-organization,
+  .app-workbench braid-organization-switcher {
     flex: 1;
     overflow-wrap: normal;
   }

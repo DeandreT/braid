@@ -502,6 +502,7 @@ export async function runBrowserFixture(definition) {
       ["braid_invocation_grant_writer", "INVOCATION_GRANT_WRITER"],
       ["braid_invocation_writer", "INVOCATION_WRITER"],
       ["braid_api_audit_writer", "API_AUDIT_WRITER"],
+      ["braid_trigger_worker", "TRIGGER_WORKER"],
       ["braid_administration", "ADMINISTRATION"],
       ["braid_draft_reader", "DRAFT_READER"],
       ["braid_draft_writer", "DRAFT_WRITER"],

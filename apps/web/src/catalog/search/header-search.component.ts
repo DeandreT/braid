@@ -12,6 +12,7 @@ import {
 import { Router } from "@angular/router";
 import { WorkspaceCommands } from "../../workbench/workspace-commands";
 import type { WorkbenchCommand } from "../../workbench/workbench-frame.component";
+import { OrganizationSelection } from "../organization-selection";
 
 @Component({
   selector: "braid-header-search",
@@ -194,6 +195,7 @@ import type { WorkbenchCommand } from "../../workbench/workbench-frame.component
 })
 export class HeaderSearchComponent {
   private readonly router = inject(Router);
+  private readonly selection = inject(OrganizationSelection);
   private readonly document = inject(DOCUMENT);
   private readonly commands = inject(WorkspaceCommands);
   private readonly dialog = viewChild<ElementRef<HTMLDialogElement>>("dialog");
@@ -242,12 +244,12 @@ export class HeaderSearchComponent {
   }
   go(url: string): void {
     this.close();
-    void this.router.navigateByUrl(url);
+    void this.router.navigateByUrl(this.selection.link(url));
   }
   search(query: string): void {
     if (query.trim()) {
       this.close();
-      void this.router.navigate(["/catalog/search"], {
+      void this.router.navigate([this.selection.link("/catalog/search")], {
         queryParams: { q: query.trim() },
       });
     }

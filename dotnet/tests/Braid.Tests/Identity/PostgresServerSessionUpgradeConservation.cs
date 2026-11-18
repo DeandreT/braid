@@ -170,6 +170,8 @@ internal sealed class PostgresServerSessionUpgradeConservation
             command.Parameters.AddWithValue(CreationSchemaAdmission.MigrationChecksum);
             command.Parameters.AddWithValue(DocumentEvidenceSchemaAdmission.MigrationChecksum);
             command.Parameters.AddWithValue(DocumentJsonSchemaAdmission.MigrationChecksum);
+            command.Parameters.AddWithValue(MachineInvocationRoleGuard.HostOrderChecksum);
+            command.Parameters.AddWithValue(PostgresMigrationTests.CurrentChecksums[48..]);
             var value = await command.ExecuteScalarAsync(cancellationToken);
             Assert.True(value is string, "The private session upgrade conservation observation is unavailable.");
             using var document = JsonDocument.Parse((string)value!);
@@ -371,7 +373,7 @@ internal sealed class PostgresServerSessionUpgradeConservation
                     ARRAY(SELECT name FROM unnest($2::text[] || CASE WHEN $1 THEN ARRAY['server_sessions']::text[]
                         ELSE ARRAY[]::text[] END) name ORDER BY name)
                 AND (SELECT array_agg(version ORDER BY version) FROM braid.schema_migrations)=
-                    ARRAY(SELECT generate_series(1,9 + CASE WHEN $1 THEN 38 ELSE 0 END))
+                    ARRAY(SELECT generate_series(1,9 + CASE WHEN $1 THEN 56 ELSE 0 END))
                 AND (SELECT array_agg(checksum ORDER BY version) FROM braid.schema_migrations WHERE version<=9)=$5::text[]
                 AND (NOT $1 OR (SELECT checksum FROM braid.schema_migrations WHERE version=9+1)=$6::text)
                 AND (NOT $1 OR (SELECT checksum FROM braid.schema_migrations WHERE version=11)=$12::text)
@@ -411,6 +413,8 @@ internal sealed class PostgresServerSessionUpgradeConservation
                 AND (NOT $1 OR (SELECT checksum FROM braid.schema_migrations WHERE version=45)=$53::text)
                 AND (NOT $1 OR (SELECT checksum FROM braid.schema_migrations WHERE version=46)=$54::text)
                 AND (NOT $1 OR (SELECT checksum FROM braid.schema_migrations WHERE version=47)=$55::text)
+                AND (NOT $1 OR (SELECT checksum FROM braid.schema_migrations WHERE version=48)=$56::text)
+                AND (NOT $1 OR (SELECT array_agg(checksum ORDER BY version) FROM braid.schema_migrations WHERE version>48)=$57::text[])
                 AND (SELECT count(*) FROM session_fks)=CASE WHEN $1 THEN 2 ELSE 0 END
                 AND (SELECT count(*) FROM intended_parent_triggers)=CASE WHEN $1 THEN 4 ELSE 0 END
                 AND (SELECT count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace

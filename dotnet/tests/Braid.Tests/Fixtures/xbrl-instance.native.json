@@ -1,0 +1,290 @@
+{
+  "source": {
+    "name": "xbrl",
+    "kind": {
+      "kind": "group",
+      "children": [
+        {
+          "name": "rows",
+          "kind": {
+            "kind": "group",
+            "children": [
+              {
+                "name": "identifier",
+                "kind": {
+                  "kind": "group",
+                  "children": [
+                    {
+                      "name": "scheme",
+                      "kind": {
+                        "kind": "scalar",
+                        "ty": "string"
+                      },
+                      "attribute": true
+                    },
+                    {
+                      "name": "#text",
+                      "kind": {
+                        "kind": "scalar",
+                        "ty": "string"
+                      },
+                      "text": true
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "period",
+                "kind": {
+                  "kind": "group",
+                  "children": [
+                    {
+                      "name": "instant",
+                      "kind": {
+                        "kind": "scalar",
+                        "ty": "string"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "Amount",
+                "kind": {
+                  "kind": "scalar",
+                  "ty": "int"
+                }
+              }
+            ]
+          },
+          "repeating": true
+        }
+      ]
+    }
+  },
+  "target": {
+    "name": "xbrl",
+    "kind": {
+      "kind": "group",
+      "children": [
+        {
+          "name": "rows",
+          "kind": {
+            "kind": "group",
+            "children": [
+              {
+                "name": "identifier",
+                "kind": {
+                  "kind": "group",
+                  "children": [
+                    {
+                      "name": "scheme",
+                      "kind": {
+                        "kind": "scalar",
+                        "ty": "string"
+                      },
+                      "attribute": true
+                    },
+                    {
+                      "name": "#text",
+                      "kind": {
+                        "kind": "scalar",
+                        "ty": "string"
+                      },
+                      "text": true
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "period",
+                "kind": {
+                  "kind": "group",
+                  "children": [
+                    {
+                      "name": "instant",
+                      "kind": {
+                        "kind": "scalar",
+                        "ty": "string"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "Amount",
+                "kind": {
+                  "kind": "scalar",
+                  "ty": "int"
+                }
+              }
+            ]
+          },
+          "repeating": true
+        }
+      ]
+    }
+  },
+  "graph": {
+    "nodes": {
+      "1": {
+        "kind": "source_field",
+        "path": [
+          "identifier",
+          "scheme"
+        ],
+        "frame": [
+          "rows"
+        ]
+      },
+      "2": {
+        "kind": "source_field",
+        "path": [
+          "identifier",
+          "#text"
+        ],
+        "frame": [
+          "rows"
+        ]
+      },
+      "3": {
+        "kind": "source_field",
+        "path": [
+          "period",
+          "instant"
+        ],
+        "frame": [
+          "rows"
+        ]
+      },
+      "4": {
+        "kind": "source_field",
+        "path": [
+          "Amount"
+        ],
+        "frame": [
+          "rows"
+        ]
+      }
+    }
+  },
+  "root": {
+    "target_field": "",
+    "source": null,
+    "bindings": [],
+    "children": [
+      {
+        "target_field": "rows",
+        "source": [
+          "rows"
+        ],
+        "bindings": [
+          {
+            "target_field": "Amount",
+            "node": 4
+          }
+        ],
+        "children": [
+          {
+            "target_field": "identifier",
+            "bindings": [
+              {
+                "target_field": "scheme",
+                "node": 1
+              },
+              {
+                "target_field": "#text",
+                "node": 2
+              }
+            ],
+            "children": []
+          },
+          {
+            "target_field": "period",
+            "bindings": [
+              {
+                "target_field": "instant",
+                "node": 3
+              }
+            ],
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  "source_options": {
+    "xbrl": {
+      "mode": "external_source",
+      "taxonomy": "taxonomy.xsd",
+      "namespace_bindings": [
+        {
+          "path": [
+            "rows",
+            "identifier"
+          ],
+          "namespace": "http://www.xbrl.org/2003/instance"
+        },
+        {
+          "path": [
+            "rows",
+            "period"
+          ],
+          "namespace": "http://www.xbrl.org/2003/instance"
+        },
+        {
+          "path": [
+            "rows",
+            "period",
+            "instant"
+          ],
+          "namespace": "http://www.xbrl.org/2003/instance"
+        },
+        {
+          "path": [
+            "rows",
+            "Amount"
+          ],
+          "namespace": "urn:a"
+        }
+      ]
+    }
+  },
+  "target_options": {
+    "xbrl": {
+      "mode": "external_target",
+      "taxonomy": "taxonomy.xsd",
+      "namespace_bindings": [
+        {
+          "path": [
+            "rows",
+            "identifier"
+          ],
+          "namespace": "http://www.xbrl.org/2003/instance"
+        },
+        {
+          "path": [
+            "rows",
+            "period"
+          ],
+          "namespace": "http://www.xbrl.org/2003/instance"
+        },
+        {
+          "path": [
+            "rows",
+            "period",
+            "instant"
+          ],
+          "namespace": "http://www.xbrl.org/2003/instance"
+        },
+        {
+          "path": [
+            "rows",
+            "Amount"
+          ],
+          "namespace": "urn:a"
+        }
+      ]
+    }
+  }
+}

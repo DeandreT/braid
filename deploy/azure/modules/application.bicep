@@ -88,6 +88,9 @@ var roles = [
   { key: 'chat-reader', env: 'CHAT_READER' }
   { key: 'chat-writer', env: 'CHAT_WRITER' }
   { key: 'chat-lifecycle', env: 'CHAT_LIFECYCLE' }
+  { key: 'chat-approver', env: 'CHAT_APPROVER' }
+  { key: 'draft-reader', env: 'DRAFT_READER' }
+  { key: 'draft-writer', env: 'DRAFT_WRITER' }
   { key: 'preview-reader', env: 'PREVIEW_READER' }
   { key: 'preview-writer', env: 'PREVIEW_WRITER' }
   { key: 'case-reader', env: 'CASE_READER' }
@@ -148,6 +151,7 @@ var nativeWorkFiles = [
 var chatFiles = [
   { key: 'chat-reader', setting: 'BRAID_CHAT_READER_CONNECTION_STRING', file: 'chat-reader-connection' }
   { key: 'chat-writer', setting: 'BRAID_CHAT_WRITER_CONNECTION_STRING', file: 'chat-writer-connection' }
+  { key: 'chat-approver', setting: 'BRAID_CHAT_APPROVER_CONNECTION_STRING', file: 'chat-approver-connection' }
   { key: 'payload-permission', setting: 'BRAID_CHAT_PAYLOAD_PERMISSION_CONNECTION_STRING', file: 'chat-payload-permission-connection' }
 ]
 // Mutating bearer requests are audited through their own append-only login.

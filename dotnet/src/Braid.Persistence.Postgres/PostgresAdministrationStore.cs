@@ -10,7 +10,7 @@ using Braid.Domain;
 namespace Braid.Persistence.Postgres;
 
 /// <summary>All authority, CAS, last-administrator checks and audit writes share the database transaction.</summary>
-public sealed class PostgresAdministrationStore(string connectionString) : IAdministrationStore, IOrganizationInvitationRedeemer, IAsyncDisposable
+public sealed partial class PostgresAdministrationStore(string connectionString) : IAdministrationStore, IOrganizationInvitationRedeemer, IAuditLogReader, IAiUsageReader, IAiQuotaStore, IAsyncDisposable
 {
     private readonly NpgsqlDataSource source = NpgsqlDataSource.Create(PostgresConfiguration.Normalize(connectionString));
 
@@ -67,7 +67,7 @@ public sealed class PostgresAdministrationStore(string connectionString) : IAdmi
         return result;
     }
 
-    private async Task<PostgresTransaction> BeginAsync(Guid org, CancellationToken token)
+    private async Task<PostgresTransaction> BeginAsync(Guid org, CancellationToken token, bool readOnly = false, bool exclusiveLifecycle = false)
     {
         if (org == Guid.Empty) throw new ArgumentException("Organization required.", nameof(org));
         var connection = await source.OpenConnectionAsync(token);
@@ -75,11 +75,17 @@ public sealed class PostgresAdministrationStore(string connectionString) : IAdmi
         try
         {
             transaction = await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted, token);
+            if (readOnly)
+            {
+                await using var mode = new NpgsqlCommand("SET TRANSACTION READ ONLY", connection, transaction);
+                await mode.ExecuteNonQueryAsync(token);
+            }
             await using (var settings = new NpgsqlCommand("SET LOCAL search_path=pg_catalog; SET LOCAL statement_timeout='15s'; SET LOCAL lock_timeout='5s'; SET LOCAL TimeZone='UTC'", connection, transaction))
                 await settings.ExecuteNonQueryAsync(token);
             await AdministrationRoleGuard.ValidateAsync(connection, transaction, token);
             var tx = new PostgresTransaction(connection, transaction, org);
             await tx.BindOrganizationAsync(org, token);
+            if (exclusiveLifecycle) await LifecycleTransactionGate.AcquireAsync(connection, transaction, org, token, exclusive: true);
             return tx;
         }
         catch { if (transaction is not null) await transaction.DisposeAsync(); await connection.DisposeAsync(); throw; }

@@ -1,0 +1,53 @@
+# Opt-in local emulators for trigger acceptance: the Service Bus emulator (with the SQL Server
+# it requires), Azurite blob storage and an OpenSSH SFTP server. Standalone, loopback-only
+# ephemeral ports, no Weft services. Emulators cannot qualify managed identity, cloud RBAC or
+# production policy.
+#
+#   BRAID_TRIGGERS_ACCEPT_EULA=Y BRAID_TRIGGERS_SQL_PASSWORD=... BRAID_TRIGGERS_SFTP_PASSWORD=... \
+#     docker compose -p braid-triggers -f deploy/compose/compose.triggers.yml up -d
+#
+# Setting BRAID_TRIGGERS_ACCEPT_EULA=Y accepts the Service Bus emulator and SQL Server licenses.
+services:
+  servicebus-sql:
+    image: mcr.microsoft.com/mssql/server@sha256:cf8f0ab2ebe61feec2eed2629061a07d247f791c2a8ddda74a4ac9f06a291718
+    environment:
+      ACCEPT_EULA: ${BRAID_TRIGGERS_ACCEPT_EULA:?Set BRAID_TRIGGERS_ACCEPT_EULA=Y to accept the emulator licenses}
+      MSSQL_SA_PASSWORD: ${BRAID_TRIGGERS_SQL_PASSWORD:?Set BRAID_TRIGGERS_SQL_PASSWORD for the emulator database}
+    security_opt: [no-new-privileges:true]
+    mem_limit: 2g
+    cpus: 1.5
+  servicebus:
+    image: mcr.microsoft.com/azure-messaging/servicebus-emulator@sha256:7607008ede6fa0f9fb4f3411bd681e39b48dcbcc90bafbc15f7bca5c3d8ced4b
+    depends_on: [servicebus-sql]
+    # The emulator exits when SQL Server is not accepting connections yet; a slow host needs another start.
+    restart: on-failure
+    environment:
+      ACCEPT_EULA: ${BRAID_TRIGGERS_ACCEPT_EULA:?Set BRAID_TRIGGERS_ACCEPT_EULA=Y to accept the emulator licenses}
+      SQL_SERVER: servicebus-sql
+      MSSQL_SA_PASSWORD: ${BRAID_TRIGGERS_SQL_PASSWORD:?Set BRAID_TRIGGERS_SQL_PASSWORD for the emulator database}
+      SQL_WAIT_INTERVAL: "15"
+    volumes:
+      - ./servicebus-emulator.json:/ServiceBus_Emulator/ConfigFiles/Config.json:ro
+    ports:
+      - "127.0.0.1::5672"
+      - "127.0.0.1::5300"
+    security_opt: [no-new-privileges:true]
+    mem_limit: 1g
+    cpus: 1
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite@sha256:830430c1da1a2d537e08f3e6764dd1f5ae00cf0346bcaf625b968ec3f0971fd5
+    command: [azurite-blob, --blobHost, 0.0.0.0, --blobPort, "10000", --inMemoryPersistence, --skipApiVersionCheck, --loose]
+    ports:
+      - "127.0.0.1::10000"
+    security_opt: [no-new-privileges:true]
+    mem_limit: 512m
+    cpus: 1
+  # User "braid" with a writable /upload under its chroot. The host key is generated once per
+  # container; clients pin it from /etc/ssh/ssh_host_ed25519_key.pub, never on first use.
+  sftp:
+    image: docker.io/atmoz/sftp@sha256:0960390462a4441dbb63698d7c185b76a41ffcee7b78ff4adf275f3e66f9c475
+    command: ["braid:${BRAID_TRIGGERS_SFTP_PASSWORD:?Set BRAID_TRIGGERS_SFTP_PASSWORD for the SFTP user}:1001::upload"]
+    ports:
+      - "127.0.0.1::22"
+    mem_limit: 256m
+    cpus: 0.5

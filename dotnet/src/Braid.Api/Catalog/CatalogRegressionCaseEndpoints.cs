@@ -156,7 +156,8 @@ public static partial class CatalogEndpoints
         try
         {
             var replay = incoming.Replay;
-            if (selectedRuntime.Profile is CsvDocumentPolicy.Profile or XmlPreviewAdmission.Profile)
+            var format = NativeDocumentFormat.FromProfile(selectedRuntime.Profile);
+            if (format is not null || selectedRuntime.Profile is CsvDocumentPolicy.Profile or XmlPreviewAdmission.Profile)
             {
                 var source = await context.RequestServices.GetRequiredService<IRevisionReportMetadataReader>()
                     .GetSourceAsync(admission.Actor!, revisionScope, context.RequestAborted);
@@ -174,7 +175,12 @@ public static partial class CatalogEndpoints
                     var artifact = NativeArtifact.Admit(revisionScope, native, PreviewPolicy.MaximumNativeBytes);
                     if (artifact.Digest != source.Source.NativeObject.Digest || artifact.ByteCount != source.Source.NativeObject.ByteCount)
                         throw new InvalidOperationException("CSV source integrity mismatch.");
-                    if (selectedRuntime.Profile == XmlPreviewAdmission.Profile)
+                    if (format is not null)
+                    {
+                        var settings = NativeDocumentNativeSettings.Read(artifact, format);
+                        if (incoming.Expected.Outputs.Count != 1 || settings.Input != replay.Primary.DocumentSettings || settings.Output != incoming.Expected.Outputs[0].DocumentSettings) return Error(CatalogErrorCodeV1.InvalidRequest, StatusCodes.Status400BadRequest);
+                    }
+                    else if (selectedRuntime.Profile == XmlPreviewAdmission.Profile)
                     {
                         if (!XmlPreviewAdmission.MatchesCase(artifact, replay, incoming.Expected))
                             return Error(CatalogErrorCodeV1.InvalidRequest, StatusCodes.Status400BadRequest);
@@ -289,7 +295,7 @@ public static partial class CatalogEndpoints
             _ => "boolean"
         }, parameter.Value)).ToArray(), value.ComparisonPolicy,
         value.Expected.Outputs.Select(output => new RegressionDocumentV1(output.Key.Name, WebEncoders.Base64UrlEncode(output.CopyBytes()),
-            value.Runtime.Profile is DocumentPreviewPolicy.Profile or CsvDocumentPolicy.Profile or XmlPreviewAdmission.Profile ? output.MediaType : null,
-            CsvDialect(output.CsvDialect), XmlMetadata(output.XmlMetadata))).ToArray(),
-        value.EdiOptions is { } options ? new(options.CompareSeparators, options.IgnoreControlNumbers, options.IgnoreDates) : null);
+            output.DocumentSettings is not null || value.Runtime.Profile is DocumentPreviewPolicy.Profile or CsvDocumentPolicy.Profile or XmlPreviewAdmission.Profile ? output.MediaType : null,
+            CsvDialect(output.CsvDialect), XmlMetadata(output.XmlMetadata), DocumentSettings(output.DocumentSettings))).ToArray(),
+        value.EdiOptions is { } options ? new(options.CompareSeparators, options.IgnoreControlNumbers, options.IgnoreDates) : null, DocumentSettings(value.Replay.Primary.DocumentSettings));
 }

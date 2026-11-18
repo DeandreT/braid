@@ -1,0 +1,19 @@
+{
+  "source": {"name":"Row","kind":{"kind":"group","children":[
+    {"name":"code","kind":{"kind":"scalar","ty":"string"}},
+    {"name":"quantity","kind":{"kind":"scalar","ty":"int"}}
+  ]}},
+  "target": {"name":"Row","kind":{"kind":"group","children":[
+    {"name":"code","kind":{"kind":"scalar","ty":"string"}},
+    {"name":"quantity","kind":{"kind":"scalar","ty":"int"}}
+  ]}},
+  "source_path":"not-a-workbook.json",
+  "target_path":"not-a-workbook.csv",
+  "source_options":{"tabular_kind":"xlsx","has_header_row":true,"xlsx_sheet":"Orders","xlsx_start_row":2},
+  "target_options":{"tabular_kind":"xlsx","has_header_row":true,"xlsx_sheet":"Result","xlsx_headers":["Code","Quantity"]},
+  "graph":{"nodes":{
+    "1":{"kind":"source_field","path":["code"]},
+    "2":{"kind":"source_field","path":["quantity"]}
+  }},
+  "root":{"target_field":"","source":[],"bindings":[{"target_field":"code","node":1},{"target_field":"quantity","node":2}],"children":[]}
+}

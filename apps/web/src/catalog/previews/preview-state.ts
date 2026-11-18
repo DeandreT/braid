@@ -20,6 +20,12 @@ import {
   type PreviewTargetKind,
 } from "./preview-types";
 import { csvPreviewProfile } from "./csv-contract";
+import {
+  nativeFormats,
+  nativeProfile,
+  nativeMedia,
+  nativeSettings,
+} from "./native-document-contract";
 import { xmlPreviewProfile } from "./xml-contract";
 import { xmlPreflightText } from "./xml-problem";
 
@@ -48,6 +54,7 @@ export interface PreviewBinding {
   /** No access check is pending, so a request can be sent at once. */
   readonly ready: () => boolean;
   readonly csvAvailable?: () => boolean;
+  readonly nativeAvailable?: () => readonly string[];
   readonly xmlAvailable?: () => boolean;
 }
 
@@ -89,6 +96,7 @@ export class PreviewState {
   readonly targetKind = signal<PreviewTargetKind>("all");
   readonly documentProfile = signal(false);
   readonly csvProfile = signal(false);
+  readonly native = signal<ReturnType<typeof nativeProfile>>(undefined);
   readonly xmlProfile = signal(false);
   readonly submitted = signal<{
     runId: string;
@@ -377,12 +385,25 @@ export class PreviewState {
   }
 
   private body(): PreviewSubmission {
+    const format = this.native();
+    if (
+      format &&
+      (!this.binding?.nativeAvailable?.().includes(format.profile) ||
+        this.inputs().length !== 1 ||
+        this.targetKind() === "named")
+    )
+      throw new Error(
+        "Choose an available native profile and one primary input.",
+      );
     if (this.xmlProfile() && !this.binding?.xmlAvailable?.())
       throw new Error("The server has not offered XML previews.");
     if (
-      [this.xmlProfile(), this.csvProfile(), this.documentProfile()].filter(
-        Boolean,
-      ).length > 1
+      [
+        format,
+        this.xmlProfile(),
+        this.csvProfile(),
+        this.documentProfile(),
+      ].filter(Boolean).length > 1
     )
       throw new Error("Choose one preview admission profile.");
     if (this.csvProfile() && !this.binding?.csvAvailable?.())
@@ -401,7 +422,7 @@ export class PreviewState {
     let total = 0;
     const encoded = inputs.map((input, index) => {
       const bytes = input.file ? input.file.bytes : encoder.encode(input.text);
-      if (bytes.length === 0 && !this.csvProfile())
+      if (bytes.length === 0 && !this.csvProfile() && !format)
         throw new Error(
           index === 0
             ? this.documentProfile()
@@ -444,13 +465,15 @@ export class PreviewState {
         kind === "named" ? { kind, name: targetName } : { kind, name: null },
       parameters,
       inputs: encoded,
-      ...(this.xmlProfile()
-        ? { profile: xmlPreviewProfile }
-        : this.csvProfile()
-          ? { profile: csvPreviewProfile }
-          : this.documentProfile()
-            ? { profile: "braid.ferrule-document-preview.v1" as const }
-            : {}),
+      ...(format
+        ? { profile: format.profile }
+        : this.xmlProfile()
+          ? { profile: xmlPreviewProfile }
+          : this.csvProfile()
+            ? { profile: csvPreviewProfile }
+            : this.documentProfile()
+              ? { profile: "braid.ferrule-document-preview.v1" as const }
+              : {}),
     };
   }
 

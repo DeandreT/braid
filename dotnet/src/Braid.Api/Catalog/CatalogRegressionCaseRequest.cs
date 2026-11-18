@@ -70,7 +70,7 @@ internal static class CatalogRegressionCaseRequest
         {
             throw new CatalogRegressionCaseRequestException(CatalogErrorCodeV1.InvalidRequest, StatusCodes.Status408RequestTimeout);
         }
-        catch (Exception error) when (error is JsonException or ArgumentException or InvalidOperationException or FormatException or OverflowException or RegressionComparisonException)
+        catch (Exception error) when (error is JsonException or ArgumentException or InvalidOperationException or FormatException or OverflowException or RegressionComparisonException or PreviewRunException or KeyNotFoundException)
         {
             throw Invalid();
         }
@@ -88,12 +88,15 @@ internal static class CatalogRegressionCaseRequest
     {
         var hasOptions = root.TryGetProperty("comparisonOptions", out var optionsElement);
         string[] fields = ["name", "revisionId", "runtime", "currentDateTime", "target", "limits", "primaryBase64Url", "namedInputs", "parameters", "comparisonPolicy", "expected"];
+        if (root.TryGetProperty("primaryDocumentSettings", out var savedSettings)) fields = [..fields,"primaryDocumentSettings"];
         Shape(root, hasOptions ? [.. fields, "comparisonOptions"] : fields);
         var runtime = root.GetProperty("runtime");
         Shape(runtime, "backendId", "engineRevision", "backendBuild", "adapterBuild", "profile");
         var identity = new RegressionRuntimeIdentity(Text(runtime, "backendId"), Text(runtime, "engineRevision"), Text(runtime, "backendBuild"),
             Text(runtime, "adapterBuild"), Text(runtime, "profile"));
         var documents = identity.Profile == DocumentPreviewPolicy.Profile;
+        var native = NativeDocumentFormat.FromProfile(identity.Profile);
+        if ((native is not null) != (savedSettings.ValueKind != JsonValueKind.Undefined)) throw Invalid();
         var csv = identity.Profile == CsvDocumentPolicy.Profile;
         // Input metadata never carries hints; the endpoint still proves it against the saved revision.
         var xmlInput = identity.Profile == XmlPreviewAdmission.Profile ? XmlDocumentMetadata.WithoutHints : null;
@@ -118,7 +121,7 @@ internal static class CatalogRegressionCaseRequest
         Shape(limitsValue, "maximumInputBytes", "maximumOutputBytes", "maximumArtifacts", "maximumTextBytes");
         var limits = new PreviewLimits(Integer(limitsValue, "maximumInputBytes"), Integer(limitsValue, "maximumOutputBytes"),
             Integer(limitsValue, "maximumArtifacts"), Integer(limitsValue, "maximumTextBytes"));
-        var primary = new PreviewInputDocument(null, Bytes(Text(root, "primaryBase64Url"), PreviewPolicy.MaximumInputBytes), xmlMetadata: xmlInput);
+        var primary = new PreviewInputDocument(null, Bytes(Text(root, "primaryBase64Url"), PreviewPolicy.MaximumInputBytes), xmlMetadata: xmlInput, documentSettings: native is null ? null : NativeDocumentSettingsJson.Read(savedSettings));
         var named = Array(root, "namedInputs", PreviewPolicy.MaximumInputDocuments - 1);
         var inputs = new List<PreviewInputDocument>();
         var inputRemaining = PreviewPolicy.MaximumInputBytes - primary.ByteCount;
@@ -152,21 +155,21 @@ internal static class CatalogRegressionCaseRequest
         foreach (var output in expected.EnumerateArray())
         {
             token.ThrowIfCancellationRequested();
-            Shape(output, xmlInput is not null ? ["name", "bytesBase64Url", "mediaType", "xmlMetadata"] :
+            Shape(output, native is not null ? ["name","bytesBase64Url","mediaType","documentSettings"] : xmlInput is not null ? ["name", "bytesBase64Url", "mediaType", "xmlMetadata"] :
                 csv ? ["name", "bytesBase64Url", "mediaType", "csvDialect"] :
                 documents ? ["name", "bytesBase64Url", "mediaType"] : ["name", "bytesBase64Url"]);
             var name = NullableText(output, "name");
             var bytes = Bytes(Text(output, "bytesBase64Url"), outputRemaining);
             outputRemaining -= bytes.Length;
             outputs.Add(RegressionOutput.Capture(name is null ? RegressionOutputKey.Primary : RegressionOutputKey.Named(name), bytes, token,
-                documents || csv || xmlInput is not null ? Text(output, "mediaType") : PreviewPolicy.MediaType,
+                documents || csv || native is not null || xmlInput is not null ? Text(output, "mediaType") : PreviewPolicy.MediaType,
                 csv ? CsvDialectJson.Read(output.GetProperty("csvDialect")) : null,
-                xmlInput is not null ? XmlDocumentMetadataJson.Read(output.GetProperty("xmlMetadata"), XmlDocumentRole.Output) : null));
+                xmlInput is not null ? XmlDocumentMetadataJson.Read(output.GetProperty("xmlMetadata"), XmlDocumentRole.Output) : null, native is null ? null : NativeDocumentSettingsJson.Read(output.GetProperty("documentSettings"))));
         }
         return new(Text(root, "name"), Id(Text(root, "revisionId")), identity,
             new(target, Text(root, "currentDateTime"), limits, primary, inputs, values, token,
-                xmlInput is not null ? PreviewExecutionProfile.XmlDocument :
-                csv ? PreviewExecutionProfile.CsvDocument : PreviewExecutionProfile.LegacyJson),
+                native?.Execution ?? (xmlInput is not null ? PreviewExecutionProfile.XmlDocument :
+                csv ? PreviewExecutionProfile.CsvDocument : PreviewExecutionProfile.LegacyJson)),
             Text(root, "comparisonPolicy"), RegressionOutputSet.Capture(outputs, token), options);
     }
 

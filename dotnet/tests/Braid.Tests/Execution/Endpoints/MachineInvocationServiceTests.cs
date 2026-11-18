@@ -36,6 +36,16 @@ public sealed class MachineInvocationServiceTests
     }
 
     [Fact]
+    public async Task A_pinned_order_finishes_its_own_release_after_the_pointer_moves()
+    {
+        var test = new Fixture { ChangePointerAt = "runtime", PinClaims = true }; await test.Activate();
+        var result = await test.InvokeAsync();
+        Assert.Equal(MachineInvocationStatus.Completed, result.Status);
+        Assert.Equal(test.Release!.ReleaseId, result.ReleaseId);
+        Assert.Equal(1, test.RuntimeCalls);
+    }
+
+    [Fact]
     public async Task A_rollback_during_the_call_releases_the_attempt_instead_of_delivering_stale_output()
     {
         var test = new Fixture { ChangePointerAt = "runtime" }; await test.Activate();
@@ -62,6 +72,7 @@ public sealed class MachineInvocationServiceTests
     [InlineData(MachineInvocationClaimStatus.InProgress, MachineInvocationStatus.InProgress)]
     [InlineData(MachineInvocationClaimStatus.Refused, MachineInvocationStatus.Refused)]
     [InlineData(MachineInvocationClaimStatus.NoRelease, MachineInvocationStatus.NoRelease)]
+    [InlineData(MachineInvocationClaimStatus.Capacity, MachineInvocationStatus.Unavailable)]
     public async Task Unclaimed_requests_run_and_record_nothing(MachineInvocationClaimStatus claim, MachineInvocationStatus expected)
     {
         var test = new Fixture { ForcedClaim = claim }; await test.Activate();
@@ -152,7 +163,7 @@ public sealed class MachineInvocationServiceTests
         internal int RuntimeCalls, Claims;
         internal bool Enabled = true, Unauthorized, CancelAtRuntime, BlockAtRuntime, StallRelease;
         /// <summary>Release reads admit only the release's publisher, as the actual store does.</summary>
-        internal bool PublisherOnlyReleaseReads;
+        internal bool PublisherOnlyReleaseReads, PinClaims;
         internal MachineInvocationFinishStatus? ForcedFinish;
         internal string? ChangePointerAt;
         internal MachineInvocationClaimStatus? ForcedClaim;
@@ -195,7 +206,8 @@ public sealed class MachineInvocationServiceTests
             if (recorded.TryGetValue(key, out var finish))
                 return Task.FromResult(new MachineInvocationClaim(MachineInvocationClaimStatus.Recorded, 1, Outcome: finish.Outcome,
                     ReleaseId: finish.Provenance?.ReleaseId, RetainedResponse: finish.Response));
-            return Task.FromResult(new MachineInvocationClaim(MachineInvocationClaimStatus.Claimed, 1, Guid.NewGuid(), saved!.Intent.Actor));
+            return Task.FromResult(new MachineInvocationClaim(MachineInvocationClaimStatus.Claimed, 1, Guid.NewGuid(), saved!.Intent.Actor,
+                ReleaseId: PinClaims ? saved.Intent.ReleaseId : null));
         }
 
         public async Task<MachineInvocationFinishStatus> FinishAsync(MachineInvocationKey key, Guid claimId, Guid applicationId, MachineInvocationOutcome outcome,

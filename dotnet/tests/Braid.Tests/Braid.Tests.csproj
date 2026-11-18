@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <IsTestProject>true</IsTestProject>
+    <!-- VSTest loads this assembly. Its otherwise unused executable entrypoint is a private-pipe replica fixture. -->
+    <GenerateProgramFile>false</GenerateProgramFile>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../tools/Braid.HostPrivacyProbe/BrowserQualificationAdmissionWire.cs" Link="BrowserQualificationAdmissionWire.cs" />
@@ -68,6 +70,9 @@
           Link="Contracts/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Fixtures/*.json"
           Link="FerruleFixtures/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures/sftp_as2_loopback.py" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures/sftp_output_loopback.py" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../deploy/compose/compose.triggers.yml;../../../deploy/compose/servicebus-emulator.json" Link="BrokerFixture/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <!-- Committed OpenAPI documents that the hosts' own routes and generated documents are compared with. -->
     <None Include="../../../contracts/braid-v1.json;../../../contracts/braid-endpoint-v1.json;../../../contracts/ferrule-service-v1.json"
           Link="Contracts/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

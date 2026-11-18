@@ -108,6 +108,76 @@ public sealed class ReleaseOperationsHttpTests(PostgresFixture fixture)
         Assert.Contains("no-store", denied.Headers.CacheControl!.ToString());
     }
 
+    [PostgresFact]
+    public async Task Pilot_route_HTTP_pins_reference_bytes_replays_create_and_fences_stale_pause()
+    {
+        await using var invocation = await MachineInvocationPersistenceTests.Context.CreateAsync(fixture, documents: true);
+        var data = invocation.Releases;
+        await using var host = await Host.Start(data);
+        using var ctx = await host.Client.GetAsync("/api/v1/catalog/context");
+        using var json = JsonDocument.Parse(await ctx.Content.ReadAsByteArrayAsync());
+        var token = json.RootElement.GetProperty("requestToken").GetString()!;
+        var trigger = Guid.NewGuid(); var operation = Guid.NewGuid();
+        var form = new Braid.Contracts.Operations.PilotRouteFormV1(data.Target.Reference.Environment.EnvironmentId.ToString(), "1", Guid.NewGuid().ToString(), "inbox", "1",
+            Guid.NewGuid().ToString(), "partner", "1", invocation.Caller.TenantId.ToString(), invocation.Caller.ObjectId.ToString(), invocation.Application.ToString(), "* * * * *", "2026-11-18T00:00:00Z", "2025b", "terms", "{\"days\":15}");
+        var empty = new Braid.Contracts.Operations.PilotRouteFormV1(form.EnvironmentId, "1", null,null,null,null,null,null,null,null,null,null,null,null,null,null);
+        async Task<HttpStatusCode> Apply(string action, Guid id, long expected, Braid.Contracts.Operations.PilotRouteFormV1 body, string? csrf)
+        {
+            using var response = await host.Post(id, JsonSerializer.Serialize(body, JsonSerializerOptions.Web), csrf, $"\"{expected}\"", $"pilot/{trigger}/{action}");
+            return response.StatusCode;
+        }
+        Assert.Equal(HttpStatusCode.Forbidden, await Apply("configure", operation, 0, form, null));
+        Assert.Equal(HttpStatusCode.OK, await Apply("configure", operation, 0, form, token));
+        Assert.Equal(HttpStatusCode.OK, await Apply("configure", operation, 0, form, token));
+        Assert.Equal(HttpStatusCode.Conflict, await Apply("configure", operation, 0, form with { ReferenceJson = "{}" }, token));
+        Assert.Equal(HttpStatusCode.OK, await Apply("enable", Guid.NewGuid(), 1, empty, token));
+        Assert.Equal(HttpStatusCode.PreconditionFailed, await Apply("pause", Guid.NewGuid(), 1, empty, token));
+        Assert.Equal(HttpStatusCode.OK, await Apply("pause", Guid.NewGuid(), 2, empty, token));
+        await using var admin = new PostgresTriggerAdministrationStore(data.Case.RegressionConnectionString("braid_release_writer"));
+        var first = (await admin.ReadAsync(data.Actor,data.Target.Reference,trigger))!.Configuration;
+        var original = Braid.Deployment.Triggers.PilotRouteInputs.Request(first,"input"u8);
+        Assert.Equal("{\"days\":15}", Encoding.UTF8.GetString(Assert.Single(original.NamedInputs).Bytes));
+        Assert.Empty(original.Parameters);
+        Assert.Equal(HttpStatusCode.OK, await Apply("configure", Guid.NewGuid(), 3, form with {ReferenceJson="{}"}, token));
+        var second = (await admin.ReadAsync(data.Actor,data.Target.Reference,trigger))!.Configuration;
+        Assert.NotEqual(original.Digest, Braid.Deployment.Triggers.PilotRouteInputs.Request(second,"input"u8).Digest);
+        Assert.Equal(original.Digest, Braid.Deployment.Triggers.PilotRouteInputs.Request(Braid.Deployment.Triggers.TriggerConfiguration.Parse(first.CopyCanonicalBytes()),"input"u8).Digest);
+    }
+
+    [PostgresTheory]
+    [InlineData("configureQueue", "blob")]
+    [InlineData("configureBlob", "serviceBusTopic")]
+    public async Task General_routes_require_current_admin_and_preserve_source_and_original_versions(string action, string kind)
+    {
+        await using var data = await LocalReleasePersistenceTests.Context.CreateAsync(fixture);
+        await using var host = await Host.Start(data);
+        using var ctx = await host.Client.GetAsync("/api/v1/catalog/context");
+        ctx.EnsureSuccessStatusCode();
+        using var json = JsonDocument.Parse(await ctx.Content.ReadAsByteArrayAsync());
+        var token = json.RootElement.GetProperty("requestToken").GetString()!;
+        var trigger = Guid.NewGuid(); var op = Guid.NewGuid(); var schedule = action == "configureBlob";
+        var form = new Braid.Contracts.Operations.PilotRouteFormV1(data.Target.Reference.Environment.EnvironmentId.ToString(), "1", Guid.NewGuid().ToString(), "local-in", "1",
+            Guid.NewGuid().ToString(), "local-out", "1", Guid.NewGuid().ToString(), Guid.NewGuid().ToString(), Guid.NewGuid().ToString(), schedule ? "* * * * *" : null,
+            schedule ? "2026-11-18T00:00:00Z" : null, schedule ? "2025b" : null, null, null, kind, "application/json", "batch");
+        async Task<HttpStatusCode> Post(Guid id, Braid.Contracts.Operations.PilotRouteFormV1 f, int generation, string? csrf)
+        {
+            using var response = await host.Post(id, JsonSerializer.Serialize(f, JsonSerializerOptions.Web), csrf, $"\"{generation}\"", $"pilot/{trigger}/{action}");
+            return response.StatusCode;
+        }
+        Assert.Equal(HttpStatusCode.Forbidden, await Post(op, form, 0, null));
+        await data.Control.Runs.Cases.RoleAsync("publisher");
+        Assert.Equal(HttpStatusCode.NotFound, await Post(op, form, 0, token));
+        await data.Control.Runs.Cases.RoleAsync("administrator");
+        Assert.Equal(HttpStatusCode.OK, await Post(op, form, 0, token));
+        Assert.Equal(HttpStatusCode.OK, await Post(op, form, 0, token));
+        Assert.Equal(HttpStatusCode.Conflict, await Post(op, form with { DestinationVersion="2" }, 0, token));
+        Assert.Equal(HttpStatusCode.NotFound, await Post(Guid.NewGuid(), form with { SourceBinding=Guid.NewGuid().ToString() }, 1, token));
+        Assert.Equal(HttpStatusCode.NotFound, await Post(Guid.NewGuid(), form with { Source="another-in" }, 1, token));
+        Assert.Equal(HttpStatusCode.OK, await Post(Guid.NewGuid(), form with { DestinationVersion="2" }, 1, token));
+        Assert.Equal("1", await data.Case.ScalarAsync<string>("SELECT convert_from(definition,'UTF8')::jsonb->'routes'->0->>'connectorVersion' FROM braid.trigger_configurations WHERE trigger_id=$1 AND version=1",trigger));
+        Assert.Equal("2", await data.Case.ScalarAsync<string>("SELECT convert_from(definition,'UTF8')::jsonb->'routes'->0->>'connectorVersion' FROM braid.trigger_configurations WHERE trigger_id=$1 AND version=2",trigger));
+    }
+
     private sealed class Host(WebApplication app, PostgresCatalogDatabase catalog, HttpClient client, string path, Guid target) : IAsyncDisposable
     {
         internal HttpClient Client => client;
@@ -125,6 +195,7 @@ public sealed class ReleaseOperationsHttpTests(PostgresFixture fixture)
             var catalog = new PostgresCatalogDatabase(data.Case.CatalogConnectionString);
             builder.Services.AddSingleton<ICatalogReader>(new PostgresCatalogReader(catalog));
             builder.Services.AddSingleton<IReleaseOperationsStore>(data.Store);
+            builder.Services.AddSingleton<Braid.Deployment.Triggers.ITriggerAdministrationStore>(_ => new PostgresTriggerAdministrationStore(data.Case.RegressionConnectionString("braid_release_writer")));
             builder.Services.AddSingleton(new ReleaseOperationsService(data.Store, data.Store, data.Qualifications));
             var app = builder.Build(); app.MapBraidCatalog(); app.MapBraidReleaseOperations(); listener.Stop();
             var client = new HttpClient(new HttpClientHandler { CookieContainer = new(), UseCookies = true, UseProxy = false }) { BaseAddress = origin };
@@ -136,9 +207,9 @@ public sealed class ReleaseOperationsHttpTests(PostgresFixture fixture)
             }
             catch { client.Dispose(); await app.DisposeAsync(); await catalog.DisposeAsync(); throw; }
         }
-        internal async Task<HttpResponseMessage> Post(Guid operation, string body, string? token, string? etag)
+        internal async Task<HttpResponseMessage> Post(Guid operation, string body, string? token, string? etag, string section = "actions")
         {
-            using var request = new HttpRequestMessage(HttpMethod.Post, path + $"/{target:D}/actions/{operation:D}") { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+            using var request = new HttpRequestMessage(HttpMethod.Post, path + $"/{target:D}/{section}/{operation:D}") { Content = new StringContent(body, Encoding.UTF8, "application/json") };
             request.Headers.TryAddWithoutValidation("Origin", client.BaseAddress!.GetLeftPart(UriPartial.Authority));
             if (token is not null) request.Headers.TryAddWithoutValidation(CatalogRequestBoundary.RequestTokenHeader, token);
             if (etag is not null) request.Headers.TryAddWithoutValidation("If-Match", etag);

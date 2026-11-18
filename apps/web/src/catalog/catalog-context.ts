@@ -16,6 +16,7 @@ import {
   Subject,
 } from "rxjs";
 import { CatalogApi, catalogFailure } from "./catalog-api";
+import { OrganizationSelection } from "./organization-selection";
 import {
   CatalogReadError,
   catalogOwner,
@@ -28,14 +29,16 @@ import { BrowserSessionState } from "../auth/browser-session-state";
  * Admission is fetched for every read selection; neither identity nor tokens are persisted.
  *
  * The confirmed context stays in place while a fresh one is read. A fresh context for the same
- * owner replaces it and joins its lineage, so content admitted under an earlier context of that
- * lineage stays current. A different owner, a failed read or a session boundary ends the lineage.
+ * owner and admission incarnation joins its lineage, keeping earlier admitted content current.
+ * A different owner or incarnation, a failed read or a session boundary ends the lineage.
  */
 @Injectable({ providedIn: "root" })
 export class CatalogContextStore {
   private readonly api = inject(CatalogApi);
   private readonly sessions = inject(BrowserSessionState);
+  private readonly selection = inject(OrganizationSelection);
   private readonly current = signal<CatalogContext | null>(null);
+  private currentOwner: string | null = null;
   private readonly currentState = signal<CatalogContextState>({ kind: "idle" });
   private readonly identityRevision = signal(0);
   private lineage = new WeakSet<CatalogContext>();
@@ -51,9 +54,12 @@ export class CatalogContextStore {
   readonly context = this.current.asReadonly();
   readonly state = this.currentState.asReadonly();
   readonly identityVersion = this.identityRevision.asReadonly();
+  /** The tab's route-selected organization; `null` is a root-only route. */
+  readonly organizationId = this.selection.organizationId;
 
   constructor() {
     const subscription = this.sessions.invalidated.subscribe(() => {
+      this.selection.observeRoot(null);
       this.clear();
       this.identityRevision.update((value) => value + 1);
       this.changes.next();
@@ -117,7 +123,19 @@ export class CatalogContextStore {
     );
   }
 
-  reject(status: number | null): void {
+  /**
+   * The route selected another organization, after its single leave decision. Everything
+   * admitted for the previous one ends synchronously, before the destination is read or shown.
+   */
+  select(organizationId: string | null): void {
+    if (!this.selection.select(organizationId)) return;
+    this.clear();
+    this.changes.next();
+  }
+
+  /** A refusal of work admitted under an earlier context classifies nothing current. */
+  reject(status: number | null, admitted?: CatalogContext): void {
+    if (admitted !== undefined && !this.isCurrent(admitted)) return;
     const context = this.current();
     if ((status === 401 || status === 403) && context?.mode === "session")
       this.sessions.rejectProtectedRequest(this.sessions.generation(), context);
@@ -135,27 +153,29 @@ export class CatalogContextStore {
       const generation = ++this.generation;
       let settled = false;
       this.currentState.set({ kind: "loading" });
-      return this.api.context().pipe(
-        map((context) => {
+      return this.read(this.selection.organizationId()).pipe(
+        map((read) => {
           if (generation !== this.generation)
             throw new CatalogReadError("unavailable");
-          return context;
+          return read;
         }),
-        tap((context) => {
+        tap(({ context, admission }) => {
           settled = true;
           if (generation !== this.generation) return;
-          const identity = catalogOwner(context);
-          const previous = this.current();
+          // A changed admission incarnation ends the lineage like another owner.
+          const identity = JSON.stringify([catalogOwner(context), admission]);
           // Another owner is a boundary: nothing admitted earlier stays current.
-          if (previous && catalogOwner(previous) !== identity) this.end();
+          if (this.current() && this.currentOwner !== identity) this.end();
           if (this.lastIdentity !== null && identity !== this.lastIdentity)
             this.identityRevision.update((revision) => revision + 1);
           this.lastIdentity = identity;
           this.lineage.add(context);
           this.current.set(context);
+          this.currentOwner = identity;
           this.currentState.set({ kind: "ready", context });
           this.settles.next();
         }),
+        map(({ context }) => context),
         catchError((error: unknown) => {
           settled = true;
           const failure = catalogFailure(error);
@@ -178,6 +198,47 @@ export class CatalogContextStore {
         }),
       );
     });
+  }
+
+  /**
+   * The legacy context discovers the root only. Every organization, including either root
+   * alias, gets its context and admission incarnation from the qualified endpoint.
+   */
+  private read(
+    organizationId: string | null,
+  ): Observable<{ context: CatalogContext; admission: string }> {
+    const root = this.api
+      .context()
+      .pipe(
+        tap((context) =>
+          this.selection.observeRoot(context.allowedOrganizationId),
+        ),
+      );
+    const qualified = (id: string) =>
+      this.api.organizationContext(id).pipe(
+        map((read) => ({
+          context: read.context,
+          admission: read.admissionVersion,
+        })),
+      );
+    const known = this.selection.rootOrganizationId();
+    if (organizationId === null)
+      return known
+        ? qualified(known)
+        : root.pipe(
+            switchMap((context) => qualified(context.allowedOrganizationId)),
+          );
+    if (known !== null) return qualified(organizationId);
+    return root.pipe(
+      catchError((error: unknown) => {
+        if (catalogFailure(error).kind !== "notFound")
+          return throwError(() => error);
+        // No root admission: this principal's organizations are all read qualified.
+        this.selection.observeRoot("");
+        return of(null);
+      }),
+      switchMap(() => qualified(organizationId)),
+    );
   }
 
   private decide(
@@ -203,5 +264,6 @@ export class CatalogContextStore {
   private end(): void {
     this.lineage = new WeakSet();
     this.current.set(null);
+    this.currentOwner = null;
   }
 }

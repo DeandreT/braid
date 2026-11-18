@@ -8,6 +8,7 @@ fn main() -> ExitCode {
     let input = io::stdin();
     let output = io::stdout();
     let mut output = output.lock();
+    let restricted = !arguments.is_empty();
     match sandbox::parse_arguments(&arguments) {
         // The container worker: Docker supplies the isolation.
         Ok(None) => {}
@@ -26,7 +27,7 @@ fn main() -> ExitCode {
         }
         Err(error) => return ExitCode::from(error.exit_code()),
     }
-    match braid_ferrule_host::handle_stream(&mut input.lock(), &mut output) {
+    match braid_ferrule_host::handle_worker_stream(&mut input.lock(), &mut output, restricted) {
         Ok(()) => ExitCode::SUCCESS,
         Err(_) => ExitCode::FAILURE,
     }

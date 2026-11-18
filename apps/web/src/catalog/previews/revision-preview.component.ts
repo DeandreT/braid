@@ -1,3 +1,4 @@
+import { DeleteItemComponent } from "../deletion/delete-item.component";
 import { DOCUMENT } from "@angular/common";
 import {
   Component,
@@ -45,11 +46,17 @@ import { RegressionViewRecovery } from "../regression/regression-view-recovery";
 import { canonicalDefinition } from "../regression/regression-definition";
 import { previewCaseDefinition, type PreviewCasePending } from "./preview-case";
 import { csvPreviewProfile } from "./csv-contract";
+import {
+  nativeFormats,
+  nativeProfile,
+  nativeMedia,
+  nativeSettings,
+} from "./native-document-contract";
 import { xmlPreviewProfile } from "./xml-contract";
 
 @Component({
   selector: "braid-revision-preview",
-  imports: [StatusChipComponent, HelpLinkComponent, DocumentViewComponent],
+  imports: [DeleteItemComponent, StatusChipComponent, HelpLinkComponent, DocumentViewComponent],
   templateUrl: "./revision-preview.component.html",
   styleUrl: "./revision-preview.component.css",
 })
@@ -72,24 +79,34 @@ export class RevisionPreviewComponent {
   readonly caseBusy = signal(false);
   readonly casePending = signal<PreviewCasePending | null>(null);
   readonly caseNotice = signal<string | null>(null);
+  readonly nativeFormats = nativeFormats;
   readonly canSaveCase = computed(() => {
     const run = this.preview.run();
     const xml = run?.provenance?.profile === xmlPreviewProfile;
-    const runtime = xml
-      ? this.capabilities()?.xmlRuntime
-      : this.capabilities()?.csvRuntime;
+    const native = nativeProfile(run?.provenance?.profile);
+    const runtime = native
+      ? this.capabilities()?.nativeRuntimes?.find(
+          (r) => r.profile === native.profile,
+        )
+      : xml
+        ? this.capabilities()?.xmlRuntime
+        : this.capabilities()?.csvRuntime;
     return (
       this.preview.busy() === null &&
       !this.preview.active() &&
       !!this.capabilities()?.publishCases &&
       !!runtime &&
       run?.outcome === "succeeded" &&
-      (xml
-        ? run.outputs.length > 0 &&
-          run.outputs.every((output) => !!output.xmlMetadata)
-        : run.provenance?.profile === csvPreviewProfile &&
-          run.outputs.length === 1 &&
-          !!run.outputs[0]?.csvDialect) &&
+      (native
+        ? run.outputs.length === 1 &&
+          !!run.primaryDocumentSettings &&
+          !!run.outputs[0]?.documentSettings
+        : xml
+          ? run.outputs.length > 0 &&
+            run.outputs.every((output) => !!output.xmlMetadata)
+          : run.provenance?.profile === csvPreviewProfile &&
+            run.outputs.length === 1 &&
+            !!run.outputs[0]?.csvDialect) &&
       this.preview.submitted()?.runId === run.runId
     );
   });
@@ -153,6 +170,8 @@ export class RevisionPreviewComponent {
               .pipe(map((context) => context.requestToken)),
           ready: () => this.contexts.canSend(this.context()),
           csvAvailable: () => this.context().features.csvPreview === true,
+          nativeAvailable: () =>
+            this.context().features.nativePreviewProfiles ?? [],
           xmlAvailable: () => this.context().features.xmlPreview === true,
         });
         this.capabilityRequest?.unsubscribe();
@@ -221,6 +240,13 @@ export class RevisionPreviewComponent {
   }
 
   setProfile(value: string): void {
+    const format = nativeProfile(value);
+    if (
+      format &&
+      !this.context().features.nativePreviewProfiles?.includes(format.profile)
+    )
+      return;
+    this.preview.native.set(format);
     if (value === "xml" && this.context().features.xmlPreview !== true) return;
     this.preview.xmlProfile.set(value === "xml");
     if (value === "csv" && this.context().features.csvPreview !== true) return;
@@ -279,7 +305,7 @@ export class RevisionPreviewComponent {
           this.caseNotice.set(
             this.casePending()
               ? "The save was not confirmed. Check the original version or retry its unchanged request."
-              : `The ${run.provenance?.profile === xmlPreviewProfile ? "XML" : "CSV"} baseline could not be verified. Check the name, runtime and access before saving.`,
+              : `The ${nativeProfile(run.provenance?.profile)?.label ?? (run.provenance?.profile === xmlPreviewProfile ? "XML" : "CSV")} baseline could not be verified. Check the name, runtime and access before saving.`,
           );
         },
       });
@@ -357,7 +383,7 @@ export class RevisionPreviewComponent {
     this.caseName.set("");
     this.baselineApproved.set(false);
     this.caseNotice.set(
-      "The exact CSV baseline is saved as a test case. Load regression cases to run it.",
+      "The exact-byte baseline is saved as a test case. Load regression cases to run it.",
     );
   }
 
@@ -535,7 +561,8 @@ function outputFilename(output: PreviewOutput): string {
       .replace(/[^A-Za-z0-9._-]+/g, "_")
       .slice(0, 80) || "output";
   const extension =
-    output.mediaType === "application/xml"
+    nativeMedia(output.mediaType)?.extension ??
+    (output.mediaType === "application/xml"
       ? "xml"
       : output.mediaType === "application/edi-x12"
         ? "x12"
@@ -545,6 +572,6 @@ function outputFilename(output: PreviewOutput): string {
             ? "csv"
             : output.mediaType === "text/tab-separated-values"
               ? "tsv"
-              : "json";
+              : "json");
   return `preview-${output.ordinal}-${base}.${extension}`;
 }

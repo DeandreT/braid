@@ -25,7 +25,7 @@ import {
   type Observable,
 } from "rxjs";
 import type { CatalogContext } from "../catalog/catalog-types";
-import { BrowserSessionApi } from "./browser-session-api";
+import { BrowserSessionApi, type InvitationLogin } from "./browser-session-api";
 import { isReturnPath } from "./return-path";
 import { BrowserAuthNavigation } from "./browser-auth-navigation";
 import {
@@ -213,7 +213,7 @@ export class BrowserSessionState {
   /** Sign-in returns to `returnTo` when it is a valid return path, otherwise to the catalog. */
   signIn(
     returnTo: string | null = null,
-    invitation?: string,
+    invitation?: InvitationLogin,
   ): Observable<void> {
     return this.perform(
       "login",
@@ -234,7 +234,7 @@ export class BrowserSessionState {
   private perform(
     action: BrowserAuthAction,
     returnTo: string | null = null,
-    invitation?: string,
+    invitation?: InvitationLogin,
   ): Observable<void> {
     return defer(() => {
       const selected = this.status();
@@ -336,7 +336,7 @@ export class BrowserSessionState {
     action: BrowserAuthAction,
     status: SessionAuthStatus,
     returnTo: string | null,
-    invitation?: string,
+    invitation?: InvitationLogin,
   ): Observable<AuthActionResult> {
     switch (action) {
       case "login":

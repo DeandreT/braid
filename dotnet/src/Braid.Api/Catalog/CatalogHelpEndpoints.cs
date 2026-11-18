@@ -14,14 +14,14 @@ namespace Braid.Api.Catalog;
 public static partial class CatalogEndpoints
 {
     /// <summary>
-    /// The user guide embedded in this build, behind the same catalog admission and fresh organization
-    /// authority as other business reads. Mapping parses the guide, so an invalid guide fails startup.
+    /// The embedded user guide requires authenticated identity but no business membership.
+    /// Mapping parses the guide, so an invalid guide fails startup.
     /// </summary>
     public static IEndpointRouteBuilder MapBraidHelp(this IEndpointRouteBuilder endpoints)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
         var guide = UserGuide.Embedded;
-        var routes = endpoints.BusinessRoutes();
+        var routes = endpoints.IdentityRoutes();
         DescribeHelp<HelpSectionListV1>(routes.MapGet("/api/v1/help/sections",
             (HttpContext context, CatalogRequestBoundary boundary) => GetHelpSections(context, boundary, guide)),
             "GetHelpSections", "Read the user guide's sections in reading order.");
@@ -51,31 +51,19 @@ public static partial class CatalogEndpoints
             .Produces<CatalogErrorV1>(StatusCodes.Status503ServiceUnavailable);
 
     private static Task<IResult> GetHelpSections(HttpContext context, CatalogRequestBoundary boundary, IUserGuideReader guide) =>
-        WithAdmission(context, boundary, async admission =>
+        WithAdmission(context, boundary, _ =>
         {
             RequireQuery(context);
-            return await HelpAdmittedAsync(context, admission) ? Results.Ok(guide.Contents) : NotFound();
-        });
+            return Task.FromResult<IResult>(Results.Ok(guide.Contents));
+        }, identityOnly: true);
 
     private static Task<IResult> GetHelpSection(string sectionId, HttpContext context, CatalogRequestBoundary boundary,
         IUserGuideReader guide) =>
-        WithAdmission(context, boundary, async admission =>
+        WithAdmission(context, boundary, _ =>
         {
             RequireQuery(context);
             if (!UserGuide.IsSectionId(sectionId))
                 throw new CatalogInvalidRequestException();
-            if (!await HelpAdmittedAsync(context, admission))
-                return NotFound();
-            return guide.TryGetSection(sectionId, out var section) ? Results.Ok(section) : NotFound();
-        });
-
-    private static async Task<bool> HelpAdmittedAsync(HttpContext context, CatalogRequestAdmission admission)
-    {
-        var organization = await ProjectCreationPersistence(context, () => context.RequestServices.GetRequiredService<ICatalogReader>()
-            .GetOrganizationAdmissionAsync(admission.Actor!, admission.AllowedOrganizationId!.Value, context.RequestAborted));
-        if (organization is null)
-            return false;
-        RequireOrganization(organization, admission);
-        return true;
-    }
+            return Task.FromResult(guide.TryGetSection(sectionId, out var section) ? Results.Ok(section) : NotFound());
+        }, identityOnly: true);
 }

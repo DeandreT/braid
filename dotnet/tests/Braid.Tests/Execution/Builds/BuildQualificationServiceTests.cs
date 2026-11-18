@@ -8,6 +8,20 @@ namespace Braid.Tests;
 public sealed class BuildQualificationServiceTests
 {
     [Fact]
+    public async Task Only_the_published_package_can_be_qualified_or_replay_its_receipt()
+    {
+        var test = new Fixture(); var id = Guid.NewGuid();
+        var foreign = new Fixture().Package;
+        Assert.Equal(BuildQualificationRequestOutcome.NotQualified, (await test.Put(id, foreign)).Outcome);
+        Assert.Equal(0, test.RuntimeCalls);
+        var package = test.Package;
+        Assert.Equal(BuildQualificationRequestOutcome.Created, (await test.Put(id, package)).Outcome);
+        Assert.Same(package.Bytes, test.Dispatched);
+        Assert.Equal(BuildQualificationRequestOutcome.Conflict, (await test.Put(id, foreign)).Outcome);
+        Assert.Equal(BuildQualificationRequestOutcome.Replayed, (await test.Put(id, package)).Outcome);
+        Assert.Equal(1, test.RuntimeCalls);
+    }
+    [Fact]
     public async Task Lost_save_reply_recovers_the_original_proof_without_rerunning_or_renewing_admission()
     {
         var test = new Fixture { LoseReply = true }; var id = Guid.NewGuid();
@@ -144,7 +158,9 @@ public sealed class BuildQualificationServiceTests
         public string RuntimeImage => image;
         internal BuildQualificationService Service { get; }
         internal Fixture() => Service = new(this, this, this, this, new(this, this, this, this, this), this);
-        internal Task<BuildQualificationRequestResult> Put(Guid id) => Service.PutAsync(Actor, Mapping, id, data.Build.Intent.BuildId);
+        internal MappingPackage Package => new(MappingPackageManifest.Create(data.Build.Artifact!), new([2, 3], 2));
+        internal BuildBytes? Dispatched;
+        internal Task<BuildQualificationRequestResult> Put(Guid id, MappingPackage? package = null) => Service.PutAsync(Actor, Mapping, id, data.Build.Intent.BuildId, package: package);
         public Task<BuildQualification?> ReadAsync(ActorContext actor, MappingScope mapping, Guid id, CancellationToken token) => Task.FromResult(Saved);
         public Task<BuildQualificationWriteOutcome> SaveAsync(ActorContext actor, BuildQualification value, CancellationToken token)
         {
@@ -201,6 +217,7 @@ public sealed class BuildQualificationServiceTests
         public Task<CompiledBuildResult> ExecuteAsync(BuildArtifactReference artifact, BuildBytes verifiedArtifact, RegressionReplay replay, CancellationToken token)
         {
             RuntimeCalls++;
+            Dispatched = verifiedArtifact;
             if (ChangeRuntime) image = "sha256:" + new string('b', 64);
             if (RevokeAt == "after-runtime") Role = ProjectRole.Viewer;
             if (RuntimeFailure is { } failure) return Task.FromResult(new CompiledBuildResult(failure));

@@ -8,12 +8,13 @@ internal static partial class ChatSchemaContract
         ChatDatabaseProfile profile, CancellationToken ct)
     {
         _ = Source.Value; _ = WorkspaceSource.Value; _ = MappingWriteSource.Value; _ = WriteJournalSource.Value; _ = EditProposalSource.Value;
+        var lifecycle = await LifecycleCatalogAdmission.ValidateIfInstalledAsync(connection, transaction, ct);
         // Reader also needs the tombstone relation protected without a tombstone
         // SELECT/listing grant. All profiles receive only this bounded lock capability.
         {
             // Validate exact source/owner/ACL before invoking this no-content lock
             // capability, then revalidate the complete schema with its locks held.
-            await ValidateFunctionsAsync(connection, transaction, ct);
+            if (!lifecycle) await ValidateFunctionsAsync(connection, transaction, ct);
             await using var protect = new NpgsqlCommand("SELECT braid.chat_schema_lock()", connection, transaction);
             await protect.ExecuteNonQueryAsync(ct);
         }
@@ -46,6 +47,12 @@ internal static partial class ChatSchemaContract
             """, connection, transaction))
             if (await journal.ExecuteScalarAsync(ct) is not true) throw Refusal();
         await ValidateHistoryAsync(connection, transaction, ct);
+        if (lifecycle)
+        {
+            // Re-admit the exact upgraded schema after acquiring the source locks.
+            await LifecycleCatalogAdmission.ValidateAsync(connection, transaction, ct);
+            return;
+        }
         // Reuse immutable old descriptors/admission, never broaden old guards/roles.
         // It is catalog-only and grants this credential no maintenance authority.
         await SupplementalMaintenanceSchemaAdmission.ValidateAsync(connection, transaction, ct);
@@ -79,6 +86,7 @@ internal static partial class ChatSchemaContract
             expected.SingleOrDefault(script => script.Version == 44)?.Checksum != DocumentEvidenceSchemaAdmission.SpecChecksum ||
             expected.SingleOrDefault(script => script.Version == 45)?.Checksum != DocumentEvidenceSchemaAdmission.CreationChecksum ||
             expected.SingleOrDefault(script => script.Version == 46)?.Checksum != DocumentEvidenceSchemaAdmission.MigrationChecksum ||
+            expected.SingleOrDefault(script => script.Version == 56)?.Checksum != AiUsageSchemaAdmission.MigrationChecksum ||
             !expected.Take(10).Select(script => script.Checksum).SequenceEqual(PrefixChecksums, StringComparer.Ordinal)) throw Refusal();
         await using var command = new NpgsqlCommand("SELECT version,checksum FROM ONLY braid.schema_migrations ORDER BY version", connection, transaction);
         await using var reader = await command.ExecuteReaderAsync(ct);
@@ -201,6 +209,10 @@ internal static partial class ChatSchemaContract
     private static async Task ValidateTriggersAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct,
         IEnumerable<string>? selected = null)
     {
+        var journal = await AuditLogSchemaAdmission.InstalledAsync(connection, transaction, ct);
+        if (journal) await AuditLogSchemaAdmission.ValidateAsync(connection, transaction, ct);
+        await AiUsageSchemaAdmission.ValidateAsync(connection, transaction, ct);
+        await AiQuotaSchemaAdmission.ValidateAsync(connection, transaction, ct);
         foreach (var table in selected ?? ChatTables)
         {
             var conversation = table == "chat_conversations";
@@ -220,6 +232,14 @@ internal static partial class ChatSchemaContract
                 expected.Add(table + "_truncate", new(table is "chat_mapping_write_content" or "chat_edit_content" ? "guard_chat_mapping_write_content" : "guard_chat_mapping_write_audit", 34));
                 audit = true;
             }
+            if (journal && table == "chat_payload_audit") expected.Add("audit_capture_payload", new("audit_log_capture", 5));
+            if (table == "chat_turns")
+            {
+                expected.Add("ai_usage_turn", new("ai_usage_capture", 21));
+                expected.Add("ai_quota_turn", new("ai_quota_require_reservation", 7));
+            }
+            if (table == "chat_rounds") expected.Add("ai_usage_round", new("ai_usage_capture", 21));
+            if (table == "chat_events") expected.Add("ai_usage_tool", new("ai_usage_capture", 5));
             if (identity) expected.Add("chat_identity_erasure", new("check_chat_identity_erasure", 17, true));
             else if (!conversation && !audit) expected.Add("chat_counters", new("check_chat_counters", 21, true));
             if (table == "chat_events")

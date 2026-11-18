@@ -61,7 +61,7 @@ public enum MachineInvocationOutcome
 }
 
 /// <summary>Claimed starts a new attempt. Recorded returns the original outcome. The others write nothing.</summary>
-public enum MachineInvocationClaimStatus { Claimed, Recorded, Conflict, InProgress, Refused, NoRelease }
+public enum MachineInvocationClaimStatus { Claimed, Recorded, Conflict, InProgress, Refused, NoRelease, Capacity }
 
 /// <summary>A recorded Completed outcome without a retained response has passed its retention period.</summary>
 public sealed record MachineInvocationClaim(MachineInvocationClaimStatus Status, int Attempt = 0, Guid ClaimId = default,

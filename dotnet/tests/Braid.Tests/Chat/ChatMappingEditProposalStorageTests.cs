@@ -16,10 +16,10 @@ public sealed class ChatMappingEditProposalStorageTests
 
     // Fixed cross-language fixtures: SQL must hash these exact identity bytes, not jsonb's rendering.
     [Theory]
-    [InlineData("call-one", "call-one", "4fb2e865-a735-87f0-8198-0dc6bc5d5d83", "81357350-83fd-8595-9414-062de8fd7dac",
-        "23bf960688dad651aec0730ea8b9cef6dca21d92daca189051043a3b4ee15c30")]
-    [InlineData("call\"\\é", "call\\u0022\\\\\\u00E9", "e6245c65-312d-84ed-a701-0d8ea9252f20", "de63b949-9252-8120-907d-d3d5405a7b82",
-        "33873d833225a83cd12afce9caa44d1dbe6c9784e295c54563322f5e330c4417")]
+    [InlineData("call-one", "call-one", "7f13f541-f1c5-844b-a9ba-444ddd6cced3", "dcfd858c-566f-8467-8ca3-090636dd36c3",
+        "94b5b66faf079aaee812c3e52a135fe4ee18e898170c3794c90adc5dbed8cf21")]
+    [InlineData("call\"\\é", "call\\u0022\\\\\\u00E9", "7b1304cf-261d-897c-b315-5c9005ca27bd", "c7e92277-f160-8f81-bf19-1abaed0367d9",
+        "62613d0b1fcc66dae93383bcd6c258e847046c9bffb891b4e875d27a952a33ff")]
     public void Fixed_call_identity_vectors_for_persistence(string call, string escaped, string proposalId, string requestKey, string fingerprint)
     {
         var p = Proposal(call: call);

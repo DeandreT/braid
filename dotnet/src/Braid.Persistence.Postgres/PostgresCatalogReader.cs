@@ -19,11 +19,13 @@ public sealed partial class PostgresCatalogReader : IProjectReader, ICatalogRead
     private const string AuthorizedOrganizationSql = """
         WITH admitted AS MATERIALIZED (
             SELECT organization.id AS organization_id, organization.name AS organization_name,
-                principal.id AS principal_id
+                principal.id AS principal_id, incarnation.version AS admission_version
             FROM braid.organizations organization
             JOIN braid.principals principal ON principal.id = @actorId AND principal.active
             JOIN braid.organization_memberships admission
               ON admission.organization_id = organization.id AND admission.principal_id = principal.id AND admission.active
+            JOIN braid.organization_admission_state incarnation
+              ON incarnation.organization_id = admission.organization_id AND incarnation.principal_id = admission.principal_id
             WHERE organization.id = @organizationId
         )
         """;

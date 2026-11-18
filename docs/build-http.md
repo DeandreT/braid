@@ -19,6 +19,7 @@ Mapping routes append `/mappings/{mappingId}`.
 | `PUT /build-approvals/{approvalId}` on a mapping | Create or recover an immutable approval. |
 | `GET /build-runs` on a mapping | Bounded own run history. |
 | `GET /build-runs/{buildId}` on a mapping | Exact retained state, attempts and artifact metadata. |
+| `GET /build-runs/{buildId}/package-manifest` on a mapping | Canonical package manifest for an own successful build; no DLL body or execution authorization. |
 | `PUT /build-runs/{buildId}` on a mapping | Submit the stored approval intent or recover the existing run. |
 | `POST /build-runs/{buildId}/cancel` on a mapping | Empty-body cancellation; returns the actual retained state. |
 
@@ -73,6 +74,15 @@ mutation. Explicit GET or identical PUT recovers it; an unconfirmed operation mu
 not generate another ID/body automatically. Identity changes clear private
 recovery state. An `uncertain` run is not success, even when artifact metadata is
 retained. No response includes native bytes, artifact bodies or worker tokens.
+
+The package-manifest read returns the canonical `braid.mapping-package.v1`
+metadata only after a build has succeeded. Missing, queued, uncertain and failed
+builds return 404. It uses the same current publisher authority and exact
+actor/mapping ownership as build history, and rechecks access before returning
+its no-store response. Reading retained metadata does not renew a revoked
+approval, stage a replica or activate a target. A consumer must independently
+verify DLL bytes and current execution authority; see the
+[package contract](build-contract.md#mapping-package-manifest).
 
 ## Admission and host composition
 

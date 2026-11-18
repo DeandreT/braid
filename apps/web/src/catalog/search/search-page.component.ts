@@ -91,7 +91,7 @@ import {
           @if (result.nextCursor) {
             <a
               class="catalog-page-link"
-              routerLink="/catalog/search"
+              [routerLink]="[]"
               [queryParams]="{ q: query(), cursor: result.nextCursor }"
               >Next page</a
             >
@@ -99,7 +99,7 @@ import {
           @if (cursor()) {
             <a
               class="catalog-page-link"
-              routerLink="/catalog/search"
+              [routerLink]="[]"
               [queryParams]="{ q: query() }"
               >First page</a
             >
@@ -221,7 +221,8 @@ export class SearchPageComponent {
       this.read.retry();
       return;
     }
-    void this.navigation.navigate(["/catalog/search"], {
+    void this.navigation.navigate([], {
+      relativeTo: this.router,
       queryParams: { q: query.trim() },
     });
   }

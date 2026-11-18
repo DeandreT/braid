@@ -134,8 +134,8 @@ public static partial class CatalogEndpoints
                 comparison.DocumentDiagnostic is { } diagnostic ? new(diagnostic.Key.Name, diagnostic.Side, DocumentLocation(diagnostic.Location)!) : null,
                 comparison.CsvDiagnostic is { } csv ? new(csv.Key.Name, csv.Side, CsvLocation(csv.Location)!) : null),
             result?.Outputs?.Outputs.Select(output => new RegressionDocumentV1(output.Key.Name, WebEncoders.Base64UrlEncode(output.CopyBytes()),
-                view.Runtime?.Profile is DocumentPreviewPolicy.Profile or CsvDocumentPolicy.Profile or XmlPreviewAdmission.Profile ? output.MediaType : null,
-                CsvDialect(output.CsvDialect), XmlMetadata(output.XmlMetadata))).ToArray());
+                output.DocumentSettings is not null || view.Runtime?.Profile is DocumentPreviewPolicy.Profile or CsvDocumentPolicy.Profile or XmlPreviewAdmission.Profile ? output.MediaType : null,
+                CsvDialect(output.CsvDialect), XmlMetadata(output.XmlMetadata), DocumentSettings(output.DocumentSettings))).ToArray());
         var bytes = PrepareCase(response, context.RequestAborted);
         return CaseResponse(bytes);
     }

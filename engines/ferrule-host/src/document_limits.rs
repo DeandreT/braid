@@ -52,6 +52,17 @@ pub fn within_limits(
             .and_then(|safety| safety.validate_bytes(bytes))
             .is_ok();
     }
+    if matches!(format, DocumentFormat::FlexText | DocumentFormat::Xbrl) {
+        return bytes.len() <= 8 * 1024 * 1024 && std::str::from_utf8(bytes).is_ok();
+    }
+    if format == DocumentFormat::Protobuf {
+        // Binary; the native decoder owns depth, field and value limits.
+        return bytes.len() <= 8 * 1024 * 1024;
+    }
+    if format == DocumentFormat::Xlsx {
+        // Package, XML and cell limits are the bounded native reader's, checked separately.
+        return bytes.len() <= crate::xlsx_document::MAX_DOCUMENT_BYTES;
+    }
     if matches!(format, DocumentFormat::Csv | DocumentFormat::Tsv) {
         // Native CSV parsing supplies cell/record/column/node limits. The outer
         // per-run limit is still enforced by preview before publication.

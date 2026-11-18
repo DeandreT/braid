@@ -72,8 +72,17 @@ public sealed class EntraBrowserAuthentication : IAsyncDisposable
             var headers = context.Request.Headers["X-Braid-Invitation"];
             if (headers.Count > 1 || headers.Count == 1 && (invitations is null || !OrganizationInvitationSecret.IsValid(headers[0])))
                 throw BrowserAuthenticationRequest.Error(BrowserAuthenticationFailureKind.InvalidRequest);
+            var targets = context.Request.Headers["X-Braid-Invitation-Organization"];
+            Guid? target = null;
+            if (targets.Count > 1 || targets.Count == 1 &&
+                (!Guid.TryParseExact(targets[0], "D", out var parsed) || parsed == Guid.Empty || targets[0] != parsed.ToString("D") ||
+                    (target = parsed) == default))
+                throw BrowserAuthenticationRequest.Error(BrowserAuthenticationFailureKind.InvalidRequest);
+            // A separate target requires its secret; legacy secret-only login explicitly targets root.
+            if (target is not null && headers.Count != 1)
+                throw BrowserAuthenticationRequest.Error(BrowserAuthenticationFailureKind.InvalidRequest);
             return await entra.BeginLoginAsync(context, BrowserAuthenticationRequest.ReturnPath(context),
-                headers.Count == 1 ? headers[0] : null, token);
+                headers.Count == 1 ? headers[0] : null, target, token);
         }));
 
     /// <summary>Completes sign-in and returns the validated application path it returns to.</summary>
@@ -85,7 +94,7 @@ public sealed class EntraBrowserAuthentication : IAsyncDisposable
             if (verified.OrganizationId != options.OrganizationId)
                 throw BrowserAuthenticationRequest.Error(BrowserAuthenticationFailureKind.Unavailable);
             if (verified.InvitationSecret is { } invitation && (invitations is null ||
-                !await invitations.RedeemAsync(options.OrganizationId, invitation, verified.ExternalIdentity, token)))
+                !await invitations.RedeemAsync(verified.InvitationOrganizationId ?? options.OrganizationId, invitation, verified.ExternalIdentity, token)))
                 throw BrowserAuthenticationRequest.Error(BrowserAuthenticationFailureKind.AuthenticationRequired);
             var resolution = await identities.ResolveAsync(verified.ExternalIdentity, token);
             token.ThrowIfCancellationRequested();

@@ -42,6 +42,8 @@ internal static partial class RegressionCaseRoleGuard
             inspect.Parameters.AddWithValue("permitted", permitted);
             if (await inspect.ExecuteScalarAsync(token) is not true) throw Refused();
         }
+        // Lifecycle rewrites the write/delete guards. Admit the exact installed catalog, not the pre-upgrade bodies.
+        if (await LifecycleCatalogAdmission.ValidateIfInstalledAsync(connection, transaction, token)) return;
         await using var functions = new NpgsqlCommand("""
             SELECT p.proname,p.prosrc,p.prosecdef,p.provolatile,l.lanname,
                 p.proowner=(SELECT oid FROM pg_catalog.pg_roles WHERE rolname='braid_migrator')

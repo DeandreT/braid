@@ -122,6 +122,21 @@ internal sealed class CatalogBearerAdmission : IDisposable
                 return CatalogRequestAdmission.Closed(CatalogErrorCodeV1.RateLimited, StatusCodes.Status429TooManyRequests);
             }
         }
+        Guid? selected;
+        if (context.Request.RouteValues.TryGetValue("organizationId", out var raw))
+        {
+            if (raw is not string text || !Guid.TryParseExact(text, "D", out var parsed) || parsed == Guid.Empty || text != parsed.ToString("D"))
+                return Refuse(context, CatalogErrorCodeV1.InvalidRequest, StatusCodes.Status400BadRequest, InvalidRequest);
+            selected = parsed;
+        }
+        else selected = options.OrganizationId;
+        var reader = context.RequestServices.GetService<ICatalogReader>();
+        var scopeAdmission = reader is null ? null
+            : await reader.GetOrganizationAdmissionAsync(new ActorContext(principal), selected.Value, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (scopeAdmission is null)
+            return CatalogRequestAdmission.Closed(CatalogErrorCodeV1.NotFound, StatusCodes.Status404NotFound);
+        if (scopeAdmission.OrganizationId != selected || scopeAdmission.PrincipalId != principal) return Unavailable();
         if (!HttpMethods.IsGet(request.Method) && !HttpMethods.IsHead(request.Method))
         {
             // A mutation runs only after its audit is durable; a failed write refuses rather than runs unaudited.
@@ -132,13 +147,52 @@ internal sealed class CatalogBearerAdmission : IDisposable
                 .Where(pair => pair.Value is string value && ApiRequestAudit.IsResourceName(pair.Key) && ApiRequestAudit.IsResourceValue(value))
                 .Select(pair => new KeyValuePair<string, string>(pair.Key, (string)pair.Value!))
                 .OrderBy(pair => pair.Key, StringComparer.Ordinal).Take(ApiRequestAudit.MaximumResources).ToArray();
-            var entry = new ApiRequestAudit(Guid.NewGuid(), options.OrganizationId, principal, binding.BindingId,
+            var entry = new ApiRequestAudit(Guid.NewGuid(), selected.Value, principal, binding.BindingId,
                 caller.ClientApplicationId, operation, request.Method, resources);
             if (await audit.RecordAsync(entry, cancellationToken) != ApiRequestAuditOutcome.Recorded)
                 return CatalogRequestAdmission.Closed(CatalogErrorCodeV1.IdentityRejected, StatusCodes.Status403Forbidden);
             cancellationToken.ThrowIfCancellationRequested();
         }
-        return CatalogRequestAdmission.AcceptedBearer(new ActorContext(principal), options.OrganizationId);
+        return CatalogRequestAdmission.AcceptedBearer(new ActorContext(principal), selected.Value,
+            scopeAdmission.AdmissionVersion, binding.BindingId, binding.Version);
+    }
+
+    /// <summary>Identity-only bearer admission: valid token, enabled binding and the shared rate limit.</summary>
+    internal async Task<CatalogRequestAdmission> AdmitIdentityAsync(HttpContext context, CancellationToken cancellationToken)
+    {
+        var request = context.Request;
+        if (!HttpMethods.IsGet(request.Method) && !HttpMethods.IsHead(request.Method) ||
+            context.GetEndpoint() is not { } endpoint || !ApiSecurity.IsIdentityRead(endpoint.Metadata))
+            return CatalogRequestAdmission.Closed(CatalogErrorCodeV1.InvalidRequest, StatusCodes.Status400BadRequest);
+        if (!TryReadToken(request, out var token) || request.Headers.Cookie.Count != 0)
+            return Refuse(context, CatalogErrorCodeV1.InvalidRequest, StatusCodes.Status400BadRequest, InvalidRequest);
+        UserCaller caller;
+        try { caller = await validator.ValidateAsync(token, cancellationToken); }
+        catch (UserTokenException error)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return error.Failure == UserTokenFailure.Unavailable ? Unavailable()
+                : Refuse(context, CatalogErrorCodeV1.IdentityRejected, StatusCodes.Status401Unauthorized, InvalidToken);
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+        var resolution = await identities.ResolveAsync(caller.Identity, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (resolution.Outcome != ExternalIdentityResolutionOutcome.Resolved)
+            return CatalogRequestAdmission.Closed(CatalogErrorCodeV1.IdentityRejected, StatusCodes.Status403Forbidden);
+        if (resolution.Binding is not { Enabled: true } binding || binding.Key != caller.Identity ||
+            binding.BindingId == Guid.Empty || binding.PrincipalId.Value == Guid.Empty)
+            return Unavailable();
+        var principal = new PrincipalId(binding.PrincipalId.Value);
+        using (var lease = limiter.AttemptAcquire(principal.Value))
+        {
+            if (!lease.IsAcquired)
+            {
+                var seconds = lease.TryGetMetadata(MetadataName.RetryAfter, out var after) ? Math.Ceiling(after.TotalSeconds) : 1;
+                context.Response.Headers.RetryAfter = Math.Clamp(seconds, 1, 86_400).ToString(CultureInfo.InvariantCulture);
+                return CatalogRequestAdmission.Closed(CatalogErrorCodeV1.RateLimited, StatusCodes.Status429TooManyRequests);
+            }
+        }
+        return CatalogRequestAdmission.AcceptedBearer(new ActorContext(principal), null, 0, binding.BindingId, binding.Version);
     }
 
     // Exactly one "Bearer <token>" value. The validator admits only compact JWS characters.

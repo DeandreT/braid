@@ -11,7 +11,45 @@ public sealed record ReleaseOperationsPageV1(IReadOnlyList<ReleaseOperationsItem
 [JsonDerivedType(typeof(ReleaseActionAuditV1), "action")]
 [JsonDerivedType(typeof(ReleaseCallerGrantV1), "caller")]
 [JsonDerivedType(typeof(ReleaseInvocationMetadataV1), "invocation")]
+[JsonDerivedType(typeof(TriggerMetadataV1), "trigger")]
+[JsonDerivedType(typeof(TriggerRunMetadataV1), "run")]
+[JsonDerivedType(typeof(TriggerDeliveryMetadataV1), "delivery")]
+[JsonDerivedType(typeof(TriggerQuarantineV1), "quarantine")]
 public abstract record ReleaseOperationsItemV1;
+public sealed record TriggerQuarantineV1([property: JsonPropertyName("item_id")] Guid ItemId, [property: JsonPropertyName("trigger_id")] Guid TriggerId,
+    [property: JsonPropertyName("configuration_version")] long Version, string Reason, [property: JsonPropertyName("recorded_at")] DateTimeOffset RecordedAt) : ReleaseOperationsItemV1;
+public sealed record TriggerMetadataV1(
+    [property: JsonPropertyName("trigger_id")] Guid TriggerId,
+    [property: JsonPropertyName("trigger_kind")] string TriggerKind,
+    [property: JsonPropertyName("configuration_version")] long ConfigurationVersion,
+    bool Enabled, bool Retired, string Generation,
+    [property: JsonPropertyName("updated_at")] DateTimeOffset UpdatedAt,
+    [property: JsonPropertyName("pending_work")] long PendingWork,
+    [property: JsonPropertyName("unknown_deliveries")] long UnknownDeliveries) : ReleaseOperationsItemV1;
+public sealed record TriggerRunMetadataV1(
+    [property: JsonPropertyName("run_id")] Guid RunId,
+    [property: JsonPropertyName("trigger_id")] Guid TriggerId,
+    [property: JsonPropertyName("run_kind")] string RunKind,
+    [property: JsonPropertyName("scheduled_at")] DateTimeOffset? ScheduledAt,
+    string State, int Pages, int Discovered, int Admitted, int Changed, int Rejected,
+    [property: JsonPropertyName("created_at")] DateTimeOffset CreatedAt,
+    [property: JsonPropertyName("finished_at")] DateTimeOffset? FinishedAt) : ReleaseOperationsItemV1;
+public sealed record TriggerDeliveryMetadataV1(
+    [property: JsonPropertyName("delivery_id")] Guid DeliveryId,
+    [property: JsonPropertyName("work_id")] Guid WorkId,
+    [property: JsonPropertyName("trigger_id")] Guid TriggerId,
+    [property: JsonPropertyName("destination_kind")] string DestinationKind,
+    [property: JsonPropertyName("connector_id")] string ConnectorId,
+    [property: JsonPropertyName("connector_version")] long ConnectorVersion,
+    string Phase, int Sends, string Version,
+    [property: JsonPropertyName("next_at")] DateTimeOffset NextAt,
+    [property: JsonPropertyName("admitted_at")] DateTimeOffset AdmittedAt,
+    [property: JsonPropertyName("first_ambiguous_at")] DateTimeOffset? FirstAmbiguousAt,
+    [property: JsonPropertyName("last_dispatch_at")] DateTimeOffset? LastDispatchAt,
+    [property: JsonPropertyName("settled_at")] DateTimeOffset? SettledAt,
+    string? Resolution) : ReleaseOperationsItemV1;
+/// <summary>Resend also requires acknowledgement "duplicateRisk": the receiver may already hold this delivery.</summary>
+public sealed record TriggerDeliveryResolutionV1(string Resolution, string EnvironmentId, string EnvironmentVersion, string? Acknowledgement);
 public sealed record ReleaseRuntimeProfileV1(string Id, long Version, string Runtime, string RuntimeVersion, string ArtifactFormat, long MaximumArtifactBytes);
 public sealed record ReleaseApprovalMetadataV1(Guid ApprovalId, bool Revoked, DateTimeOffset CreatedAt);
 public sealed record ReleaseActiveMetadataV1(Guid ReleaseId, Guid ActorId, Guid QualificationId, Guid BuildId, string ArtifactDigest, Guid ApprovalId, ReleaseApprovalMetadataV1 Approval);

@@ -54,7 +54,8 @@ internal static partial class ChatSchemaContract
             Roles: ["braid_chat_approver"])
     ];
     internal static string[] FunctionGrants(ChatDatabaseProfile profile) => Functions
-        .Where(f => f.Roles?.Contains(ChatRoleGuard.RoleName(profile), StringComparer.Ordinal) == true).Select(f => f.Signature).ToArray();
+        .Where(f => f.Roles?.Contains(ChatRoleGuard.RoleName(profile), StringComparer.Ordinal) == true).Select(f => f.Signature)
+        .Concat(profile == ChatDatabaseProfile.Writer ? [AiQuotaSchemaAdmission.ReserveSignature] : Array.Empty<string>()).ToArray();
     internal static string[] FunctionNames => Functions.Select(f => f.Name).ToArray();
 
     private static async Task ValidateFunctionsAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct,

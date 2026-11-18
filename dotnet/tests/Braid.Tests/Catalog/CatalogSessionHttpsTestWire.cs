@@ -276,6 +276,17 @@ internal sealed partial class CatalogSessionHttpsFixture
         Check(json.ValueKind == JsonValueKind.Object && json.EnumerateObject().Count() == 1 && json.TryGetProperty("code", out var value) && value.GetString() == code,
             "The catalog-session failure disclosed an unexpected response shape.");
     }
+    internal static void NoBodyAfterAdmission(CatalogSessionReply reply, Braid.Application.ActorContext actor)
+    {
+        var value = reply.Record;
+        Check(value.Actor?.PrincipalId == actor.PrincipalId && value.CatalogReads == 1
+            && value.Order.SequenceEqual(new[] { "catalog", "organization-completed" })
+            && value.BodyReads == 0 && value.BodyBytes == 0 && value.CapabilityReads == 0
+            && value.MetadataWrites == 0 && value.CreatorCalls == 0 && value.DeferredResolutions == 0
+            && value.DeferredCalls == 0 && value.DownstreamPaths == 0 && value.SessionRenews == 0,
+            "Cross-organization token reached work beyond its single admission read.");
+    }
+
     internal static void NoBodyOrBusiness(CatalogSessionReply reply, bool noRenew = true)
     {
         var value = reply.Record;

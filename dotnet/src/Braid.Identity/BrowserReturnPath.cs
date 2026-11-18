@@ -20,7 +20,7 @@ public static class BrowserReturnPath
     // overhead. It remains inside the unchanged 16 KiB authorization/callback budget.
     public const int MaximumProtectedStateLength = 12 * 1024;
     private static readonly UTF8Encoding Utf8 = new(false, true);
-    private static readonly string[] Sections = ["catalog", "help", "administration", "chat", "notifications"];
+    private static readonly string[] Sections = ["catalog", "help", "administration", "chat", "notifications", "audit", "organizations", "usage", "quotas", "retention"];
 
     public static bool IsValid(string? value)
     {
@@ -38,7 +38,11 @@ public static class BrowserReturnPath
         for (var index = 0; index < raw.Length; index++)
             if (!PathSegment(raw[index], out segments[index])) return false;
         var queryEnd = fragmentAt < 0 ? value.Length : fragmentAt;
-        if (!Query(queryAt < 0 ? "" : value[(queryAt + 1)..queryEnd], out var values) || !AllowedQuery(segments, values))
+        var scoped = Unqualified(segments);
+        if (scoped is null || !Query(queryAt < 0 ? "" : value[(queryAt + 1)..queryEnd], out var values) || !AllowedQuery(scoped, values))
+            return false;
+        // A qualified resource reference names exactly its route's organization.
+        if (!ReferenceEquals(scoped, segments) && values.TryGetValue("organizationId", out var referenced) && referenced != segments[1])
             return false;
         if (fragmentAt < 0) return true;
         if (!Decode(value[(fragmentAt + 1)..], false, out var fragment)) return false;
@@ -52,6 +56,8 @@ public static class BrowserReturnPath
 
     private static bool AllowedQuery(string[] path, Dictionary<string, string> values)
     {
+        if (path[0] is "usage" or "quotas" or "retention") return path.Length == 1 && values.Count == 0;
+        if (path[0] == "audit") return path.Length == 1 && values.Count == 0;
         if (path is ["chat"])
         {
             if (values.ContainsKey("creationProjectId") || values.ContainsKey("creationProposalId") || values.ContainsKey("creationFingerprint"))
@@ -109,6 +115,17 @@ public static class BrowserReturnPath
             return Keys(values, "view") && values.Values.All(value => Token(value, 64));
         return values.Count == 0;
     }
+
+    // Organization-qualified standalone and search routes follow their root-only rules; any other
+    // path under /organizations is refused.
+    private static string[]? Unqualified(string[] path) => path switch
+    {
+        ["organizations", var organization, .. var rest] => Id(organization) &&
+            rest is ["chat"] or ["chat", "resources"] or ["notifications"] or ["administration"] or ["audit"] or ["usage"] or ["quotas"] or ["retention"] ? rest : null,
+        ["organizations", ..] => null,
+        ["catalog", "organizations", var organization, "search"] when Id(organization) => ["catalog", "search"],
+        _ => path
+    };
 
     private static bool Revision(string[] path) => path is
         ["catalog", "organizations", var organization, "projects", var project, "mappings", var mapping, "revisions", var revision] &&

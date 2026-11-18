@@ -104,9 +104,10 @@ public sealed class FerruleBuildCompiler : IBuildCompiler
     public async Task<BuildCapabilitySnapshot> InspectAsync(BuildIntent intent, CancellationToken token = default)
     {
         token.ThrowIfCancellationRequested();
-        if (intent.Boundaries.Any(boundary => boundary.Format == "xml"))
+        var refusal = BuildPreflightService.DocumentRefusal(intent);
+        if (refusal != BuildPreflightReason.None)
             return new(intent.Revision, intent.NativeDigest, intent.Backend, intent.Profile, intent.Boundaries,
-                CapabilityStatus.Unsupported, refusalReason: BuildPreflightReason.UnsupportedXmlBuild);
+                CapabilityStatus.Unsupported, refusalReason: refusal);
         var backend = intent.Profile.Id == BuildWorkerProtocol.CsvProfile ? CsvBackend : BuildWorkerProtocol.IsDocumentProfile(intent.Profile.Id) ? DocumentBackend : Backend;
         var profile = intent.Profile;
         if (!Admits(intent))
@@ -123,6 +124,10 @@ public sealed class FerruleBuildCompiler : IBuildCompiler
             {
                 "unsupportedCsvPlan" => BuildPreflightReason.UnsupportedCsvPlan,
                 "unsupportedXmlBuild" => BuildPreflightReason.UnsupportedXmlBuild,
+                "unsupportedFlexTextBuild" => BuildPreflightReason.UnsupportedFlexTextBuild,
+                "unsupportedXlsxBuild" => BuildPreflightReason.UnsupportedXlsxBuild,
+                "unsupportedProtobufBuild" => BuildPreflightReason.UnsupportedProtobufBuild,
+                "unsupportedXbrlBuild" => BuildPreflightReason.UnsupportedXbrlBuild,
                 _ => BuildPreflightReason.None
             });
     }

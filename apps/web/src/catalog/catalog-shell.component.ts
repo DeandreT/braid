@@ -20,12 +20,16 @@ import {
 import {
   combineLatest,
   filter,
-  of,
   startWith,
   take,
   type Observable,
+  type Subscription,
 } from "rxjs";
-import { CatalogApi } from "./catalog-api";
+import {
+  CatalogApi,
+  catalogFailure,
+  type OrganizationPage,
+} from "./catalog-api";
 import { BrowserSessionState } from "../auth/browser-session-state";
 import { fileStatusLabel } from "../workbench/presentation";
 import { CatalogContextStore } from "./catalog-context";
@@ -35,8 +39,8 @@ import { revisionReportSelectors } from "./reports/revision-report-selection";
 import {
   catalogRoutes,
   isCatalogCursor,
+  type CatalogFailureKind,
   isCatalogId,
-  type CatalogContext,
   type CatalogMapping,
   type CatalogMappingScope,
   type CatalogScope,
@@ -310,18 +314,22 @@ function routeSelection(
 
 @Component({
   selector: "braid-catalog-shell",
-  imports: [RouterOutlet, CatalogStatusComponent],
+  imports: [RouterLink, RouterOutlet, CatalogStatusComponent],
   providers: [InitiatingControl],
   templateUrl: "./catalog-shell.component.html",
 })
 export class CatalogShellComponent {
   readonly sessions = inject(BrowserSessionState);
   readonly contextStore = inject(CatalogContextStore);
-  readonly landingRead = createCatalogRead<CatalogContext>();
+  readonly routes = catalogRoutes;
+  /** `/catalog` is the chooser of discovered admissions, never a business workspace. */
+  readonly chooser = signal<Chooser>({ kind: "idle" });
   readonly landing = signal(false);
+  private readonly api = inject(CatalogApi);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
+  private discovery: Subscription | null = null;
 
   constructor() {
     inject(InitiatingControl);
@@ -332,24 +340,29 @@ export class CatalogShellComponent {
         takeUntilDestroyed(),
       )
       .subscribe(() => {
-        const landing = this.route.snapshot.firstChild === null;
+        const landing =
+          this.route.snapshot.firstChild?.routeConfig?.path === "";
+        // The initial emission and its NavigationEnd are one arrival: discover once.
+        const entered = landing && !this.landing();
         this.landing.set(landing);
-        if (landing) this.landingRead.select(null, (context) => of(context));
-        else this.landingRead.clear();
+        if (entered) {
+          this.discover();
+        } else if (!landing) {
+          this.discovery?.unsubscribe();
+          this.chooser.set({ kind: "idle" });
+        }
       });
-    effect(() => {
-      const state = this.landingRead.state();
-      if (this.landing() && state.kind === "ready")
-        void this.router.navigateByUrl(
-          catalogRoutes.projects(state.context.allowedOrganizationId),
-          { replaceUrl: true },
-        );
-    });
+    this.destroyRef.onDestroy(() => this.discovery?.unsubscribe());
   }
 
   retry(): void {
-    if (!this.landing()) return;
-    this.landingRead.retry();
+    if (this.landing()) this.discover();
+  }
+
+  more(): void {
+    const state = this.chooser();
+    if (state.kind === "ready" && state.next)
+      this.discover(state.next, state.organizations);
   }
 
   retryAccess(): void {
@@ -362,4 +375,36 @@ export class CatalogShellComponent {
       .pipe(take(1), takeUntilDestroyed(this.destroyRef))
       .subscribe({ error: () => {} });
   }
+
+  private discover(
+    cursor: string | null = null,
+    earlier: readonly OrganizationChoice[] = [],
+  ): void {
+    this.discovery?.unsubscribe();
+    if (cursor === null) this.chooser.set({ kind: "loading" });
+    this.discovery = this.api.organizations(cursor).subscribe({
+      next: (page) => {
+        const organizations = [...earlier, ...page.organizations];
+        const next = page.nextCursor ?? null;
+        // Only complete discovery may treat one admission as the sole choice.
+        if (next === null && organizations.length === 1)
+          void this.router.navigateByUrl(
+            catalogRoutes.projects(organizations[0].organizationId),
+            { replaceUrl: true },
+          );
+        else this.chooser.set({ kind: "ready", organizations, next });
+      },
+      error: (error: unknown) =>
+        this.chooser.set({ kind: catalogFailure(error).kind }),
+    });
+  }
 }
+
+type OrganizationChoice = OrganizationPage["organizations"][number];
+type Chooser =
+  | { kind: "idle" | "loading" | CatalogFailureKind }
+  | {
+      kind: "ready";
+      organizations: readonly OrganizationChoice[];
+      next: string | null;
+    };

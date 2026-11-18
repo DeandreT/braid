@@ -33,18 +33,23 @@ public sealed class PostgresInvocationLedger(string connectionString) : IMachine
             var status = rows.GetInt32(0);
             result = status switch
             {
-                0 => new(MachineInvocationClaimStatus.Claimed, rows.GetInt32(1), rows.GetGuid(2), new PrincipalId(rows.GetGuid(3))),
+                0 => new(MachineInvocationClaimStatus.Claimed, rows.GetInt32(1), rows.GetGuid(2), new PrincipalId(rows.GetGuid(3)),
+                    ReleaseId: rows.IsDBNull(6) ? null : rows.GetGuid(6)),
                 1 => new(MachineInvocationClaimStatus.Recorded, rows.GetInt32(1), Outcome: Outcome(rows.GetString(5)),
                     ReleaseId: rows.IsDBNull(6) ? null : rows.GetGuid(6), RetainedResponse: rows.IsDBNull(7) ? null : rows.GetFieldValue<byte[]>(7)),
                 2 => new(MachineInvocationClaimStatus.Conflict),
                 3 => new(MachineInvocationClaimStatus.InProgress, rows.GetInt32(1)),
                 4 => new(MachineInvocationClaimStatus.Refused),
                 5 => new(MachineInvocationClaimStatus.NoRelease),
+                6 => new(MachineInvocationClaimStatus.Capacity),
                 _ => throw Invalid()
             };
             if (await rows.ReadAsync(token)) throw Invalid();
         }
-        if (result.Status == MachineInvocationClaimStatus.Claimed && (result.Attempt is < 1 or > MachineInvocationPolicy.MaximumAttempts || result.ClaimId == Guid.Empty))
+        // The host always supplies metadata. Never execute an unpinned claim
+        // if an operator starts the new host against a pre-0048 database.
+        if (result.Status == MachineInvocationClaimStatus.Claimed && (result.Attempt is < 1 or > MachineInvocationPolicy.MaximumAttempts ||
+            result.ClaimId == Guid.Empty || inputBytes.HasValue && result.ReleaseId is null))
             throw Invalid();
         // A recorded outcome is final; only a completed one can have a retained response.
         if (result.Status == MachineInvocationClaimStatus.Recorded && (result.Outcome is null or MachineInvocationOutcome.Unavailable or
@@ -159,7 +164,7 @@ public sealed class PostgresInvocationLedger(string connectionString) : IMachine
         _ => throw Invalid()
     };
 
-    private static MachineInvocationOutcome Outcome(string value)
+    internal static MachineInvocationOutcome Outcome(string value)
     {
         foreach (var outcome in Enum.GetValues<MachineInvocationOutcome>())
             if (Name(outcome) == value) return outcome;

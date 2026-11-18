@@ -9,6 +9,7 @@ public sealed record PreviewDeclaredInput(string? Name, long ByteLength, Sha256D
 {
     public CsvDocumentDialect? CsvDialect { get; init; }
     public XmlDocumentMetadata? XmlMetadata { get; init; }
+    public NativeDocumentSettings? DocumentSettings { get; init; }
 }
 
 /// <summary>The decoded canonical request a run was admitted with.</summary>
@@ -42,6 +43,9 @@ public static class PreviewRequestDocument
     {
         ArgumentNullException.ThrowIfNull(submission);
         ArgumentNullException.ThrowIfNull(limits);
+        var native = NativeDocumentFormat.FromExecution(submission.Profile);
+        if (native is not null && (submission.Subject is not RevisionPreviewSubject || submission.NamedInputs.Count != 0 || submission.Target.Kind == PreviewTargetKind.Named || submission.Primary.Name is not null || submission.Primary.DocumentSettings?.Format != native) ||
+            native is null && submission.NamedInputs.Prepend(submission.Primary).Any(input => input.DocumentSettings is not null)) throw new PreviewRunException("Native document settings require their saved primary revision.");
         if (submission.NamedInputs.Prepend(submission.Primary).Any(input => submission.Profile == PreviewExecutionProfile.XmlDocument
             ? input.XmlMetadata is null || input.CsvDialect is not null
             : input.XmlMetadata is not null)) throw new PreviewRunException("XML metadata must belong to its own profile.");
@@ -60,7 +64,7 @@ public static class PreviewRequestDocument
             json.WriteString("schema", submission.Subject is DraftPreviewSubject
                 ? document ? DraftDocumentSchema : DraftSchema
                 : document ? DocumentSchema : submission.Profile == PreviewExecutionProfile.CsvDocument ? CsvSchema
-                : submission.Profile == PreviewExecutionProfile.XmlDocument ? XmlSchema : Schema);
+                : submission.Profile == PreviewExecutionProfile.XmlDocument ? XmlSchema : native?.RequestSchema ?? Schema);
             json.WriteString("organizationId", revision.OrganizationId.ToString("D"));
             json.WriteString("projectId", revision.ProjectId.ToString("D"));
             json.WriteString("mappingId", revision.MappingId.ToString("D"));
@@ -101,7 +105,7 @@ public static class PreviewRequestDocument
                     json.WriteNull("name");
                 else
                     json.WriteString("name", input.Name);
-                if (submission.Profile == PreviewExecutionProfile.CsvDocument) json.WriteBoolean("present", true);
+                if (native is not null || submission.Profile == PreviewExecutionProfile.CsvDocument) json.WriteBoolean("present", true);
                 json.WriteNumber("byteLength", input.ByteCount);
                 json.WriteString("sha256", input.Digest.Value);
                 if (submission.Profile == PreviewExecutionProfile.CsvDocument)
@@ -109,6 +113,7 @@ public static class PreviewRequestDocument
                     json.WritePropertyName("csvDialect");
                     CsvDialectJson.Write(json, input.CsvDialect ?? throw new PreviewRunException("CSV input requires its saved native dialect."));
                 }
+                if (native is not null) { json.WritePropertyName("documentSettings"); NativeDocumentSettingsJson.Write(json, input.DocumentSettings!); }
                 if (submission.Profile == PreviewExecutionProfile.XmlDocument)
                 {
                     json.WritePropertyName("xmlMetadata");
@@ -144,7 +149,9 @@ public static class PreviewRequestDocument
             using var parsed = JsonDocument.Parse(document, new JsonDocumentOptions { MaxDepth = 8 });
             var root = parsed.RootElement;
             var schema = Text(root, "schema");
-            Require(schema is Schema or DraftSchema or DocumentSchema or DraftDocumentSchema or CsvSchema or XmlSchema);
+            var native = NativeDocumentFormat.All.FirstOrDefault(f => f.RequestSchema == schema);
+            var settingsField = native is null ? "csvDialect" : "documentSettings";
+            Require(native is not null || schema is Schema or DraftSchema or DocumentSchema or DraftDocumentSchema or CsvSchema or XmlSchema);
             var isDraft = schema is DraftSchema or DraftDocumentSchema;
             var revision = new RevisionScope(Guid.ParseExact(Text(root, "organizationId"), "D"), Guid.ParseExact(Text(root, "projectId"), "D"),
                 Guid.ParseExact(Text(root, "mappingId"), "D"), Guid.ParseExact(Text(root, isDraft ? "baseRevisionId" : "revisionId"), "D"));
@@ -172,15 +179,16 @@ public static class PreviewRequestDocument
                 item.GetProperty("name").ValueKind == JsonValueKind.Null ? null : Text(item, "name"),
                 item.GetProperty("byteLength").GetInt64(), Sha256Digest.Parse(Text(item, "sha256")))
             {
+                DocumentSettings = native is null ? null : NativeDocumentSettingsJson.Read(item.GetProperty("documentSettings")),
                 CsvDialect = schema == CsvSchema ? CsvDialectJson.Read(item.GetProperty("csvDialect")) : null,
                 XmlMetadata = schema == XmlSchema ? XmlDocumentMetadataJson.Read(item.GetProperty("xmlMetadata"), XmlDocumentRole.Input) : null
             }).ToArray();
-            if (schema == CsvSchema)
+            if (schema == CsvSchema || native is not null)
             {
                 Require(root.EnumerateObject().Select(property => property.Name).SequenceEqual(new[]
                     { "schema", "organizationId", "projectId", "mappingId", "revisionId", "target", "parameters", "inputs", "limits" }));
                 Require(root.GetProperty("inputs").EnumerateArray().All(item => item.GetProperty("present").GetBoolean()
-                    && item.EnumerateObject().Select(property => property.Name).SequenceEqual(new[] { "name", "present", "byteLength", "sha256", "csvDialect" }))
+                    && item.EnumerateObject().Select(property => property.Name).SequenceEqual(new[] { "name", "present", "byteLength", "sha256", settingsField }))
                     && inputs.Length == 1 && selection.Kind != PreviewTargetKind.Named);
                 Require(target.EnumerateObject().Select(property => property.Name).SequenceEqual(new[] { "kind" })
                     && root.GetProperty("parameters").EnumerateArray().All(item => item.EnumerateObject().Select(property => property.Name)
@@ -188,7 +196,7 @@ public static class PreviewRequestDocument
                     && root.GetProperty("limits").EnumerateObject().Select(property => property.Name).SequenceEqual(new[]
                         { "maximumInputBytes", "maximumOutputBytes", "maximumArtifacts", "maximumTextBytes" }));
                 var input = root.GetProperty("inputs")[0];
-                Require(input.GetProperty("csvDialect").GetRawText() == CsvDialectJson.Encode(inputs[0].CsvDialect!)
+                Require((native is null || inputs[0].DocumentSettings?.Format == native) && input.GetProperty(settingsField).GetRawText() == (native is null ? CsvDialectJson.Encode(inputs[0].CsvDialect!) : NativeDocumentSettingsJson.Encode(inputs[0].DocumentSettings!))
                     && Text(input, "sha256") == inputs[0].Digest.Value
                     && input.GetProperty("byteLength").GetRawText() == inputs[0].ByteLength.ToString(CultureInfo.InvariantCulture)
                     && Text(root, "organizationId") == revision.OrganizationId.ToString("D")
@@ -236,11 +244,11 @@ public static class PreviewRequestDocument
                     DocumentSchema or DraftDocumentSchema => PreviewExecutionProfile.Document,
                     CsvSchema => PreviewExecutionProfile.CsvDocument,
                     XmlSchema => PreviewExecutionProfile.XmlDocument,
-                    _ => PreviewExecutionProfile.LegacyJson
+                    _ => native?.Execution ?? PreviewExecutionProfile.LegacyJson
                 }
             };
             Require(inputs.Length > 0 && inputs[0].Name is null && inputs.Skip(1).All(input => input.Name is not null));
-            Require(inputs.All(input => input.ByteLength >= (schema == CsvSchema ? 0 : 1)));
+            Require(inputs.All(input => input.ByteLength >= (NativeDocumentPolicy.AllowsEmpty(description.Profile) ? 0 : 1)));
             return description;
         }
         catch (Exception error) when (error is JsonException or KeyNotFoundException or InvalidOperationException

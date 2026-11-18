@@ -28,7 +28,7 @@ public sealed class MachineInvocationSchemaTests(PostgresFixture fixture, ITestO
         await using var transaction = await connection.BeginTransactionAsync();
         var definitions = BuildRoleGuard.LoadFunctions("0024_machine_invocation.sql", MachineInvocationRoleGuard.Names.Length);
         definitions["guard_machine_invocation"] = BuildRoleGuard.LoadFunctions("0027_administration.sql", AdministrationRoleGuard.Names.Length)["guard_machine_invocation"];
-        await BuildRoleGuard.ValidateFunctionsAsync(connection, transaction, MachineInvocationRoleGuard.Names, definitions, default);
+        await MachineInvocationRoleGuard.ValidateOrderContractAsync(connection, transaction, definitions, default);
         var fingerprint = await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, MachineInvocationRoleGuard.Tables, default);
         output.WriteLine("MachineInvocationFingerprint=" + fingerprint);
         Assert.Equal(MachineInvocationRoleGuard.Fingerprint, fingerprint);
@@ -93,6 +93,7 @@ public sealed class MachineInvocationSchemaTests(PostgresFixture fixture, ITestO
         var key = new MachineInvocationKey(releases.Target.Reference, caller, Guid.NewGuid());
         var application = Guid.NewGuid();
         var digest = Sha256Digest.FromBytes(Encoding.UTF8.GetBytes("request"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => ledger.ClaimWithMetadataAsync(key, application, digest, 7));
         var claim = await ledger.ClaimAsync(key, application, digest);
         Assert.Equal(MachineInvocationClaimStatus.Claimed, claim.Status); Assert.Equal(releases.Actor.PrincipalId, claim.Publisher);
         Assert.Equal(MachineInvocationFinishStatus.Recorded, await ledger.FinishAsync(key, claim.ClaimId, application, MachineInvocationOutcome.Completed,

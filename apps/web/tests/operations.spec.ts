@@ -38,6 +38,7 @@ import {
 
 const target = "70000000-0000-4000-8000-000000000001";
 const environment = "70000000-0000-4000-8000-000000000002";
+const delivery = "70000000-0000-4000-8000-000000000003";
 const base = catalogApi(mappingPath(synthetic.mapping.scope)) + "/operations";
 
 /** Synthetic browser boundary only. Real release admission and storage have PostgreSQL/HTTP tests. */
@@ -173,6 +174,32 @@ async function fixture(page: Page, session = false) {
           nextOffset: null,
         },
       });
+    } else if (url.pathname.endsWith("/deliveries")) {
+      await route.fulfill({
+        json: {
+          items: [
+            {
+              kind: "delivery",
+              delivery_id: delivery,
+              work_id: "70000000-0000-4000-8000-000000000004",
+              trigger_id: "70000000-0000-4000-8000-000000000005",
+              destination_kind: "https",
+              connector_id: "partner-https",
+              connector_version: 1,
+              phase: state.applied.size ? "accepted" : "unknown",
+              sends: 1,
+              version: "1",
+              next_at: "2026-11-09T00:00:00Z",
+              admitted_at: "2026-11-09T00:00:00Z",
+              first_ambiguous_at: "2026-11-09T00:00:01Z",
+              last_dispatch_at: "2026-11-09T00:00:01Z",
+              settled_at: null,
+              resolution: null,
+            },
+          ],
+          nextOffset: null,
+        },
+      });
     } else if (url.pathname.endsWith("/summary")) {
       await route.fulfill({
         json: {
@@ -278,6 +305,142 @@ async function disable(page: Page) {
   await page.getByLabel("I reviewed this target, action and version.").check();
   await page.getByRole("button", { name: "Apply action" }).click();
 }
+
+async function openDeliveries(page: Page) {
+  await select(page);
+  await page
+    .getByRole("combobox", { name: "View", exact: true })
+    .selectOption("deliveries");
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await page.getByRole("button", { name: "Resolve this delivery" }).click();
+}
+
+test("a resend needs acknowledged duplicate risk and an uncertain reply recovers the same resolution", async ({
+  page,
+}) => {
+  const state = await fixture(page, true);
+  await openDeliveries(page);
+  const deliveryRead = state.reads.find((url) => url.includes("/deliveries"))!;
+  expect(new URL(deliveryRead).searchParams.has("since")).toBe(false);
+  await page
+    .getByRole("combobox", { name: "Resolution", exact: true })
+    .selectOption("resend");
+  await page
+    .getByLabel("I reviewed this delivery, resolution and version.")
+    .check();
+  const record = page.getByRole("button", { name: "Record resolution" });
+  await expect(record).toBeDisabled();
+  await page
+    .getByLabel("I accept that the receiver may get this delivery twice.")
+    .check();
+  state.failure = "lost";
+  await record.click();
+  const recover = page.getByRole("button", {
+    name: "Recover original operation",
+  });
+  await expect(recover).toBeEnabled();
+  await recover.click();
+  await expect(
+    page.getByText(
+      "Operation recorded. Refresh the target before another change.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  expect(state.writes).toHaveLength(2);
+  expect(state.writes[1]).toEqual(state.writes[0]);
+  expect(state.effects).toBe(1);
+  expect(state.writes[0].url).toContain(
+    `${base}/${target}/deliveries/${delivery}/resolutions/`,
+  );
+  expect(state.writes[0].etag).toBe('"1"');
+  expect(JSON.parse(state.writes[0].body)).toEqual({
+    resolution: "resend",
+    environmentId: environment,
+    environmentVersion: "1",
+    acknowledgement: "duplicateRisk",
+  });
+  await expect(
+    page.getByRole("button", { name: "Record resolution" }),
+  ).toHaveCount(0);
+  await expectWarning(page, false);
+});
+
+test("a stale delivery resolution is definite and publishers cannot resolve", async ({
+  page,
+}) => {
+  const state = await fixture(page);
+  await openDeliveries(page);
+  await page
+    .getByLabel("I reviewed this delivery, resolution and version.")
+    .check();
+  state.failure = "stale";
+  await page.getByRole("button", { name: "Record resolution" }).click();
+  await expect(
+    page.getByText(
+      "The delivery is no longer unknown or was sent again. Refresh deliveries and review before resolving.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  expect(JSON.parse(state.writes[0].body)).toMatchObject({
+    resolution: "accepted",
+    acknowledgement: null,
+  });
+  state.role = "publisher";
+  await page.getByRole("button", { name: "Resolve this delivery" }).click();
+  await page
+    .getByLabel("I reviewed this delivery, resolution and version.")
+    .check();
+  await page.getByRole("button", { name: "Record resolution" }).click();
+  await expect(
+    page.getByRole("button", { name: "Recover original operation" }),
+  ).toBeEnabled();
+  expect(state.writes).toHaveLength(1);
+});
+
+test("delivery resolution drafts survive a same-owner check but clear for another owner", async ({
+  page,
+}) => {
+  const state = await fixture(page, true);
+  await openDeliveries(page);
+  await expectWarning(page, true);
+  await page
+    .getByRole("combobox", { name: "Resolution", exact: true })
+    .selectOption("resend");
+  await page
+    .getByLabel("I accept that the receiver may get this delivery twice.")
+    .check();
+  state.sessionStatus = 503;
+  await checkSession(page);
+  state.sessionStatus = 200;
+  await checkSession(page);
+  await page
+    .getByRole("button", { name: "Refresh operations", exact: true })
+    .click();
+  await expect(
+    page.getByRole("combobox", { name: "Resolution", exact: true }),
+  ).toHaveValue("resend");
+  await expect(
+    page.getByLabel("I accept that the receiver may get this delivery twice."),
+  ).toBeChecked();
+  await expectWarning(page, true);
+  state.identity = `v1.${"B".repeat(42)}A`;
+  state.actor = "10000000-0000-4000-8000-000000000003";
+  await checkSession(page);
+  await page
+    .getByRole("button", { name: "Refresh operations", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Resolve unknown delivery",
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("combobox", { name: "Action", exact: true }),
+  ).toHaveValue("activate");
+  await expectWarning(page, false);
+  expect(state.writes).toHaveLength(0);
+});
 
 test("invocation filters, paging, summary and caller administration are reachable", async ({
   page,

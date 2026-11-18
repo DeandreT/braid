@@ -19,14 +19,15 @@ var xmlRegression = XmlPreviewAdmission.Enabled(read, XmlPreviewAdmission.Regres
 var inspection = InspectionWorkerSettings.Read(read, settings.WorkerImage, settings.DockerExecutable);
 var previewRunner = PreviewRunnerSettings.Read(read, settings);
 const string previewRunnerKey = "preview-runner";
-if (!settings.PreviewEnabled && inspection is null && read("BRAID_NOTIFICATIONS_ENABLED") != "true")
+var lifecycle = read(LifecycleDeletionWorker.EnabledSetting) == "true";
+if (!settings.PreviewEnabled && inspection is null && read("BRAID_NOTIFICATIONS_ENABLED") != "true" && !lifecycle)
     throw new InvalidOperationException("The worker requires execution, inspection or notifications.");
 var builder = Host.CreateApplicationBuilder(args);
 var contentRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(builder.Environment.ContentRootPath));
 if (settings.PreviewEnabled)
 {
     builder.Services.AddSingleton(new PreviewWorkerInstance(Guid.NewGuid()));
-    builder.Services.AddSingleton(new PreviewRunOptions { Lease = settings.Lease, XmlEnabled = xmlPreview });
+    builder.Services.AddSingleton(new PreviewRunOptions { Lease = settings.Lease, XmlEnabled = xmlPreview, NativeFormats = NativeDocumentFormat.EnabledFormats(read, false) });
     builder.Services.AddSingleton(TimeProvider.System);
     builder.Services.AddSingleton(_ => new PostgresPreviewDatabase(settings.WriterConnectionString!, PreviewDatabaseProfile.Writer));
     builder.Services.AddSingleton(provider => new PostgresPreviewRunStore(provider.GetRequiredService<PostgresPreviewDatabase>()));
@@ -35,7 +36,7 @@ if (settings.PreviewEnabled)
     builder.Services.AddSingleton<IPrivateObjectStore>(_ => new LazyPrivateObjectStore(storage));
     builder.Services.AddKeyedSingleton(previewRunnerKey, (_, _) => previewRunner.CreateRunner(settings));
     builder.Services.AddBraidPreviewBackends(provider => provider.GetRequiredKeyedService<IInspectionWorkerRunner>(previewRunnerKey),
-        xmlPreview, xmlRegression);
+        xmlPreview, xmlRegression, NativeDocumentFormat.EnabledFormats(read, false), NativeDocumentFormat.EnabledFormats(read, true));
     builder.Services.AddSingleton(provider => new PreviewRunExecutor(provider.GetRequiredService<PostgresPreviewRunStore>(),
         provider.GetRequiredService<IPrivateObjectStore>(), provider.GetRequiredService<IMappingPreviewBackend>(),
         provider.GetRequiredService<TimeProvider>(), provider.GetRequiredService<PreviewRunOptions>()));
@@ -49,6 +50,13 @@ builder.Services.AddBraidRegressionWorker(read, () =>
     (path, maximum) => ProtectedHostFiles.ReadText(path, maximum));
 builder.Services.AddBraidNotificationWorker(read, (path, maximum) => ProtectedHostFiles.ReadText(path, maximum));
 builder.Services.AddBraidBuildWorkerWithRunner(read, () => previewRunner.CreateBuildRunner(settings));
+if (lifecycle)
+{
+    var connection = read(LifecycleDeletionWorker.ConnectionSetting) is { Length: > 0 } value ? value
+        : throw new InvalidOperationException("The lifecycle worker requires its own restricted connection.");
+    var storage = PrivateStorageSettings.Read(read).Bind(contentRoot);
+    builder.Services.AddHostedService(_ => new LifecycleDeletionWorker(connection, storage));
+}
 if (inspection is { } hosted)
     builder.Services.AddBraidInspectionWorker(hosted.Transport, hosted.Runner);
 await builder.Build().RunAsync();

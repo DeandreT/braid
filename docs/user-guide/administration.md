@@ -53,3 +53,5 @@ The account menu warns when signing in or out would lose an unsent form, a
 member-role choice, a pending edit, or a private invitation link. A normal
 access refresh keeps unsent changes, and saving one form leaves other drafts
 alone.
+
+Use the Audit page to filter, page through, or export audit events for the organization or projects you administer.

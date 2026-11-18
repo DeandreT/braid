@@ -9,7 +9,7 @@ namespace Braid.Tests;
 
 /// <summary>Real PostgreSQL grants and invocation ledger over a registered target with a synthetic activated release.</summary>
 [Collection(PostgresCollection.Name)]
-public sealed class MachineInvocationPersistenceTests(PostgresFixture fixture)
+public sealed partial class MachineInvocationPersistenceTests(PostgresFixture fixture)
 {
     private static readonly Guid Tenant = Guid.Parse("a67cb0f3-6f11-4e5e-921a-71c3b894fb32");
 
@@ -291,6 +291,8 @@ public sealed class MachineInvocationPersistenceTests(PostgresFixture fixture)
     [InlineData("machine_invocations")]
     [InlineData("machine_invocation_audit")]
     [InlineData("machine_invocation_results")]
+    [InlineData("host_order_pins")]
+    [InlineData("host_target_slots")]
     public async Task History_cannot_be_rewritten_directly(string table)
     {
         await using var test = await Context.CreateAsync(fixture);
@@ -336,9 +338,9 @@ public sealed class MachineInvocationPersistenceTests(PostgresFixture fixture)
         internal ActorContext Actor => Releases.Actor;
         internal PostgresCase Case => Releases.Case;
 
-        internal static async Task<Context> CreateAsync(PostgresFixture fixture, bool activate = true)
+        internal static async Task<Context> CreateAsync(PostgresFixture fixture, bool activate = true, int? migrations = null, bool documents = false, bool shipment = false)
         {
-            var releases = await LocalReleasePersistenceTests.Context.CreateAsync(fixture);
+            var releases = await LocalReleasePersistenceTests.Context.CreateAsync(fixture, migrations, documents, shipment);
             PostgresInvocationGrantStore? grants = null; PostgresInvocationLedger? ledger = null;
             try
             {

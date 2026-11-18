@@ -35,6 +35,7 @@ public sealed class PostgresPreviewRunStore(PostgresPreviewDatabase database) : 
             await using var command = new NpgsqlCommand(draft is null
                 ? submission.Profile == PreviewExecutionProfile.XmlDocument
                     ? "SELECT outcome, run_id FROM braid.preview_submit_xml($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)"
+                    : NativeDocumentFormat.FromExecution(submission.Profile) is not null ? "SELECT outcome, run_id FROM braid.preview_submit_native($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)"
                     : "SELECT outcome, run_id FROM braid.preview_submit($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)"
                 : "SELECT outcome, run_id FROM braid.preview_submit_draft($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)", connection, transaction);
             var revision = submission.Subject.ExecutionScope;
@@ -179,7 +180,8 @@ public sealed class PostgresPreviewRunStore(PostgresPreviewDatabase database) : 
             // be decoded. A verified successful result owns its profile; the legacy terminal
             // function publishes no documents on a failure and therefore cannot widen admission.
             var xml = completion.Provenance?.Profile == XmlPreviewAdmission.Profile;
-            await using var command = new NpgsqlCommand(xml
+            var native = NativeDocumentFormat.FromProfile(completion.Provenance?.Profile);
+            await using var command = new NpgsqlCommand(native is not null ? "SELECT braid.preview_complete_native($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)" : xml
                 ? "SELECT braid.preview_complete_xml($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)"
                 : csv
                 ? "SELECT braid.preview_complete_csv($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)"
@@ -208,6 +210,7 @@ public sealed class PostgresPreviewRunStore(PostgresPreviewDatabase database) : 
             Array(command, NpgsqlDbType.Text, artifacts.Select(artifact => artifact.MediaType).ToArray());
             Array(command, NpgsqlDbType.Bigint, artifacts.Select(artifact => artifact.RecordsWritten).ToArray());
             Array(command, NpgsqlDbType.Bytea, artifacts.Select(artifact => artifact.CopyBytes()).ToArray());
+            if (native is not null) Array(command, NpgsqlDbType.Text, artifacts.Select(a => NativeDocumentSettingsJson.Encode(a.DocumentSettings ?? throw Inconsistent())).ToArray());
             if (csv) Array(command, NpgsqlDbType.Text, artifacts.Select(artifact => CsvDialectJson.Encode(artifact.CsvDialect
                 ?? throw new ArgumentException("CSV output has no dialect.", nameof(completion)))).ToArray());
             if (xml) Array(command, NpgsqlDbType.Text, artifacts.Select(artifact => XmlDocumentMetadataJson.Encode(artifact.XmlMetadata

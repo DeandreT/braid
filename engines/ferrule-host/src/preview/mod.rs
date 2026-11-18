@@ -74,6 +74,7 @@ pub fn handle_preview(
     header_bytes: &[u8],
     reader: &mut impl Read,
     writer: &mut impl Write,
+    restricted: bool,
 ) -> io::Result<()> {
     let Ok(header) = serde_json::from_slice::<PreviewRequestHeader>(header_bytes) else {
         discard(reader);
@@ -90,6 +91,18 @@ pub fn handle_preview(
     if let Err(refusal) = check_header(&header) {
         discard(reader);
         return write_outcome(writer, &refused(&header, &refusal));
+    }
+    if restricted && header.is_xlsx_preview() {
+        discard(reader);
+        return write_outcome(
+            writer,
+            &PreviewOutcome::failure(
+                Some(&header),
+                "unsupportedCapability",
+                crate::xlsx_document::SERVICE_OUTPUT_REFUSAL,
+                Some("primary-output"),
+            ),
+        );
     }
     let native = match framing::read_frame(reader, MAX_NATIVE_BYTES) {
         Ok(native) => native,
@@ -196,6 +209,21 @@ pub fn process_preview(
         (decoded, None)
     };
     let mut project = decoded.project;
+    if header.is_flextext_preview()
+        && let Err(message) = crate::flextext_document::admit_saved_metadata(native, &project)
+    {
+        return failure("unsupportedCapability", message, None);
+    }
+    if header.reads_xlsx()
+        && let Err(message) = crate::xlsx_document::admit_saved_metadata(native, &project)
+    {
+        return failure("unsupportedCapability", message, None);
+    }
+    if let Some(format) = header.native_format()
+        && let Err(message) = crate::native_document::admit_saved_metadata(format, native, &project)
+    {
+        return failure("unsupportedCapability", message, None);
+    }
     let issues = ferrule_engine::validate(&project).len();
     if issues > 0 {
         return failure(
@@ -245,6 +273,72 @@ pub fn process_preview(
                 );
             }
         }
+    }
+    if header.is_flextext_preview() {
+        let parsed = std::str::from_utf8(&inputs[0]).ok().map(|text| {
+            ferrule_format_flextext::from_str(
+                text,
+                &project.source,
+                project.source_options.flextext.as_ref().unwrap(),
+            )
+        });
+        match parsed {
+            Some(Ok(_)) => {}
+            Some(Err(error)) => {
+                use ferrule_format_flextext::FlexTextError;
+                let limited = matches!(
+                    error,
+                    FlexTextError::InputTooLarge
+                        | FlexTextError::InstanceTooDeep
+                        | FlexTextError::TooManyNodes
+                        | FlexTextError::TooManyRecords
+                        | FlexTextError::ValueTooLarge { .. }
+                );
+                return failure(
+                    if limited {
+                        "inputLimitExceeded"
+                    } else {
+                        "invalidInput"
+                    },
+                    "The FlexText input violates its saved layout or bounded codec limits.",
+                    Some("primary"),
+                );
+            }
+            None => {
+                return failure(
+                    "invalidInput",
+                    "FlexText requires strict UTF-8.",
+                    Some("primary"),
+                );
+            }
+        }
+    }
+    if header.reads_xlsx()
+        && let Err(error) =
+            crate::xlsx_document::read(&inputs[0], &project.source, &project.source_options)
+    {
+        return failure(
+            if crate::xlsx_document::limited(&error) {
+                "inputLimitExceeded"
+            } else {
+                "invalidInput"
+            },
+            "The XLSX input violates its saved sheet settings, flat schema or bounded package limits.",
+            Some("primary"),
+        );
+    }
+    if let Some(format) = header.native_format()
+        && let Err(limited) = crate::native_document::read_input(format, &project, &inputs[0])
+    {
+        return failure(
+            if limited {
+                "inputLimitExceeded"
+            } else {
+                "invalidInput"
+            },
+            "The input violates its saved native document options or bounded codec limits.",
+            Some("primary"),
+        );
     }
     if header.is_csv_preview()
         && let Err(error) = ferrule_format_csv::from_bytes_with_options_bounded(
@@ -393,10 +487,15 @@ pub fn process_preview(
         .with_extra_sources(&named)
         .with_output_path(&output_path)
         .with_runtime_parameters(&parameters);
-    if header.is_csv_preview() || header.is_xml_preview() {
+    if header.is_csv_preview()
+        || header.is_xml_preview()
+        || header.is_flextext_preview()
+        || header.reads_xlsx()
+        || header.native_format().is_some()
+    {
         // Keep legacy JSON/EDI on their established compatibility route. In
         // particular, that route accepts JSON schema provenance the bounded
-        // selector refuses. Only explicitly admitted CSV uses this opt-in.
+        // selector refuses. Only separately admitted document profiles opt in.
         options = options.with_bounded_documents();
     }
     if let Some(selection) = admission.selection {
@@ -503,6 +602,44 @@ pub fn process_preview(
         } else {
             None
         };
+        if header.is_flextext_preview()
+            && std::str::from_utf8(&artifact.bytes)
+                .ok()
+                .and_then(|text| {
+                    ferrule_format_flextext::from_str(
+                        text,
+                        &project.target,
+                        project.target_options.flextext.as_ref().unwrap(),
+                    )
+                    .ok()
+                })
+                .is_none()
+        {
+            return failure(
+                "resultLimitExceeded",
+                "The FlexText output violates its saved layout or bounded codec limits.",
+                Some(&target.boundary_id),
+            );
+        }
+        if header.is_xlsx_preview()
+            && crate::xlsx_document::read(&artifact.bytes, &project.target, &project.target_options)
+                .is_err()
+        {
+            return failure(
+                "resultLimitExceeded",
+                "The XLSX output violates its saved sheet settings or bounded package limits.",
+                Some(&target.boundary_id),
+            );
+        }
+        if let Some(format) = header.native_format()
+            && !crate::native_document::valid_output(format, &project, &artifact.bytes)
+        {
+            return failure(
+                "resultLimitExceeded",
+                "The output violates its saved native document options or bounded codec limits.",
+                Some(&target.boundary_id),
+            );
+        }
         if header.is_csv_preview()
             && ferrule_format_csv::from_bytes_with_options_bounded(
                 &artifact.bytes,
@@ -545,6 +682,19 @@ pub fn process_preview(
             } else {
                 None
             },
+            flex_text_settings: if header.is_flextext_preview() {
+                crate::flextext_document::settings(&project.target_options).ok()
+            } else {
+                None
+            },
+            xlsx_settings: if header.is_xlsx_preview() {
+                crate::xlsx_document::settings(&project.target_options, true).ok()
+            } else {
+                None
+            },
+            document_settings: header.native_format().and_then(|format| {
+                crate::native_document::settings(format, &project.target_options).ok()
+            }),
             xml_metadata,
         });
         outputs.push(artifact.bytes);
@@ -619,6 +769,11 @@ fn check_header(header: &PreviewRequestHeader) -> Result<(), Refusal> {
             | DOCUMENT_PREVIEW_PROTOCOL_VERSION
             | CSV_PREVIEW_PROTOCOL_VERSION
             | XML_PREVIEW_PROTOCOL_VERSION
+            | crate::flextext_document::PROFILE
+            | crate::xlsx_document::PROFILE
+            | crate::xlsx_document::READ_JSON_PROFILE
+            | crate::native_document::PROTOBUF_PROFILE
+            | crate::native_document::XBRL_PROFILE
     ) {
         return failure(
             "unsupportedProtocolVersion",
@@ -666,7 +821,10 @@ fn check_header(header: &PreviewRequestHeader) -> Result<(), Refusal> {
     let mut names = std::collections::BTreeSet::new();
     let mut total = 0u64;
     for input in &header.inputs {
-        if (input.byte_length() == 0 && !header.is_csv_preview())
+        if (input.byte_length() == 0
+            && !header.is_csv_preview()
+            && !header.is_flextext_preview()
+            && header.native_format().is_none())
             || input.sha256().len() != 64
             || !input
                 .sha256()
@@ -811,7 +969,15 @@ fn execution_failure(
     } else {
         classify(error, header, output_path)
     };
-    let message = if header.is_xml_preview() {
+    let message = if let Some(format) = header.native_format() {
+        format.execution_failure().into()
+    } else if header.is_flextext_preview() {
+        "The native FlexText mapping or bounded serialization failed; no output was published."
+            .into()
+    } else if header.reads_xlsx() {
+        "The native XLSX mapping or bounded workbook serialization failed; no output was published."
+            .into()
+    } else if header.is_xml_preview() {
         if matches!(code, "inputLimitExceeded" | "resultLimitExceeded") {
             "The XML operation exceeds a resource limit."
         } else {
@@ -976,7 +1142,10 @@ fn classify(
     // with this untyped finalization error. Match only its exact root message
     // and our admitted synthetic destination, never arbitrary size-error text.
     // Legacy JSON/EDI retain their established classification.
-    if header.is_csv_preview()
+    if (header.is_csv_preview()
+        || header.is_flextext_preview()
+        || header.reads_xlsx()
+        || header.native_format().is_some())
         && error.root_cause().to_string()
             == format!(
                 "output artifact `{}` exceeds the {} MiB per-document limit",
@@ -987,6 +1156,33 @@ fn classify(
         return ("resultLimitExceeded", None);
     }
     for cause in error.chain() {
+        if header.native_format().is_some() && crate::native_document::limited(cause) {
+            return ("resultLimitExceeded", None);
+        }
+        if header.is_xlsx_preview()
+            && cause
+                .downcast_ref::<ferrule_format_xlsx::XlsxFormatError>()
+                .is_some_and(crate::xlsx_document::limited)
+        {
+            return ("resultLimitExceeded", None);
+        }
+        if header.is_flextext_preview()
+            && cause
+                .downcast_ref::<ferrule_format_flextext::FlexTextError>()
+                .is_some_and(|error| {
+                    matches!(
+                        error,
+                        ferrule_format_flextext::FlexTextError::OutputTooLarge
+                            | ferrule_format_flextext::FlexTextError::InstanceTooDeep
+                            | ferrule_format_flextext::FlexTextError::TooManyNodes
+                            | ferrule_format_flextext::FlexTextError::TooManyRecords
+                            | ferrule_format_flextext::FlexTextError::ValueTooLarge { .. }
+                    )
+                })
+        {
+            return ("resultLimitExceeded", None);
+        }
+
         if let Some(engine) = cause.downcast_ref::<EngineError>() {
             return match engine {
                 EngineError::MissingRuntimeParameter { name, .. } => {

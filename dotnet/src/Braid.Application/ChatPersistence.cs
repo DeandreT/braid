@@ -2,7 +2,11 @@ using Braid.Domain;
 
 namespace Braid.Application;
 
-public enum ChatStoreOutcome { Applied, Replayed, Conflict, InvalidState, LimitReached, Expired, NotAuthorizedOrNotFound, IdentityRetired }
+public enum ChatStoreOutcome
+{
+    Applied, Replayed, Conflict, InvalidState, LimitReached, Expired, NotAuthorizedOrNotFound, IdentityRetired,
+    QuotaTurnLimitReached, QuotaTokenLimitReached, QuotaTokenBoundUnavailable, QuotaCoverageUnavailable
+}
 
 public sealed record ChatTurnFacts
 {

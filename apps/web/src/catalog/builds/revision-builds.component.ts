@@ -1,3 +1,4 @@
+import { DeleteItemComponent } from "../deletion/delete-item.component";
 import { DatePipe } from "@angular/common";
 import {
   Component,
@@ -77,6 +78,7 @@ import { UnsentWork } from "../../workbench/unsent-work";
 @Component({
   selector: "braid-revision-builds",
   imports: [
+    DeleteItemComponent,
     FormsModule,
     DatePipe,
     RouterLink,
@@ -641,7 +643,10 @@ export class RevisionBuildsComponent {
     return this.admission() || this.context();
   }
   private freshAdmission(owner = this.owner()): Observable<CatalogContext> {
-    return this.catalog.context().pipe(
+    // The owner's own organization context carries its admission incarnation and request token;
+    // the legacy root context would name another organization or skip the incarnation fence.
+    return this.catalog.organizationContext(owner.scope.organizationId).pipe(
+      map((read) => read.context),
       switchMap((ctx) => {
         if (!sameOwner(owner, buildOwner(ctx, this.revision())))
           throw new BuildError("rejected");

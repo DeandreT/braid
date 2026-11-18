@@ -14,6 +14,7 @@ import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { NavigationStart, Router, RouterLink } from "@angular/router";
 import { filter, type Subscription } from "rxjs";
 import { CatalogContextStore } from "../catalog-context";
+import { OrganizationSelection } from "../organization-selection";
 import { catalogOwner } from "../catalog-types";
 import {
   AutomationApi,
@@ -69,7 +70,7 @@ import {
                     [class.popover-dot-read]="item.read"
                     aria-hidden="true"
                   ></span>
-                  <a [routerLink]="item.link" (click)="close()"
+                  <a [routerLink]="selection.link(item.link)" (click)="close()"
                     ><strong>{{ label(item.event) }}</strong>
                     <small
                       >{{ item.read ? "Read" : "Unread" }} ·
@@ -86,7 +87,10 @@ import {
             </ul>
           }
         }
-        <a class="popover-footer" routerLink="/notifications" (click)="close()"
+        <a
+          class="popover-footer"
+          [routerLink]="selection.link('/notifications')"
+          (click)="close()"
           >Open notification centre</a
         >
       </section>
@@ -184,6 +188,7 @@ export class NotificationPopoverComponent {
   readonly state = signal<"loading" | "ready" | "unavailable">("loading");
   readonly items = signal<Inbox["notifications"]>([]);
   readonly label = notificationEventLabel;
+  readonly selection = inject(OrganizationSelection);
   private readonly api = inject(AutomationApi);
   private readonly contexts = inject(CatalogContextStore);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);

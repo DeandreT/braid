@@ -15,7 +15,9 @@ public sealed class BuildCapabilitySnapshot
         ArgumentNullException.ThrowIfNull(backend);
         ArgumentNullException.ThrowIfNull(profile);
         if (!Enum.IsDefined(status)) throw new BuildContractException(BuildContractFailure.InvalidInput);
-        if (refusalReason != BuildPreflightReason.None && (status != CapabilityStatus.Unsupported || refusalReason is not (BuildPreflightReason.UnsupportedCsvPlan or BuildPreflightReason.UnsupportedXmlBuild)))
+        if (refusalReason != BuildPreflightReason.None && (status != CapabilityStatus.Unsupported || refusalReason is not
+            (BuildPreflightReason.UnsupportedCsvPlan or BuildPreflightReason.UnsupportedXmlBuild or BuildPreflightReason.UnsupportedFlexTextBuild or
+             BuildPreflightReason.UnsupportedXlsxBuild or BuildPreflightReason.UnsupportedProtobufBuild or BuildPreflightReason.UnsupportedXbrlBuild)))
             throw new BuildContractException(BuildContractFailure.InvalidInput);
         var count = conditions?.Count ?? 0;
         if (count is < 0 or > 32 || (status == CapabilityStatus.Conditional) != (count > 0))
@@ -44,7 +46,7 @@ public sealed class BuildCapabilitySnapshot
 }
 
 public enum BuildPreflightOutcome { Supported, Unsupported, NotQualified, ConditionsRequired, MismatchedEvidence }
-public enum BuildPreflightReason { None, RevisionMismatch, NativeDigestMismatch, BackendMismatch, ProfileMismatch, BoundaryMismatch, UnsupportedCsvPlan, UnsupportedXmlBuild }
+public enum BuildPreflightReason { None, RevisionMismatch, NativeDigestMismatch, BackendMismatch, ProfileMismatch, BoundaryMismatch, UnsupportedCsvPlan, UnsupportedXmlBuild, UnsupportedFlexTextBuild, UnsupportedXlsxBuild, UnsupportedProtobufBuild, UnsupportedXbrlBuild }
 
 public sealed record BuildPreflightResult(BuildPreflightOutcome Outcome, BuildPreflightReason Reason)
 {
@@ -54,14 +56,32 @@ public sealed record BuildPreflightResult(BuildPreflightOutcome Outcome, BuildPr
 /// <summary>Pure compatibility check. A Supported result is not authorization or permission to run a worker.</summary>
 public sealed class BuildPreflightService
 {
+    public static BuildPreflightReason DocumentRefusal(BuildIntent intent)
+    {
+        foreach (var boundary in intent.Boundaries)
+        {
+            var refusal = boundary.Format switch
+            {
+                "xml" => BuildPreflightReason.UnsupportedXmlBuild,
+                "flexText" => BuildPreflightReason.UnsupportedFlexTextBuild,
+                "xlsx" => BuildPreflightReason.UnsupportedXlsxBuild,
+                "protobuf" => BuildPreflightReason.UnsupportedProtobufBuild,
+                "xbrl" => BuildPreflightReason.UnsupportedXbrlBuild,
+                _ => BuildPreflightReason.None
+            };
+            if (refusal != BuildPreflightReason.None) return refusal;
+        }
+        return BuildPreflightReason.None;
+    }
+
     public BuildPreflightResult Evaluate(BuildIntent intent, BuildCapabilitySnapshot capability,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(intent);
         ArgumentNullException.ThrowIfNull(capability);
-        if (intent.Boundaries.Any(boundary => boundary.Format == "xml"))
-            return new(BuildPreflightOutcome.Unsupported, BuildPreflightReason.UnsupportedXmlBuild);
+        var refusal = DocumentRefusal(intent);
+        if (refusal != BuildPreflightReason.None) return new(BuildPreflightOutcome.Unsupported, refusal);
         if (intent.Revision != capability.Revision) return Mismatch(BuildPreflightReason.RevisionMismatch);
         if (intent.NativeDigest != capability.NativeDigest) return Mismatch(BuildPreflightReason.NativeDigestMismatch);
         if (intent.Backend != capability.Backend) return Mismatch(BuildPreflightReason.BackendMismatch);

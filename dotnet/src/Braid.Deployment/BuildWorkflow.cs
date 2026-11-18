@@ -42,6 +42,8 @@ public interface IBuildCompiler
 
 public sealed record BuildPublication(PrincipalId Actor, BuildArtifactReference Artifact, PrivateObjectReference Object)
 {
+    // Derived only from retained publication facts; accepting an uploaded manifest cannot create a publication.
+    public MappingPackageManifest Manifest => MappingPackageManifest.Create(Artifact);
     public override string ToString() => nameof(BuildPublication);
 }
 

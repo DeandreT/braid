@@ -49,7 +49,9 @@ public sealed class RegressionCaseVersion
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(replay);
         ArgumentNullException.ThrowIfNull(expected);
-        if (runtime.Profile is not (PreviewPolicy.Profile or DocumentPreviewPolicy.Profile or CsvDocumentPolicy.Profile or XmlPreviewAdmission.Profile) ||
+        var native = NativeDocumentFormat.FromProfile(runtime.Profile);
+        if (NativeDocumentFormat.FromExecution(replay.Profile) != native || native is not null && (comparisonPolicy != RegressionComparisonService.ExactBytesPolicy || expected.Outputs.Count != 1 || !expected.Outputs[0].Key.IsPrimary || expected.Outputs[0].DocumentSettings?.Format != native) || native is null && expected.Outputs.Any(o => o.DocumentSettings is not null)) throw new RegressionCaseException(RegressionCaseFailure.InvalidInput);
+        if (native is null && runtime.Profile is not (PreviewPolicy.Profile or DocumentPreviewPolicy.Profile or CsvDocumentPolicy.Profile or XmlPreviewAdmission.Profile) ||
             comparisonPolicy is not (RegressionComparisonService.ExactBytesPolicy or RegressionComparisonService.EdiSegmentsPolicy or RegressionComparisonService.CsvRowsPolicy) ||
             (comparisonPolicy == RegressionComparisonService.EdiSegmentsPolicy) != (ediOptions is not null) ||
             comparisonPolicy == RegressionComparisonService.CsvRowsPolicy && runtime.Profile != CsvDocumentPolicy.Profile ||
@@ -122,6 +124,7 @@ public sealed class RegressionCaseVersion
             throw new RegressionCaseException(RegressionCaseFailure.InvalidInput);
         if (artifact.ByteCount > PreviewPolicy.MaximumNativeBytes)
             throw new RegressionCaseException(RegressionCaseFailure.ResourceLimit);
+        if (NativeDocumentFormat.FromProfile(Runtime.Profile) is { } native && NativeDocumentNativeSettings.Read(artifact, native) != (Replay.Primary.DocumentSettings, Expected.Outputs.Single().DocumentSettings)) throw new RegressionCaseException(RegressionCaseFailure.InvalidInput);
         if (Runtime.Profile == CsvDocumentPolicy.Profile)
         {
             var dialect = CsvNativeDialect.Read(artifact);
@@ -142,7 +145,7 @@ public sealed class RegressionCaseVersion
         return new(artifact, Replay.Target, Replay.Primary, Replay.NamedInputs, Replay.Parameters,
             Replay.CurrentDateTime, Replay.Limits)
         {
-            Profile = Runtime.Profile switch
+            Profile = NativeDocumentFormat.FromProfile(Runtime.Profile)?.Execution ?? Runtime.Profile switch
             {
                 XmlPreviewAdmission.Profile => PreviewExecutionProfile.XmlDocument,
                 CsvDocumentPolicy.Profile => PreviewExecutionProfile.CsvDocument,

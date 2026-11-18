@@ -342,6 +342,10 @@ public sealed partial class ChatTurnOrchestrator
     {
         ChatStoreOutcome.NotAuthorizedOrNotFound => ChatOrchestrationOutcome.Denied,
         ChatStoreOutcome.LimitReached or ChatStoreOutcome.Expired => ChatOrchestrationOutcome.BudgetExceeded,
+        ChatStoreOutcome.QuotaTurnLimitReached => ChatOrchestrationOutcome.QuotaTurnLimitReached,
+        ChatStoreOutcome.QuotaTokenLimitReached => ChatOrchestrationOutcome.QuotaTokenLimitReached,
+        ChatStoreOutcome.QuotaTokenBoundUnavailable => ChatOrchestrationOutcome.QuotaTokenBoundUnavailable,
+        ChatStoreOutcome.QuotaCoverageUnavailable => ChatOrchestrationOutcome.QuotaCoverageUnavailable,
         _ => ChatOrchestrationOutcome.PersistenceUncertain
     };
     private static StopException Stop(ChatOrchestrationOutcome outcome) => new(outcome);

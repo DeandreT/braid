@@ -9,6 +9,8 @@ Every operation is described in the generated `contracts/braid-v1.json`.
 
 *Organization members, their roles and the invitation form.*
 
+See `docs/ai-usage.md` for usage reporting, coverage limits and hard-cap admission.
+
 ## Authority
 
 An organization has two administrative roles: `member` and `administrator`.

@@ -337,6 +337,9 @@ internal sealed class AuthHttpHost(AuthHttpFixture test) : IAsyncDisposable
         {
             builder.Services.AddSingleton(_ => new PostgresAdministrationStore(test.Data.Case.RegressionConnectionString("braid_administration")));
             builder.Services.AddSingleton<IAdministrationStore>(p => p.GetRequiredService<PostgresAdministrationStore>());
+            builder.Services.AddSingleton<IAuditLogReader>(p => p.GetRequiredService<PostgresAdministrationStore>());
+            builder.Services.AddSingleton<IAiUsageReader>(p => p.GetRequiredService<PostgresAdministrationStore>());
+            builder.Services.AddSingleton<IAiQuotaStore>(p => p.GetRequiredService<PostgresAdministrationStore>());
             builder.Services.AddSingleton<IOrganizationInvitationRedeemer>(p => p.GetRequiredService<PostgresAdministrationStore>());
         }
         builder.Services.AddBraidEntraBrowserAuthentication(new(test.Data.Seed.OrganizationA, test.Origin.GetLeftPart(UriPartial.Authority)), Profile, identities, test.DisplayMetadata);

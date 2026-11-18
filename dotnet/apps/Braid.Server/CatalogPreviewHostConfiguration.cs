@@ -39,7 +39,7 @@ internal static class CatalogPreviewHostConfiguration
             new OutboxPreviewRunStore(new PostgresPreviewRunStore(provider.GetRequiredKeyedService<PostgresPreviewDatabase>(PreviewDatabaseProfile.Writer)),
                 provider.GetRequiredService<IWolverineRuntime>()),
             new PostgresPreviewRunReader(provider.GetRequiredKeyedService<PostgresPreviewDatabase>(PreviewDatabaseProfile.Reader)),
-            TimeProvider.System, new PreviewRunOptions { XmlEnabled = options.XmlEnabled }));
+            TimeProvider.System, new PreviewRunOptions { XmlEnabled = options.XmlEnabled, NativeFormats = options.NativeFormats }));
     }
 
     private static string Required(Func<string, string?> readEnvironment, string name) =>

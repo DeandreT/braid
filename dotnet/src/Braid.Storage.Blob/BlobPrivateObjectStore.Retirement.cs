@@ -1,21 +1,36 @@
 using Azure;
 using Braid.Application;
+using Braid.Application.Lifecycle;
 using Braid.Domain;
 
 namespace Braid.Storage.Blob;
 
 public sealed partial class BlobPrivateObjectStore
 {
-    public async Task<PrivateObjectRetirementOutcome> RetireAsync(ObjectCleanupClaim claim,
+    public Task<PrivateObjectRetirementOutcome> RetireAsync(ObjectCleanupClaim claim,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(claim);
+        return RetireTargetAsync(claim.Retirement.Target, claim.Retirement.Publication, cancellationToken);
+    }
+
+    /// <summary>Catalog deletion of one database-claimed target through the same permanent fences.</summary>
+    public Task<PrivateObjectRetirementOutcome> DeleteAsync(CatalogObjectDeletionClaim claim,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        return RetireTargetAsync(claim.Target, claim.Publication, cancellationToken);
+    }
+
+    private async Task<PrivateObjectRetirementOutcome> RetireTargetAsync(ObjectCleanupTarget target,
+        PrivatePublicationRecord? publication, CancellationToken cancellationToken)
+    {
         using var operation = await AcquireOperationAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            return claim.Retirement.Target.Kind == CleanupTargetKind.FinalObject
-                ? await RetireFinalAsync(claim, cancellationToken).ConfigureAwait(false)
-                : await RetireTemporaryAsync(claim, cancellationToken).ConfigureAwait(false);
+            return target.Kind == CleanupTargetKind.FinalObject
+                ? await RetireFinalAsync(target.Object, cancellationToken).ConfigureAwait(false)
+                : await RetireTemporaryAsync(target, publication, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception raw)
@@ -37,9 +52,8 @@ public sealed partial class BlobPrivateObjectStore
     /// the permanent retirement fence. The fence occupies the final name and a stale
     /// publisher's lease cannot authorize a later commit.
     /// </summary>
-    private async Task<PrivateObjectRetirementOutcome> RetireFinalAsync(ObjectCleanupClaim claim, CancellationToken token)
+    private async Task<PrivateObjectRetirementOutcome> RetireFinalAsync(PrivateObjectId id, CancellationToken token)
     {
-        var id = claim.Retirement.Target.Object;
         var gateName = BlobLayout.ObjectGate(_controlId, id);
         await EnsureGateAsync(gateName, token, finalObject: true).ConfigureAwait(false);
         await using var gate = await TryAcquireGateAsync(gateName, token, finalObject: true).ConfigureAwait(false);
@@ -76,14 +90,14 @@ public sealed partial class BlobPrivateObjectStore
     /// Under the temporary gate, checks the captured original publication against the complete
     /// immutable seal chain and the actual attempt marker, then fences the attempt name.
     /// </summary>
-    private async Task<PrivateObjectRetirementOutcome> RetireTemporaryAsync(ObjectCleanupClaim claim, CancellationToken token)
+    private async Task<PrivateObjectRetirementOutcome> RetireTemporaryAsync(ObjectCleanupTarget target, PrivatePublicationRecord? captured, CancellationToken token)
     {
-        var publication = claim.Retirement.Publication ?? throw Failure(PrivateObjectStorageError.UnsafeStorage);
+        var publication = captured ?? throw Failure(PrivateObjectStorageError.UnsafeStorage);
         var reservation = publication.Reservation;
         var key = reservation.Key;
         // A publication registered by another store kind is never this store's temporary.
-        if (reservation.StoreKind != PublicationStoreKind || key.RootId != _rootId || key.Object != claim.Retirement.Target.Object ||
-            reservation.PublicationId != claim.Retirement.Target.PublicationAttemptId)
+        if (reservation.StoreKind != PublicationStoreKind || key.RootId != _rootId || key.Object != target.Object ||
+            reservation.PublicationId != target.PublicationAttemptId)
             throw Failure(PrivateObjectStorageError.UnsafeStorage);
         var id = key.Object;
         // Retirement and promotion lease the same destination. A publisher whose

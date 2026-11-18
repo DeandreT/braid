@@ -1,0 +1,175 @@
+<header><h1>Data retention</h1></header>
+<p>
+  Organization administrators choose how long preview runs, regression runs,
+  conversations and invocation history are kept. There are no defaults: a family
+  that isn't configured keeps its data. Audit and AI usage records keep their
+  own fixed retention and can't be shortened here.
+</p>
+<p>
+  A policy applies to data created after you save it unless you explicitly apply
+  it to existing data. Cleanup runs in the background and permanently deletes
+  data once its period has passed; due conversations are hidden right away.
+  Regression runs that ended before this feature have no reliable end time and
+  are kept.
+</p>
+@if (busy()) {
+  <p role="status">
+    {{ saving() ? "Saving retention policy…" : "Loading retention policy…" }}
+  </p>
+}
+@if (snapshot(); as data) {
+  <p>Version {{ data.version }}</p>
+  <div class="scroll">
+    <table>
+      <caption>
+        Current retention policy
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">Data</th>
+          <th scope="col">Policy</th>
+          <th scope="col">Applies to</th>
+          <th scope="col">Effective (UTC)</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (policy of data.policies; track policy.family) {
+          <tr>
+            <th scope="row">{{ label(policy.family) }}</th>
+            <td>{{ current(policy) }}</td>
+            <td>
+              {{
+                policy.mode === "notConfigured"
+                  ? ""
+                  : policy.appliesToExisting
+                    ? "New and existing data"
+                    : "New data only"
+              }}
+            </td>
+            <td>{{ policy.effectiveAtUtc ?? "" }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+@if (visibleEdit(); as edit) {
+  <h2>Edit retention policy</h2>
+  <form (ngSubmit)="review()" (input)="changed()" (change)="changed()">
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Data</th>
+            <th scope="col">Policy</th>
+            <th scope="col">Delete after</th>
+            <th scope="col">Existing data</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows; track row.family) {
+            <tr>
+              <th scope="row">{{ labels[row.family] }}</th>
+              <td>
+                <select
+                  [name]="row.family + '-mode'"
+                  [attr.aria-label]="labels[row.family] + ' policy'"
+                  [(ngModel)]="row.mode"
+                  [disabled]="saving() || edit.used"
+                >
+                  @if (!row.configured) {
+                    <option value="notConfigured">Not configured (keep)</option>
+                  }
+                  <option value="retain">Keep</option>
+                  <option value="expire">Delete after a period</option>
+                </select>
+              </td>
+              <td>
+                @if (row.mode === "expire") {
+                  <input
+                    type="text"
+                    inputmode="numeric"
+                    [name]="row.family + '-amount'"
+                    [attr.aria-label]="labels[row.family] + ' period'"
+                    [(ngModel)]="row.amount"
+                    [disabled]="saving() || edit.used"
+                  />
+                  <select
+                    [name]="row.family + '-unit'"
+                    [attr.aria-label]="labels[row.family] + ' unit'"
+                    [(ngModel)]="row.unit"
+                    [disabled]="saving() || edit.used"
+                  >
+                    <option value="hours">hours</option>
+                    <option value="days">days</option>
+                  </select>
+                }
+              </td>
+              <td>
+                @if (row.mode === "expire") {
+                  <label class="inline"
+                    ><input
+                      type="checkbox"
+                      [name]="row.family + '-existing'"
+                      [(ngModel)]="row.applyToExisting"
+                      [disabled]="saving() || edit.used"
+                    />Also apply to existing data</label
+                  >
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    <div class="actions">
+      <button type="submit" [disabled]="busy() || edit.used">
+        Review changes
+      </button>
+    </div>
+  </form>
+  @if (reviewing()) {
+    <section aria-labelledby="retention-review">
+      <h2 id="retention-review">Review before saving</h2>
+      <ul>
+        @for (row of rows; track row.family) {
+          <li>{{ labels[row.family] }}: {{ describe(row) }}</li>
+        }
+      </ul>
+      @if (existingRows().length > 0) {
+        <p role="alert">
+          Applying a policy to existing data lets cleanup permanently delete
+          data that is already older than its period. This can't be undone.
+        </p>
+      }
+      <p>
+        Once a family is configured it can't go back to not configured; choose
+        Keep to stop deleting.
+      </p>
+      <div class="actions">
+        <button type="button" [disabled]="!canSave()" (click)="save()">
+          Save retention policy
+        </button>
+        <button
+          type="button"
+          [disabled]="saving()"
+          (click)="reviewing.set(false)"
+        >
+          Back to editing
+        </button>
+      </div>
+    </section>
+  }
+}
+@if (receipt()) {
+  <p role="status">{{ receipt() }}</p>
+}
+@if (problem()) {
+  <p role="alert">{{ problem() }}</p>
+}
+@if (["notFound", "unavailable", "forbidden"].includes(read.state().kind)) {
+  <p role="alert">
+    Retention settings are unavailable. Organization administrator access is
+    required.
+  </p>
+}

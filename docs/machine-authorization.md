@@ -85,7 +85,8 @@ migration are admitted again at runtime, together with the release contract they
 
 - **Claims.** A request is identified by its target, caller and caller-supplied request
   ID, with a digest of the request. A claim requires an active grant on an enabled
-  target and a current activated release, and returns that release's publisher. The
+  target and a current activated release. The first accepted claim pins that release
+  and its publisher. Later claims of that order keep the pin across activations and rollbacks. The
   publisher only selects the authority under which the existing release invocation
   path reads the pointer, release and build; that path still makes every check. The
   same ID with a different digest or client application conflicts. Concurrent first

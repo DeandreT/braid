@@ -143,6 +143,8 @@ internal static class ChatRoleGuard
         command.Parameters.AddWithValue(profile == ChatDatabaseProfile.Writer);
         // Resolve the source-declared exact routine signatures, never a name-prefix allowlist.
         var signatures = ChatSchemaContract.FunctionGrants(profile);
+        if (profile is ChatDatabaseProfile.Reader or ChatDatabaseProfile.Writer && await LifecycleCatalogAdmission.InstalledAsync(connection, transaction, ct))
+            signatures = [.. signatures, "braid.chat_retention_due(uuid,timestamp with time zone)"];
         await using var resolve = new NpgsqlCommand("SELECT array_agg(x::regprocedure::oid ORDER BY x) FROM unnest($1::text[]) x", connection, transaction);
         resolve.Parameters.AddWithValue(signatures);
         command.Parameters.Add(new NpgsqlParameter

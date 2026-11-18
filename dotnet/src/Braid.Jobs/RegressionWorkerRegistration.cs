@@ -74,7 +74,7 @@ public static class RegressionWorkerRegistration
             new PostgresRevisionReportMetadataReader(provider.GetRequiredKeyedService<PostgresRevisionReportDatabase>(Key)),
             provider.GetRequiredService<IPrivateObjectStore>(),
             provider.GetKeyedService<IMappingPreviewBackend>(PreviewBackendKey) ?? provider.GetRequiredService<IMappingPreviewBackend>(),
-            identity, documentIdentity, csvIdentity, xmlIdentity));
+            identity, documentIdentity, csvIdentity, xmlIdentity, NativeDocumentFormat.EnabledFormats(environment, true).Select(f => new RegressionRuntimeIdentity(identity.BackendId, identity.EngineRevision, identity.BackendBuild, f.AdapterBuild, f.Profile)).ToArray()));
         services.AddSingleton<IRegressionCaseExecutor>(provider => provider.GetRequiredService<RegressionCaseExecutionService>());
         services.AddSingleton<IRegressionEvaluationExecutor>(provider => provider.GetRequiredService<RegressionCaseExecutionService>());
         services.AddSingleton<IAutomationQueue>(_ => new PostgresAutomationStore(run, writer: true));
