@@ -156,6 +156,8 @@ public sealed class PostgresWorkspacePayloadTests(PostgresFixture fixture)
         Assert.Equal(RegressionRunSubmitOutcome.Created, await test.SubmitAsync());
         Assert.True(await test.Writer.CompleteAsync(await test.ClaimAsync(), test.Success()));
         var cases = test.Cases;
+        var completionEnabled = false;
+        var completionResolutions = 0;
         await using var catalogDatabase = new PostgresCatalogDatabase(cases.Case.CatalogConnectionString);
         var catalog = new PostgresCatalogReader(catalogDatabase);
         await using var payloadDatabase = new PostgresPayloadPermissionDatabase(cases.Case.PayloadPermissionConnectionString);
@@ -163,10 +165,16 @@ public sealed class PostgresWorkspacePayloadTests(PostgresFixture fixture)
         var reports = new MappingToolFixture();
         await using var services = new ServiceCollection()
             .AddSingleton<ICatalogReader>(catalog).AddSingleton<ICatalogResourceLocator>(catalog)
-            .AddSingleton<IRegressionCaseReader>(cases.Reader).AddSingleton<IRegressionRunReader>(test.Reader)
+            .AddSingleton<IRegressionCaseReader>(cases.Reader)
+            .AddSingleton<IRegressionRunReader>(_ =>
+            {
+                completionResolutions++;
+                Assert.True(completionEnabled, "Metadata reads must not resolve the private completion reader.");
+                return test.Reader;
+            })
             .AddSingleton<IRegressionCaseMetadataReader>(cases.Reader)
             .AddSingleton<IRegressionRunMetadataReader>(test.Reader)
-            .AddSingleton(new RegressionRunReadService(test.Reader, cases.Reader))
+            .AddSingleton<RegressionRunReadService>()
             .AddSingleton<IRevisionReportReader>(reports).AddSingleton<IRevisionReportMetadataReader>(reports)
             .AddSingleton<IProjectPayloadPermissionReader>(grants).AddSingleton<IProjectPayloadGrantPresence>(grants)
             .BuildServiceProvider();
@@ -178,10 +186,8 @@ public sealed class PostgresWorkspacePayloadTests(PostgresFixture fixture)
             AiToolIntent.Create("call-1", name, AiJsonObject.CopyFrom(arguments)), CancellationToken.None));
         var output = "{\"runId\":\"" + test.RunId.ToString("D") + "\",\"ordinal\":0}";
 
-        // Metadata and citation reads still work when this login cannot call the
-        // private completion reader at all. A denied payload call must not need it either.
-        await cases.Case.ExecuteAsync("REVOKE EXECUTE ON FUNCTION braid.read_regression_run(uuid,uuid) FROM braid_run_reader");
-        try
+        // Keep the installed database ACL intact: changing it correctly refuses
+        // catalog admission. Withhold the private completion port instead.
         {
             var run = await CallAsync("get_run", "{\"kind\":\"regressionRun\",\"runId\":\"" + test.RunId.ToString("D") + "\"}");
             Assert.Equal("available", run.Outcome);
@@ -198,15 +204,14 @@ public sealed class PostgresWorkspacePayloadTests(PostgresFixture fixture)
             Assert.Null(await test.Reader.ReadMetadataAsync(test.Actor, Guid.NewGuid(), test.RunId));
             Assert.Equal("notPermitted", (await CallAsync("get_regression_run_output", output)).Outcome);
         }
-        finally
-        {
-            await cases.Case.ExecuteAsync("GRANT EXECUTE ON FUNCTION braid.read_regression_run(uuid,uuid) TO braid_run_reader");
-        }
+        Assert.Equal(0, completionResolutions);
 
         await cases.Case.ExecuteAsync("INSERT INTO braid.project_payload_read_grants(organization_id,project_id,principal_id,active,version) VALUES($1,$2,$3,true,1)",
             test.Organization, cases.Seed.ProjectA, cases.Seed.Alice);
+        completionEnabled = true;
         var shared = await CallAsync("get_regression_run_output", output);
         Assert.Equal("available", shared.Outcome);
+        Assert.Equal(1, completionResolutions);
         Assert.Equal("expected-1", shared.Data.GetProperty("text").GetString());
         Assert.Equal(new ChatPayloadDisclosureFact(cases.Seed.ProjectA, ChatPayloadSource.RegressionRunOutput, test.RunId, null, "expected-1".Length),
             shared.Result.DataShared);

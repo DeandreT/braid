@@ -20,7 +20,16 @@ internal static partial class PayloadPermissionSchemaContract
             await protect.ExecuteNonQueryAsync(cancellationToken);
         }
         await ValidateRelationsAsync(connection, transaction, names, cancellationToken);
-        var searchInstalled = await CatalogSearchSchemaAdmission.ValidateAsync(connection, transaction, cancellationToken);
+        // Lifecycle migrations replace the original transition functions and add fences.
+        // Admit that exact catalog after taking the source locks; search still validates
+        // its extension and view, and both paths retain the dedicated reader profile.
+        var lifecycle = await LifecycleCatalogAdmission.ValidateIfInstalledAsync(connection, transaction, cancellationToken);
+        var searchInstalled = await CatalogSearchSchemaAdmission.ValidateAsync(connection, transaction, cancellationToken, admittedLifecycle: lifecycle);
+        if (lifecycle)
+        {
+            await ValidateGrantPrivilegesAsync(connection, transaction, cancellationToken);
+            return;
+        }
         foreach (var name in names)
         {
             await ValidateColumnsAsync(connection, transaction, Tables[name], cancellationToken);
