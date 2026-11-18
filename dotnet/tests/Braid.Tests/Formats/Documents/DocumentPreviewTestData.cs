@@ -11,6 +11,10 @@ internal static class DocumentPreviewTestData
     internal const string X12 = "ISA*00*          *00*          *ZZ*BRAIDSENDER    *ZZ*BRAIDRECEIVER  *261024*1200*^*00501*000000330*0*T*:~GS*PO*BRAIDSENDER*BRAIDRECEIVER*20261024*1200*330*X*005010~ST*850*0330~BEG*00*SA*BRAID-330~SE*3*0330~GE*1*330~IEA*1*000000330~";
     internal const string Edifact = "UNB+UNOC:3+BRAIDSENDER+BRAIDRECEIVER+261024:1200+330'UNH+330+ORDERS:D:96A:UN'BGM+220+BRAID-330'UNT+3+330'UNZ+1+330'";
 
+    internal static byte[] XbrlInstance(string amount) => Encoding.UTF8.GetBytes($"""
+        <xbrli:xbrl xmlns:xbrli="http://www.xbrl.org/2003/instance" xmlns:a="urn:a"><xbrli:context id="c"><xbrli:entity><xbrli:identifier scheme="urn:id">Entity</xbrli:identifier></xbrli:entity><xbrli:period><xbrli:instant>2026-06-30</xbrli:instant></xbrli:period></xbrli:context><xbrli:unit id="u"><xbrli:measure>xbrli:pure</xbrli:measure></xbrli:unit><a:Amount contextRef="c" unitRef="u">{amount}</a:Amount></xbrli:xbrl>
+        """);
+
     internal static byte[] Input(string family) => Encoding.UTF8.GetBytes(family == "x12" ? X12 : Edifact);
 
     internal static string MixedX12(bool crossRole = true)

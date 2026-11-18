@@ -34,7 +34,7 @@ public sealed class NativePreviewReplayHttpTests(PostgresFixture fixture)
 
     [DocumentPreviewFact]
     public Task Xbrl_replays_completed_and_invalid_numeric_instances() =>
-        Verify(NativeDocumentFormat.Xbrl, "xbrl-instance", Instance("5"), Instance("not-a-number"));
+        Verify(NativeDocumentFormat.Xbrl, "xbrl-instance", DocumentPreviewTestData.XbrlInstance("5"), DocumentPreviewTestData.XbrlInstance("not-a-number"));
 
     [DocumentPreviewFact]
     public Task Valid_workbook_output_is_refused_before_worker_dispatch_or_persistence() =>
@@ -144,10 +144,6 @@ public sealed class NativePreviewReplayHttpTests(PostgresFixture fixture)
     }
 
     private static readonly XNamespace Spreadsheet = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-
-    private static byte[] Instance(string amount) => Encoding.UTF8.GetBytes($"""
-        <xbrli:xbrl xmlns:xbrli="http://www.xbrl.org/2003/instance" xmlns:a="urn:a"><xbrli:context id="c"><xbrli:entity><xbrli:identifier scheme="urn:id">Entity</xbrli:identifier></xbrli:entity><xbrli:period><xbrli:instant>2026-06-30</xbrli:instant></xbrli:period></xbrli:context><xbrli:unit id="u"><xbrli:measure>xbrli:pure</xbrli:measure></xbrli:unit><a:Amount contextRef="c" unitRef="u">{amount}</a:Amount></xbrli:xbrl>
-        """);
 
     private static byte[] Workbook(string sheetName, bool malformed = false)
     {

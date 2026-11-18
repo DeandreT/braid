@@ -20,6 +20,54 @@ namespace Braid.Tests;
 public sealed class FerruleServiceProcessRunnerTests
 {
     [ServiceEquivalenceFact]
+    public async Task Protobuf_and_Xbrl_preserve_native_artifacts_across_runners_and_failed_requests()
+    {
+        var root = TemporaryRoot();
+        var workers = new List<IAsyncDisposable>();
+        Exception? primary = null;
+        try
+        {
+            var docker = Own(workers, new DockerInspectionWorkerRunner(new DockerInspectionWorkerOptions("/usr/bin/docker",
+                Environment.GetEnvironmentVariable("BRAID_FERRULE_WORKER_IMAGE")!, profile: DockerWorkerProfile.Preview)));
+            var comparing = new ComparingRunner(docker, Own(workers, new ProcessWorkerRunner(Options(root, DockerWorkerProfile.Preview))));
+            foreach (var (format, fixture, valid, invalid) in new[]
+            {
+                (NativeDocumentFormat.Protobuf, "protobuf", new byte[] {10, 3, 65, 0, 66}, new byte[] {10, 3, 65}),
+                (NativeDocumentFormat.Xbrl, "xbrl-instance", DocumentPreviewTestData.XbrlInstance("5"), DocumentPreviewTestData.XbrlInstance("not-a-number"))
+            })
+            {
+                var native = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "FerruleFixtures", fixture + ".native.json"));
+                var artifact = NativeArtifact.Admit(Scope, native, PreviewPolicy.MaximumNativeBytes);
+                var settings = NativeDocumentNativeSettings.Read(artifact, format);
+                var backend = new FerrulePreviewBackend(comparing, format.Execution, nativeFormats: [format]);
+                byte[]? original = null;
+                foreach (var good in new[] { true, false, true })
+                {
+                    var reply = await backend.PreviewAsync(new(artifact, PreviewTargetSelection.Primary,
+                        new(null, good ? valid : invalid, documentSettings: settings.Input), [], [], "2026-11-18T12:00:00Z", PreviewLimits.Default));
+                    if (!good)
+                    {
+                        Assert.Equal(MappingPreviewStatus.InvalidInput, reply.Status);
+                        Assert.Empty(reply.Artifacts);
+                        continue;
+                    }
+                    Assert.Equal(MappingPreviewStatus.Succeeded, reply.Status);
+                    var output = Assert.Single(reply.Artifacts);
+                    Assert.Equal(format.MediaType, output.MediaType);
+                    Assert.Equal(settings.Output, output.DocumentSettings);
+                    var bytes = output.CopyBytes();
+                    if (format == NativeDocumentFormat.Protobuf) Assert.Equal(valid, bytes);
+                    else Assert.Equal("5", System.Xml.Linq.XDocument.Parse(Encoding.UTF8.GetString(bytes)).Descendants(System.Xml.Linq.XName.Get("Amount", "urn:a")).Single().Value);
+                    if (original is not null) Assert.Equal(original, bytes);
+                    original = bytes;
+                }
+            }
+            Assert.Equal(6, comparing.Compared);
+        }
+        catch (Exception error) { primary = error; }
+        finally { await CompleteCleanupAsync(workers, root, primary); }
+    }
+    [ServiceEquivalenceFact]
     public async Task FlexText_and_EDI_replies_match_on_valid_invalid_valid_requests()
     {
         var root = TemporaryRoot();
