@@ -10,6 +10,10 @@ pub enum DocumentFormat {
     Edifact,
     Csv,
     Tsv,
+    FlexText,
+    Xlsx,
+    Protobuf,
+    Xbrl,
     Xml,
 }
 
@@ -29,6 +33,10 @@ impl DocumentFormat {
             Self::Edifact => "edifact",
             Self::Csv => "csv",
             Self::Tsv => "tsv",
+            Self::FlexText => "flexText",
+            Self::Xlsx => "xlsx",
+            Self::Protobuf => "protobuf",
+            Self::Xbrl => "xbrl",
             Self::Xml => "xml",
         }
     }
@@ -40,6 +48,10 @@ impl DocumentFormat {
             Self::Edifact => "edi",
             Self::Csv => "csv",
             Self::Tsv => "tsv",
+            Self::FlexText => "flex",
+            Self::Xlsx => "xlsx",
+            Self::Protobuf => "pb",
+            Self::Xbrl => "xbrl",
             Self::Xml => "xml",
         }
     }
@@ -51,7 +63,18 @@ impl DocumentFormat {
             Self::Edifact => "application/edifact",
             Self::Csv => "text/csv",
             Self::Tsv => "text/tab-separated-values",
+            Self::FlexText => "text/plain",
+            Self::Xlsx => crate::xlsx_document::MEDIA_TYPE,
+            Self::Protobuf => "application/x-protobuf",
+            Self::Xbrl => "application/xbrl+xml",
             Self::Xml => "application/xml",
+        }
+    }
+
+    pub fn native(format: crate::native_document::NativeFormat) -> Self {
+        match format {
+            crate::native_document::NativeFormat::Protobuf => Self::Protobuf,
+            crate::native_document::NativeFormat::Xbrl => Self::Xbrl,
         }
     }
 
@@ -113,6 +136,9 @@ impl DocumentFormat {
                 }
             }
             Self::Csv | Self::Tsv => unreachable!("CSV returned after its closed option admission"),
+            Self::FlexText | Self::Xlsx | Self::Protobuf | Self::Xbrl => {
+                unreachable!("Separate native profile required")
+            }
             Self::Xml => unreachable!("XML requires its separate preview admission"),
         }
         if *options != admitted {

@@ -41,6 +41,39 @@ pub fn admit<'a>(
     project: &Project,
     header: &'a PreviewRequestHeader,
 ) -> Result<Admission<'a>, Refusal> {
+    if header.is_flextext_preview() {
+        crate::flextext_document::admit(project)
+            .map_err(|message| refuse("unsupportedCapability", message, None))?;
+        if header.inputs.len() != 1 || matches!(header.target, PreviewTarget::Named { .. }) {
+            return Err(refuse(
+                "unsupportedCapability",
+                "FlexText requires one primary document.",
+                None,
+            ));
+        }
+    }
+    if header.is_xlsx_preview() {
+        crate::xlsx_document::admit(project)
+            .map_err(|message| refuse("unsupportedCapability", message, None))?;
+        if header.inputs.len() != 1 || matches!(header.target, PreviewTarget::Named { .. }) {
+            return Err(refuse(
+                "unsupportedCapability",
+                "XLSX requires one primary workbook.",
+                None,
+            ));
+        }
+    }
+    if let Some(native) = header.native_format() {
+        crate::native_document::admit(native, project)
+            .map_err(|message| refuse("unsupportedCapability", message, None))?;
+        if header.inputs.len() != 1 || matches!(header.target, PreviewTarget::Named { .. }) {
+            return Err(refuse(
+                "unsupportedCapability",
+                "Native documents require one primary document.",
+                None,
+            ));
+        }
+    }
     if header.is_csv_preview() {
         crate::csv_document::admit(project)
             .map_err(|message| refuse("unsupportedCapability", message, None))?;
@@ -285,6 +318,22 @@ fn boundary_format(
     stored_path: Option<&str>,
     schema: &ferrule_ir::SchemaNode,
 ) -> Option<DocumentFormat> {
+    if header.is_flextext_preview() {
+        return crate::flextext_document::settings(options)
+            .ok()
+            .map(|_| DocumentFormat::FlexText);
+    }
+    if header.is_xlsx_preview() {
+        // Direction-specific settings were admitted with the whole project.
+        return (options.tabular_kind == Some(ferrule_mapping::TabularBoundaryKind::Xlsx))
+            .then_some(DocumentFormat::Xlsx)
+            .filter(|format| crate::document_limits::admitted_schema(*format, schema));
+    }
+    if let Some(native) = header.native_format() {
+        return crate::native_document::settings(native, options)
+            .ok()
+            .map(|_| DocumentFormat::native(native));
+    }
     if header.is_xml_preview() {
         // Complete raw-option, role, declaration and emission-plan admission is
         // required by process_preview before this selected-boundary projection.

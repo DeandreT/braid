@@ -145,6 +145,29 @@ finite floating-point tags and bits beyond a decimal rendering.
 Stateful SQLite and update-existing XLSX are outside the preview contract.
 Inherited design-time HTTP paths do not authorize worker network access.
 
+### Direct worker profiles for native documents
+
+The worker accepts one primary input and produces one new primary document for
+each profile below. Both boundaries must declare the same family. The saved
+options, not filenames or media types, select Ferrule's bounded document reader
+and writer. Each frame carries its byte length and SHA-256 digest, with an 8 MiB
+aggregate input limit and a separate 8 MiB aggregate output limit. An execution
+failure publishes no artifact frames.
+
+| Worker protocol | Saved settings and output |
+| --- | --- |
+| `braid.ferrule-flextext-preview.v1` | The canonical saved FlexText layout (up to 16 KiB) must match the boundary schema. Input and output are UTF-8; a declared empty document is distinct from a missing frame. Output modes that pad fixed columns or collect whole record sets or switch arms before checking size are refused. |
+| `braid.ferrule-xlsx-preview.v1` | Read a flat worksheet and write a new workbook. Sheet, start row, column positions and headers come from the saved mapping. Updating an existing file, formulas and external links are outside this profile. |
+| `braid.ferrule-protobuf-preview.v1` | Use the embedded schema, imports and root message. Return binary bytes, not text; the output must decode against the saved target schema. |
+| `braid.ferrule-xbrl-preview.v1` | Read and write an instance with the saved source and target instance options. A taxonomy reference does not authorize fetching a file or making a network request. |
+
+These are direct worker protocols, **not** persisted preview or regression
+profiles, public HTTP capabilities or workbench options. Generated C# builds
+refuse these boundary formats with `unsupportedFlexTextBuild`,
+`unsupportedXlsxBuild`, `unsupportedProtobufBuild` or `unsupportedXbrlBuild`;
+there is no new mapping endpoint format. PDF rendering and database connections
+are not admitted by these profiles.
+
 The [flat CSV document core](csv-documents.md) has a separate direct-preview and
 source-emission contract. Its bounded route, dialect metadata and empty-document
 semantics do not expand the existing persisted preview or deployment profiles.

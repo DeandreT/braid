@@ -12,11 +12,14 @@ pub mod document_format;
 pub mod document_limits;
 pub mod edi_envelope;
 pub mod edit;
+pub mod flextext_document;
 pub mod framing;
 pub mod interchange;
+pub mod native_document;
 pub mod preview;
 pub mod sandbox;
 mod x12_syntax;
+pub mod xlsx_document;
 pub mod xml_document;
 pub use braid_ferrule_core::{
     canonical_nonzero_guid, decode, inspect, projection, protocol, valid_context_parts, validation,
@@ -95,6 +98,10 @@ pub fn handle_stream(reader: &mut impl Read, writer: &mut impl Write) -> io::Res
                     | DOCUMENT_PREVIEW_PROTOCOL_VERSION
                     | CSV_PREVIEW_PROTOCOL_VERSION
                     | XML_PREVIEW_PROTOCOL_VERSION
+                    | crate::flextext_document::PROFILE
+                    | crate::xlsx_document::PROFILE
+                    | crate::native_document::PROTOBUF_PROFILE
+                    | crate::native_document::XBRL_PROFILE
             )
         )
     }) {

@@ -9,6 +9,7 @@ These native Ferrule JSON documents were written for Braid bridge tests. They ar
 - `resource-metadata.json`: local and remote sentinel instance/configuration references that inspection must preserve as unresolved design metadata without access.
 - `preview-orders.json`: a JSON preview mapping with a repeated child scope, a static named input, typed runtime parameters, the host clock and a static named output.
 - `preview-csv-source.json`: the basic mapping with a stored `.csv` primary input path, which the JSON preview profile must refuse before parsing.
+- `flextext.native.json`, `xlsx-flat.native.json` and `protobuf.native.json`: self-authored mappings with saved layout, worksheet or message settings. `native_documents.rs` builds the corresponding XBRL instance mapping in memory.
 - `projection-owned-context.json`: explicitly owned forms: an owned inner join read through owned member reads and source positions, with one closed ordinary read; an optional-presence scope; an owned failure iteration over a named input; an owned dynamic-input driver; and object-item nullability and an undeclared JSON property in the source schema.
 
 The worker and .NET process tests consume the same retained bytes. Expected inspection counts and native paths are independently specified in the tests; validation expectations come directly from the pinned Ferrule engine.

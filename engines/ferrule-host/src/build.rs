@@ -148,6 +148,24 @@ pub fn generate(
     }
     let decoded = decode::decode_native(native).map_err(|_| "invalidMapping")?;
     let project = &decoded.project;
+    for options in [&project.source_options, &project.target_options]
+        .into_iter()
+        .chain(project.extra_sources.iter().map(|source| &source.options))
+        .chain(project.extra_targets.iter().map(|target| &target.options))
+    {
+        if options.flextext.is_some() {
+            return Err("unsupportedFlexTextBuild");
+        }
+        if options.tabular_kind == Some(ferrule_mapping::TabularBoundaryKind::Xlsx) {
+            return Err("unsupportedXlsxBuild");
+        }
+        if options.protobuf.is_some() {
+            return Err("unsupportedProtobufBuild");
+        }
+        if options.xbrl.is_some() {
+            return Err("unsupportedXbrlBuild");
+        }
+    }
     let csv_policy = if request.profile == CSV_PROFILE {
         Some(crate::csv_document::admit(project).map_err(|_| "unsupportedCsvPlan")?)
     } else {
@@ -266,6 +284,10 @@ pub fn generate(
                     .map(DocumentBoundaryOptions::Edifact)
                     .map_err(|_| "unsupported"),
                 DocumentFormat::Csv | DocumentFormat::Tsv => Err("unsupportedCsvPlan"),
+                DocumentFormat::FlexText => Err("unsupportedFlexTextBuild"),
+                DocumentFormat::Xlsx => Err("unsupportedXlsxBuild"),
+                DocumentFormat::Protobuf => Err("unsupportedProtobufBuild"),
+                DocumentFormat::Xbrl => Err("unsupportedXbrlBuild"),
                 DocumentFormat::Xml => Err("unsupportedXmlBuild"),
             }
         };
