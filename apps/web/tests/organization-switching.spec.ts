@@ -1,4 +1,10 @@
-import { expect, test, type Page, type Request } from "@playwright/test";
+import {
+  expect,
+  test,
+  type Page,
+  type Request,
+  type Route,
+} from "@playwright/test";
 import { synthetic } from "./catalog.fixture";
 import { workspaceFixture } from "./workspace-chat.fixture";
 
@@ -47,7 +53,6 @@ async function install(
     state,
     reads: [] as string[],
     logins: [] as Request[],
-    hold: null as { organizationId: string; release: Promise<void> } | null,
   };
   await page.route("**/api/**", async (route) => {
     const request = route.request();
@@ -111,8 +116,6 @@ async function install(
           })
         : route.fulfill({ status: 404, json: { code: "notFound" } });
     if (qualified) {
-      if (fixture.hold?.organizationId === qualified[1])
-        await fixture.hold.release;
       return route.fulfill({
         json: { projects: [project(qualified[1])], nextCursor: null },
       });
@@ -151,7 +154,7 @@ test("bare catalog landing cannot clear a dirty non-root administration view", a
     else await dialog.dismiss();
   });
   const reads = fixture.reads.length;
-  await page.getByRole("link", { name: "Braid home", exact: true }).click();
+  await page.getByRole("link", { name: "braid home", exact: true }).click();
   await expect(page).toHaveURL(source);
   await expect(principal).toHaveValue("keep this non-root draft");
   await expect(page.locator(".workspace-organization strong")).toHaveText(
@@ -160,7 +163,7 @@ test("bare catalog landing cannot clear a dirty non-root administration view", a
   expect(prompts).toHaveLength(1);
   expect(fixture.reads.slice(reads)).not.toContain("/api/v1/organizations");
   accept = true;
-  await page.getByRole("link", { name: "Braid home", exact: true }).click();
+  await page.getByRole("link", { name: "braid home", exact: true }).click();
   await expect(page).toHaveURL("/catalog");
   await expect(
     page.getByRole("list", { name: "Your organizations" }),
@@ -308,29 +311,177 @@ test("the chooser requires a choice and the switcher opens the destination home"
 test("a late response for the organization left behind never appears under the next", async ({
   page,
 }) => {
-  const fixture = await install(page);
-  let release!: () => void;
-  fixture.hold = {
-    organizationId: rootOrg,
-    release: new Promise((resolve) => (release = resolve)),
-  };
+  await install(page);
+  const pending = await holdReply(
+    page,
+    `**/api/v1/organizations/${rootOrg}/projects?*`,
+    () => ({
+      json: { projects: [project(rootOrg)], nextCursor: null },
+    }),
+  );
   await page.goto(projects(rootOrg));
-  await expect
-    .poll(() =>
-      fixture.reads.includes(`/api/v1/organizations/${rootOrg}/projects`),
-    )
-    .toBe(true);
-  await switchTo(page, names[otherOrg]);
-  await expect(
-    page.getByRole("link", { name: "Second project" }),
-  ).toBeVisible();
-  release();
-  await page.waitForTimeout(300);
+  await pending.entered;
+  try {
+    await switchTo(page, names[otherOrg]);
+    await expect(projectLink(page, "Second")).toBeVisible();
+  } finally {
+    await pending.finish();
+  }
   await expect(page.getByRole("link", { name: "Root project" })).toHaveCount(0);
   await expect(page).toHaveURL(projects(otherOrg));
   await expect(page.locator(".workspace-organization strong")).toHaveText(
     names[otherOrg],
   );
+});
+
+// Hold one synthetic reply until the browser has crossed the boundary. Join the
+// original handler even if navigation cancels its request before it can reply.
+async function holdReply(
+  page: Page,
+  path: string,
+  reply: () => Parameters<Route["fulfill"]>[0],
+) {
+  const latch = () => {
+    let open!: () => void;
+    const promise = new Promise<void>((resolve) => (open = resolve));
+    return { open, promise };
+  };
+  const entered = latch(),
+    release = latch(),
+    finished = latch();
+  await page.route(
+    path,
+    async (route) => {
+      entered.open();
+      try {
+        await release.promise;
+        await route.fulfill(reply());
+      } finally {
+        finished.open();
+      }
+    },
+    { times: 1 },
+  );
+  return {
+    entered: entered.promise,
+    finish: async () => {
+      release.open();
+      await finished.promise;
+    },
+  };
+}
+
+const projectLink = (page: Page, name: string) =>
+  page.getByRole("link", { name: `${name} project`, exact: true });
+
+test("suspension during a switch refuses the destination without reading either project's data", async ({
+  page,
+}) => {
+  const fixture = await install(page);
+  await page.goto(projects(rootOrg));
+  await expect(projectLink(page, "Root")).toBeVisible();
+  const reads = fixture.reads.length;
+  const pending = await holdReply(
+    page,
+    `**/organizations/${otherOrg}/context`,
+    () => ({ status: 404, json: { code: "notFound" } }),
+  );
+  await switchTo(page, names[otherOrg]);
+  await pending.entered;
+  await pending.finish();
+  await expect(
+    page.getByRole("heading", { name: "Not found", exact: true }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(projects(otherOrg));
+  await expect(projectLink(page, "Root")).toHaveCount(0);
+  await expect(projectLink(page, "Second")).toHaveCount(0);
+  expect(
+    fixture.reads.slice(reads).filter((path) => path.endsWith("/projects")),
+  ).toEqual([]);
+});
+
+test("sign-out during a switch hides protected content despite a late successful context", async ({
+  page,
+}) => {
+  const fixture = await install(page);
+  await page.goto(projects(rootOrg));
+  await expect(projectLink(page, "Root")).toBeVisible();
+  const pending = await holdReply(
+    page,
+    `**/organizations/${otherOrg}/context`,
+    () => ({
+      json: {
+        schemaVersion: "braid.organization-context.v1",
+        admissionVersion: "1",
+        catalog: context(otherOrg),
+      },
+    }),
+  );
+  await switchTo(page, names[otherOrg]);
+  await pending.entered;
+  try {
+    await page.route(
+      "**/api/auth/logout",
+      async (route) => {
+        expect(route.request().method()).toBe("POST");
+        fixture.state = "anonymous";
+        await route.fulfill({ status: 204 });
+      },
+      { times: 1 },
+    );
+    await page.locator("#account-trigger").click();
+    await page.getByRole("button", { name: "Sign out", exact: true }).click();
+    await expect.poll(() => fixture.state).toBe("anonymous");
+    await expect(page.locator("#organization-switcher")).toHaveCount(0);
+  } finally {
+    await pending.finish();
+  }
+  await expect(projectLink(page, "Root")).not.toBeVisible();
+  await expect(projectLink(page, "Second")).not.toBeVisible();
+  expect(fixture.reads).not.toContain(
+    `/api/v1/organizations/${otherOrg}/projects`,
+  );
+});
+
+test("a late root CSV cannot download in the destination workspace", async ({
+  page,
+}) => {
+  await install(page);
+  const json = {
+    entries: [],
+    nextCursor: null,
+    since: "2026-10-01T00:00:00Z",
+    until: "2026-11-01T00:00:00Z",
+    organizationWide: true,
+  };
+  const audit = `**/organizations/${rootOrg}/audit?*`;
+  await page.route(audit, (route) => route.fulfill({ json }));
+  await page.goto("/audit");
+  const button = page.getByRole("button", { name: "Export filtered CSV" });
+  const [valid] = await Promise.all([
+    page.waitForEvent("download"),
+    button.click(),
+  ]);
+  expect(valid.suggestedFilename()).toBe("braid-audit.csv");
+  const downloads: string[] = [];
+  page.on("download", (item) => downloads.push(item.suggestedFilename()));
+  const pending = await holdReply(page, audit, () => ({ json }));
+  await button.click();
+  await pending.entered;
+  try {
+    await switchTo(page, names[otherOrg]);
+    await expect(projectLink(page, "Second")).toBeVisible();
+  } finally {
+    await pending.finish();
+  }
+  await expect(page).toHaveURL(projects(otherOrg));
+  // A subsequent action/refresh provides a browser round trip after releasing the response.
+  await Promise.all([
+    page.waitForResponse(`**/organizations/${otherOrg}/projects*`),
+    page.getByRole("button", { name: "Refresh catalog" }).click(),
+  ]);
+  await expect(projectLink(page, "Second")).toBeVisible();
+  expect(downloads).toEqual([]);
 });
 
 test("two tabs under one session keep independent organizations", async ({
