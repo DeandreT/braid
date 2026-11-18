@@ -42,6 +42,7 @@ public sealed class ReleaseOperationsPersistenceTests(PostgresFixture fixture)
     [InlineData("GRANT SELECT ON braid.release_target_operations TO braid_release_reader")]
     [InlineData("ALTER TABLE braid.release_target_events DISABLE TRIGGER release_events_guard")]
     [InlineData("ALTER FUNCTION braid.read_release_operations(uuid,uuid,uuid,uuid,text,integer,integer,timestamp with time zone,timestamp with time zone,uuid,text) SECURITY INVOKER")]
+    [InlineData("ALTER FUNCTION braid.begin_as2_send STABLE")]
     public async Task Broadened_or_altered_metadata_contracts_fail_closed(string change)
     {
         await using var data = await LocalReleasePersistenceTests.Context.CreateAsync(fixture);
@@ -318,7 +319,7 @@ public sealed class ReleaseOperationsPersistenceTests(PostgresFixture fixture)
         var history = await data.Case.ScalarAsync<string>(
             "SELECT jsonb_agg(to_jsonb(m) ORDER BY version)::text FROM braid.schema_migrations m");
         await data.Case.MigrateAsync();
-        Assert.Equal(Enumerable.Range(1, 47), await data.Case.ScalarAsync<int[]>(
+        Assert.Equal(Enumerable.Range(1, 66), await data.Case.ScalarAsync<int[]>(
             "SELECT array_agg(version ORDER BY version) FROM braid.schema_migrations"));
         Assert.Equal(history, await data.Case.ScalarAsync<string>(
             "SELECT jsonb_agg(to_jsonb(m) ORDER BY version)::text FROM braid.schema_migrations m WHERE version<=$1", prefixVersion));

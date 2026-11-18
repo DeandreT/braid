@@ -62,7 +62,10 @@ public sealed class PostgresPreviewDatabase : IAsyncDisposable
             if (await inspect.ExecuteScalarAsync(ct) is not true)
                 throw new InvalidOperationException("Preview database profile is invalid.");
         }
-        await XmlPreviewSchemaAdmission.ValidateAsync(connection, transaction, ct);
+        // Lifecycle fences change the transition routines, including the XML preview
+        // entry points. Validate that complete installed schema instead of 0042's bodies.
+        if (!await LifecycleCatalogAdmission.ValidateIfInstalledAsync(connection, transaction, ct))
+            await XmlPreviewSchemaAdmission.ValidateAsync(connection, transaction, ct);
         await using (var settings = new NpgsqlCommand("""
             SELECT set_config('statement_timeout','15000',true),set_config('lock_timeout','5000',true),
                 set_config('search_path','pg_catalog,braid,pg_temp',true),set_config('TimeZone','UTC',true)

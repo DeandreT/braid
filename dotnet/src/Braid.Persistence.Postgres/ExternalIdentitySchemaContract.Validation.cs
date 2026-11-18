@@ -261,9 +261,11 @@ internal static partial class ExternalIdentitySchemaContract
             FROM pg_catalog.pg_trigger t JOIN pg_catalog.pg_class r ON r.oid=t.tgrelid
             JOIN pg_catalog.pg_proc p ON p.oid=t.tgfoid JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
             WHERE r.relnamespace=(SELECT oid FROM pg_catalog.pg_namespace WHERE nspname='braid')
-                AND r.relname=ANY($1::text[]) AND NOT t.tgisinternal ORDER BY r.relname,t.tgname
+                AND r.relname=ANY($1::text[]) AND NOT t.tgisinternal AND NOT t.tgname=ANY($2::text[]) ORDER BY r.relname,t.tgname
             """, connection, transaction);
         command.Parameters.AddWithValue(names);
+        await OrganizationSwitchingSchemaAdmission.ValidateAsync(connection, transaction, cancellationToken);
+        command.Parameters.AddWithValue(OrganizationSwitchingSchemaAdmission.AllTriggerNames);
         var expected = new Dictionary<string, short>(StringComparer.Ordinal)
         {
             ["external_identity_bindings_transition_guard"] = 31,

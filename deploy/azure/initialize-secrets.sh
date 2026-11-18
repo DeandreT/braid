@@ -57,6 +57,7 @@ declare -A logins=(
   [identity]=braid_identity_reader [payload-permission]=braid_payload_permission_reader
   [session-reader]=braid_session_reader [session-writer]=braid_session_writer
   [chat-reader]=braid_chat_reader [chat-writer]=braid_chat_writer [chat-lifecycle]=braid_chat_lifecycle
+  [chat-approver]=braid_chat_approver [draft-reader]=braid_draft_reader [draft-writer]=braid_draft_writer
   [preview-reader]=braid_preview_reader [preview-writer]=braid_preview_writer
   [case-reader]=braid_case_reader [case-writer]=braid_case_writer
   [run-reader]=braid_run_reader [run-writer]=braid_run_writer

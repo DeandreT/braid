@@ -64,6 +64,7 @@ internal static partial class BuildRoleGuard
 
     internal static async Task ValidateContractAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken token)
     {
+        if (await LifecycleCatalogAdmission.ValidateIfInstalledAsync(connection, transaction, token)) return;
         var definitions = Definitions.Value;
         if (await HasCsvBuildsAsync(connection, transaction, token))
         {
@@ -159,7 +160,7 @@ internal static partial class BuildRoleGuard
         }
         return result;
     }
-    [GeneratedRegex(@"CREATE (?:OR REPLACE )?FUNCTION braid\.([a-z_]+)\((.*?)\)\s+RETURNS\s+(.*?)\s+LANGUAGE (\w+) (IMMUTABLE|STABLE|VOLATILE) SECURITY (DEFINER|INVOKER) SET search_path=pg_catalog,braid,pg_temp\s+AS \$body\$(.*?)\$body\$;", RegexOptions.Singleline | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"CREATE (?:OR REPLACE )?FUNCTION braid\.([a-z_][a-z_0-9]*)\((.*?)\)\s+RETURNS\s+(.*?)\s+LANGUAGE (\w+) (IMMUTABLE|STABLE|VOLATILE) SECURITY (DEFINER|INVOKER) SET search_path=pg_catalog,braid,pg_temp\s+AS \$body\$(.*?)\$body\$;", RegexOptions.Singleline | RegexOptions.CultureInvariant)]
     private static partial Regex Function();
     private static InvalidOperationException Invalid() => new("Build database contract unavailable.");
 }

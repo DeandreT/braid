@@ -1,0 +1,190 @@
+<header>
+  <h1>AI usage</h1>
+  <button type="button" [disabled]="busy()" (click)="read.retry()">
+    Refresh usage
+  </button>
+</header>
+<p>
+  Read-only usage by turn admission time. Missing provider counts remain
+  unknown, not zero.
+</p>
+<form (ngSubmit)="apply()" (input)="dirty.set(true)" (change)="dirty.set(true)">
+  <label
+    >Group by<select name="group" [(ngModel)]="groupBy" [disabled]="busy()">
+      <option value="organization">Organization</option>
+      <option value="project">Project</option>
+      <option value="principal">Principal</option>
+      <option value="modelProfile">Model profile</option>
+    </select></label
+  >
+  <label
+    >Project ID<input
+      name="project"
+      [(ngModel)]="projectId"
+      [disabled]="busy()"
+  /></label>
+  <label
+    >Principal ID<input
+      name="principal"
+      [(ngModel)]="principalId"
+      [disabled]="busy()"
+  /></label>
+  <label
+    >Model profile<input
+      name="profile"
+      [(ngModel)]="profileId"
+      [disabled]="busy()"
+  /></label>
+  <label
+    >Profile version<input
+      name="version"
+      [(ngModel)]="profileVersion"
+      [disabled]="busy()"
+  /></label>
+  <label
+    >Since (UTC ISO)<input name="since" [(ngModel)]="since" [disabled]="busy()"
+  /></label>
+  <label
+    >Until (exclusive UTC ISO)<input
+      name="until"
+      [(ngModel)]="until"
+      [disabled]="busy()"
+  /></label>
+  <button type="submit" [disabled]="busy()">Apply filters</button>
+</form>
+@if (busy()) {
+  <p role="status">Loading usage…</p>
+}
+@if (page(); as data) {
+  <p>
+    {{
+      data.organizationWide
+        ? "Organization administrator view"
+        : "Your administered projects only"
+    }}
+    · {{ data.since | date: "medium" : "UTC" }} to
+    {{ data.until | date: "medium" : "UTC" }} UTC · Observed
+    {{ data.observedAtUtc | date: "medium" : "UTC" }} UTC
+  </p>
+  @if (data.includesPartialHistory) {
+    <p role="note">
+      Partial history. Complete accounting starts
+      {{ data.completeHistorySince | date: "medium" : "UTC" }} UTC; earlier
+      erased conversations cannot be counted.
+    </p>
+  }
+  <div class="scroll">
+    <table>
+      <caption>
+        AI usage, current filtered window
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">Group</th>
+          <th scope="col">Turns</th>
+          <th scope="col">Rounds</th>
+          <th scope="col">Tools</th>
+          <th scope="col">Failed turns</th>
+          <th scope="col">Input tokens</th>
+          <th scope="col">Output tokens</th>
+          <th scope="col">Total tokens</th>
+          <th scope="col">Failures</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of data.groups; track group(row)) {
+          <tr>
+            <td>{{ group(row) }}</td>
+            <td class="number">{{ count(row.usage.turns) }}</td>
+            <td class="number">{{ count(row.usage.rounds) }}</td>
+            <td class="number">{{ count(row.usage.toolCalls) }}</td>
+            <td class="number">{{ count(row.usage.failedTurns) }}</td>
+            <td
+              class="number"
+              [title]="
+                tokenHint(
+                  row.usage.inputTokens,
+                  row.usage.knownInputTokens,
+                  row.usage.unknownInputRounds
+                )
+              "
+              [attr.aria-label]="
+                tokenHint(
+                  row.usage.inputTokens,
+                  row.usage.knownInputTokens,
+                  row.usage.unknownInputRounds
+                )
+              "
+            >
+              {{ count(row.usage.inputTokens) }}
+            </td>
+            <td
+              class="number"
+              [title]="
+                tokenHint(
+                  row.usage.outputTokens,
+                  row.usage.knownOutputTokens,
+                  row.usage.unknownOutputRounds
+                )
+              "
+              [attr.aria-label]="
+                tokenHint(
+                  row.usage.outputTokens,
+                  row.usage.knownOutputTokens,
+                  row.usage.unknownOutputRounds
+                )
+              "
+            >
+              {{ count(row.usage.outputTokens) }}
+            </td>
+            <td
+              class="number"
+              [title]="
+                tokenHint(
+                  row.usage.totalTokens,
+                  row.usage.knownTotalTokens,
+                  row.usage.unknownTotalRounds
+                )
+              "
+              [attr.aria-label]="
+                tokenHint(
+                  row.usage.totalTokens,
+                  row.usage.knownTotalTokens,
+                  row.usage.unknownTotalRounds
+                )
+              "
+            >
+              {{ count(row.usage.totalTokens) }}
+            </td>
+            <td>
+              @for (failure of row.usage.failures; track failure.category) {
+                <span>{{ failure.category }}: {{ count(failure.count) }} </span>
+              } @empty {
+                <span>None recorded</span>
+              }
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="9">No retained usage matches these filters.</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  <nav aria-label="Usage pagination">
+    <button type="button" [disabled]="busy()" (click)="apply()">
+      First page</button
+    ><button
+      type="button"
+      [disabled]="busy() || dirty() || !data.nextCursor"
+      (click)="next()"
+    >
+      Next page
+    </button>
+  </nav>
+} @else if (read.state().kind !== "loading" && read.state().kind !== "idle") {
+  <p role="alert">
+    Usage access is unavailable. Refresh your access before continuing.
+  </p>
+}

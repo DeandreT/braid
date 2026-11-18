@@ -78,6 +78,17 @@ isolated browser owner. The tests validate the admission record's exact
 node/npm/browser/server bytes, assets and custody. Prepare the admission record
 with `admit.mjs` and use the assigned isolated display.
 
+`host-replica-pilot` and `sftp-loopback` each require Linux and the pinned
+Docker PostgreSQL fixture. The former requires `BRAID_HOST_REPLICA_PILOT=1`
+and exercises real claim expiry. The latter requires `BRAID_SFTP_TEST_PYTHON`
+pointing to the absolute executable for the [local SFTP/AS2 receiver](../../docs/sftp-as2-route.md).
+The separate `Braid.As2.Tests` connector fixture project is outside the solution;
+its `Fixtures/test_fence.py` owns the private Unix-socket fence database.
+
+`trigger-emulators` requires Linux, the pinned PostgreSQL fixture, Docker Compose, `BRAID_TRIGGER_EMULATORS=compose`
+and explicit operator acceptance (`BRAID_TRIGGERS_ACCEPT_EULA=Y`). The selection
+does not supply these settings or accept a license.
+
 For both installed-document groups, provide Linux,
 `BRAID_TEST_DOCUMENT_HOST_LINUX=1`, `BRAID_SPEC_DOCUMENT_WORKERS=optional`, the
 existing `BRAID_SPEC_DOCUMENT_*` installation paths and profile/build/runtime

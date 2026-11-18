@@ -78,8 +78,10 @@ public sealed class PostgresFixture : IAsyncLifetime
     private readonly string releaseReaderPassword = Guid.NewGuid().ToString("N");
     private readonly string releaseWriterPassword = Guid.NewGuid().ToString("N");
     private readonly string invocationGrantWriterPassword = Guid.NewGuid().ToString("N");
+    private readonly string triggerWorkerPassword = Guid.NewGuid().ToString("N");
     private readonly string invocationWriterPassword = Guid.NewGuid().ToString("N");
     private readonly string apiAuditWriterPassword = Guid.NewGuid().ToString("N");
+    private readonly string lifecycleWorkerPassword = Guid.NewGuid().ToString("N");
     private readonly string administrationPassword = Guid.NewGuid().ToString("N");
     private readonly string draftReaderPassword = Guid.NewGuid().ToString("N");
     private readonly string draftWriterPassword = Guid.NewGuid().ToString("N");
@@ -463,8 +465,10 @@ public sealed class PostgresFixture : IAsyncLifetime
         return ConnectionString(test.Name, "braid_chat_approver", chatApproverPassword);
     }
 
+    private readonly string discoveryPassword = Guid.NewGuid().ToString("N");
+
     private (string Name, string Password)[] RegressionRoles() =>
-        [("braid_administration", administrationPassword), ("braid_case_reader", caseReaderPassword), ("braid_case_writer", caseWriterPassword),
+        [("braid_lifecycle_worker", lifecycleWorkerPassword), ("braid_organization_discovery", discoveryPassword), ("braid_administration", administrationPassword), ("braid_case_reader", caseReaderPassword), ("braid_case_writer", caseWriterPassword),
          ("braid_run_reader", runReaderPassword), ("braid_run_writer", runWriterPassword), ("braid_comparison_settler", comparisonPassword),
          .. (provisionBuildProfiles ? new (string Name, string Password)[] { ("braid_build_reader", buildReaderPassword), ("braid_build_writer", buildWriterPassword) } : []),
          .. (provisionBuildRunProfiles ? new (string Name, string Password)[] { ("braid_build_run_reader", buildRunReaderPassword),
@@ -475,7 +479,7 @@ public sealed class PostgresFixture : IAsyncLifetime
          .. (provisionLocalReleases ? new (string Name, string Password)[] { ("braid_release_reader", releaseReaderPassword),
              ("braid_release_writer", releaseWriterPassword) } : []),
          .. (provisionMachineInvocations ? new (string Name, string Password)[] { ("braid_invocation_grant_writer", invocationGrantWriterPassword),
-             ("braid_invocation_writer", invocationWriterPassword) } : []),
+             ("braid_invocation_writer", invocationWriterPassword), ("braid_trigger_worker", triggerWorkerPassword) } : []),
           .. (provisionApiAudit ? new (string Name, string Password)[] { ("braid_api_audit_writer", apiAuditWriterPassword) } : []),
           ("braid_draft_reader", draftReaderPassword), ("braid_draft_writer", draftWriterPassword),
            ("braid_spec_reader", specReaderPassword), ("braid_spec_writer", specWriterPassword), ("braid_spec_maintenance", specMaintenancePassword),
@@ -486,6 +490,44 @@ public sealed class PostgresFixture : IAsyncLifetime
         if (!caseDatabases.ContainsKey(test.Name)) throw new ArgumentException("A current fixture-owned database is required.");
         var selected = RegressionRoles().Single(item => item.Name == role);
         return ConnectionString(test.Name, selected.Name, selected.Password);
+    }
+
+    // Full logical application database backup, restored beside (never over) its source. Cluster logins and database
+    // CONNECT grants are infrastructure, provisioned by this disposable fixture, not by pg_dump.
+    internal async Task<PostgresCase> RestoreFullBackupAsync(PostgresCase source)
+    {
+        if (native is not null || !IsGeneratedCaseName(source.Name) || !caseDatabases.ContainsKey(source.Name))
+            throw new InvalidOperationException("Full backup requires this fixture's own Docker database.");
+        var destination = await CreateCaseAsync(migrate: false);
+        try
+        {
+            // A raw pg_restore recreates equivalent logical objects, not the migration-created physical catalog
+            // (e.g. column positions). Keep the exact catalog guard: install the same migration history first.
+            var version = await source.ScalarAsync<int>("SELECT max(version) FROM braid.schema_migrations");
+            await using (var migrate = new MigrationRunner(destination.MigrationConnectionString, MigrationRunner.EmbeddedMigrations.Take(version).ToArray()))
+                await migrate.MigrateAsync();
+            const string checksums = "SELECT jsonb_agg(jsonb_build_array(version,checksum) ORDER BY version)::text FROM braid.schema_migrations";
+            if (await destination.ScalarAsync<string>(checksums) != await source.ScalarAsync<string>(checksums))
+                throw new InvalidOperationException("Restore migration history does not match the source.");
+            // Keep the archive private in the fixture container. Only generated names are arguments, never credentials.
+            var rc = await RunDockerAsync(["exec", "--user", "postgres", Container, "sh", "-ec", """
+                umask 077
+                file=$(mktemp /tmp/braid-case-XXXXXX)
+                trap 'rm -f "$file"' EXIT
+                pg_dump --no-password --format=custom --file="$file" -U "$1" "$2"
+                data=$(mktemp /tmp/braid-data-XXXXXX)
+                trap 'rm -f "$file" "$data"' EXIT
+                pg_restore --data-only --file="$data" "$file"
+                # Only the newly created, isolated destination. Never allow a worker to observe partially loaded rows.
+                psql -X --no-password --single-transaction -v ON_ERROR_STOP=1 -U "$1" -d "$3" \
+                  -c "SET LOCAL session_replication_role=replica" \
+                  -c "DO \$\$ DECLARE relations text; BEGIN SELECT string_agg(format('%I.%I',schemaname,tablename),',') INTO STRICT relations FROM pg_tables WHERE schemaname='braid'; EXECUTE 'TRUNCATE ' || relations; END \$\$" \
+                  -f "$data" >/dev/null
+                """, "restore-case", BootstrapUser, source.Name, destination.Name], timeoutSeconds: 120);
+            if (rc.ExitCode != 0) throw new InvalidOperationException($"Disposable database backup/restore failed: {SafeDockerError(rc.Error)}");
+            return destination;
+        }
+        catch { await destination.DisposeAsync(); throw; }
     }
 
     internal async Task DropCaseDatabaseAsync(string name)

@@ -93,7 +93,9 @@ public sealed class PostgresPreviewRunReader(PostgresPreviewDatabase database) :
                         reader.GetInt64(5), Sha256Digest.Parse(reader.GetString(6)), reader.GetInt32(7)));
             }
             for (var index = 0; index < outputs.Count; index++)
-                if (CsvDocumentPolicy.AdmitsMediaType(outputs[index].MediaType))
+                if (NativeDocumentFormat.FromMediaType(outputs[index].MediaType) is { } native)
+                    outputs[index] = outputs[index] with { DocumentSettings = await ReadNativeAsync(connection, transaction, actor, organizationId, runId, 2, index, native, cancellationToken) };
+                else if (CsvDocumentPolicy.AdmitsMediaType(outputs[index].MediaType))
                     outputs[index] = outputs[index] with
                     {
                         CsvDialect = await ReadCsvDialectAsync(connection, transaction,
@@ -110,7 +112,8 @@ public sealed class PostgresPreviewRunReader(PostgresPreviewDatabase database) :
             if (outputs.Select((output, index) => output.Ordinal != index).Any(mismatch => mismatch)
                 || (snapshot.Outcome == PreviewRunOutcome.Succeeded) != (outputs.Count > 0))
                 throw PostgresPreviewRunStore.Inconsistent();
-            return snapshot with { Outputs = outputs };
+            var selectedFormat = NativeDocumentFormat.FromProfile(snapshot.Provenance?.Profile);
+            return snapshot with { Outputs = outputs, PrimaryDocumentSettings = selectedFormat is null ? null : await ReadNativeAsync(connection, transaction, actor, organizationId, runId, 1, 0, selectedFormat, cancellationToken) };
         }, cancellationToken);
     }
 
@@ -255,10 +258,23 @@ public sealed class PostgresPreviewRunReader(PostgresPreviewDatabase database) :
                     if (await values.ReadAsync(cancellationToken)) throw PostgresPreviewRunStore.Inconsistent();
                 }
             }
+            if (NativeDocumentFormat.FromMediaType(mediaType) is { } format)
+            {
+                var settings = await ReadNativeAsync(connection, transaction, actor, organizationId, runId, function == "preview_input" ? 1 : 2, ordinal, format, cancellationToken);
+                return new PreviewOutputContent(digest, content) { MediaType = mediaType, DocumentSettings = settings };
+            }
             if (CsvDocumentPolicy.AdmitsMediaType(mediaType) ? !CsvDocumentPolicy.Admits(dialect, mediaType)
                 : !DocumentPreviewPolicy.AdmitsMediaType(mediaType) || dialect is not null) throw PostgresPreviewRunStore.Inconsistent();
             return (PreviewOutputContent?)new PreviewOutputContent(digest, content) { MediaType = mediaType, CsvDialect = dialect };
         }, cancellationToken);
+    }
+
+    private static async Task<NativeDocumentSettings> ReadNativeAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, ActorContext actor, Guid org, Guid run, int direction, int ordinal, NativeDocumentFormat format, CancellationToken token)
+    {
+        await using var command = new NpgsqlCommand("SELECT settings::text FROM braid.preview_native_metadata($1,$2,$3,$4,$5)", connection, transaction);
+        foreach (var value in new object[] {org,run,actor.PrincipalId.Value,direction,ordinal}) command.Parameters.AddWithValue(value);
+        var settings = NativeDocumentSettingsJson.Decode(await command.ExecuteScalarAsync(token) as string ?? throw PostgresPreviewRunStore.Inconsistent());
+        return settings.Format == format ? settings : throw PostgresPreviewRunStore.Inconsistent();
     }
 
     private static async Task<CsvDocumentDialect> ReadCsvDialectAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,

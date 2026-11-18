@@ -36,6 +36,14 @@ use protocol::{
 use serde::Deserialize;
 
 pub fn handle_stream(reader: &mut impl Read, writer: &mut impl Write) -> io::Result<()> {
+    handle_worker_stream(reader, writer, false)
+}
+
+pub fn handle_worker_stream(
+    reader: &mut impl Read,
+    writer: &mut impl Write,
+    restricted: bool,
+) -> io::Result<()> {
     let header_bytes = match framing::read_frame(
         reader,
         MAX_HEADER_BYTES.max(authored_preview::MAX_HEADER_BYTES),
@@ -100,12 +108,13 @@ pub fn handle_stream(reader: &mut impl Read, writer: &mut impl Write) -> io::Res
                     | XML_PREVIEW_PROTOCOL_VERSION
                     | crate::flextext_document::PROFILE
                     | crate::xlsx_document::PROFILE
+                    | crate::xlsx_document::READ_JSON_PROFILE
                     | crate::native_document::PROTOBUF_PROFILE
                     | crate::native_document::XBRL_PROFILE
             )
         )
     }) {
-        return preview::handle_preview(&header_bytes, reader, writer);
+        return preview::handle_preview(&header_bytes, reader, writer, restricted);
     }
     let header = serde_json::from_slice::<RequestHeader>(&header_bytes).ok();
     let native = match framing::read_frame(reader, MAX_NATIVE_BYTES) {

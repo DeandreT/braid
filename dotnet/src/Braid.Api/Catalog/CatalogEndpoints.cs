@@ -22,6 +22,7 @@ public static partial class CatalogEndpoints
         DescribeSearch(routes.MapGet(organization + "/search", SearchCatalog));
         const string project = organization + "/projects/{projectId}";
         const string mapping = project + "/mappings/{mappingId}";
+        OrganizationEndpoints.MapBraidOrganizations(endpoints);
         Describe<CatalogProjectPageV1>(routes.MapGet(organization + "/projects", GetProjects),
             "GetCatalogProjects", "Read a bounded page of currently visible projects.");
         DescribeProjectCreation(routes.MapPost(organization + "/projects", CreateCatalogProject));
@@ -60,9 +61,19 @@ public static partial class CatalogEndpoints
             .Produces<CatalogErrorV1>(StatusCodes.Status500InternalServerError)
             .Produces<CatalogErrorV1>(StatusCodes.Status503ServiceUnavailable);
 
+    internal static Task<IResult> WithSelectedContext(HttpContext context, CatalogRequestBoundary boundary,
+        CatalogMetadataEditOptions metadataEditOptions, CatalogRevisionIngestionOptions ingestionOptions,
+        CatalogProjectCreationOptions creationOptions, CatalogRevisionReportOptions revisionReportOptions) =>
+        ReadContext(context, boundary, metadataEditOptions, ingestionOptions, creationOptions, revisionReportOptions, true);
+
     private static Task<IResult> GetContext(HttpContext context, CatalogRequestBoundary boundary,
         CatalogMetadataEditOptions metadataEditOptions, CatalogRevisionIngestionOptions ingestionOptions,
         CatalogProjectCreationOptions creationOptions, CatalogRevisionReportOptions revisionReportOptions) =>
+        ReadContext(context, boundary, metadataEditOptions, ingestionOptions, creationOptions, revisionReportOptions, false);
+
+    private static Task<IResult> ReadContext(HttpContext context, CatalogRequestBoundary boundary,
+        CatalogMetadataEditOptions metadataEditOptions, CatalogRevisionIngestionOptions ingestionOptions,
+        CatalogProjectCreationOptions creationOptions, CatalogRevisionReportOptions revisionReportOptions, bool qualified) =>
         WithAdmission(context, boundary, async admission =>
         {
             RequireQuery(context);
@@ -71,6 +82,7 @@ public static partial class CatalogEndpoints
             if (organization is null)
                 return NotFound();
             RequireOrganization(organization, admission);
+            if (admission.ContextMode != "development" && organization.AdmissionVersion != admission.AdmissionVersion) return NotFound();
             var canCreateProjects = false;
             if (creationOptions.Enabled)
             {
@@ -82,13 +94,16 @@ public static partial class CatalogEndpoints
             // A bearer request carries its own credential: there is no ambient session to protect with a request token.
             var token = admission.ContextMode == "bearer" ? null
                 : await boundary.IssueRequestTokenAsync(context, admission.Actor!, context.RequestAborted);
-            return Results.Ok(CatalogPublicMapper.Context(organization, token, admission.ContextMode!, metadataEditOptions.Enabled,
+            var catalog = CatalogPublicMapper.Context(organization, token, admission.ContextMode!, metadataEditOptions.Enabled,
                 ingestionOptions.Enabled, creationOptions.Enabled, canCreateProjects,
                 revisionReportOptions.Enabled, revisionReportOptions.DerivationEnabled, admission.IdentityContext,
                 context.RequestServices.GetService<Chat.ChatApiOptions>()?.Enabled == true, PreviewEnabled(context),
                 context.RequestServices.GetService<IAdministrationStore>() is not null, MappingEditingEnabled(context),
                 csvPreviewEnabled: context.RequestServices.GetService<CatalogPreviewOptions>() is { Enabled: true, CsvEnabled: true },
-                xmlPreviewEnabled: context.RequestServices.GetService<CatalogPreviewOptions>() is { Enabled: true, XmlEnabled: true }));
+                xmlPreviewEnabled: context.RequestServices.GetService<CatalogPreviewOptions>() is { Enabled: true, XmlEnabled: true },
+                nativePreviewProfiles: context.RequestServices.GetService<CatalogPreviewOptions>()?.NativeFormats.Select(f => f.Profile).ToArray());
+            return qualified ? Results.Ok(new Contracts.Organizations.OrganizationContextV1(
+                organization.AdmissionVersion.ToString(CultureInfo.InvariantCulture), catalog)) : Results.Ok(catalog);
         });
 
     private static Task<IResult> GetProjects(string organizationId, HttpContext context,
@@ -231,7 +246,7 @@ public static partial class CatalogEndpoints
         });
 
     private static async Task<IResult> WithAdmission(HttpContext context, CatalogRequestBoundary boundary,
-        Func<CatalogRequestAdmission, Task<IResult>> action, bool unsafeRequest = false)
+        Func<CatalogRequestAdmission, Task<IResult>> action, bool unsafeRequest = false, bool identityOnly = false)
     {
         context.Response.OnStarting(static state =>
         {
@@ -243,7 +258,8 @@ public static partial class CatalogEndpoints
         context.Response.Headers.CacheControl = "no-store";
         try
         {
-            var admission = await boundary.AuthenticateAsync(context, unsafeRequest, context.RequestAborted);
+            var admission = identityOnly ? await boundary.AuthenticateIdentityAsync(context, context.RequestAborted)
+                : await boundary.AuthenticateAsync(context, unsafeRequest, context.RequestAborted);
             if (!admission.IsAdmitted)
             {
                 context.Response.Headers.Remove("ETag");

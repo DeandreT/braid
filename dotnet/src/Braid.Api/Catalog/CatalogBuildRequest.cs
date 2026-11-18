@@ -27,6 +27,11 @@ internal static class CatalogBuildRequest
         return new(values["action"]!, values["environmentId"]!, values["environmentVersion"]!,
             values["qualificationId"], values["sourceReleaseId"]);
     }
+    internal static async Task<Braid.Contracts.Operations.TriggerDeliveryResolutionV1> DeliveryResolutionAsync(HttpRequest request, CancellationToken token)
+    {
+        var values = await ReadAsync(request, "application/json", ["resolution", "environmentId", "environmentVersion", "acknowledgement"], token, ["acknowledgement"]);
+        return new(values["resolution"]!, values["environmentId"]!, values["environmentVersion"]!, values["acknowledgement"]);
+    }
     internal static Guid Id(string value) => Guid.TryParseExact(value, "D", out var result) && result != Guid.Empty && value == result.ToString("D") ? result : throw Invalid();
     internal static long Version(string value) => value.Length is > 0 and <= 19 &&
         long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var result) && result > 0 &&
@@ -50,7 +55,7 @@ internal static class CatalogBuildRequest
         return new(id, Version(values["profileVersion"]!));
     }
 
-    private static async Task<Dictionary<string, string?>> ReadAsync(HttpRequest request, string mediaType, string[] fields, CancellationToken token, string[]? nullable = null)
+    internal static async Task<Dictionary<string, string?>> ReadAsync(HttpRequest request, string mediaType, string[] fields, CancellationToken token, string[]? nullable = null, int maximumBytes = MaximumBytes, string[]? optional = null)
     {
         var values = request.Headers.ContentType;
         if (values.Count != 1 || !MediaTypeHeaderValue.TryParse(values[0], out var media) ||
@@ -59,17 +64,17 @@ internal static class CatalogBuildRequest
             media.Charset.HasValue && !string.Equals(media.Charset.Value, "utf-8", StringComparison.OrdinalIgnoreCase) ||
             request.Headers.ContainsKey("Content-Encoding"))
             throw new CatalogBuildRequestException(CatalogErrorCodeV1.UnsupportedMediaType, StatusCodes.Status415UnsupportedMediaType);
-        if (request.ContentLength is > MaximumBytes) throw TooLarge();
+        if (request.ContentLength > maximumBytes) throw TooLarge();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
         timeout.CancelAfter(TimeSpan.FromSeconds(15));
         using var buffer = new MemoryStream();
-        var block = new byte[MaximumBytes + 1];
+        var block = new byte[maximumBytes + 1];
         try
         {
             int count;
             while ((count = await request.Body.ReadAsync(block, timeout.Token)) != 0)
             {
-                if (count > MaximumBytes - buffer.Length) throw TooLarge();
+                if (count > maximumBytes - buffer.Length) throw TooLarge();
                 buffer.Write(block, 0, count);
             }
             if (request.ContentLength is { } declared && declared != buffer.Length) throw Invalid();
@@ -86,6 +91,7 @@ internal static class CatalogBuildRequest
                 else if (property.Value.ValueKind == JsonValueKind.String) result.Add(property.Name, property.Value.GetString()!);
                 else throw Invalid();
             }
+            foreach (var field in optional ?? []) if (required.Remove(field)) result.Add(field, null);
             if (required.Count != 0) throw Invalid();
             return result;
         }

@@ -16,7 +16,7 @@ internal static class CatalogSearchSchemaAdmission
     private static readonly string ViewSource = Migration.Split("CREATE VIEW braid.catalog_search_reports WITH (security_barrier = true) AS", StringSplitOptions.None)[1].Split(';')[0];
 
     internal static async Task<bool> ValidateAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
-        CancellationToken token)
+        CancellationToken token, bool admittedLifecycle = false)
     {
         await using var command = new NpgsqlCommand("""
             SELECT CASE WHEN to_regclass('braid.catalog_search_report_index') IS NULL THEN true ELSE
@@ -24,7 +24,7 @@ internal static class CatalogSearchSchemaAdmission
                     AND NOT r.relispartition AND o.rolname = 'braid_migrator'
                     AND NOT EXISTS (SELECT 1 FROM pg_inherits WHERE inhrelid = r.oid OR inhparent = r.oid)
                     AND NOT EXISTS (SELECT 1 FROM pg_rewrite WHERE ev_class = r.oid)
-                    AND NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = r.oid AND NOT tgisinternal)
+                    AND NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = r.oid AND NOT tgisinternal AND NOT ($2 AND tgname='lifecycle_fence'))
                     AND NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = r.oid AND tgisinternal AND tgenabled <> 'O')
                   FROM pg_class r JOIN pg_roles o ON o.oid = r.relowner WHERE r.oid = to_regclass('braid.catalog_search_report_index'))
                 AND EXISTS (SELECT 1 FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace
@@ -54,7 +54,8 @@ internal static class CatalogSearchSchemaAdmission
                 END,
                 pg_get_viewdef(to_regclass('braid.catalog_search_reports'), false)
             """, connection, transaction);
-        command.Parameters.AddWithValue(IndexBody);
+        command.Parameters.AddWithValue(admittedLifecycle ? IndexBody.Replace("\nBEGIN\n", "\nBEGIN\n    PERFORM pg_advisory_xact_lock_shared(1464158804,hashtext('braid.lifecycle:'||organization::text));\n", StringComparison.Ordinal) : IndexBody);
+        command.Parameters.AddWithValue(admittedLifecycle);
         await using var reader = await command.ExecuteReaderAsync(token);
         if (!await reader.ReadAsync(token) || reader.IsDBNull(0) || !reader.GetBoolean(0) ||
             !reader.IsDBNull(1) && Canonical(reader.GetString(1)) != Canonical(ViewSource))

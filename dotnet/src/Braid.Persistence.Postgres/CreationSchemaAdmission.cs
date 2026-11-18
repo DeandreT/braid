@@ -36,6 +36,9 @@ internal static class CreationSchemaAdmission
 
     internal static async Task<string> ShapeAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct)
     {
+        // The organization supplement owns two membership triggers. Check their exact bodies,
+        // grants and placement before projecting them out of the older creation fingerprint.
+        var membershipTriggers = await OrganizationSwitchingSchemaAdmission.AdmitTriggersAsync(connection, transaction, "organization_memberships", ct);
         await using var command = new NpgsqlCommand("""
             WITH entries AS (
                 SELECT 'table/'||c.relname AS key, jsonb_build_array(c.relkind,c.relpersistence,c.relrowsecurity,c.relforcerowsecurity,c.relispartition,
@@ -62,17 +65,20 @@ internal static class CreationSchemaAdmission
                 SELECT 'trigger/'||c.relname||'/'||t.tgname,jsonb_build_array(pg_get_triggerdef(t.oid),t.tgenabled)::text
                 FROM pg_class c JOIN pg_trigger t ON t.tgrelid=c.oid AND NOT t.tgisinternal WHERE c.relnamespace='braid'::regnamespace
                     AND (c.relname=ANY($1) OR t.tgname='revision_ingestions_creation_guard')
+                    AND NOT (c.relname='organization_memberships' AND t.tgname=ANY($2::text[]))
                 UNION ALL
                 SELECT 'function/'||p.oid::regprocedure::text,jsonb_build_array(pg_get_function_result(p.oid),p.prosrc,p.prosecdef,pg_get_userbyid(p.proowner),p.proconfig,p.provolatile,p.proisstrict,p.proparallel,CASE WHEN p.proacl IS NULL THEN NULL ELSE ARRAY(SELECT acl_entry::text FROM unnest(p.proacl) acl_entry ORDER BY acl_entry::text COLLATE "C")::text END,
                     p.proargnames,p.prokind,p.proleakproof,p.proargmodes,pg_get_expr(p.proargdefaults,0),p.prosupport::regproc::text)::text
                 FROM pg_proc p WHERE p.pronamespace='braid'::regnamespace AND (p.proname LIKE 'creation\_%' ESCAPE '\' OR p.proname LIKE 'spec\_%' ESCAPE '\' OR p.proname='document_evidence_schema_version'
-                    OR EXISTS(SELECT 1 FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid WHERE t.tgfoid=p.oid AND c.relnamespace='braid'::regnamespace AND c.relname=ANY($1)))
+                    OR EXISTS(SELECT 1 FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid WHERE t.tgfoid=p.oid AND c.relnamespace='braid'::regnamespace AND c.relname=ANY($1)
+                        AND NOT (c.relname='organization_memberships' AND t.tgname=ANY($2::text[]))))
                 UNION ALL
                 SELECT 'inherit/'||c.relname,jsonb_build_array(i.inhparent::regclass::text,i.inhseqno)::text FROM pg_class c JOIN pg_inherits i ON i.inhrelid=c.oid
                 WHERE c.relnamespace='braid'::regnamespace AND c.relname=ANY($1)
             ) SELECT string_agg(key||'='||value,E'\n' ORDER BY key COLLATE "C") FROM entries
             """, connection, transaction);
         command.Parameters.AddWithValue(Tables.Concat(new[] { "principals", "organization_memberships", "project_memberships", "project_payload_read_grants", "projects", "spec_stores", "spec_bundles", "spec_sources", "spec_objects" }).ToArray());
+        command.Parameters.AddWithValue(membershipTriggers);
         var text = (string?)await command.ExecuteScalarAsync(ct).ConfigureAwait(false) ?? "";
         // Internal RI trigger names contain catalog OIDs, so validate their enforcement
         // separately instead of including unstable names in the catalog fingerprint.

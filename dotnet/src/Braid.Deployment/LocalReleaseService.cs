@@ -69,12 +69,15 @@ public sealed class LocalReleaseService(ILocalReleaseStore releases, IBuildQuali
 /// <summary>Local invocation through the active pointer, retaining build authority and output-delivery fences.</summary>
 public sealed class LocalReleaseInvocation(ILocalReleaseStore releases, CompiledBuildExecution execution)
 {
-    public async Task<CompiledBuildResult> ExecuteAsync(ActorContext actor, ReleaseTargetReference target, RegressionReplay replay, CancellationToken token = default)
+    public Task<CompiledBuildResult> ExecuteAsync(ActorContext actor, ReleaseTargetReference target, RegressionReplay replay, CancellationToken token = default)
+        => ExecuteAsync(actor, target, replay, token, null);
+
+    internal async Task<CompiledBuildResult> ExecuteAsync(ActorContext actor, ReleaseTargetReference target, RegressionReplay replay, CancellationToken token, Guid? pin)
     {
         ArgumentNullException.ThrowIfNull(actor); ArgumentNullException.ThrowIfNull(target); ArgumentNullException.ThrowIfNull(replay);
         token.ThrowIfCancellationRequested();
         var before = await releases.ReadTargetAsync(actor, target, token).ConfigureAwait(false);
-        if (before is null || !before.Enabled || before.Target.Reference != target || before.ActiveReleaseId is not { } active)
+        if (before is null || !before.Enabled || before.Target.Reference != target || (pin ?? before.ActiveReleaseId) is not { } active)
             return new(CompiledBuildOutcome.Refused);
         var release = await releases.ReadAsync(actor, target, active, token).ConfigureAwait(false);
         if (release is null || release.Phase != ReleasePhase.Active || release.Intent.ReleaseId != active || release.Intent.Target != target ||
@@ -84,12 +87,12 @@ public sealed class LocalReleaseInvocation(ILocalReleaseStore releases, Compiled
         async Task<bool> StillActive(CancellationToken currentToken)
         {
             var current = await releases.ReadTargetAsync(actor, target, currentToken).ConfigureAwait(false);
-            return current is not null && current.Enabled && current.Target == before.Target && current.ActiveReleaseId == active;
+            return current is not null && current.Enabled && current.Target == before.Target && (pin is not null || current.ActiveReleaseId == active);
         }
         var result = await execution.ExecuteQualifiedAsync(actor, target.Mapping, qualified.Artifact, replay, qualified.RuntimeImage, token, StillActive).ConfigureAwait(false);
         var after = await releases.ReadTargetAsync(actor, target, token).ConfigureAwait(false);
         token.ThrowIfCancellationRequested();
-        return after is not null && after.Enabled && after.Target == before.Target && after.ActiveReleaseId == active
+        return after is not null && after.Enabled && after.Target == before.Target && (pin is not null || after.ActiveReleaseId == active)
             ? result : new(CompiledBuildOutcome.Refused);
     }
 }

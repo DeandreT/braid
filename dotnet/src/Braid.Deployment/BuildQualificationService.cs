@@ -19,7 +19,7 @@ public sealed class BuildQualificationService(IBuildQualificationStore store, IB
     IRegressionRunReader evidence, IRegressionCaseReader cases, CompiledBuildExecution execution, IProjectReader projects)
 {
     public async Task<BuildQualificationRequestResult> PutAsync(ActorContext actor, MappingScope mapping, Guid qualificationId,
-        Guid buildId, CancellationToken token = default)
+        Guid buildId, CancellationToken token = default, MappingPackage? package = null)
     {
         ArgumentNullException.ThrowIfNull(actor); ArgumentNullException.ThrowIfNull(mapping);
         token.ThrowIfCancellationRequested();
@@ -30,6 +30,8 @@ public sealed class BuildQualificationService(IBuildQualificationStore store, IB
         {
             Check(existing, actor, mapping, qualificationId);
             if (existing.Artifact.Intent.BuildId != buildId) return new(BuildQualificationRequestOutcome.Conflict);
+            if (package is not null && (!package.Manifest.Matches(existing.Artifact, package.Bytes) || existing.RuntimeImage != execution.RuntimeImage))
+                return new(BuildQualificationRequestOutcome.Conflict);
             return await Allowed(actor, mapping, token).ConfigureAwait(false)
                 ? new(BuildQualificationRequestOutcome.Replayed, existing) : new(BuildQualificationRequestOutcome.Refused);
         }
@@ -37,6 +39,7 @@ public sealed class BuildQualificationService(IBuildQualificationStore store, IB
         if (build is null || build.Actor != actor.PrincipalId || build.Intent.BuildId != buildId || !Belongs(build.Intent.Revision, mapping))
             return new(BuildQualificationRequestOutcome.Refused);
         if (build.State != BuildRunState.Succeeded || build.Artifact is null) return new(BuildQualificationRequestOutcome.NotQualified);
+        if (package is not null && !package.Manifest.Matches(build.Artifact, package.Bytes)) return new(BuildQualificationRequestOutcome.NotQualified);
         var original = await evidence.ReadAsync(actor, mapping.OrganizationId, build.Intent.RegressionEvidenceId, token).ConfigureAwait(false);
         if (original is null || original.Submitter != actor.PrincipalId || original.Case.Revision != build.Intent.Revision)
             return new(BuildQualificationRequestOutcome.Refused);
@@ -45,7 +48,7 @@ public sealed class BuildQualificationService(IBuildQualificationStore store, IB
         try { _ = BuildQualification.ValidateSource(actor.PrincipalId, build, original, baseline, token); }
         catch (BuildQualificationException) { return new(BuildQualificationRequestOutcome.NotQualified); }
         var image = execution.RuntimeImage;
-        var result = await execution.ExecuteQualifiedAsync(actor, mapping, build.Artifact, baseline.Replay, image, token).ConfigureAwait(false);
+        var result = await execution.ExecuteQualifiedAsync(actor, mapping, build.Artifact, baseline.Replay, image, token, package: package).ConfigureAwait(false);
         if (result.Outcome == CompiledBuildOutcome.Refused) return new(BuildQualificationRequestOutcome.Refused);
         if (result.Outcome is CompiledBuildOutcome.Unavailable or CompiledBuildOutcome.Busy) return new(BuildQualificationRequestOutcome.Unavailable);
         if (result.Outcome != CompiledBuildOutcome.Completed) return new(BuildQualificationRequestOutcome.NotQualified);

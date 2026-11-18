@@ -164,6 +164,14 @@ internal static class RevisionDerivationRoleGuard
         await using (var protect = new NpgsqlCommand("LOCK TABLE " +
             string.Join(", ", reads.Select(name => "ONLY braid." + name)) + " IN ACCESS SHARE MODE", connection, transaction))
             await protect.ExecuteNonQueryAsync(cancellationToken);
+        // Lifecycle replaces transition functions and adds fences on these locked sources.
+        // Its pinned complete catalog describes the post-upgrade schema; the login,
+        // privileges and relation locks above remain mandatory on both paths.
+        if (await LifecycleCatalogAdmission.ValidateIfInstalledAsync(connection, transaction, cancellationToken))
+        {
+            await CatalogSearchSchemaAdmission.ValidateAsync(connection, transaction, cancellationToken, admittedLifecycle: true);
+            return;
+        }
         await SupplementalMaintenanceSchemaAdmission.ValidateAsync(connection, transaction, cancellationToken);
         await CatalogSearchSchemaAdmission.ValidateAsync(connection, transaction, cancellationToken);
         await ValidateRelationsAsync(connection, transaction, reads, cancellationToken);
@@ -447,8 +455,9 @@ internal static class RevisionDerivationRoleGuard
         if (table.FunctionBody is null)
         {
             await using var absent = new NpgsqlCommand(
-                "SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_trigger WHERE tgrelid = ('braid.' || $1)::regclass AND NOT tgisinternal)", connection, transaction);
+                "SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_trigger WHERE tgrelid = ('braid.' || $1)::regclass AND NOT tgisinternal AND NOT tgname = ANY($2::text[]))", connection, transaction);
             absent.Parameters.AddWithValue(table.Name);
+            absent.Parameters.AddWithValue(await OrganizationSwitchingSchemaAdmission.AdmitTriggersAsync(connection, transaction, table.Name, cancellationToken));
             if (await absent.ExecuteScalarAsync(cancellationToken) is not false)
                 throw Refusal("The revision report metadata ownership sources must not have additional transition triggers.");
             await ValidateNoRulesAsync(connection, transaction, table.Name, cancellationToken);

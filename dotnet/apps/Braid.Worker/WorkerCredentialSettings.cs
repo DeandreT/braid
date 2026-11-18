@@ -14,6 +14,7 @@ internal static class WorkerCredentialSettings
 
     internal static readonly string[] Connections =
     [
+        LifecycleDeletionWorker.ConnectionSetting,
         "BRAID_PREVIEW_WRITER_CONNECTION_STRING",
         "BRAID_NOTIFICATION_CONNECTION_STRING",
         "BRAID_REGRESSION_RUN_WRITER_CONNECTION_STRING",

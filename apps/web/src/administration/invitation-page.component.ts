@@ -1,8 +1,10 @@
 import { DOCUMENT } from "@angular/common";
 import { Component, DestroyRef, inject, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
+import { ActivatedRoute } from "@angular/router";
 import { BrowserSessionState } from "../auth/browser-session-state";
 import { UnsentWork } from "../workbench/unsent-work";
+import { catalogRoutes, isCatalogId } from "../catalog/catalog-types";
 
 @Component({
   selector: "braid-invitation-page",
@@ -55,14 +57,25 @@ export class InvitationPageComponent {
   private readonly lifetime = inject(DestroyRef);
   private readonly secret =
     this.document.defaultView?.location.hash.slice(1) ?? "";
-  readonly valid = /^[0-9a-f]{64}$/.test(this.secret);
+  /** The link's public target; a legacy secret-only link targets the root organization. */
+  private readonly organizationId =
+    inject(ActivatedRoute).snapshot.paramMap.get("organizationId");
+  readonly valid =
+    /^[0-9a-f]{64}$/.test(this.secret) &&
+    (this.organizationId === null || isCatalogId(this.organizationId));
   readonly failed = signal(false);
 
   constructor() {
     inject(UnsentWork).track(() => this.valid, this.lifetime);
     // Fragments never reach the server or referrer. Remove it from visible browser
     // history immediately; only this component retains the in-memory credential.
-    this.document.defaultView?.history.replaceState(null, "", "/invitations");
+    this.document.defaultView?.history.replaceState(
+      null,
+      "",
+      this.organizationId === null
+        ? "/invitations"
+        : `/organizations/${this.organizationId}/invitations`,
+    );
     this.sessions
       .observe()
       .pipe(takeUntilDestroyed(this.lifetime))
@@ -72,7 +85,12 @@ export class InvitationPageComponent {
     if (!this.valid) return;
     this.failed.set(false);
     this.sessions
-      .signIn(null, this.secret)
+      .signIn(
+        this.organizationId === null
+          ? null
+          : catalogRoutes.projects(this.organizationId),
+        { secret: this.secret, organizationId: this.organizationId },
+      )
       .pipe(takeUntilDestroyed(this.lifetime))
       .subscribe({ error: () => this.failed.set(true) });
   }

@@ -170,6 +170,7 @@ public sealed class DocumentEvidencePersistenceTests(PostgresFixture fixture)
         Assert.Equal(disclosure, Assert.Single(events, e => e.Kind == ChatEventKind.DataShared).DataShared);
         Assert.Equal(5, await chat.Case.ScalarAsync<int>("SELECT max(ordinal) FROM braid.chat_rounds WHERE turn_id=$1", id));
         Assert.Equal(1L, await chat.Case.ScalarAsync<long>("SELECT count(*) FROM braid.chat_payload_audit WHERE source_kind=5 AND turn_id=$1", id));
+        Assert.Equal(1L, await chat.Case.ScalarAsync<long>("SELECT count(*) FROM braid.audit_log_events WHERE kind='payload' AND action='specification' AND resource_id=$1 AND actor_id=$2", f.Bundle, chat.Actor.PrincipalId.Value));
         var other = new ActorContext(new PrincipalId(Guid.NewGuid()));
         Assert.Empty(await chat.Reader.ReadEventsAsync(other, key, id, 0, 32));
     }

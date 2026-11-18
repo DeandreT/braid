@@ -74,6 +74,7 @@ pub fn handle_preview(
     header_bytes: &[u8],
     reader: &mut impl Read,
     writer: &mut impl Write,
+    restricted: bool,
 ) -> io::Result<()> {
     let Ok(header) = serde_json::from_slice::<PreviewRequestHeader>(header_bytes) else {
         discard(reader);
@@ -90,6 +91,18 @@ pub fn handle_preview(
     if let Err(refusal) = check_header(&header) {
         discard(reader);
         return write_outcome(writer, &refused(&header, &refusal));
+    }
+    if restricted && header.is_xlsx_preview() {
+        discard(reader);
+        return write_outcome(
+            writer,
+            &PreviewOutcome::failure(
+                Some(&header),
+                "unsupportedCapability",
+                crate::xlsx_document::SERVICE_OUTPUT_REFUSAL,
+                Some("primary-output"),
+            ),
+        );
     }
     let native = match framing::read_frame(reader, MAX_NATIVE_BYTES) {
         Ok(native) => native,
@@ -201,7 +214,7 @@ pub fn process_preview(
     {
         return failure("unsupportedCapability", message, None);
     }
-    if header.is_xlsx_preview()
+    if header.reads_xlsx()
         && let Err(message) = crate::xlsx_document::admit_saved_metadata(native, &project)
     {
         return failure("unsupportedCapability", message, None);
@@ -300,7 +313,7 @@ pub fn process_preview(
             }
         }
     }
-    if header.is_xlsx_preview()
+    if header.reads_xlsx()
         && let Err(error) =
             crate::xlsx_document::read(&inputs[0], &project.source, &project.source_options)
     {
@@ -477,7 +490,7 @@ pub fn process_preview(
     if header.is_csv_preview()
         || header.is_xml_preview()
         || header.is_flextext_preview()
-        || header.is_xlsx_preview()
+        || header.reads_xlsx()
         || header.native_format().is_some()
     {
         // Keep legacy JSON/EDI on their established compatibility route. In
@@ -758,6 +771,7 @@ fn check_header(header: &PreviewRequestHeader) -> Result<(), Refusal> {
             | XML_PREVIEW_PROTOCOL_VERSION
             | crate::flextext_document::PROFILE
             | crate::xlsx_document::PROFILE
+            | crate::xlsx_document::READ_JSON_PROFILE
             | crate::native_document::PROTOBUF_PROFILE
             | crate::native_document::XBRL_PROFILE
     ) {
@@ -960,7 +974,7 @@ fn execution_failure(
     } else if header.is_flextext_preview() {
         "The native FlexText mapping or bounded serialization failed; no output was published."
             .into()
-    } else if header.is_xlsx_preview() {
+    } else if header.reads_xlsx() {
         "The native XLSX mapping or bounded workbook serialization failed; no output was published."
             .into()
     } else if header.is_xml_preview() {
@@ -1130,7 +1144,7 @@ fn classify(
     // Legacy JSON/EDI retain their established classification.
     if (header.is_csv_preview()
         || header.is_flextext_preview()
-        || header.is_xlsx_preview()
+        || header.reads_xlsx()
         || header.native_format().is_some())
         && error.root_cause().to_string()
             == format!(

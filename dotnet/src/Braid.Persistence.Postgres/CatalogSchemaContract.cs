@@ -11,7 +11,7 @@ internal static class CatalogSchemaContract
         IngestionSchemaContract.Constraint[] Constraints, string? FunctionBody);
 
     internal static readonly string[] FullReadTables =
-        ["organizations", "principals", "organization_memberships", "projects", "project_memberships", "mappings", "mapping_revisions"];
+        ["organizations", "principals", "organization_memberships", "organization_admission_state", "projects", "project_memberships", "mappings", "mapping_revisions"];
     internal static readonly string[] ReservationReadColumns =
         ["organization_id", "project_id", "operation_id", "display_filename"];
     internal static readonly IReadOnlyDictionary<string, Table> Tables = Load();

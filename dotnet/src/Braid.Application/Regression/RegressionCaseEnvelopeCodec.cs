@@ -75,7 +75,7 @@ public sealed partial class RegressionCaseEnvelopeCodec
             if (offset != owned.Length || result.CaseId != expected.CaseId || result.Version != expected.Version ||
                 result.Owner != expected.Owner || result.Revision != expected.Revision || result.NativeDigest != expected.NativeDigest)
                 throw Integrity();
-            if (result.Runtime.Profile is CsvDocumentPolicy.Profile or XmlPreviewAdmission.Profile &&
+            if ((result.Runtime.Profile is CsvDocumentPolicy.Profile or XmlPreviewAdmission.Profile || NativeDocumentFormat.FromProfile(result.Runtime.Profile) is not null) &&
                 !Encode(result, cancellationToken).CopyBytes().AsSpan().SequenceEqual(owned))
                 throw Integrity();
             cancellationToken.ThrowIfCancellationRequested();
@@ -96,7 +96,8 @@ public sealed partial class RegressionCaseEnvelopeCodec
         var documents = value.Runtime.Profile == DocumentPreviewPolicy.Profile;
         var csv = value.Runtime.Profile == CsvDocumentPolicy.Profile;
         var xml = value.Runtime.Profile == XmlPreviewAdmission.Profile;
-        json.WriteString("schema", xml ? XmlSchema : csv ? CsvSchema : documents ? DocumentSchema : Schema);
+        var native = NativeDocumentFormat.FromProfile(value.Runtime.Profile);
+        json.WriteString("schema", native?.CaseSchema ?? (xml ? XmlSchema : csv ? CsvSchema : documents ? DocumentSchema : Schema));
         json.WriteString("caseId", value.CaseId.ToString("D"));
         json.WriteNumber("version", value.Version);
         json.WriteString("owner", value.Owner.Value.ToString("D"));
@@ -165,7 +166,7 @@ public sealed partial class RegressionCaseEnvelopeCodec
         }
         json.WriteEndArray();
         json.WriteStartArray("inputs");
-        WriteFrameHeader(json, null, replay.Primary.ByteCount, replay.Primary.Digest, csvDialect: csv ? replay.Primary.CsvDialect : null, present: csv,
+        WriteFrameHeader(json, null, replay.Primary.ByteCount, replay.Primary.Digest, csvDialect: csv ? replay.Primary.CsvDialect : null, present: csv || native is not null, documentSettings: replay.Primary.DocumentSettings,
             xmlMetadata: replay.Primary.XmlMetadata, xmlRole: XmlDocumentRole.Input);
         foreach (var input in replay.NamedInputs)
         {
@@ -177,8 +178,8 @@ public sealed partial class RegressionCaseEnvelopeCodec
         foreach (var output in value.Expected.Outputs)
         {
             token.ThrowIfCancellationRequested();
-            WriteFrameHeader(json, output.Key.Name, output.ByteCount, output.Digest, documents || csv || xml ? output.MediaType : null, output.CsvDialect,
-                xmlMetadata: output.XmlMetadata, xmlRole: XmlDocumentRole.Output);
+            WriteFrameHeader(json, output.Key.Name, output.ByteCount, output.Digest, documents || csv || xml || native is not null ? output.MediaType : null, output.CsvDialect,
+                documentSettings: output.DocumentSettings, xmlMetadata: output.XmlMetadata, xmlRole: XmlDocumentRole.Output);
         }
         json.WriteEndArray();
         json.WriteEndObject();
@@ -186,7 +187,7 @@ public sealed partial class RegressionCaseEnvelopeCodec
 
     private static void WriteFrameHeader(Utf8JsonWriter json, string? name, int length, Sha256Digest digest, string? mediaType = null,
         CsvDocumentDialect? csvDialect = null, bool present = false,
-        XmlDocumentMetadata? xmlMetadata = null, XmlDocumentRole xmlRole = XmlDocumentRole.Input)
+        XmlDocumentMetadata? xmlMetadata = null, XmlDocumentRole xmlRole = XmlDocumentRole.Input, NativeDocumentSettings? documentSettings = null)
     {
         json.WriteStartObject();
         json.WriteString("name", name);
@@ -195,6 +196,7 @@ public sealed partial class RegressionCaseEnvelopeCodec
         json.WriteString("sha256", digest.Value);
         if (mediaType is not null) json.WriteString("mediaType", mediaType);
         if (csvDialect is not null) { json.WritePropertyName("csvDialect"); CsvDialectJson.Write(json, csvDialect); }
+        if (documentSettings is not null) { json.WritePropertyName("documentSettings"); NativeDocumentSettingsJson.Write(json, documentSettings); }
         if (xmlMetadata is not null) { json.WritePropertyName("xmlMetadata"); XmlDocumentMetadataJson.Write(json, xmlMetadata, xmlRole); }
         json.WriteEndObject();
     }

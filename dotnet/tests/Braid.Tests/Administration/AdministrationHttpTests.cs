@@ -118,6 +118,69 @@ public sealed class AdministrationHttpTests
         Assert.Equal(Principal, host.Store.Actor);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Quota_reads_bind_the_exact_scope_and_decimal_version_to_a_strong_etag(bool principalScope)
+    {
+        await using var host = await Host.StartAsync();
+        var principal = principalScope ? (Guid?)Principal : null;
+        var path = Path + (principalScope ? $"/principals/{Principal}" : "") + "/ai-quotas";
+        using var response = await host.Client.GetAsync(path);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(response.Headers.CacheControl?.NoStore);
+        Assert.Equal(AdministrationEndpoints.QuotaETag(Org, principal, 9007199254740993), response.Headers.ETag?.Tag);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsByteArrayAsync());
+        Assert.Equal("9007199254740993", body.RootElement.GetProperty("version").GetString());
+        Assert.Equal(0, host.Store.Writes);
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"maximumTurns\":\"01\",\"maximumTokens\":null}")]
+    [InlineData("{\"maximumTurns\":1,\"maximumTokens\":null}")]
+    [InlineData("{\"maximumTurns\":\"1\",\"maximumTokens\":\"9223372036854775808\"}")]
+    [InlineData("{\"maximumTurns\":null,\"maximumTokens\":null,\"extra\":true}")]
+    [InlineData("{\"maximumTurns\":\"1\",\"maximumTurns\":\"2\",\"maximumTokens\":null}")]
+    public async Task Invalid_quota_write_never_reaches_the_store(string body)
+    {
+        await using var host = await Host.StartAsync();
+        using var response = await host.PutAsync(Path + "/ai-quotas/day", body, AdministrationEndpoints.QuotaETag(Org, null, 1));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode); Assert.Equal(0, host.Store.Writes);
+    }
+
+    [Fact]
+    public async Task Quota_writes_require_the_observed_scope_and_fresh_condition()
+    {
+        await using var host = await Host.StartAsync();
+        const string body = "{\"maximumTurns\":\"12\",\"maximumTokens\":\"9007199254740993\"}";
+        using var missing = await host.PutAsync(Path + "/ai-quotas/day", body, null);
+        Assert.Equal((HttpStatusCode)428, missing.StatusCode);
+        using var wrongScope = await host.PutAsync(Path + $"/principals/{Principal}/ai-quotas/day", body, AdministrationEndpoints.QuotaETag(Org, null, 7));
+        Assert.Equal(HttpStatusCode.BadRequest, wrongScope.StatusCode); Assert.Equal(0, host.Store.Writes);
+        using var applied = await host.PutAsync(Path + "/ai-quotas/day", body, AdministrationEndpoints.QuotaETag(Org, null, 7));
+        Assert.Equal(HttpStatusCode.OK, applied.StatusCode); Assert.Equal(1, host.Store.Writes);
+        Assert.Equal(7, host.Store.Version); Assert.Equal(9007199254740993, host.Store.Policy!.MaximumTokens);
+        Assert.Equal(Principal, host.Store.Actor); Assert.Equal(Org, host.Store.Org);
+        host.Store.Outcome = "preconditionFailed";
+        using var conflict = await host.PutAsync(Path + "/ai-quotas/day", body, AdministrationEndpoints.QuotaETag(Org, null, 7));
+        Assert.Equal(HttpStatusCode.PreconditionFailed, conflict.StatusCode); Assert.Equal(2, host.Store.Writes);
+    }
+
+    [Fact]
+    public async Task Quota_writes_keep_origin_csrf_and_foreign_organization_boundaries()
+    {
+        await using var host = await Host.StartAsync();
+        using var unsafeRequest = new HttpRequestMessage(HttpMethod.Put, Path + "/ai-quotas/day") { Content = new StringContent("{}", Encoding.UTF8, "application/json") };
+        using var unsafeReply = await host.Client.SendAsync(unsafeRequest);
+        Assert.NotEqual(HttpStatusCode.OK, unsafeReply.StatusCode); Assert.Equal(0, host.Store.Writes);
+        using var foreign = await host.PutAsync($"/api/v1/organizations/{Guid.NewGuid()}/administration/ai-quotas/day",
+            "{\"maximumTurns\":null,\"maximumTokens\":null}", AdministrationEndpoints.QuotaETag(Org, null, 7));
+        Assert.Equal(HttpStatusCode.NotFound, foreign.StatusCode); Assert.Equal(0, host.Store.Writes);
+        using var clear = await host.PutAsync(Path + "/ai-quotas/day", "{\"maximumTurns\":null,\"maximumTokens\":null}", AdministrationEndpoints.QuotaETag(Org, null, 7));
+        Assert.Equal(HttpStatusCode.OK, clear.StatusCode); Assert.True(host.Store.Policy!.Disabled);
+    }
+
     private sealed class UnknownLengthContent : HttpContent
     {
         protected override bool TryComputeLength(out long length) { length = 0; return false; }
@@ -125,10 +188,15 @@ public sealed class AdministrationHttpTests
             stream.WriteAsync("unexpected administration body"u8.ToArray()).AsTask();
     }
 
-    private sealed class Store : IAdministrationStore
+    private sealed class Store : IAdministrationStore, IAiQuotaStore
     {
         internal int Writes; internal string Outcome = "updated"; internal Guid Actor, Org; internal long Version;
         internal string? Protocol; internal long? ContentLength; internal bool TransferEncoding; internal bool? CanHaveBody;
+        internal AiQuotaPolicy? Policy;
+        public Task<AiQuotaSnapshotV1?> ReadQuotasAsync(ActorContext actor, Guid org, Guid? principal, CancellationToken token) =>
+            Task.FromResult<AiQuotaSnapshotV1?>(new(org, principal, "9007199254740993", []));
+        public Task<string> WriteQuotaAsync(ActorContext actor, Guid org, long version, AiQuotaPolicy policy, CancellationToken token)
+        { Writes++; Actor = actor.PrincipalId.Value; Org = org; Version = version; Policy = policy; return Task.FromResult(Outcome); }
         public Task<OrganizationAdministrationV1?> ReadOrganizationAsync(ActorContext actor, Guid org, CancellationToken token) =>
             Task.FromResult<OrganizationAdministrationV1?>(new(7, [], [], []));
         public Task<ProjectAdministrationV1?> ReadProjectAsync(ActorContext actor, ProjectScope project, CancellationToken token) =>
@@ -154,6 +222,7 @@ public sealed class AdministrationHttpTests
             builder.Services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
             builder.Services.AddBraidCatalog(new(true, true, Principal, Org, origin), builder.Environment);
             var store = new Store(); builder.Services.AddSingleton<IAdministrationStore>(store);
+            builder.Services.AddSingleton<IAiQuotaStore>(store);
             var app = builder.Build();
             app.Use(async (context, next) =>
             {

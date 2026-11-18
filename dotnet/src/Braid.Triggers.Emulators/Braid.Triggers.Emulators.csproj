@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Azure.Messaging.ServiceBus" Version="7.21.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Braid.Deployment/Braid.Deployment.csproj" />
+    <ProjectReference Include="../Braid.Storage.Blob/Braid.Storage.Blob.csproj" />
+  </ItemGroup>
+</Project>

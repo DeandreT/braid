@@ -94,15 +94,18 @@ public sealed partial class EntraBrowserClient : IAsyncDisposable
         BeginLoginAsync(context, BrowserReturnPath.Root, cancellationToken);
 
     public Task<EntraLoginChallenge> BeginLoginAsync(HttpContext context, string returnPath,
-        CancellationToken cancellationToken) => BeginLoginAsync(context, returnPath, null, cancellationToken);
+        CancellationToken cancellationToken) => BeginLoginAsync(context, returnPath, null, null, cancellationToken);
 
     internal async Task<EntraLoginChallenge> BeginLoginAsync(HttpContext context, string returnPath, string? invitation,
-        CancellationToken cancellationToken)
+        Guid? invitationOrganizationId, CancellationToken cancellationToken)
     {
         // The return path travels in the protected state and is checked again on the callback.
         if (returnPath != BrowserReturnPath.Root && !BrowserReturnPath.IsValid(returnPath))
             throw EntraErrors.Create(ServerSessionIdentityFailureKind.Unavailable);
-        var operation = await RunAsync(context, callback: false, cancellationToken, returnPath, invitation);
+        if (invitationOrganizationId is not null && invitation is null)
+            throw EntraErrors.Create(ServerSessionIdentityFailureKind.Denied);
+        var operation = await RunAsync(context, callback: false, cancellationToken, returnPath, invitation,
+            invitationOrganizationId);
         return operation.Challenge ?? throw EntraErrors.Create(ServerSessionIdentityFailureKind.Unavailable);
     }
 
@@ -115,7 +118,7 @@ public sealed partial class EntraBrowserClient : IAsyncDisposable
     }
 
     private async Task<Operation> RunAsync(HttpContext context, bool callback, CancellationToken caller,
-        string returnPath = BrowserReturnPath.Root, string? invitation = null)
+        string returnPath = BrowserReturnPath.Root, string? invitation = null, Guid? invitationOrganizationId = null)
     {
         if (context is null) throw EntraErrors.Create(ServerSessionIdentityFailureKind.UntrustedIssuance);
         var originalAbort = context.RequestAborted;
@@ -176,6 +179,8 @@ public sealed partial class EntraBrowserClient : IAsyncDisposable
                     ExpiresUtc = now.Add(FlowLifetime)
                 };
                 properties.Items[".braid.flow"] = "1";
+                if (invitationOrganizationId is { } targetOrganization)
+                    properties.Items[".braid.invitationOrganization"] = targetOrganization.ToString("D");
                 if (invitation is not null)
                 {
                     if (!Braid.Application.OrganizationInvitationSecret.IsValid(invitation))

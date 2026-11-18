@@ -94,3 +94,24 @@ regression selection.
 The build/store workflow verifies exact bytes, rejects conflicting publication
 under the same build ID, and retains immutable provenance. Deployment verifies
 the reference and current authority again.
+
+## Mapping package manifest
+
+`BuildPublication.Manifest` derives a canonical `braid.mapping-package.v1`
+manifest from the retained artifact reference. It binds the fixed
+`Ferrule.Generated.dll` filename, exact SHA-256 and byte count, and the complete
+canonical build intent. The manifest fingerprint therefore includes source,
+compiler, runtime, environment, approval and I/O identities. Reopening a
+publication reproduces the same manifest without another mutable catalog row.
+
+`MappingPackageManifest.Decode` refuses alternate serialization, duplicate or
+unknown fields, unknown versions, invalid intent and out-of-range lengths.
+`Matches` compares against independently loaded publication facts and exact DLL
+bytes. Compilation qualification and release execution share that check through
+`CompiledBuildExecution` before dispatch to the bounded child.
+
+A manifest is not a signature or an authorization token. Parsing it, or matching
+its digest, does not establish its publisher. The existing authenticated catalog,
+current build admission and release checks remain mandatory. This metadata
+contract does not add an external package-import endpoint or replica-readiness
+protocol.

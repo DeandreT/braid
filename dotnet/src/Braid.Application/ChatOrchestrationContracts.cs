@@ -162,7 +162,8 @@ public sealed record ChatOrchestrationLimits
 public enum ChatOrchestrationOutcome
 {
     Completed, Failed, Cancelled, Interrupted, Duplicate, Denied, InvalidRequest,
-    BudgetExceeded, PersistenceUncertain, ProviderUnavailable, CleanupUnproven
+    BudgetExceeded, PersistenceUncertain, ProviderUnavailable, CleanupUnproven,
+    QuotaTurnLimitReached, QuotaTokenLimitReached, QuotaTokenBoundUnavailable, QuotaCoverageUnavailable
 }
 
 /// <summary>Phase is present only for an acknowledged terminal publication (or acknowledged duplicate).</summary>

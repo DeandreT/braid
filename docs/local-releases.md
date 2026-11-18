@@ -81,11 +81,58 @@ one JSON line, for example `{"outcome":"activated","releaseId":"…","qualificat
 
 ```sh
 Braid.ReleaseTool qualify-build ACTOR ORG PROJECT MAPPING BUILD QUALIFICATION
+Braid.ReleaseTool export-package ACTOR ORG PROJECT MAPPING BUILD > mapping.package
+Braid.ReleaseTool stage-package ACTOR ORG PROJECT MAPPING BUILD QUALIFICATION < mapping.package
 Braid.ReleaseTool register-release-target ACTOR ORG PROJECT MAPPING ENVIRONMENT VERSION TARGET
 Braid.ReleaseTool activate-release ACTOR ORG PROJECT MAPPING ENVIRONMENT VERSION TARGET RELEASE QUALIFICATION EXPECTED|none
 Braid.ReleaseTool rollback-release ACTOR ORG PROJECT MAPPING ENVIRONMENT VERSION TARGET RELEASE SOURCE EXPECTED
 Braid.ReleaseTool disable-release-target ACTOR ORG PROJECT MAPPING ENVIRONMENT VERSION TARGET
 ```
+
+`export-package` is the exception to JSON output: it writes only the framed binary
+package to redirected stdout. Use a private directory, `umask 077` and a new file;
+discard partial output on nonzero exit. Export requires the six qualification reader
+logins, current build admission and an own successful published build. The frame is
+a four-byte big-endian manifest length, the canonical v1 manifest, then exactly the
+declared DLL bytes. There are no archive paths or extra entries.
+
+`stage-package` uses the same settings and regression checks as `qualify-build`.
+It rejects truncated, changed or trailing bytes and binds the supplied manifest to
+the independently authorized publication before executing the supplied DLL in the
+selected isolated runtime. An exact retry can recover the retained qualification
+without dispatching again. Neither command changes the active target. Use the
+qualification ID with `activate-release`; rollback retains the original proof.
+For these local targets PostgreSQL already holds the immutable serving bytes. There
+is no second writable DLL copy or per-replica install to reconcile. A disconnected
+host with no access to that publication cannot import a package on its own authority.
+
+### Multi-replica targets
+
+Use `register-replica-target` instead of `register-release-target` for a serving
+pool. Supply the same target arguments and set `BRAID_REPLICA_VERIFIERS` to the
+comma-separated lowercase SHA-256 hashes of 1–32 distinct random 32-byte replica
+credentials (hash the raw bytes, not their hex text). The administrator registers
+the target and its complete roster in one transaction. Reordering the same roster
+is safe. An existing roster cannot be reduced; changing membership or rotating
+credentials requires a new target. Legacy single targets keep their original gate.
+
+On **each** replica, use `stage-replica ACTOR ORG PROJECT MAPPING ENVIRONMENT VERSION
+TARGET BUILD < mapping.package`. Supply the qualification settings, release writer
+login and only that replica's `BRAID_REPLICA_CREDENTIAL` (64 hex characters). Run it
+with the serving replica's pinned local Docker runtime; pooled and remote runners
+are refused because their replies do not authenticate an individual serving member.
+The credential authenticates the replica; a publisher or another member cannot
+substitute a replica name. A successful `ready` result binds an independent, fresh
+qualification to that member. The DLL remains in the authorized shared artifact store.
+
+Activation and rollback both require every member to have qualified the **same
+published build** on the target runtime within the last ten minutes (database
+time). Any one of those qualifications can be the release qualification. The
+database rechecks readiness under the target lock at application, not just at
+request time. Missing or expired readiness never displaces the active release.
+Rerun staging to renew; `withdraw-replica ACTOR ORG PROJECT MAPPING ENVIRONMENT
+VERSION TARGET` invalidates this publisher's receipts for this member before a
+planned removal. A crashed replica's receipt expires; it is not a live health probe.
 
 - `qualify-build` runs `BuildQualificationService` for one of the actor's completed
   builds. It replays the build's saved regression evidence through the compiled runtime

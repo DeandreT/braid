@@ -14,6 +14,82 @@ use zip::{CompressionMethod, ZipArchive, ZipWriter, write::SimpleFileOptions};
 
 const NATIVE: &[u8] = include_bytes!("fixtures/xlsx-flat.native.json");
 
+#[test]
+fn restricted_child_reads_a_workbook_to_json_but_refuses_the_workbook_writer() {
+    use std::process::{Command, Stdio};
+    let input = workbook("Orders", &[row("Order-7", 7)]);
+    let mut project: serde_json::Value = serde_json::from_slice(NATIVE).unwrap();
+    project["target_options"] = serde_json::json!({"json_document":true});
+    let to_json = serde_json::to_vec(&project).unwrap();
+    for (profile, mapping, bytes, expected_error) in [
+        (
+            xlsx_document::PROFILE,
+            NATIVE,
+            input.as_slice(),
+            Some("unsupportedCapability"),
+        ),
+        (
+            xlsx_document::READ_JSON_PROFILE,
+            NATIVE,
+            input.as_slice(),
+            Some("unsupportedCapability"),
+        ),
+        (
+            xlsx_document::READ_JSON_PROFILE,
+            to_json.as_slice(),
+            &b"not a workbook"[..],
+            Some("invalidInput"),
+        ),
+        (
+            xlsx_document::READ_JSON_PROFILE,
+            to_json.as_slice(),
+            input.as_slice(),
+            None,
+        ),
+    ] {
+        let mut request = header(mapping, bytes);
+        request.protocol_version = profile.into();
+        let mut frame = support::framed_bytes(&serde_json::to_vec(&request).unwrap(), mapping);
+        frame.extend((bytes.len() as u32).to_be_bytes());
+        frame.extend_from_slice(bytes);
+        let mut child = Command::new(env!("CARGO_BIN_EXE_braid-ferrule-host"))
+            .args([
+                "--service-sandbox",
+                "--cpu-seconds=30",
+                "--memory-bytes=536870912",
+                "--open-files=64",
+            ])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child.stdin.take().unwrap().write_all(&frame).unwrap();
+        let output = child.wait_with_output().unwrap();
+        assert!(output.status.success());
+        let reply = output.stdout.strip_prefix(b"BFS1").unwrap();
+        let len = u32::from_be_bytes(reply[..4].try_into().unwrap()) as usize;
+        let body: serde_json::Value = serde_json::from_slice(&reply[4..4 + len]).unwrap();
+        let payload = &reply[4 + len..];
+        assert_eq!(body["profile"], profile);
+        if let Some(reason) = expected_error {
+            assert_eq!(body["failure"]["code"], reason, "{body}");
+            assert!(payload.is_empty());
+        } else {
+            assert!(body["failure"].is_null(), "{body}");
+            assert_eq!(
+                body["result"]["artifacts"][0]["mediaType"],
+                "application/json"
+            );
+            assert_eq!(
+                u32::from_be_bytes(payload[..4].try_into().unwrap()) as usize,
+                payload.len() - 4
+            );
+            let rows: serde_json::Value = serde_json::from_slice(&payload[4..]).unwrap();
+            assert_eq!(rows, serde_json::json!([{"code":"Order-7","quantity":7}]));
+        }
+    }
+}
+
 fn header(native: &[u8], input: &[u8]) -> PreviewRequestHeader {
     let context = support::request("inspect", native);
     PreviewRequestHeader {

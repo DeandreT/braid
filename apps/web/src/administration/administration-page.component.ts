@@ -1,3 +1,5 @@
+import { OrganizationSelection } from "../catalog/organization-selection";
+import { RouterLink } from "@angular/router";
 import { DOCUMENT, DatePipe, JsonPipe } from "@angular/common";
 import {
   Component,
@@ -28,6 +30,7 @@ import {
   type OrganizationAdministration,
   type ProjectAdministration,
 } from "./administration-api";
+import { isInvitationPath } from "./invitation-path";
 
 type AdministrationForm = "organization" | "project" | "invitation" | "grant";
 const formKinds: AdministrationForm[] = [
@@ -39,12 +42,13 @@ const formKinds: AdministrationForm[] = [
 
 @Component({
   selector: "braid-administration-page",
-  imports: [FormsModule, DatePipe, JsonPipe],
+  imports: [RouterLink, FormsModule, DatePipe, JsonPipe],
   templateUrl: "./administration-page.component.html",
   styleUrl: "./administration-page.component.css",
   host: { "(input)": "draftChanged()", "(change)": "draftChanged()" },
 })
 export class AdministrationPageComponent {
+  readonly selection = inject(OrganizationSelection);
   readonly contexts = inject(CatalogContextStore);
   private readonly api = inject(AdministrationApi);
   private readonly document = inject(DOCUMENT);
@@ -466,8 +470,7 @@ export class AdministrationPageComponent {
         result &&
         typeof result === "object" &&
         "redemptionPath" in result &&
-        typeof result.redemptionPath === "string" &&
-        /^\/invitations#[0-9a-f]{64}$/.test(result.redemptionPath)
+        isInvitationPath(result.redemptionPath, owner.allowedOrganizationId)
       )
         this.invitationLink.set(
           new URL(result.redemptionPath, this.document.location.origin).href,

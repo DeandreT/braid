@@ -7,7 +7,8 @@ internal static class CatalogRoleGuard
     internal static async Task ValidateAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
         CancellationToken cancellationToken)
     {
-        var reads = CatalogSchemaContract.FullReadTables;
+        string[] reads = await LifecycleCatalogAdmission.InstalledAsync(connection, transaction, cancellationToken)
+            ? [.. CatalogSchemaContract.FullReadTables, "resource_lifecycles"] : CatalogSchemaContract.FullReadTables;
         var reservationColumns = CatalogSchemaContract.ReservationReadColumns;
         var sources = CatalogSchemaContract.Tables.Keys.ToArray();
         await using (var guard = new NpgsqlCommand("""
@@ -116,6 +117,14 @@ internal static class CatalogRoleGuard
             "SELECT organization_id FROM ONLY braid.revision_ingestions WHERE false", connection, transaction))
             await protectReservations.ExecuteNonQueryAsync(cancellationToken);
 
+        // Lifecycle replaces transition functions and adds fences on these locked sources.
+        // Its pinned complete catalog describes the post-upgrade schema; the login,
+        // privileges and relation locks above remain mandatory on both paths.
+        if (await LifecycleCatalogAdmission.ValidateIfInstalledAsync(connection, transaction, cancellationToken))
+        {
+            await CatalogSearchSchemaAdmission.ValidateAsync(connection, transaction, cancellationToken, admittedLifecycle: true);
+            return;
+        }
         await SupplementalMaintenanceSchemaAdmission.ValidateAsync(connection, transaction, cancellationToken);
         await CatalogSearchSchemaAdmission.ValidateAsync(connection, transaction, cancellationToken);
         await ValidateRelationsAsync(connection, transaction, sources, cancellationToken);
@@ -284,8 +293,9 @@ internal static class CatalogRoleGuard
         if (table.FunctionBody is null)
         {
             await using var absent = new NpgsqlCommand(
-                "SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_trigger WHERE tgrelid = ('braid.' || $1)::regclass AND NOT tgisinternal)", connection, transaction);
+                "SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_trigger WHERE tgrelid = ('braid.' || $1)::regclass AND NOT tgisinternal AND NOT tgname = ANY($2::text[]))", connection, transaction);
             absent.Parameters.AddWithValue(table.Name);
+            absent.Parameters.AddWithValue(await OrganizationSwitchingSchemaAdmission.AdmitTriggersAsync(connection, transaction, table.Name, cancellationToken));
             if (await absent.ExecuteScalarAsync(cancellationToken) is not false)
                 throw Refusal("The catalog ownership sources must not have additional transition triggers.");
             await ValidateNoRulesAsync(connection, transaction, table.Name, cancellationToken);

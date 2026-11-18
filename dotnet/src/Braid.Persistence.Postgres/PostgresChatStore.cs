@@ -9,11 +9,16 @@ namespace Braid.Persistence.Postgres;
 public sealed partial class PostgresChatStore : IChatConversationStore, IChatTurnStore
 {
     private readonly PostgresChatDatabase _database;
+    private readonly IAiTokenBoundAuthority _tokenBounds;
     private const string Scope = "organization_id=@org AND creator_id=@creator AND conversation_id=@conversation";
     private const string TurnScope = Scope + " AND turn_id=@turn";
     // The conversation's complete identity: a revision conversation's exact scope, or a workspace conversation's none.
     private const string ExactScope = "conversation_kind=@conversationKind AND project_id IS NOT DISTINCT FROM @project AND mapping_id IS NOT DISTINCT FROM @mapping AND revision_id IS NOT DISTINCT FROM @revision";
-    public PostgresChatStore(PostgresChatDatabase database) => _database = database ?? throw new ArgumentNullException(nameof(database));
+    public PostgresChatStore(PostgresChatDatabase database, IAiTokenBoundAuthority? tokenBounds = null)
+    {
+        _database = database ?? throw new ArgumentNullException(nameof(database));
+        _tokenBounds = tokenBounds ?? new UnavailableAiTokenBoundAuthority();
+    }
 
     public Task<ChatStoreOutcome> CreateAsync(ActorContext actor, ChatConversationIntent intent, CancellationToken ct = default)
     {
@@ -107,25 +112,13 @@ public sealed partial class PostgresChatStore : IChatConversationStore, IChatTur
                 if (identity != ChatStoreOutcome.Applied)
                 { await tx.Transaction.RollbackAsync(admission, ct); return new(identity == ChatStoreOutcome.Replayed ? ChatStoreOutcome.Conflict : identity); }
             }
-            await tx.Transaction.ReleaseAsync(admission, ct);
             var canonical = ChatCanonicalEnvelope.Turn(conversation, intent);
-            await using (var insert = Command(tx, """
-                INSERT INTO braid.chat_turns(organization_id,creator_id,conversation_id,turn_id,original_request,request_id,original_envelope,canonical_envelope,envelope_fingerprint,profile_id,profile_version,
-                    provider_id,model_id,metadata_policy_id,metadata_policy_version,profile_fingerprint,max_events,max_event_bytes,max_rounds,deadline)
-                VALUES(@org,@creator,@conversation,@turn,@request,@requestId,@originalEnvelope,@canonicalEnvelope,@envelopeFingerprint,@profile,@pv,@provider,@model,@policy,@mpv,@fingerprint,@events,@bytes,@rounds,@deadline)
-                """, key, intent.TurnId))
-            {
-                Add(insert, "request", NpgsqlDbType.Text, intent.OriginalRequest);
-                Add(insert, "requestId", NpgsqlDbType.Uuid, intent.Envelope.RequestId); Add(insert, "originalEnvelope", NpgsqlDbType.Text, intent.Envelope.CanonicalJson);
-                Add(insert, "canonicalEnvelope", NpgsqlDbType.Text, canonical); Add(insert, "envelopeFingerprint", NpgsqlDbType.Text, ChatCanonicalEnvelope.Fingerprint(canonical).Value);
-                Add(insert, "profile", NpgsqlDbType.Text, intent.Profile.ProfileId); Add(insert, "pv", NpgsqlDbType.Integer, intent.Profile.Version);
-                Add(insert, "provider", NpgsqlDbType.Text, intent.Profile.ProviderId); Add(insert, "model", NpgsqlDbType.Text, intent.Profile.ModelId);
-                Add(insert, "policy", NpgsqlDbType.Text, intent.Profile.MetadataPolicyId); Add(insert, "mpv", NpgsqlDbType.Integer, intent.Profile.MetadataPolicyVersion);
-                Add(insert, "fingerprint", NpgsqlDbType.Text, intent.Profile.ConfigurationFingerprint.Value);
-                Add(insert, "events", NpgsqlDbType.Integer, intent.Budget.MaxEvents); Add(insert, "bytes", NpgsqlDbType.Integer, intent.Budget.MaxEventBytes);
-                Add(insert, "rounds", NpgsqlDbType.Integer, intent.Budget.MaxRounds); Add(insert, "deadline", NpgsqlDbType.TimestampTz, intent.DeadlineUtc);
-                RequireOne(await insert.ExecuteNonQueryAsync(ct));
-            }
+            var quota = await InsertQuotaTurnAsync(tx, actor, key, intent, canonical, ct);
+            if (quota != ChatStoreOutcome.Applied)
+            { await tx.Transaction.RollbackAsync(admission, ct); return new(quota); }
+            if (!await AuthorizedAsync(tx, key, ct))
+            { await tx.Transaction.RollbackAsync(admission, ct); return Denied(); }
+            await tx.Transaction.ReleaseAsync(admission, ct);
             await InsertEventAsync(tx, key, intent.TurnId, 1, Guid.NewGuid(), ChatEventKind.Started, "", null, null, ct);
             return new(ChatStoreOutcome.Applied, await RequireTurnAsync(tx, key, intent.TurnId, ct));
         }, Denied(), ct);

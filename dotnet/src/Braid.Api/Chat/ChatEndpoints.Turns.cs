@@ -77,6 +77,10 @@ public static partial class ChatEndpoints
         {
             ChatOrchestrationOutcome.Denied => NotFound(),
             ChatOrchestrationOutcome.InvalidRequest => Error(ChatErrorCodeV1.InvalidRequest, StatusCodes.Status400BadRequest),
+            ChatOrchestrationOutcome.QuotaTurnLimitReached => Error(ChatErrorCodeV1.QuotaTurnLimitReached, StatusCodes.Status429TooManyRequests),
+            ChatOrchestrationOutcome.QuotaTokenLimitReached => Error(ChatErrorCodeV1.QuotaTokenLimitReached, StatusCodes.Status429TooManyRequests),
+            ChatOrchestrationOutcome.QuotaTokenBoundUnavailable => Error(ChatErrorCodeV1.QuotaTokenBoundUnavailable, StatusCodes.Status409Conflict),
+            ChatOrchestrationOutcome.QuotaCoverageUnavailable => Error(ChatErrorCodeV1.QuotaCoverageUnavailable, StatusCodes.Status409Conflict),
             _ => Error(ChatErrorCodeV1.TurnNotStarted, StatusCodes.Status409Conflict)
         };
     }

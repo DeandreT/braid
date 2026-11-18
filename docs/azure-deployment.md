@@ -555,17 +555,12 @@ regenerate it after an intended change, set `BRAID_QUALIFY_UPDATE_EXPECTED=1`, t
 
 ## Open questions and limits
 
-- **Current credential wiring.** `provision-database.sh` requires
-  `BRAID_CHAT_APPROVER_PASSWORD`, `BRAID_DRAFT_READER_PASSWORD` and
-  `BRAID_DRAFT_WRITER_PASSWORD`. The login inventory in `initialize-secrets.sh` and
-  the `roles` array used by the `database-roles` job in `modules/application.bicep`
-  do not supply them. The job therefore cannot complete fresh provisioning as
-  currently wired. The application's `chatFiles` also omits
-  `BRAID_CHAT_APPROVER_CONNECTION_STRING_FILE`, which enabled Session chat requires.
-  Supply these secrets to provisioning and runtime before deployment. Do not work
-  around this by sharing another role's password, skipping migrations or giving
-  the app the migrator credential. The optional creation/specification host
-  features also need their own composition; these templates do not enable them.
+- **Credential wiring.** The database-roles job receives separate chat approver
+  and draft reader/writer passwords. When Session chat is enabled, the server
+  receives the approver connection through its protected file. Fresh provisioning
+  creates the trigger worker, organization discovery and lifecycle worker logins
+  for the migration sequence without enabling those services. The optional
+  creation/specification features require separate host configuration.
 - **Private search extension.** Provisioning requires `pg_trgm` to be allowed by
   the server's extension policy. The role transaction installs it in
   `braid_search_extensions` and removes PUBLIC schema and function privileges.

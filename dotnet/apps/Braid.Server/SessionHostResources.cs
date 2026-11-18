@@ -110,6 +110,12 @@ internal sealed class SessionHostResources
         services.AddBraidEntraBrowserAuthentication(new(options.OrganizationId, options.Origin), profile, identities, displayMetadata);
         services.AddBraidAuthenticationHttp(new(AuthenticationHttpMode.Session, options.Origin), environment);
         services.AddBraidSessionCatalog(new(options.OrganizationId), options.Metadata, options.Ingestion, options.Creation, options.Reports);
+        // Optional restricted discovery pool; its absence fails discovery reads, never business authority.
+        if (read("BRAID_ORGANIZATION_DISCOVERY_CONNECTION_STRING_FILE") is not null)
+        {
+            var connection = ReadConnection(read, "BRAID_ORGANIZATION_DISCOVERY_CONNECTION_STRING_FILE");
+            services.AddSingleton<IOrganizationDiscovery>(_ => new PostgresOrganizationDiscovery(connection));
+        }
         if (options.Bearer is { } bearer)
         {
             // Borrowed by the admission: the validator only fetches the fixed tenant's discovery and keys on first use.

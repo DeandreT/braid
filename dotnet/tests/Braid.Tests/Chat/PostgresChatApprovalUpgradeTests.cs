@@ -46,7 +46,7 @@ public sealed class PostgresChatApprovalUpgradeTests(PostgresFixture fixture)
         var before = await test.ScalarAsync<string>(HistoricalSnapshot);
 
         await test.MigrateAsync();
-        Assert.Equal(Enumerable.Range(1, 47), await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM braid.schema_migrations"));
+        Assert.Equal(Enumerable.Range(1, 66), await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM braid.schema_migrations"));
         Assert.Equal(before, await test.ScalarAsync<string>(HistoricalSnapshot));
         Assert.Equal(0L, await test.ScalarAsync<long>("SELECT count(*) FROM braid.chat_edit_proposals"));
         Assert.Equal(0L, await test.ScalarAsync<long>("SELECT count(*) FROM braid.chat_edit_approvals"));

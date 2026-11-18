@@ -2,7 +2,18 @@
 export const defaultReturnPath = "/catalog";
 export const maximumReturnPathLength = 7 * 1024;
 export const maximumApplicationPathLength = 1024;
-const sections = ["catalog", "help", "administration", "chat", "notifications"];
+const sections = [
+  "catalog",
+  "help",
+  "administration",
+  "chat",
+  "notifications",
+  "audit",
+  "usage",
+  "retention",
+  "quotas",
+  "organizations",
+];
 const encoder = new TextEncoder();
 const wire = /^[A-Za-z0-9\-._~!$&'()*+,;=:@/?%#]*$/;
 const pathCharacter = /^[A-Za-z0-9\-._~!$&'()*+,;=:@]$/;
@@ -49,7 +60,17 @@ export function isReturnPath(value: unknown): value is string {
       ? ""
       : value.slice(queryAt + 1, fragmentAt < 0 ? value.length : fragmentAt),
   );
-  if (values === null || !allowedQuery(segments, values)) return false;
+  const scoped = unqualified(segments);
+  if (
+    values === null ||
+    scoped === null ||
+    !allowedQuery(scoped, values) ||
+    // A qualified resource reference names exactly its route's organization.
+    (scoped !== segments &&
+      values.has("organizationId") &&
+      values.get("organizationId") !== segments[1])
+  )
+    return false;
   if (fragmentAt < 0) return true;
   const fragment = decode(value.slice(fragmentAt + 1), false);
   if (fragment === null) return false;
@@ -71,6 +92,9 @@ export function isReturnPath(value: unknown): value is string {
 }
 
 function allowedQuery(path: string[], values: Map<string, string>): boolean {
+  if (path[0] === "retention" || path[0] === "quotas") return path.length === 1 && values.size === 0;
+  if (path[0] === "usage") return path.length === 1 && values.size === 0;
+  if (path[0] === "audit") return path.length === 1 && values.size === 0;
   if (path.length === 1 && path[0] === "chat") {
     if (
       values.has("creationProjectId") ||
@@ -221,6 +245,29 @@ function allowedQuery(path: string[], values: Map<string, string>): boolean {
       [...values.values()].every((value) => token(value, 64))
     );
   return values.size === 0;
+}
+
+/**
+ * Organization-qualified standalone and search routes follow their root-only rules; any other
+ * path under `/organizations` is refused.
+ */
+function unqualified(path: string[]): string[] | null {
+  if (path[0] === "organizations") {
+    const rest = path.slice(2);
+    return id(path[1] ?? "") &&
+      ["chat", "chat/resources", "notifications", "administration", "audit", "usage", "quotas", "retention"].includes(
+        rest.join("/"),
+      )
+      ? rest
+      : null;
+  }
+  return path.length === 4 &&
+    path[0] === "catalog" &&
+    path[1] === "organizations" &&
+    id(path[2]) &&
+    path[3] === "search"
+    ? ["catalog", "search"]
+    : path;
 }
 
 function revision(path: string[]): boolean {

@@ -4,6 +4,10 @@ import { createHash, randomUUID } from "node:crypto";
 import { lstat, readFile } from "node:fs/promises";
 import { dirname, isAbsolute } from "node:path";
 import type { components } from "../src/api/generated";
+import {
+  organizationContext,
+  organizationContextPath,
+} from "./organization-context.fixture";
 
 export type ProjectScope = components["schemas"]["CatalogProjectScopeV1"];
 export type MappingScope = components["schemas"]["CatalogMappingScopeV1"];
@@ -676,6 +680,16 @@ export async function syntheticCatalog(
 ): Promise<void> {
   const replies: Record<string, unknown> = {
     "/api/v1/catalog/context": synthetic.context,
+    "/api/v1/organizations": {
+      schemaVersion: "braid.organizations.v1",
+      organizations: [
+        {
+          organizationId: synthetic.org,
+          name: synthetic.context.organizationName,
+        },
+      ],
+      nextCursor: null,
+    },
     [catalogApi(projectsPath(synthetic.org))]: {
       projects: [synthetic.project],
       nextCursor: null,
@@ -694,6 +708,9 @@ export async function syntheticCatalog(
     ...overrides,
   };
   // Explicit Development bootstrap only; catalog route replies below are unchanged.
+  const root = replies["/api/v1/catalog/context"] as typeof synthetic.context;
+  const path = organizationContextPath(synthetic.org);
+  if (!(path in overrides)) replies[path] = organizationContext(root);
   await page.route("**/api/auth/session*", async (route: Route) => {
     const request = route.request(),
       url = new URL(request.url());

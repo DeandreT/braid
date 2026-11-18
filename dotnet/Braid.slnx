@@ -14,6 +14,8 @@
     <Project Path="src/Braid.Application/Braid.Application.csproj" />
     <Project Path="src/Braid.Contracts/Braid.Contracts.csproj" />
     <Project Path="src/Braid.Deployment/Braid.Deployment.csproj" />
+    <Project Path="src/Braid.Triggers.Emulators/Braid.Triggers.Emulators.csproj" />
+    <Project Path="src/Braid.Triggers.Sftp/Braid.Triggers.Sftp.csproj" />
     <Project Path="src/Braid.Domain/Braid.Domain.csproj" />
     <Project Path="src/Braid.Identity/Braid.Identity.csproj" />
     <Project Path="src/Braid.Jobs/Braid.Jobs.csproj" />

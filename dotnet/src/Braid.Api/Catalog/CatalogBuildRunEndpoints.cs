@@ -15,6 +15,8 @@ public static partial class CatalogEndpoints
     {
         BuildPageParameters(DescribeBuild<BuildRunPageV1>(endpoints.MapGet(route + "/build-runs", GetBuildRuns), "GetBuildRuns", "Read bounded own build history without artifact bodies."), "afterBuildId");
         DescribeBuild<BuildRunV1>(endpoints.MapGet(route + "/build-runs/{buildId}", GetBuildRun), "GetBuildRun", "Read one exact own retained build result.");
+        DescribeBuild<MappingPackageManifestV1>(endpoints.MapGet(route + "/build-runs/{buildId}/package-manifest", GetBuildPackageManifest),
+            "GetBuildPackageManifest", "Read the canonical manifest of an own successful immutable build; this does not authorize execution.");
         DescribeBuild<BuildRunReceiptV1>(endpoints.MapPut(route + "/build-runs/{buildId}", PutBuildRun), "PutBuildRun", "Queue an exact stored approval or recover the original submission.")
             .Accepts<BuildRunPutV1>(CatalogBuildRequest.RunMediaType).Produces<BuildRunReceiptV1>(StatusCodes.Status201Created)
             .Produces<CatalogErrorV1>(StatusCodes.Status409Conflict).Produces<CatalogErrorV1>(StatusCodes.Status412PreconditionFailed)
@@ -50,6 +52,20 @@ public static partial class CatalogEndpoints
             var id = CatalogBuildRequest.Id(buildId);
             if (mapping is null || !await BuildMappingAccess(context, admission, mapping)) return NotFound();
             return await BuildRunResponse(context, admission, mapping, id);
+        });
+    private static Task<IResult> GetBuildPackageManifest(string organizationId, string projectId, string mappingId, string buildId, HttpContext context, CatalogBuildOptions options) =>
+        WithBuildAdmission(context, options, async admission =>
+        {
+            RequireQuery(context);
+            var mapping = BuildMapping(organizationId, projectId, mappingId, admission);
+            var id = CatalogBuildRequest.Id(buildId);
+            if (mapping is null) return NotFound();
+            var value = await BuildRunAsync(context.RequestServices, admission.Actor!, mapping, id, context.RequestAborted);
+            if (value is not { State: BuildRunState.Succeeded, Artifact: { } artifact }) return NotFound();
+            if (!artifact.MatchesIntent(value.Intent)) throw new InvalidOperationException("Build artifact intent mismatch.");
+            var bytes = MappingPackageManifest.Create(artifact).CopyCanonicalBytes();
+            context.RequestAborted.ThrowIfCancellationRequested();
+            return await BuildMappingAccess(context, admission, mapping) ? CaseResponse(bytes) : NotFound();
         });
     private static Task<IResult> CancelBuildRun(string organizationId, string projectId, string mappingId, string buildId, HttpContext context, CatalogBuildOptions options) =>
         WithBuildAdmission(context, options, async admission =>

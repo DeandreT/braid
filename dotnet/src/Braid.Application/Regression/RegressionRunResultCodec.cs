@@ -44,10 +44,10 @@ public sealed class RegressionRunResultCodec
         if (runId == Guid.Empty) throw Invalid();
         var csv = execution.Profile == CsvDocumentPolicy.Profile || execution.Outputs?.Outputs.Any(output => output.CsvDialect is not null) == true;
         var xml = execution.Profile == XmlPreviewAdmission.Profile;
-        var document = new Document(xml ? XmlSchema : csv ? CsvSchema : "braid.regression-run-result.v1", runId.ToString("D"), reference.ContentDigest.Value,
+        var document = new Document(NativeDocumentFormat.FromProfile(execution.Profile)?.ResultSchema ?? (xml ? XmlSchema : csv ? CsvSchema : "braid.regression-run-result.v1"), runId.ToString("D"), reference.ContentDigest.Value,
             execution.Outcome, execution.PreviewStatus, execution.Outputs?.Outputs.Select(output => new Output(output.Key.Name,
                 Convert.ToBase64String(output.CopyBytes()).TrimEnd('=').Replace('+', '-').Replace('/', '_'),
-                output.MediaType == PreviewPolicy.MediaType ? null : output.MediaType, output.CsvDialect, output.XmlMetadata)).ToArray());
+                output.MediaType == PreviewPolicy.MediaType ? null : output.MediaType, output.CsvDialect, output.XmlMetadata, output.DocumentSettings)).ToArray());
         var bytes = JsonSerializer.SerializeToUtf8Bytes(document, Json);
         if (bytes.Length > MaximumBytes) throw Invalid();
         token.ThrowIfCancellationRequested();
@@ -65,7 +65,8 @@ public sealed class RegressionRunResultCodec
             _ = new UTF8Encoding(false, true).GetCharCount(bytes);
             var doc = JsonSerializer.Deserialize<Document>(bytes, Json) ?? throw Invalid();
             var reference = new RegressionCaseEnvelopeCodec().Encode(value, token).Reference;
-            if (doc.Schema is not ("braid.regression-run-result.v1" or CsvSchema or XmlSchema) ||
+            var native = NativeDocumentFormat.FromProfile(value.Runtime.Profile);
+            if (doc.Schema != native?.ResultSchema && doc.Schema is not ("braid.regression-run-result.v1" or CsvSchema or XmlSchema) ||
                 doc.Schema == XmlSchema && value.Runtime.Profile != XmlPreviewAdmission.Profile ||
                 doc.Schema == CsvSchema && value.Runtime.Profile != CsvDocumentPolicy.Profile ||
                 doc.RunId != runId.ToString("D") || doc.CaseDigest != reference.ContentDigest.Value ||
@@ -78,6 +79,7 @@ public sealed class RegressionRunResultCodec
             }
             else
             {
+                if (native is not null && doc.Schema != native.ResultSchema) throw Invalid();
                 if ((doc.Schema == CsvSchema) != (value.Runtime.Profile == CsvDocumentPolicy.Profile)) throw Invalid();
                 if ((doc.Schema == XmlSchema) != (value.Runtime.Profile == XmlPreviewAdmission.Profile)) throw Invalid();
                 if (doc.PreviewStatus is not { } status || !Enum.IsDefined(status) || doc.Outputs is null ||
@@ -93,13 +95,14 @@ public sealed class RegressionRunResultCodec
                     if (value.Runtime.Profile == CsvDocumentPolicy.Profile &&
                         (doc.Schema != CsvSchema || output.CsvDialect != value.Expected.Outputs.Single().CsvDialect)) throw Invalid();
                     if ((value.Runtime.Profile == XmlPreviewAdmission.Profile) != (output.XmlMetadata is not null)) throw Invalid();
+                    if (native is not null ? output.Name is not null || output.DocumentSettings != value.Expected.Outputs.Single().DocumentSettings : output.DocumentSettings is not null) throw Invalid();
                     var text = output.Content.Replace('-', '+').Replace('_', '/');
                     var raw = Convert.FromBase64String(text.PadRight((text.Length + 3) / 4 * 4, '='));
                     if (raw.Length > remaining) throw Invalid();
                     remaining -= raw.Length;
                     var key = output.Name is null ? RegressionOutputKey.Primary : RegressionOutputKey.Named(output.Name);
                     if (output.Name is not null) RegressionCaseValues.Name(output.Name);
-                    outputs.Add(RegressionOutput.Capture(key, raw, token, output.MediaType ?? PreviewPolicy.MediaType, output.CsvDialect, output.XmlMetadata));
+                    outputs.Add(RegressionOutput.Capture(key, raw, token, output.MediaType ?? PreviewPolicy.MediaType, output.CsvDialect, output.XmlMetadata, output.DocumentSettings));
                 }
                 var set = RegressionOutputSet.Capture(outputs, token);
                 if (status != MappingPreviewStatus.Succeeded && set.Outputs.Count != 0 || status == MappingPreviewStatus.Succeeded && set.Outputs.Count == 0)
@@ -128,7 +131,8 @@ public sealed class RegressionRunResultCodec
     private sealed record Output(string? Name, string Content,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? MediaType = null,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CsvDocumentDialect? CsvDialect = null,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull), JsonConverter(typeof(XmlOutputMetadataConverter))] XmlDocumentMetadata? XmlMetadata = null);
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull), JsonConverter(typeof(XmlOutputMetadataConverter))] XmlDocumentMetadata? XmlMetadata = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] NativeDocumentSettings? DocumentSettings = null);
 
     /// <summary>The closed canonical metadata codec, so stored bytes re-encode identically.</summary>
     private sealed class XmlOutputMetadataConverter : JsonConverter<XmlDocumentMetadata>

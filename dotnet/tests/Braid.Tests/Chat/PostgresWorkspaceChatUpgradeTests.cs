@@ -109,7 +109,7 @@ public sealed class PostgresWorkspaceChatUpgradeTests(PostgresFixture fixture)
     }
 
     // The prefix build's own writer statements: identity routine, conversation, turn and start event, round, citation.
-    private static async Task WriteAsPrefixAsync(PostgresCase test, ChatConversationIntent conversation, ChatTurnIntent intent,
+    internal static async Task WriteAsPrefixAsync(PostgresCase test, ChatConversationIntent conversation, ChatTurnIntent intent,
         ChatRoundIntent round, string citation)
     {
         var key = conversation.Key;
@@ -188,7 +188,7 @@ public sealed class PostgresWorkspaceChatUpgradeTests(PostgresFixture fixture)
     }
 
     /// <summary>An authored usable retained attempt for one operation, as the derivation owner would have committed it.</summary>
-    private static async Task<ChatReportPin> SeedReportAsync(PostgresCase test, ActorContext actor, RevisionReportKey key)
+    internal static async Task<ChatReportPin> SeedReportAsync(PostgresCase test, ActorContext actor, RevisionReportKey key)
     {
         await using var connection = PostgresChatSecurityTests.Open(test.MigrationConnectionString); await connection.OpenAsync();
         await using var transaction = await connection.BeginTransactionAsync();

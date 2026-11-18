@@ -83,6 +83,11 @@ receipts are returned only after commit. The existing one-second lock and
 five-second statement limits apply. No body stream, native store or worker is
 held inside this transaction.
 
+Project creation requires both row triggers on `project_creations`: the transition
+guard protects retained creation records, and the request-key guard prevents a
+purged key from reserving new work. A missing, disabled or miswired trigger
+refuses admission; restoring service does not require broader creator grants.
+
 The migration owner is trusted. Binary-pinned source checks can reject altered
 routines at application admission; an owner-editable routine cannot securely
 attest itself against a malicious owner. Relation locks protect admitted

@@ -20,10 +20,16 @@ import { BrowserAuthControlsComponent } from "./auth/browser-auth-controls.compo
 import { CatalogContextStore } from "./catalog/catalog-context";
 import { ConnectionNoticeComponent } from "./workbench/connection-notice.component";
 import { HeaderSearchComponent } from "./catalog/search/header-search.component";
+import { OrganizationSelection } from "./catalog/organization-selection";
+import { OrganizationSwitcherComponent } from "./catalog/organization-switcher.component";
 import { NotificationPopoverComponent } from "./catalog/automation/notification-popover.component";
 import { WorkspaceChatPanelComponent } from "./workbench/workspace-chat-panel.component";
 import { WorkspaceConversation } from "./workbench/workspace-conversation";
 import { ThemePreference } from "./theme-preference";
+
+/** Sign-in and invitation entry are full pages without the workspace header. */
+const entryPage =
+  /^\/(?:sign-in|invitations|organizations\/[^/?#]+\/invitations)(?:[?#]|$)/;
 
 @Component({
   selector: "braid-root",
@@ -34,6 +40,7 @@ import { ThemePreference } from "./theme-preference";
     BrowserAuthControlsComponent,
     ConnectionNoticeComponent,
     HeaderSearchComponent,
+    OrganizationSwitcherComponent,
     NotificationPopoverComponent,
     WorkspaceChatPanelComponent,
   ],
@@ -41,6 +48,7 @@ import { ThemePreference } from "./theme-preference";
 })
 export class AppComponent {
   readonly contexts = inject(CatalogContextStore);
+  readonly selection = inject(OrganizationSelection);
   readonly chat = inject(WorkspaceConversation);
   readonly chatVisible = computed(
     () =>
@@ -67,16 +75,8 @@ export class AppComponent {
       .events.pipe(
         filter((event) => event instanceof NavigationEnd),
         tap((event) => {
-          this.workbench.set(
-            !/^\/(?:sign-in|invitations)(?:[?#]|$)/.test(
-              event.urlAfterRedirects,
-            ),
-          );
-          this.signInPage.set(
-            /^\/(?:sign-in|invitations)(?:[?#]|$)/.test(
-              event.urlAfterRedirects,
-            ),
-          );
+          this.workbench.set(!entryPage.test(event.urlAfterRedirects));
+          this.signInPage.set(entryPage.test(event.urlAfterRedirects));
           this.navigationOpen.set(false);
           if (initialNavigation) {
             initialNavigation = false;

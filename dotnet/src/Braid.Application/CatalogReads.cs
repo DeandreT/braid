@@ -6,19 +6,25 @@ namespace Braid.Application;
 /// <summary>One fresh organization admission; it grants no access to another operation or project.</summary>
 public sealed record CatalogOrganizationAdmission
 {
-    public CatalogOrganizationAdmission(Guid organizationId, PrincipalId principalId, string name)
+    public CatalogOrganizationAdmission(Guid organizationId, PrincipalId principalId, string name,
+        long admissionVersion = 1)
     {
         CatalogReadGuard.RequireId(organizationId, nameof(organizationId));
         ArgumentNullException.ThrowIfNull(principalId);
         CatalogReadGuard.RequireName(name, false);
+        if (admissionVersion < 1)
+            throw new ArgumentOutOfRangeException(nameof(admissionVersion), "An organization admission incarnation is positive.");
         OrganizationId = organizationId;
         PrincipalId = principalId;
         Name = name;
+        AdmissionVersion = admissionVersion;
     }
 
     public Guid OrganizationId { get; }
     public PrincipalId PrincipalId { get; }
     public string Name { get; }
+    /// <summary>The retained membership incarnation; it advances once per admission activity change.</summary>
+    public long AdmissionVersion { get; }
 }
 
 public sealed record CatalogProject

@@ -15,7 +15,11 @@ public enum PreviewExecutionProfile
     Document,
     /// <summary>Separate primary-only CSV contract, including explicit empty input presence.</summary>
     CsvDocument,
-    XmlDocument
+    XmlDocument,
+    FlexTextDocument,
+    XlsxDocument,
+    ProtobufDocument,
+    XbrlDocument
 }
 
 public static class DocumentPreviewPolicy
@@ -72,10 +76,12 @@ public sealed class PreviewInputDocument
     private readonly byte[] _bytes;
 
     public PreviewInputDocument(string? name, ReadOnlySpan<byte> bytes, CsvDocumentDialect? csvDialect = null,
-        XmlDocumentMetadata? xmlMetadata = null)
+        XmlDocumentMetadata? xmlMetadata = null, NativeDocumentSettings? documentSettings = null)
     {
         if (csvDialect is not null && !CsvDocumentPolicy.Admits(csvDialect, CsvDialectJson.MediaType(csvDialect)))
             throw new ArgumentException("Invalid CSV input dialect.", nameof(csvDialect));
+        if (documentSettings is not null && (csvDialect is not null || xmlMetadata is not null || name is not null)) throw new ArgumentException("Conflicting native settings.");
+        DocumentSettings = documentSettings;
         Name = name;
         if (xmlMetadata is not null && (csvDialect is not null || !XmlDocumentPolicy.Admits(xmlMetadata, XmlDocumentRole.Input)))
             throw new ArgumentException("XML input requires distinct role-valid metadata.", nameof(xmlMetadata));
@@ -89,6 +95,7 @@ public sealed class PreviewInputDocument
     public string? Name { get; }
     public CsvDocumentDialect? CsvDialect { get; }
     public XmlDocumentMetadata? XmlMetadata { get; }
+    public NativeDocumentSettings? DocumentSettings { get; }
     public Sha256Digest Digest { get; }
     public int ByteCount => _bytes.Length;
     public ReadOnlySpan<byte> Bytes => _bytes;
@@ -139,7 +146,7 @@ public sealed class PreviewOutputArtifact
     private readonly byte[] _bytes;
 
     public PreviewOutputArtifact(string boundaryId, string targetName, bool targetNameTruncated, string mediaType, long recordsWritten, ReadOnlySpan<byte> bytes,
-        CsvDocumentDialect? csvDialect = null, XmlDocumentMetadata? xmlMetadata = null)
+        CsvDocumentDialect? csvDialect = null, XmlDocumentMetadata? xmlMetadata = null, NativeDocumentSettings? documentSettings = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(boundaryId);
         ArgumentNullException.ThrowIfNull(targetName);
@@ -149,6 +156,8 @@ public sealed class PreviewOutputArtifact
             throw new ArgumentException("XML output requires distinct role-valid metadata.", nameof(xmlMetadata));
         if (CsvDocumentPolicy.AdmitsMediaType(mediaType) ? !CsvDocumentPolicy.Admits(csvDialect, mediaType) : csvDialect is not null)
             throw new ArgumentException("CSV output requires a matching versioned dialect.", nameof(csvDialect));
+        if (NativeDocumentFormat.FromMediaType(mediaType) != documentSettings?.Format || documentSettings is not null && (boundaryId != "primary-output" || xmlMetadata is not null || csvDialect is not null)) throw new ArgumentException("Conflicting native output metadata.");
+        DocumentSettings = documentSettings;
         BoundaryId = boundaryId;
         TargetName = targetName;
         TargetNameTruncated = targetNameTruncated;
@@ -167,6 +176,7 @@ public sealed class PreviewOutputArtifact
     public long RecordsWritten { get; }
     public CsvDocumentDialect? CsvDialect { get; }
     public XmlDocumentMetadata? XmlMetadata { get; }
+    public NativeDocumentSettings? DocumentSettings { get; }
     public Sha256Digest Digest { get; }
     public int ByteCount => _bytes.Length;
     public ReadOnlySpan<byte> Bytes => _bytes;

@@ -31,9 +31,9 @@ internal sealed class RegressionRunPostgresTestSupport : IAsyncDisposable
     }
 
     internal static async Task<RegressionRunPostgresTestSupport> CreateAsync(PostgresFixture fixture, int? migrations = null,
-        Func<RegressionCaseVersion, RegressionCaseVersion>? configure = null)
+        Func<RegressionCaseVersion, RegressionCaseVersion>? configure = null, byte[]? nativeBytes = null)
     {
-        var cases = await RegressionCasePostgresTestSupport.CreateAsync(fixture, migrations);
+        var cases = await RegressionCasePostgresTestSupport.CreateAsync(fixture, migrations, nativeBytes);
         try
         {
             var value = cases.Version(1);

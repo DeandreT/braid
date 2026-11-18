@@ -5,6 +5,9 @@ use ferrule_mapping::{FormatOptions, Project, TabularBoundaryKind};
 use serde::{Deserialize, Serialize};
 
 pub const PROFILE: &str = "braid.ferrule-xlsx-preview.v1";
+pub const READ_JSON_PROFILE: &str = "braid.ferrule-xlsx-to-json-preview.v1";
+pub const SERVICE_OUTPUT_REFUSAL: &str =
+    "XLSX output requires a worksheet thread unavailable in the restricted service runner.";
 pub const SETTINGS_SCHEMA: &str = "braid.xlsx-settings.v1";
 pub const MEDIA_TYPE: &str = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 pub const MAX_DOCUMENT_BYTES: usize = 8 * 1024 * 1024;

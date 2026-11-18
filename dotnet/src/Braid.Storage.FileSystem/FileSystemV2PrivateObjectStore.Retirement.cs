@@ -1,22 +1,37 @@
 using Microsoft.Win32.SafeHandles;
 using Braid.Application;
+using Braid.Application.Lifecycle;
 using Braid.Domain;
 
 namespace Braid.Storage.FileSystem;
 
 public sealed partial class FileSystemV2PrivateObjectStore
 {
-    public async Task<PrivateObjectRetirementOutcome> RetireAsync(ObjectCleanupClaim claim,
+    public Task<PrivateObjectRetirementOutcome> RetireAsync(ObjectCleanupClaim claim,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(claim);
+        return RetireTargetAsync(claim.Retirement.Target, claim.Retirement.Publication, cancellationToken);
+    }
+
+    /// <summary>Catalog deletion of one database-claimed target through the same permanent fences.</summary>
+    public Task<PrivateObjectRetirementOutcome> DeleteAsync(CatalogObjectDeletionClaim claim,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        return RetireTargetAsync(claim.Target, claim.Publication, cancellationToken);
+    }
+
+    private async Task<PrivateObjectRetirementOutcome> RetireTargetAsync(ObjectCleanupTarget target,
+        PrivatePublicationRecord? publication, CancellationToken cancellationToken)
+    {
         using var operation = await AcquireOperationAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             ValidateRoot();
-            return claim.Retirement.Target.Kind == CleanupTargetKind.FinalObject
-                ? await RetireFinalAsync(claim, cancellationToken).ConfigureAwait(false)
-                : await RetireTemporaryAsync(claim, cancellationToken).ConfigureAwait(false);
+            return target.Kind == CleanupTargetKind.FinalObject
+                ? await RetireFinalAsync(target.Object, cancellationToken).ConfigureAwait(false)
+                : await RetireTemporaryAsync(target, publication, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) { throw; }
         catch (PrivateObjectStorageException error)
@@ -35,9 +50,8 @@ public sealed partial class FileSystemV2PrivateObjectStore
         catch { return PrivateObjectRetirementOutcome.Io; }
     }
 
-    private async Task<PrivateObjectRetirementOutcome> RetireFinalAsync(ObjectCleanupClaim claim, CancellationToken token)
+    private async Task<PrivateObjectRetirementOutcome> RetireFinalAsync(PrivateObjectId id, CancellationToken token)
     {
-        var id = claim.Retirement.Target.Object;
         using var control = OpenObjectControl(id, true);
         using var gate = LinuxFileSystem.TryLockGate(control, "object.gate", true, _userId);
         if (gate is null) return PrivateObjectRetirementOutcome.Busy;
@@ -88,14 +102,14 @@ public sealed partial class FileSystemV2PrivateObjectStore
         }
     }
 
-    private async Task<PrivateObjectRetirementOutcome> RetireTemporaryAsync(ObjectCleanupClaim claim, CancellationToken token)
+    private async Task<PrivateObjectRetirementOutcome> RetireTemporaryAsync(ObjectCleanupTarget target, PrivatePublicationRecord? captured, CancellationToken token)
     {
-        var publication = claim.Retirement.Publication ?? throw Failure(PrivateObjectStorageError.UnsafeStorage);
+        var publication = captured ?? throw Failure(PrivateObjectStorageError.UnsafeStorage);
         var reservation = publication.Reservation;
         var key = reservation.Key;
         // A publication registered by another store kind is never this store's temporary.
-        if (reservation.StoreKind != PublicationStoreKind || key.RootId != _marker.RootId || key.Object != claim.Retirement.Target.Object ||
-            reservation.PublicationId != claim.Retirement.Target.PublicationAttemptId)
+        if (reservation.StoreKind != PublicationStoreKind || key.RootId != _marker.RootId || key.Object != target.Object ||
+            reservation.PublicationId != target.PublicationAttemptId)
             throw Failure(PrivateObjectStorageError.UnsafeStorage);
         using var objectControl = OpenObjectControl(key.Object, false);
         using var tempControl = OpenTempControl(objectControl, key.TempId);

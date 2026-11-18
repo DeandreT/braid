@@ -24,7 +24,7 @@ public static class CatalogHostConfiguration
         var reportOptions = new CatalogRevisionReportOptions(Flag("BRAID_REVISION_REPORTS_ENABLED"),
             Flag("BRAID_REVISION_REPORT_DERIVATION_ENABLED"));
         var previewOptions = new CatalogPreviewOptions(Flag("BRAID_PREVIEWS_ENABLED"), csvEnabled: Flag(CatalogPreviewOptions.CsvEnabledSetting),
-            xmlEnabled: Flag(Braid.Application.XmlPreviewAdmission.EnabledSetting));
+            xmlEnabled: Flag(Braid.Application.XmlPreviewAdmission.EnabledSetting), nativeFormats: Braid.Application.NativeDocumentFormat.EnabledFormats(readEnvironment, false));
         CatalogMappingEditingHostConfiguration.Configure(builder.Services, readEnvironment, options.Enabled, ingestionOptions.Enabled,
             reportOptions.Enabled, reportOptions.DerivationEnabled);
         builder.Services.AddBraidCatalog(options, builder.Environment, metadataOptions, ingestionOptions, creationOptions, reportOptions);

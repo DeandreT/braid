@@ -25,6 +25,9 @@ public sealed class ReleaseToolTests(PostgresFixture fixture)
         var rollback = ReleaseCommands.Parse(["rollback-release", .. Target(), Ids[5], Ids[6], Ids[7]]);
         Assert.Equal(Guid.Parse(Ids[7]), rollback.Expected);
         Assert.Empty(ReleaseCommands.Parse(["register-release-target", .. Target()]).Values);
+        Assert.Empty(ReleaseCommands.Parse(["register-replica-target", .. Target()]).Values);
+        Assert.Empty(ReleaseCommands.Parse(["withdraw-replica", .. Target()]).Values);
+        Assert.Equal([Guid.Parse(Ids[4])], ReleaseCommands.Parse(["stage-replica", .. Target(), Ids[4]]).Values);
         foreach (var arguments in new[]
         {
             Array.Empty<string>(), ["deploy-release", .. Target()], ["register-release-target", .. Target(), Ids[5]],
@@ -159,21 +162,57 @@ public sealed class ReleaseToolTests(PostgresFixture fixture)
 
     private static string[] Target() => [Ids[0], Ids[1], Ids[2], Ids[3], Ids[4], "2", Ids[8]];
 
+    [PostgresFact]
+    public async Task Only_a_published_own_package_exports_and_failed_staging_leaves_the_pointer_alone()
+    {
+        await using var test = await LocalReleasePersistenceTests.Context.CreateAsync(fixture);
+        var active = await test.Request(test.First, null);
+        Assert.Equal(ReleaseTransitionOutcome.Activated, await test.Apply(active));
+        var build = test.First.Artifact.Intent;
+        var settings = ReleaseCommands.QualificationLogins.ToDictionary(login => login.Setting, login => login.Role switch
+        {
+            "braid_runtime" => test.Case.RuntimeConnectionString,
+            "braid_report_reader" => test.Case.ReportConnectionString,
+            _ => test.Case.RegressionConnectionString(login.Role)
+        });
+        settings[ReleaseCommands.RuntimeImageSetting] = test.Target.RuntimeImage;
+        settings[ReleaseCommands.CompilerImageSetting] = "sha256:" + new string('a', 64);
+        string[] scope = [test.Actor.PrincipalId.Value.ToString("D"), build.Revision.OrganizationId.ToString("D"),
+            build.Revision.ProjectId.ToString("D"), build.Revision.MappingId.ToString("D"), build.BuildId.ToString("D")];
+        var exported = await RunAsync(settings, ["export-package", .. scope]);
+        Assert.Equal((0, ""), (exported.ExitCode, exported.Error));
+        using var wire = new MemoryStream(exported.Bytes);
+        var package = await MappingPackage.ReadAsync(wire, 32, default);
+        Assert.True(package.Manifest.Matches(test.First.Artifact, package.Bytes));
+        Assert.Equal((0, "replayed"), Outcome(await RunAsync(settings, ["stage-package", .. scope, test.First.Id.ToString("D")], exported.Bytes)));
+        // This fixture profile cannot execute on the Ferrule runtime; a fresh qualification must fail, not replay.
+        var candidate = Guid.NewGuid();
+        Assert.Equal((3, "notQualified"), Outcome(await RunAsync(settings, ["stage-package", .. scope, candidate.ToString("D")], exported.Bytes)));
+        Assert.Null(await test.Qualifications.ReadAsync(test.Actor, test.Target.Reference.Mapping, candidate));
+        Assert.Equal(active.ReleaseId, (await test.Store.ReadTargetAsync(test.Actor, test.Target.Reference))!.ActiveReleaseId);
+        scope[0] = Guid.NewGuid().ToString("D");
+        var denied = await RunAsync(settings, ["export-package", .. scope]);
+        Assert.Equal(3, denied.ExitCode); Assert.Empty(denied.Bytes);
+    }
+
     private static (int ExitCode, string Outcome) Outcome(ToolResult result)
     {
         using var line = JsonDocument.Parse(result.Output);
         return (result.ExitCode, line.RootElement.GetProperty("outcome").GetString()!);
     }
 
-    private sealed record ToolResult(int ExitCode, string Output, string Error);
+    private sealed record ToolResult(int ExitCode, byte[] Bytes, string Error)
+    {
+        public string Output => System.Text.Encoding.UTF8.GetString(Bytes);
+    }
 
-    private static async Task<ToolResult> RunAsync(IReadOnlyDictionary<string, string> settings, string[] arguments)
+    private static async Task<ToolResult> RunAsync(IReadOnlyDictionary<string, string> settings, string[] arguments, byte[]? input = null)
     {
         var dll = Path.Combine(AppContext.BaseDirectory, "ReleaseTool", "Braid.ReleaseTool.dll");
         Assert.True(File.Exists(dll), "The release tool must be copied into the test output.");
         var host = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH");
         if (string.IsNullOrWhiteSpace(host)) host = Environment.ProcessPath is { } current && Path.GetFileName(current) == "dotnet" ? current : "dotnet";
-        var start = new ProcessStartInfo(host) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
+        var start = new ProcessStartInfo(host) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, RedirectStandardInput = input is not null };
         start.ArgumentList.Add(dll);
         foreach (var argument in arguments) start.ArgumentList.Add(argument);
         foreach (var name in start.Environment.Keys.Where(name => name.StartsWith("BRAID_", StringComparison.Ordinal)).ToArray())
@@ -181,12 +220,19 @@ public sealed class ReleaseToolTests(PostgresFixture fixture)
         foreach (var (name, value) in settings) start.Environment[name] = value;
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(90));
         using var process = Process.Start(start) ?? throw new InvalidOperationException("The release tool did not start.");
-        var output = process.StandardOutput.ReadToEndAsync(deadline.Token);
+        using var bytes = new MemoryStream();
+        var output = process.StandardOutput.BaseStream.CopyToAsync(bytes, deadline.Token);
         var error = process.StandardError.ReadToEndAsync(deadline.Token);
         try
         {
+            if (input is not null)
+            {
+                await process.StandardInput.BaseStream.WriteAsync(input, deadline.Token);
+                process.StandardInput.Close();
+            }
             await process.WaitForExitAsync(deadline.Token);
-            var result = new ToolResult(process.ExitCode, await output, await error);
+            await output;
+            var result = new ToolResult(process.ExitCode, bytes.ToArray(), await error);
             // No connection text or password on either stream.
             Assert.DoesNotContain("Password", result.Output + result.Error, StringComparison.OrdinalIgnoreCase);
             return result;

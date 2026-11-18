@@ -9,6 +9,7 @@ using Braid.Api.Auth;
 using Braid.Contracts.Catalog;
 using Braid.Contracts.Operations;
 using Braid.Deployment;
+using Braid.Deployment.Triggers;
 using Braid.Domain;
 
 namespace Braid.Api.Catalog;
@@ -31,6 +32,14 @@ public static partial class CatalogEndpoints
             .Accepts<ReleaseOperationV1>("application/json").Produces<CatalogErrorV1>(412).Produces<CatalogErrorV1>(428)
             .Produces<CatalogErrorV1>(409).Produces<CatalogErrorV1>(408).Produces<CatalogErrorV1>(413).Produces<CatalogErrorV1>(415)
             .AddOpenApiOperationTransformer((operation, _, _) => { AddReportParameter(operation, "If-Match", ParameterLocation.Header, true, "Quoted target version."); return Task.CompletedTask; });
+        DescribeOperations<ReleaseOperationReceiptV1>(routes.MapPost(root + "/{targetId}/deliveries/{deliveryId}/resolutions/{operationId}", ResolveTriggerDelivery),
+                "ResolveTriggerDelivery", "Resolve a trigger delivery whose remote outcome is unknown. Administrator only, version-conditional and idempotent.")
+            .Accepts<TriggerDeliveryResolutionV1>("application/json").Produces<CatalogErrorV1>(412).Produces<CatalogErrorV1>(428)
+            .Produces<CatalogErrorV1>(409).Produces<CatalogErrorV1>(408).Produces<CatalogErrorV1>(413).Produces<CatalogErrorV1>(415)
+            .AddOpenApiOperationTransformer((operation, _, _) => { AddReportParameter(operation, "If-Match", ParameterLocation.Header, true, "Quoted delivery version."); return Task.CompletedTask; });
+        DescribeOperations<ReleaseOperationReceiptV1>(routes.MapPost(root + "/{targetId}/pilot/{triggerId}/{action}/{operationId}", ApplyPilotRoute), "ApplyPilotRoute", "Configure a local queue, Blob schedule or SFTP pilot route; enable or pause its generation. Administrator only.")
+            .Accepts<PilotRouteFormV1>("application/json").Produces<CatalogErrorV1>(412).Produces<CatalogErrorV1>(428)
+            .AddOpenApiOperationTransformer((operation, _, _) => { AddReportParameter(operation, "If-Match", ParameterLocation.Header, true, "Quoted trigger generation; zero for creation."); return Task.CompletedTask; });
         return endpoints;
     }
 
@@ -69,10 +78,24 @@ public static partial class CatalogEndpoints
         WithOperations(context, async admission =>
         {
             RequireQuery(context, "offset", "limit", "since", "until", "caller", "outcome");
-            if (section is not ("targets" or "releases" or "history" or "actions" or "callers" or "invocations" or "summary")) return NotFound();
+            if (section is not ("targets" or "releases" or "history" or "actions" or "callers" or "invocations" or "summary" or "triggers" or "runs" or "deliveries" or "quarantine"))
+                return NotFound();
             var mapping = BuildMapping(organizationId, projectId, mappingId, admission);
             if (mapping is null || !await BuildProjectAccess(context, admission, new(mapping.OrganizationId, mapping.ProjectId))) return NotFound();
             var offset = context.Request.Query.TryGetValue("offset", out var raw) && raw[0] != "0" ? checked((int)CatalogBuildRequest.Version(raw[0]!)) : 0;
+            if (section is "triggers" or "runs" or "deliveries" or "quarantine")
+            {
+                // Trigger metadata pages by position only; the release time window and caller filters do not apply.
+                if (targetId is null || context.Request.Query.Keys.Any(key => key is not ("offset" or "limit"))) throw new CatalogInvalidRequestException();
+                var limit = BuildPageLimit(context);
+                if (context.RequestServices.GetService<ITriggerOperationsStore>() is not { } store) return NotFound();
+                var rows = await store.ReadTriggerOperationsAsync(admission.Actor!, mapping,
+                    CatalogBuildRequest.Id(targetId), section, offset, limit + 1, context.RequestAborted);
+                if (rows is null || !await BuildProjectAccess(context, admission, new(mapping.OrganizationId, mapping.ProjectId))) return NotFound();
+                var found = rows.Value.EnumerateArray().ToArray();
+                return CaseResponse(PrepareBuild(new ReleaseOperationsPageV1(found.Take(limit).Select(item => OperationsItem(section, item)).ToArray(),
+                    found.Length > limit ? offset + limit : null), context.RequestAborted));
+            }
             DateTimeOffset? Date(string name) => context.Request.Query.TryGetValue(name, out var value)
                 ? DateTimeOffset.TryParseExact(value[0], ["O", "yyyy-MM-dd'T'HH:mm:ss.FFFFFFFzzz", "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'"], CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var date) ? date : throw new CatalogInvalidRequestException() : null;
             var query = new ReleaseOperationsQuery(section, offset, BuildPageLimit(context), Date("since"), Date("until"),
@@ -103,6 +126,10 @@ public static partial class CatalogEndpoints
             "actions" => typeof(ReleaseActionAuditV1),
             "callers" => typeof(ReleaseCallerGrantV1),
             "invocations" => typeof(ReleaseInvocationMetadataV1),
+            "triggers" => typeof(TriggerMetadataV1),
+            "quarantine" => typeof(TriggerQuarantineV1),
+            "runs" => typeof(TriggerRunMetadataV1),
+            "deliveries" => typeof(TriggerDeliveryMetadataV1),
             _ => throw new InvalidOperationException("Invalid metadata section.")
         };
         return (ReleaseOperationsItemV1)(JsonSerializer.Deserialize(item, type, new JsonSerializerOptions(JsonSerializerDefaults.Web))
@@ -127,5 +154,40 @@ public static partial class CatalogEndpoints
             if (result == ReleaseTransitionOutcome.Conflict) return Error(CatalogErrorCodeV1.PreconditionFailed, 412);
             if (result == ReleaseTransitionOutcome.Refused) return NotFound();
             return CaseResponse(PrepareBuild(new ReleaseOperationReceiptV1(operationId, result == ReleaseTransitionOutcome.Activated ? "applied" : result.ToString().ToLowerInvariant()), context.RequestAborted));
+        }, true);
+
+    private static Task<IResult> ResolveTriggerDelivery(string organizationId, string projectId, string mappingId, string targetId, string deliveryId,
+        string operationId, HttpContext context) =>
+        WithOperations(context, async admission =>
+        {
+            RequireQuery(context);
+            var mapping = BuildMapping(organizationId, projectId, mappingId, admission);
+            if (mapping is null || !await BuildProjectAccess(context, admission, new(mapping.OrganizationId, mapping.ProjectId), administrator: true)) return NotFound();
+            if (!context.Request.Headers.TryGetValue("If-Match", out var match)) return Error(CatalogErrorCodeV1.PreconditionFailed, 428);
+            if (match.Count != 1 || match[0] is not { Length: > 2 } etag || etag[0] != '"' || etag[^1] != '"') throw new CatalogInvalidRequestException();
+            var expected = checked((int)CatalogBuildRequest.Version(etag[1..^1]));
+            var body = await CatalogBuildRequest.DeliveryResolutionAsync(context.Request, context.RequestAborted);
+            var resolution = body.Resolution switch
+            {
+                "accepted" => TriggerDeliveryResolution.Accepted,
+                "abandoned" => TriggerDeliveryResolution.Abandoned,
+                "resend" => TriggerDeliveryResolution.Resend,
+                _ => throw new CatalogInvalidRequestException()
+            };
+            // A resend may duplicate a delivery the receiver already took; it is never implied.
+            if (body.Acknowledgement != (resolution == TriggerDeliveryResolution.Resend ? "duplicateRisk" : null) || expected > DeliveryRetryPolicy.MaximumTotalSends) throw new CatalogInvalidRequestException();
+            var target = new ReleaseTargetReference(mapping, new(new(mapping.OrganizationId, mapping.ProjectId), CatalogBuildRequest.Id(body.EnvironmentId),
+                CatalogBuildRequest.Version(body.EnvironmentVersion)), CatalogBuildRequest.Id(targetId));
+            if (context.RequestServices.GetService<ITriggerOperationsStore>() is not { } store) return NotFound();
+            var result = await store.ResolveDeliveryAsync(admission.Actor!, target,
+                CatalogBuildRequest.Id(deliveryId), CatalogBuildRequest.Id(operationId), expected, resolution, context.RequestAborted);
+            return result switch
+            {
+                TriggerResolutionOutcome.IdempotencyConflict => Error(CatalogErrorCodeV1.IdempotencyConflict, 409),
+                TriggerResolutionOutcome.Stale => Error(CatalogErrorCodeV1.PreconditionFailed, 412),
+                TriggerResolutionOutcome.Refused => NotFound(),
+                TriggerResolutionOutcome.Applied => CaseResponse(PrepareBuild(new ReleaseOperationReceiptV1(operationId, "applied"), context.RequestAborted)),
+                _ => throw new InvalidOperationException("Invalid delivery resolution outcome.")
+            };
         }, true);
 }

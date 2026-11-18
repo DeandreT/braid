@@ -179,13 +179,20 @@ public sealed partial class ServerSessionBrowser
         return false;
     }
 
+    private static string Expected(HttpContext context, ServerSessionRequestIdentity identity) =>
+        context.Features.Get<ServerSessionBusinessScope>() is { } scope &&
+            scope.PrincipalId == identity.PrincipalId.Value && scope.LoginEpoch == identity.LoginEpoch
+            ? "braid:business-csrf:2:" + identity.OrganizationId.ToString("D") + ":" + identity.LoginEpoch.ToString("D") +
+                ":" + scope.OrganizationId.ToString("D") + ":" + scope.AdmissionVersion.ToString("D")
+            : "braid:csrf:1:" + identity.OrganizationId.ToString("D") + ":" + identity.LoginEpoch.ToString("D");
+
     private sealed class ServerSessionEpochAdditionalDataProvider(ServerSessionBrowser browser)
         : IAntiforgeryAdditionalDataProvider
     {
         public string GetAdditionalData(HttpContext context)
         {
             var identity = browser.RequireEpochIdentity(context);
-            return "braid:csrf:1:" + identity.OrganizationId.ToString("D") + ":" + identity.LoginEpoch.ToString("D");
+            return Expected(context, identity);
         }
 
         public bool ValidateAdditionalData(HttpContext context, string additionalData)
@@ -194,8 +201,8 @@ public sealed partial class ServerSessionBrowser
             try
             {
                 var identity = browser.RequireEpochIdentity(context);
-                var expected = "braid:csrf:1:" + identity.OrganizationId.ToString("D") + ":" + identity.LoginEpoch.ToString("D");
-                return additionalData is { Length: 85 } && string.Equals(additionalData, expected, StringComparison.Ordinal);
+                var expected = Expected(context, identity);
+                return additionalData is { Length: >= 30 and <= 160 } && string.Equals(additionalData, expected, StringComparison.Ordinal);
             }
             catch (ServerSessionIdentityException error) when (error.Kind is
                 ServerSessionIdentityFailureKind.Denied or ServerSessionIdentityFailureKind.UntrustedIssuance or

@@ -1,0 +1,124 @@
+<header>
+  <h1>Audit log</h1>
+  <button
+    type="button"
+    [disabled]="busy() || !page() || !presented() || filtersDirty()"
+    (click)="exportCsv()"
+  >
+    Export filtered CSV
+  </button>
+</header>
+<p>
+  Read-only event metadata. Payloads, credentials and private conversation text
+  are never shown. System transitions have no user actor; a historical
+  observation is not the original action time.
+</p>
+<form
+  (ngSubmit)="load()"
+  (input)="filtersDirty.set(true)"
+  (change)="filtersDirty.set(true)"
+>
+  <label
+    >Project ID<input
+      name="project"
+      [(ngModel)]="projectId"
+      [disabled]="busy()"
+  /></label>
+  <label
+    >Actor ID<input name="actor" [(ngModel)]="actorId" [disabled]="busy()"
+  /></label>
+  <label
+    >Kind<select name="kind" [(ngModel)]="kind" [disabled]="busy()">
+      <option value="">All kinds</option>
+      @for (item of kinds; track item) {
+        <option [value]="item">{{ item }}</option>
+      }
+    </select></label
+  >
+  <label
+    >Since (UTC ISO)<input
+      name="since"
+      [(ngModel)]="since"
+      [disabled]="busy()"
+      placeholder="2026-01-01T00:00:00Z"
+  /></label>
+  <label
+    >Until (exclusive UTC ISO)<input
+      name="until"
+      [(ngModel)]="until"
+      [disabled]="busy()"
+  /></label>
+  <button type="submit" [disabled]="busy()">Apply filters</button>
+</form>
+@if (busy()) {
+  <p role="status">Loading audit events…</p>
+}
+@if (error()) {
+  <p role="alert">{{ error() }}</p>
+}
+@if (presented()) {
+  @if (page(); as page) {
+    <p>
+      {{
+        page.organizationWide
+          ? "Organization administrator view"
+          : "Your administered projects only"
+      }}
+      · {{ page.since | date: "medium" : "UTC" }} to
+      {{ page.until | date: "medium" : "UTC" }} UTC
+    </p>
+    <div class="table-scroll">
+      <table>
+        <caption>
+          Audit events, newest first
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">Time (UTC)</th>
+            <th scope="col">Kind / action</th>
+            <th scope="col">Actor</th>
+            <th scope="col">Project</th>
+            <th scope="col">Resource</th>
+            <th scope="col">Outcome</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (entry of page.entries; track entry.eventId) {
+            <tr>
+              <td>
+                {{ entry.occurredAtUtc | date: "medium" : "UTC" }}
+                @if (entry.historicalObservation) {
+                  <span
+                    title="Observed during audit migration, not the original action time"
+                  >
+                    · Historical observation</span
+                  >
+                }
+              </td>
+              <td>{{ entry.kind }} / {{ entry.action }}</td>
+              <td>{{ entry.actorKind }} {{ entry.actorId }}</td>
+              <td>{{ entry.projectId ?? "Organization" }}</td>
+              <td>{{ entry.resourceId }}</td>
+              <td>{{ entry.outcome }}</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="6">No audit events match these filters.</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    <nav aria-label="Audit pagination">
+      <button type="button" [disabled]="busy()" (click)="load()">
+        First page</button
+      ><button
+        type="button"
+        [disabled]="busy() || !page.nextCursor || filtersDirty()"
+        (click)="load(true)"
+      >
+        Next page
+      </button>
+    </nav>
+  }
+}

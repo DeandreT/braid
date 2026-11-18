@@ -30,7 +30,12 @@ export interface OriginalOperation {
   version: string;
   body: string;
   owner: string;
+  /** Set for a delivery resolution; the action is then administrator only. */
+  delivery?: string;
+  pilot?: { trigger: string; action: string };
 }
+
+export const triggerSections = ["triggers", "runs", "deliveries", "quarantine"];
 
 @Injectable({ providedIn: "root" })
 export class OperationsApi {
@@ -55,10 +60,14 @@ export class OperationsApi {
         "callers",
         "invocations",
         "summary",
+        ...triggerSections,
       ].includes(section)
     )
       throw new Error("Invalid section");
-    const query = new URLSearchParams(filters);
+    // Trigger metadata pages by position only; release window filters do not apply.
+    const query = new URLSearchParams(
+      triggerSections.includes(section) ? undefined : filters,
+    );
     query.set("offset", String(offset));
     query.set("limit", "20");
     return this.request(
@@ -76,7 +85,11 @@ export class OperationsApi {
     return this.request(
       context,
       scope,
-      `/${original.target}/actions/${original.id}`,
+      original.pilot
+        ? `/${original.target}/pilot/${original.pilot.trigger}/${original.pilot.action}/${original.id}`
+        : original.delivery
+          ? `/${original.target}/deliveries/${original.delivery}/resolutions/${original.id}`
+          : `/${original.target}/actions/${original.id}`,
       original,
     );
   }
@@ -100,7 +113,25 @@ export class OperationsApi {
         (original &&
           (!isCatalogId(original.id) ||
             !isCatalogId(original.target) ||
-            !/^[1-9][0-9]*$/.test(original.version) ||
+            (original.delivery !== undefined &&
+              !isCatalogId(original.delivery)) ||
+            (original.pilot !== undefined &&
+              (!isCatalogId(original.pilot.trigger) ||
+                ![
+                  "configure",
+                  "configureQueue",
+                  "configureBlob",
+                  "enable",
+                  "pause",
+                ].includes(original.pilot.action))) ||
+            !(
+              (original.pilot &&
+                ["configure", "configureQueue", "configureBlob"].includes(
+                  original.pilot.action,
+                ) &&
+                original.version === "0") ||
+              /^[1-9][0-9]*$/.test(original.version)
+            ) ||
             !context.requestToken))
       )
         throw new Error("Workspace access unavailable");
@@ -121,9 +152,11 @@ export class OperationsApi {
             !this.sessions.canDispatch(context) ||
             !["publisher", "administrator"].includes(project.access.role) ||
             (original &&
-              ["enable", "disable"].includes(
-                JSON.parse(original.body).action,
-              ) &&
+              (original.pilot !== undefined ||
+                original.delivery !== undefined ||
+                ["enable", "disable"].includes(
+                  JSON.parse(original.body).action,
+                )) &&
               project.access.role !== "administrator")
           )
             throw new Error("Current project authority is required");

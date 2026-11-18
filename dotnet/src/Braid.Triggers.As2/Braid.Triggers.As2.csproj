@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../Braid.As2/Braid.As2.csproj" />
+    <ProjectReference Include="../Braid.Deployment/Braid.Deployment.csproj" />
+    <PackageReference Include="Npgsql" Version="10.0.3" />
+  </ItemGroup>
+</Project>

@@ -31,10 +31,42 @@
           <h1>Catalog</h1>
         </div>
       </div>
-      <braid-catalog-status
-        [kind]="landingRead.state().kind"
-        (retry)="retry()"
-      />
+      @let choice = chooser();
+      @if (choice.kind === "ready") {
+        @if (choice.organizations.length === 0) {
+          <section class="catalog-state" role="status">
+            <h2>No workspace</h2>
+            <p>
+              You are not a member of an organization yet. Ask an administrator
+              for an invitation.
+            </p>
+          </section>
+        } @else {
+          <section aria-labelledby="organization-choice-heading">
+            <h2 id="organization-choice-heading">Choose an organization</h2>
+            <ul class="catalog-list" aria-label="Your organizations">
+              @for (
+                organization of choice.organizations;
+                track organization.organizationId
+              ) {
+                <li class="catalog-list-item">
+                  <a
+                    [routerLink]="routes.projects(organization.organizationId)"
+                    >{{ organization.name }}</a
+                  >
+                </li>
+              }
+            </ul>
+            @if (choice.next) {
+              <button class="catalog-button" type="button" (click)="more()">
+                Show more organizations
+              </button>
+            }
+          </section>
+        }
+      } @else {
+        <braid-catalog-status [kind]="choice.kind" (retry)="retry()" />
+      }
     } @else {
       <router-outlet />
     }

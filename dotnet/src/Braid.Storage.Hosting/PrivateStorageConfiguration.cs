@@ -1,4 +1,5 @@
 using Braid.Application;
+using Braid.Application.Lifecycle;
 using Braid.Domain;
 using Braid.Storage.Blob;
 using Braid.Storage.FileSystem;
@@ -51,11 +52,12 @@ public sealed record PrivateStorageConfiguration
 }
 
 /// <summary>One opened claim-aware store of either kind, behind its public capabilities.</summary>
-public sealed class PrivateObjectStoreHandle : IPrivateObjectPublicationStore, IPrivateObjectRetirementStore,
+public sealed class PrivateObjectStoreHandle : IPrivateObjectPublicationStore, IPrivateObjectRetirementStore, IPrivateObjectDeletionStore,
     IPrivateObjectStorageObserver, IDisposable, IAsyncDisposable
 {
     private readonly IPrivateObjectPublicationStore _publication;
     private readonly IPrivateObjectRetirementStore _retirement;
+    private readonly IPrivateObjectDeletionStore _deletion;
     private readonly IPrivateObjectStorageObserver _observer;
     private readonly IAsyncDisposable _lifetime;
 
@@ -63,6 +65,7 @@ public sealed class PrivateObjectStoreHandle : IPrivateObjectPublicationStore, I
     {
         _publication = store;
         _retirement = store;
+        _deletion = store;
         _observer = store;
         _lifetime = store;
     }
@@ -71,6 +74,7 @@ public sealed class PrivateObjectStoreHandle : IPrivateObjectPublicationStore, I
     {
         _publication = store;
         _retirement = store;
+        _deletion = store;
         _observer = store;
         _lifetime = store;
     }
@@ -89,6 +93,9 @@ public sealed class PrivateObjectStoreHandle : IPrivateObjectPublicationStore, I
 
     public Task<PrivateObjectRetirementOutcome> RetireAsync(ObjectCleanupClaim claim, CancellationToken cancellationToken = default) =>
         _retirement.RetireAsync(claim, cancellationToken);
+
+    public Task<PrivateObjectRetirementOutcome> DeleteAsync(CatalogObjectDeletionClaim claim, CancellationToken cancellationToken = default) =>
+        _deletion.DeleteAsync(claim, cancellationToken);
 
     public Task<PrivateStorageObservationPage> ObserveAsync(ProjectScope project, CancellationToken cancellationToken = default) =>
         _observer.ObserveAsync(project, cancellationToken);

@@ -78,7 +78,7 @@ export class AdministrationApi {
           throw new AdministrationFailure("unconfirmed");
         return response.body;
       }),
-      catchError((error) => this.failure(error)),
+      catchError((error) => this.failure(error, context)),
     );
   }
   private read<T>(
@@ -105,15 +105,15 @@ export class AdministrationApi {
           throw new AdministrationFailure("unavailable");
         return { body: response.body, etag };
       }),
-      catchError((error) => this.failure(error)),
+      catchError((error) => this.failure(error, context)),
     );
   }
   private path(context: CatalogContext, project: string): string {
     return `/api/v1/organizations/${context.allowedOrganizationId}${project}/administration`;
   }
-  private failure(error: unknown): Observable<never> {
+  private failure(error: unknown, context: CatalogContext): Observable<never> {
     if (error instanceof HttpErrorResponse) {
-      this.contexts.reject(error.status);
+      this.contexts.reject(error.status, context);
       const code: unknown = error.error?.code;
       if (
         typeof code === "string" &&

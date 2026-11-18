@@ -35,9 +35,15 @@ internal sealed class PostgresSeedData
         return seed;
     }
 
-    public Task AddProjectAsync(PostgresCase test, Guid organization, Guid project, Guid creator, string name, string description) =>
-        test.ExecuteAsync("INSERT INTO braid.projects(organization_id,id,name,description,creator_principal_id) VALUES ($1,$2,$3,$4,$5)",
+    public async Task AddProjectAsync(PostgresCase test, Guid organization, Guid project, Guid creator, string name, string description)
+    {
+        await test.ExecuteAsync("INSERT INTO braid.projects(organization_id,id,name,description,creator_principal_id) VALUES ($1,$2,$3,$4,$5)",
             organization, project, name, description, creator);
+        // The real creation port writes the active project epoch in the same transaction.
+        // Owner-seeded projects must mirror that state, but only after 0058 exists.
+        if (await test.ScalarAsync<bool>("SELECT to_regclass('braid.resource_lifecycles') IS NOT NULL"))
+            await test.ExecuteAsync("INSERT INTO braid.resource_lifecycles(organization_id,resource_kind,resource_id,project_id,state,version,write_epoch,changed_at) VALUES($1,'project',$2,$2,'active',1,1,statement_timestamp())", organization, project);
+    }
 
     public Task AddMembershipAsync(PostgresCase test, Guid organization, Guid project, Guid principal, string role) =>
         test.ExecuteAsync("INSERT INTO braid.project_memberships(organization_id,project_id,principal_id,role,active) VALUES ($1,$2,$3,$4,true)",

@@ -15,11 +15,15 @@ using Braid.Domain;
 
 namespace Braid.Api.Administration;
 
-public static class AdministrationEndpoints
+public static partial class AdministrationEndpoints
 {
     public static IEndpointRouteBuilder MapBraidAdministration(this IEndpointRouteBuilder endpoints)
     {
         var routes = endpoints.BusinessRoutes();
+        routes.MapAuditLog();
+        routes.MapAiUsage();
+        MapQuotas(routes);
+        MapRetention(routes);
         const string org = "/api/v1/organizations/{organizationId}/administration";
         const string project = "/api/v1/organizations/{organizationId}/projects/{projectId}/administration";
         Describe<OrganizationAdministrationV1>(routes.MapGet(org, (string organizationId, HttpContext context) =>
@@ -80,8 +84,13 @@ public static class AdministrationEndpoints
                     secretHash = OrganizationInvitationSecret.Hash(secret)
                 }, ProjectionJson.CreateOptions());
                 var outcome = await store.WriteAsync(actor, id, null, version, AdministrationOperation.Invite, value.InvitationId, data, context.RequestAborted);
-                return outcome == "updated" ? Results.Ok(new AdministrationInvitationCreatedV1(value.InvitationId, "/invitations#" + secret)) : Outcome(outcome);
+                return outcome == "updated" ? Results.Ok(new AdministrationInvitationCreatedV1(value.InvitationId, "/organizations/" + id.ToString("D") + "/invitations#" + secret)) : Outcome(outcome);
             })), "CreateOrganizationInvitation").Accepts<AdministrationInvitationPostV1>("application/json");
+        MapLifecycle(routes);
+        MapDeletion(routes);
+        MapPurge(routes);
+        MapRetirement(routes);
+        MapResume(routes);
         return endpoints;
 
         void Member(string path, string name, AdministrationOperation operation) =>

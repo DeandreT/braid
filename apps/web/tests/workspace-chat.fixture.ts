@@ -1,6 +1,10 @@
 import type { Page } from "@playwright/test";
 import { controlledData, P, V } from "./revision-reports-controlled.fixture";
 import { catalogApi, mappingPath, projectPath } from "./catalog.fixture";
+import {
+  organizationContext,
+  organizationContextPath,
+} from "./organization-context.fixture";
 import type {
   ChatEvent,
   ChatTurn,
@@ -163,11 +167,16 @@ export async function workspaceFixture(
           apiVersion: "v1",
         },
       });
-    if (path === "/api/v1/catalog/context")
+    const scopedContext = path === organizationContextPath(org);
+    if (path === "/api/v1/catalog/context" || scopedContext)
       return route.fulfill(
         state.reject
           ? { status: 403, json: { code: "identityRejected" } }
-          : { json: data.context },
+          : {
+              json: scopedContext
+                ? organizationContext(data.context)
+                : data.context,
+            },
       );
     if (path === "/api/v1/help/sections")
       return route.fulfill({

@@ -7,6 +7,24 @@ namespace Braid.Tests;
 
 public sealed class ChatOrchestrationAdmissionTests
 {
+    [Theory]
+    [InlineData(ChatStoreOutcome.QuotaTurnLimitReached, ChatOrchestrationOutcome.QuotaTurnLimitReached)]
+    [InlineData(ChatStoreOutcome.QuotaTokenLimitReached, ChatOrchestrationOutcome.QuotaTokenLimitReached)]
+    [InlineData(ChatStoreOutcome.QuotaTokenBoundUnavailable, ChatOrchestrationOutcome.QuotaTokenBoundUnavailable)]
+    [InlineData(ChatStoreOutcome.QuotaCoverageUnavailable, ChatOrchestrationOutcome.QuotaCoverageUnavailable)]
+    public async Task Quota_refusal_is_explicit_and_precedes_credentials_provider_and_tools(ChatStoreOutcome refusal, ChatOrchestrationOutcome outcome)
+    {
+        await using var f = new ChatOrchestrationFixture();
+        f.Store.StartReply = _ => new(refusal);
+        var execution = f.Begin();
+        var result = await FinishExecution(execution);
+        Assert.Equal(outcome, result.Outcome); Assert.Null(result.Phase);
+        Assert.Equal(1, f.Store.Count("start")); Assert.Equal(0, f.Store.Count("reserve"));
+        Assert.Equal(0, f.Credentials.Calls); Assert.Equal(0, f.Server.RequestCount);
+        Assert.Empty(f.Port.Validations); Assert.Empty(f.Port.Executions);
+        Assert.True(execution.ReleaseSafe);
+    }
+
     [Fact]
     public async Task Original_exact_reservation_acknowledgement_precedes_the_first_billable_request()
     {

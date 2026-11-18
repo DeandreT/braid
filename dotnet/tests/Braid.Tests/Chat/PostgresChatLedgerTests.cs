@@ -42,10 +42,15 @@ public sealed class PostgresChatLedgerTests(PostgresFixture fixture)
         Assert.Equal(ChatStoreOutcome.InvalidState, await f.Writer.DeleteExpiredAsync(f.Actor, f.Key, f.ErasurePolicy));
         var current = Assert.IsType<ChatTurnFacts>(reserved.Turn);
         Assert.Equal(ChatStoreOutcome.Applied, (await f.Writer.FinishAsync(f.Actor, f.Key, turn.Intent.TurnId, current.Version, ChatTurnPhase.Interrupted)).Outcome);
+        var usage = await f.Case.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(u) ORDER BY turn_id)::text FROM braid.ai_usage_turns u");
+        var reservations = await f.Case.ScalarAsync<string>("SELECT encode(sha256(convert_to(jsonb_agg(to_jsonb(r) ORDER BY turn_id)::text,'UTF8')),'hex') FROM braid.ai_quota_reservations r");
+        Assert.Equal(1L, await f.Case.ScalarAsync<long>("SELECT count(*) FROM braid.ai_quota_reservations WHERE settled_tokens IS NULL"));
         Assert.Equal(ChatStoreOutcome.Applied, await f.Writer.DeleteExpiredAsync(f.Actor, f.Key, f.ErasurePolicy));
         Assert.Equal(0L, await f.Case.ScalarAsync<long>("SELECT count(*) FROM braid.chat_turns"));
         Assert.Equal(0L, await f.Case.ScalarAsync<long>("SELECT count(*) FROM braid.chat_rounds"));
         Assert.Equal(0L, await f.Case.ScalarAsync<long>("SELECT count(*) FROM braid.chat_events"));
+        Assert.Equal(usage, await f.Case.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(u) ORDER BY turn_id)::text FROM braid.ai_usage_turns u"));
+        Assert.Equal(reservations, await f.Case.ScalarAsync<string>("SELECT encode(sha256(convert_to(jsonb_agg(to_jsonb(r) ORDER BY turn_id)::text,'UTF8')),'hex') FROM braid.ai_quota_reservations r"));
         Assert.Equal(reportsBefore, await f.Case.ScalarAsync<long>("SELECT count(*) FROM braid.revision_derivation_attempts WHERE result_usable"));
     }
 

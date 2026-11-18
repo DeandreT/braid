@@ -1,3 +1,5 @@
+import { DeleteItemComponent } from "../deletion/delete-item.component";
+import { nativeProfile } from "../previews/native-document-contract";
 import { DOCUMENT, DatePipe } from "@angular/common";
 import {
   Component,
@@ -79,6 +81,7 @@ const maxBytes = 8 * 1024 * 1024;
 @Component({
   selector: "braid-revision-regression",
   imports: [
+    DeleteItemComponent,
     FormsModule,
     DatePipe,
     RouterLink,
@@ -294,9 +297,12 @@ export class RevisionRegressionComponent {
   }
   editNext(): void {
     const value = this.selected();
-    if (value?.definition.runtime.profile === "braid.ferrule-xml-preview.v1") {
+    if (
+      nativeProfile(value?.definition.runtime.profile) ||
+      value?.definition.runtime.profile === "braid.ferrule-xml-preview.v1"
+    ) {
       this.notice.set(
-        "XML baselines and their saved metadata are read only. Run a new sample and explicitly save its outputs to create another baseline.",
+        "These baselines and their saved settings are read only. Run a new sample and explicitly save its outputs to create another baseline.",
       );
       return;
     }

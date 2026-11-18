@@ -75,6 +75,7 @@ public sealed record PreviewOutputDescriptor(
 {
     public CsvDocumentDialect? CsvDialect { get; init; }
     public XmlDocumentMetadata? XmlMetadata { get; init; }
+    public NativeDocumentSettings? DocumentSettings { get; init; }
 }
 
 /// <summary>The submitter's view of one run; outputs are present only for a succeeded run.</summary>
@@ -96,7 +97,10 @@ public sealed record PreviewRunSnapshot(
     DateTimeOffset CreatedAtUtc,
     DateTimeOffset? StartedAtUtc,
     DateTimeOffset? FinishedAtUtc,
-    DateTimeOffset ExpiresAtUtc);
+    DateTimeOffset ExpiresAtUtc)
+{
+    public NativeDocumentSettings? PrimaryDocumentSettings { get; init; }
+}
 
 public sealed record PreviewRunProvenance(bool Confirmed, string EngineRevision, string BackendBuild, string AdapterBuild, string Profile);
 
@@ -148,6 +152,7 @@ public sealed record PreviewOutputContent(Sha256Digest Digest, byte[] Content)
     public string MediaType { get; init; } = PreviewPolicy.MediaType;
     public CsvDocumentDialect? CsvDialect { get; init; }
     public XmlDocumentMetadata? XmlMetadata { get; init; }
+    public NativeDocumentSettings? DocumentSettings { get; init; }
 }
 
 /// <summary>Writer port. Each call is one short transaction; none spans worker or storage I/O.</summary>
@@ -199,6 +204,7 @@ public interface IPreviewRunReader
 public sealed class PreviewRunOptions
 {
     public bool XmlEnabled { get; init; }
+    public IReadOnlyList<NativeDocumentFormat> NativeFormats { get; init; } = [];
     public int MaxAttempts { get; init; } = 3;
     public TimeSpan Lease { get; init; } = TimeSpan.FromSeconds(90);
     public TimeSpan Retention { get; init; } = TimeSpan.FromHours(24);

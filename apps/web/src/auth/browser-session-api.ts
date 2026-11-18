@@ -21,6 +21,12 @@ import {
 import { isReturnPath } from "./return-path";
 
 /** Same-origin observation and bodyless auth actions; no provider protocol or token cache. */
+/** A private invitation secret and the organization its link targets. */
+export type InvitationLogin = {
+  readonly secret: string;
+  readonly organizationId: string | null;
+};
+
 @Injectable({ providedIn: "root" })
 export class BrowserSessionApi {
   private readonly http = inject(HttpClient);
@@ -52,14 +58,21 @@ export class BrowserSessionApi {
   login(
     status: SessionAuthStatus,
     returnTo: string | null,
-    invitation?: string,
+    invitation?: InvitationLogin,
   ): Observable<AuthLogin> {
     return defer(() => {
       if (returnTo !== null && !isReturnPath(returnTo))
         throw new BrowserSessionError();
       let headers = actionHeaders(status, "X-Braid-Login", true);
-      if (invitation !== undefined)
-        headers = headers.set("X-Braid-Invitation", invitation);
+      if (invitation !== undefined) {
+        headers = headers.set("X-Braid-Invitation", invitation.secret);
+        // The target is public routing metadata; legacy secret-only links target the root.
+        if (invitation.organizationId !== null)
+          headers = headers.set(
+            "X-Braid-Invitation-Organization",
+            invitation.organizationId,
+          );
+      }
       return this.actions.post<unknown>("/api/auth/login", null, {
         observe: "response",
         headers:

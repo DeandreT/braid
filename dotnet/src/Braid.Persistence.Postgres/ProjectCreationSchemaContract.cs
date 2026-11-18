@@ -24,6 +24,23 @@ internal static class ProjectCreationSchemaContract
 
     internal static string MigrationChecksum => AcceptedSource.Checksum;
     internal static IReadOnlyDictionary<string, Function> Functions => AcceptedSource.Functions;
+    private static readonly Lazy<string> SwitchingAssertion = new(LoadSwitchingAssertion);
+    /// <summary>Organization switching replaces only the contract assertion, to admit its exact membership triggers.</summary>
+    internal static string SwitchingAssertionBody => SwitchingAssertion.Value;
+
+    private static string LoadSwitchingAssertion()
+    {
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(
+            "Braid.Persistence.Postgres.Migrations." + OrganizationSwitchingSchemaAdmission.Migration) ??
+            throw new InvalidOperationException("The accepted organization switching migration is missing.");
+        using var reader = new StreamReader(stream, new UTF8Encoding(false, true));
+        var matches = Regex.Matches(reader.ReadToEnd(),
+            @"^CREATE OR REPLACE FUNCTION braid\.assert_project_creation_contract_v1\(\) RETURNS void\s.*?\bAS \$braid_assert_project_creation_contract_v1\$(?<body>.*?)\$braid_assert_project_creation_contract_v1\$;",
+            RegexOptions.Multiline | RegexOptions.Singleline | RegexOptions.CultureInvariant);
+        if (matches.Count != 1 || matches[0].Groups["body"].Length == 0)
+            throw new InvalidOperationException("The accepted project creation function contract is incomplete.");
+        return matches[0].Groups["body"].Value;
+    }
 
     private static Source Load()
     {

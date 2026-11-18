@@ -202,6 +202,7 @@ public sealed partial class EntraBrowserClient
         if (candidate.Deadline <= DateTimeOffset.UtcNow)
             throw EntraErrors.Create(ServerSessionIdentityFailureKind.Denied);
         candidate.Properties.Items.TryGetValue(".braid.invitation", out var invitation);
+        candidate.Properties.Items.TryGetValue(".braid.invitationOrganization", out var invitationOrganization);
         // RemoteAuthenticationHandler moves RedirectUri into ReturnUri and clears
         // the properties before this event. Keep the path captured from the same
         // validated state and reject an inconsistent ticket continuation.
@@ -213,7 +214,9 @@ public sealed partial class EntraBrowserClient
         var displayName = candidate.Token.Payload.TryGetValue("name", out var name) && name is string text
             ? AccountDisplayName.Optional(text) : null;
         operation.Verified = new(this, operation.Context, operation, organization, candidate.Identity, candidate.Deadline,
-            returnPath, displayName, DateTimeOffset.UtcNow, invitation);
+            returnPath, displayName, DateTimeOffset.UtcNow, invitation,
+            Guid.TryParseExact(invitationOrganization, "D", out var target) && target != Guid.Empty &&
+                string.Equals(invitationOrganization, target.ToString("D"), StringComparison.Ordinal) ? target : null);
         return Task.CompletedTask;
     }
 
@@ -248,6 +251,9 @@ public sealed partial class EntraBrowserClient
     private static void RequireFlowProperties(AuthenticationProperties? properties)
     {
         if (properties?.Items.TryGetValue(".braid.invitation", out var invitation) == true && !OrganizationInvitationSecret.IsValid(invitation))
+            throw EntraErrors.Create(ServerSessionIdentityFailureKind.Denied);
+        if (properties?.Items.TryGetValue(".braid.invitationOrganization", out var target) == true &&
+            (!Guid.TryParseExact(target, "D", out var parsed) || parsed == Guid.Empty || target != parsed.ToString("D")))
             throw EntraErrors.Create(ServerSessionIdentityFailureKind.Denied);
         var now = DateTimeOffset.UtcNow;
         if (properties is null || properties.RedirectUri is not (null or "/") && !BrowserReturnPath.IsValid(properties.RedirectUri) ||

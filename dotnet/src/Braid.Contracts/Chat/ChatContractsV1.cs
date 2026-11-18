@@ -20,7 +20,11 @@ public enum ChatErrorCodeV1
     TurnActive = 11,
     IdempotencyConflict = 12,
     TurnNotStarted = 13,
-    RateLimited = 14
+    RateLimited = 14,
+    QuotaTurnLimitReached = 15,
+    QuotaTokenLimitReached = 16,
+    QuotaTokenBoundUnavailable = 17,
+    QuotaCoverageUnavailable = 18
 }
 
 public sealed record ChatErrorV1

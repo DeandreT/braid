@@ -17,12 +17,16 @@ internal static class RegressionCaseSchemaContract
         => await CaptureAsync(connection, transaction, ["regression_cases", "regression_case_versions"], token);
 
     internal static async Task<string> CaptureAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string[] tables, CancellationToken token,
-        bool validateAutomation = true)
+        bool validateAutomation = true, bool validateAudit = true, bool validateUsage = true, bool validateQuota = true)
     {
         // This admits complete Automation or rejects any partial installation
         // before projecting its triggers away. The nonrecursive leaf capture is
         // used by that admission itself and must keep the same projection.
         if (validateAutomation) await AutomationSchemaAdmission.ValidateTriggersAsync(connection, transaction, token);
+        if (validateAutomation) await OrganizationSwitchingSchemaAdmission.ValidateAsync(connection, transaction, token);
+        if (validateAudit) await AuditLogSchemaAdmission.ValidateAsync(connection, transaction, token);
+        if (validateUsage) await AiUsageSchemaAdmission.ValidateAsync(connection, transaction, token);
+        if (validateQuota) await AiQuotaSchemaAdmission.ValidateAsync(connection, transaction, token);
         // Physical search indexes do not alter the logical source contracts. Omit
         // only this exact additive set, after its complete definitions and private
         // extension boundary have been admitted; every other index stays pinned.
@@ -50,7 +54,7 @@ internal static class RegressionCaseSchemaContract
         }
         await using var command = new NpgsqlCommand(CaptureSql, connection, transaction);
         command.Parameters.AddWithValue("tables", tables);
-        command.Parameters.AddWithValue("automationTriggers", AutomationSchemaAdmission.AllTriggerNames);
+        command.Parameters.AddWithValue("automationTriggers", AutomationSchemaAdmission.AllTriggerNames.Concat(OrganizationSwitchingSchemaAdmission.AllTriggerNames).Concat(AuditLogSchemaAdmission.TriggerNames).Concat(AiUsageSchemaAdmission.TriggerNames).Concat(AiQuotaSchemaAdmission.TriggerNames).ToArray());
         command.Parameters.AddWithValue("searchIndexes", searchIndexes);
         return await command.ExecuteScalarAsync(token) as string ?? throw new InvalidOperationException("Regression case schema is unavailable.");
     }

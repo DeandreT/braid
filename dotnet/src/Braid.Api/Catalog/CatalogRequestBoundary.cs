@@ -13,7 +13,8 @@ namespace Braid.Api.Catalog;
 public sealed record CatalogRequestAdmission
 {
     private CatalogRequestAdmission(ActorContext? actor, Guid? organizationId,
-        CatalogErrorCodeV1? error, int statusCode, string? contextMode = null, string? identityContext = null)
+        CatalogErrorCodeV1? error, int statusCode, string? contextMode = null, string? identityContext = null,
+        long admissionVersion = 0, Guid bindingId = default, long bindingVersion = 0)
     {
         Actor = actor;
         AllowedOrganizationId = organizationId;
@@ -21,22 +22,34 @@ public sealed record CatalogRequestAdmission
         StatusCode = statusCode;
         ContextMode = contextMode;
         IdentityContext = identityContext;
+        AdmissionVersion = admissionVersion;
+        BindingId = bindingId;
+        BindingVersion = bindingVersion;
     }
 
     public bool IsAdmitted => Actor is not null;
     public ActorContext? Actor { get; }
+    /// <summary>The admitted business scope: the route-selected organization, or the root organization on a root-only route.</summary>
     public Guid? AllowedOrganizationId { get; }
+    /// <summary>The selected admission's retained incarnation; zero when no business scope was established.</summary>
+    public long AdmissionVersion { get; }
+    /// <summary>The current enabled external binding the credential resolved to; empty for Development.</summary>
+    internal Guid BindingId { get; }
+    internal long BindingVersion { get; }
     public CatalogErrorCodeV1? Error { get; }
     public int StatusCode { get; }
     internal string? ContextMode { get; }
     internal string? IdentityContext { get; }
     internal static CatalogRequestAdmission Accepted(ActorContext actor, Guid organizationId) =>
-        new(actor, organizationId, null, StatusCodes.Status200OK, "development");
-    internal static CatalogRequestAdmission AcceptedSession(ActorContext actor, Guid organizationId,
-        ServerSessionRequestIdentity identity) =>
-        new(actor, organizationId, null, StatusCodes.Status200OK, "session", ServerSessionIdentityContext.Derive(identity));
-    internal static CatalogRequestAdmission AcceptedBearer(ActorContext actor, Guid organizationId) =>
-        new(actor, organizationId, null, StatusCodes.Status200OK, "bearer");
+        new(actor, organizationId, null, StatusCodes.Status200OK, "development", admissionVersion: 1);
+    internal static CatalogRequestAdmission AcceptedSession(ActorContext actor, Guid? organizationId,
+        ServerSessionRequestIdentity identity, long admissionVersion = 1, Guid bindingId = default, long bindingVersion = 0) =>
+        new(actor, organizationId, null, StatusCodes.Status200OK, "session", ServerSessionIdentityContext.Derive(identity),
+            admissionVersion, bindingId, bindingVersion);
+    internal static CatalogRequestAdmission AcceptedBearer(ActorContext actor, Guid? organizationId,
+        long admissionVersion = 1, Guid bindingId = default, long bindingVersion = 0) =>
+        new(actor, organizationId, null, StatusCodes.Status200OK, "bearer", admissionVersion: admissionVersion,
+            bindingId: bindingId, bindingVersion: bindingVersion);
     internal static CatalogRequestAdmission Closed(CatalogErrorCodeV1 error, int statusCode) =>
         new(null, null, error, statusCode);
 }
@@ -75,6 +88,11 @@ public sealed partial class CatalogRequestBoundary
         if (!ValidTransport(context))
             return Rejected();
         var actor = new ActorContext(new PrincipalId(options.PrincipalId!.Value));
+        // Development stays fixed-principal and single-organization: another selection never admits.
+        if (RouteScope(context) is { } selected && selected != options.OrganizationId)
+            return selected == Guid.Empty
+                ? CatalogRequestAdmission.Closed(CatalogErrorCodeV1.InvalidRequest, StatusCodes.Status400BadRequest)
+                : CatalogRequestAdmission.Closed(CatalogErrorCodeV1.NotFound, StatusCodes.Status404NotFound);
         if (unsafeRequest)
         {
             var origins = context.Request.Headers.Origin;
@@ -108,6 +126,15 @@ public sealed partial class CatalogRequestBoundary
         SetTrustedPrincipal(context);
         return _antiforgery!.GetAndStoreTokens(context).RequestToken ??
             throw new InvalidOperationException("The catalog request token could not be issued.");
+    }
+
+    /// <summary>The canonical route organization, or null for a root-only business mapping. Malformed input is invalid.</summary>
+    internal static Guid? RouteScope(HttpContext context)
+    {
+        if (context.Request.RouteValues.TryGetValue("organizationId", out var raw))
+            return raw is string text && Guid.TryParseExact(text, "D", out var id) && id != Guid.Empty && text == id.ToString("D")
+                ? id : Guid.Empty;
+        return null;
     }
 
     private bool ValidTransport(HttpContext context) =>

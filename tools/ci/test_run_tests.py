@@ -380,6 +380,7 @@ class PrerequisiteTests(unittest.TestCase):
 
     def test_each_expensive_group_refuses_its_missing_configuration_without_launching(self):
         expected = {"integration": "BRAID_FERRULE_HOST_EXECUTABLE", "packaged-browser": "BRAID_AUTH_BROWSER_ADMISSION_FILE",
+                    "host-replica-pilot": "BRAID_HOST_REPLICA_PILOT", "sftp-loopback": "BRAID_SFTP_TEST_PYTHON",
                     "installed-documents": "BRAID_SPEC_DOCUMENT_WORKERS", "installed-document-probes": "BRAID_TEST_DOCUMENT_PROFILE_PROBE_ASSEMBLY",
                     "live-provider": "BRAID_LIVE_OLLAMA_ENDPOINT", "native-windows": "BRAID_POSTGRES_BIN",
                     "incremental-build": "BRAID_OPENAPI_INCREMENTAL_TESTS"}
@@ -442,6 +443,8 @@ class PrerequisiteTests(unittest.TestCase):
             probes[prefix + "RUNTIME_SHA256"] = "b" * 64
         profiles = {
             "integration": integration,
+            "host-replica-pilot": {"BRAID_POSTGRES_IMAGE": postgres, "BRAID_HOST_REPLICA_PILOT": "1"},
+            "sftp-loopback": {"BRAID_POSTGRES_IMAGE": postgres, "BRAID_SFTP_TEST_PYTHON": "/fixture/python"},
             "packaged-browser": {"BRAID_POSTGRES_IMAGE": postgres, "BRAID_AUTH_BROWSER_ADMISSION_ROOT": "/fixture/root",
                                  "BRAID_AUTH_BROWSER_ADMISSION_FILE": "/fixture/record", "BRAID_WORKSPACE_CHAT_BROWSER": "true", "DISPLAY": ":999"},
             "installed-documents": installed, "installed-document-probes": probes,

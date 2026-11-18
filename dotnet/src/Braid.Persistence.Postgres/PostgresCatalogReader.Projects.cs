@@ -43,7 +43,7 @@ public sealed partial class PostgresCatalogReader
         await using var transaction = await _database.BeginTransactionAsync(organizationId, cancellationToken);
         await transaction.RequireOrganizationAsync(organizationId, cancellationToken);
         await using var command = transaction.CreateCommand(AuthorizedOrganizationSql + """
-            SELECT organization_id, principal_id, organization_name FROM admitted
+            SELECT organization_id, principal_id, organization_name, admission_version FROM admitted
             """);
         AddOrganization(command, actor, organizationId);
         CatalogOrganizationAdmission? result;
@@ -63,7 +63,7 @@ public sealed partial class PostgresCatalogReader
         await using var transaction = await _database.BeginTransactionAsync(organizationId, cancellationToken);
         await transaction.RequireOrganizationAsync(organizationId, cancellationToken);
         await using var command = transaction.CreateCommand(AuthorizedOrganizationSql + """
-            SELECT admitted.organization_id, admitted.principal_id, admitted.organization_name,
+            SELECT admitted.organization_id, admitted.principal_id, admitted.organization_name, admitted.admission_version,
                 admitted.organization_id AS a_organization_id, child.project_id AS a_project_id,
                 admitted.principal_id AS a_principal_id, child.role AS a_role,
                 child.organization_id AS p_organization_id, child.project_id AS p_project_id,
@@ -143,7 +143,8 @@ public sealed partial class PostgresCatalogReader
         Guid organizationId) => Read(() =>
     {
         var result = new CatalogOrganizationAdmission(Value<Guid>(reader, "organization_id"),
-            new PrincipalId(Value<Guid>(reader, "principal_id")), Value<string>(reader, "organization_name"));
+            new PrincipalId(Value<Guid>(reader, "principal_id")), Value<string>(reader, "organization_name"),
+            Value<long>(reader, "admission_version"));
         if (result.OrganizationId != organizationId || result.PrincipalId != actor.PrincipalId)
             throw InvalidMetadata();
         return result;

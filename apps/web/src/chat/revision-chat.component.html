@@ -183,13 +183,27 @@
   >
     @if (current()) {
       <a
-        routerLink="/chat"
+        [routerLink]="selection.link('/chat')"
         [queryParams]="openInChat()"
         target="_blank"
         rel="noopener"
         (click)="closeMenu()"
         >Open full page</a
       >
+    }
+    @if (current(); as conversation) {
+      @if (!busy() && !hasPending()) {
+        <braid-delete-item
+          [context]="context()"
+          [target]="{
+            kind: 'conversation',
+            organizationId: context().allowedOrganizationId,
+            conversationId: conversation.conversationId,
+          }"
+          label="this conversation"
+          (deleted)="conversationDeleted(conversation.conversationId)"
+        />
+      }
     }
     @if (current() && !scope()) {
       <button type="button" (click)="toggleMenu('focus', moreTrigger)">

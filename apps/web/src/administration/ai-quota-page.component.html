@@ -1,0 +1,94 @@
+<header><h1>AI quotas</h1></header>
+<p>
+  Organization administrators manage UTC hour, day and month budgets.
+  Organization and principal limits both apply. Hard token caps require a
+  verified bound for the entire turn; unsupported model profiles refuse new
+  turns.
+</p>
+<form (ngSubmit)="load()">
+  <label
+    >Quota principal ID (empty for organization)<input
+      name="principal"
+      [(ngModel)]="principal"
+      (ngModelChange)="scopeChanged()"
+      [disabled]="saving()"
+  /></label>
+  <button type="submit" [disabled]="busy()">Load current policy</button>
+</form>
+@if (busy()) {
+  <p role="status">
+    {{ saving() ? "Saving quota policy…" : "Loading quota policy…" }}
+  </p>
+}
+@if (snapshot(); as data) {
+  <p>
+    {{
+      data.principalId ? "Principal " + data.principalId : "Organization budget"
+    }}
+    · Version {{ data.version }}
+  </p>
+  <div class="scroll">
+    <table>
+      <caption>
+        Current quota policy
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">UTC period</th>
+          <th scope="col">Maximum turns</th>
+          <th scope="col">Hard token cap</th>
+          <th scope="col">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (period of periods; track period) {
+          <tr>
+            <th scope="row">{{ period }}</th>
+            <td>{{ limit(period, "maximumTurns") }}</td>
+            <td>{{ limit(period, "maximumTokens") }}</td>
+            <td>
+              <button type="button" [disabled]="busy()" (click)="edit(period)">
+                Edit {{ period }}
+              </button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+@if (visibleEdit(); as edit) {
+  <h2>Edit {{ edit.period }} limits</h2>
+  <p>
+    Saving replaces both limits for this period. Empty fields remove their
+    limits. The entered values below stay available after an unconfirmed write.
+  </p>
+  <form (ngSubmit)="save()" (input)="dirty.set(true)">
+    <label
+      >Maximum turns<input
+        name="turns"
+        inputmode="numeric"
+        [(ngModel)]="maximumTurns"
+        [disabled]="saving() || edit.used"
+    /></label>
+    <label
+      >Hard token cap<input
+        name="tokens"
+        inputmode="numeric"
+        [(ngModel)]="maximumTokens"
+        [disabled]="saving() || edit.used"
+    /></label>
+    <button type="submit" [disabled]="!canSave()">Save quota policy</button>
+  </form>
+}
+@if (receipt()) {
+  <p role="status">{{ receipt() }}</p>
+}
+@if (problem()) {
+  <p role="alert">{{ problem() }}</p>
+}
+@if (["notFound", "unavailable", "forbidden"].includes(read.state().kind)) {
+  <p role="alert">
+    Quota access is unavailable. Organization administrator access is required.
+  </p>
+}

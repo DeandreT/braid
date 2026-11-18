@@ -1,5 +1,6 @@
 using Microsoft.Win32.SafeHandles;
 using Braid.Application;
+using Braid.Application.Lifecycle;
 using Braid.Domain;
 
 namespace Braid.Storage.FileSystem;
@@ -9,7 +10,7 @@ namespace Braid.Storage.FileSystem;
 /// workflow claim; physical retirement consumes an already issued retirement.
 /// </summary>
 public sealed partial class FileSystemV2PrivateObjectStore : IPrivateObjectPublicationStore,
-    IPrivateObjectRetirementStore, IDisposable, IAsyncDisposable
+    IPrivateObjectRetirementStore, IPrivateObjectDeletionStore, IDisposable, IAsyncDisposable
 {
     /// <summary>The explicit kind this store registers; it selects the filesystem publication format.</summary>
     public const PrivatePublicationStoreKind PublicationStoreKind = PrivatePublicationStoreKind.FileSystem;

@@ -40,6 +40,11 @@ internal static class ReleaseCommands
 
     private const string Usage = """
         Usage: Braid.ReleaseTool qualify-build ACTOR ORGANIZATION PROJECT MAPPING BUILD QUALIFICATION
+               Braid.ReleaseTool export-package ACTOR ORGANIZATION PROJECT MAPPING BUILD > package
+               Braid.ReleaseTool stage-package ACTOR ORGANIZATION PROJECT MAPPING BUILD QUALIFICATION < package
+               Braid.ReleaseTool register-replica-target ACTOR ORGANIZATION PROJECT MAPPING ENVIRONMENT VERSION TARGET
+               Braid.ReleaseTool stage-replica ACTOR ORGANIZATION PROJECT MAPPING ENVIRONMENT VERSION TARGET BUILD < package
+               Braid.ReleaseTool withdraw-replica ACTOR ORGANIZATION PROJECT MAPPING ENVIRONMENT VERSION TARGET
                Braid.ReleaseTool register-release-target ACTOR ORGANIZATION PROJECT MAPPING ENVIRONMENT VERSION TARGET
                Braid.ReleaseTool activate-release ACTOR ORGANIZATION PROJECT MAPPING ENVIRONMENT VERSION TARGET RELEASE QUALIFICATION EXPECTED|none
                Braid.ReleaseTool rollback-release ACTOR ORGANIZATION PROJECT MAPPING ENVIRONMENT VERSION TARGET RELEASE SOURCE EXPECTED
@@ -65,10 +70,13 @@ internal static class ReleaseCommands
         Console.CancelKeyPress += cancel;
         try
         {
+            if (command.Name == "export-package")
+                return await ExportAsync(command, environment, cancellation.Token);
             var (outcome, values) = command.Name switch
             {
-                "qualify-build" => await QualifyAsync(command, environment, cancellation.Token),
-                "register-release-target" => await RegisterAsync(command, environment, cancellation.Token),
+                "qualify-build" or "stage-package" or "stage-replica" => await QualifyAsync(command, environment, cancellation.Token),
+                "register-release-target" or "register-replica-target" => await RegisterAsync(command, environment, cancellation.Token),
+                "withdraw-replica" => await ReplicaAsync(command, environment, null, cancellation.Token) ? ("withdrawn", Array.Empty<(string, string?)>()) : ("refused", Array.Empty<(string, string?)>()),
                 "activate-release" or "rollback-release" => await ActivateAsync(command, environment, cancellation.Token),
                 _ => await DisableAsync(command, environment, cancellation.Token)
             };
@@ -78,13 +86,14 @@ internal static class ReleaseCommands
             Console.Out.WriteLine(JsonSerializer.Serialize(line));
             return outcome switch
             {
-                "qualified" or "registered" or "activated" or "disabled" or "replayed" => 0,
+                "qualified" or "ready" or "withdrawn" or "registered" or "activated" or "disabled" or "replayed" => 0,
                 "unavailable" => 1,
                 _ => 3
             };
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { return Error("canceled", 130); }
         catch (RuntimeCleanupException) { return Error("runtimeCleanupUnconfirmed", 1); }
+        catch (BuildContractException) { return Error("invalidPackage", 3); }
         catch (ArgumentException) { return Error("configurationInvalid", 2); }
         catch (Exception error) when (error is NpgsqlException or InvalidOperationException or OperationCanceledException or TimeoutException)
         { return Error("persistenceFailure", 1); }
@@ -102,6 +111,9 @@ internal static class ReleaseCommands
         MappingRuntimeSelection selection;
         try { selection = MappingRuntimeSelection.Read(environment, Image(environment(RuntimeImageSetting)), Image(environment(CompilerImageSetting))); }
         catch (InvalidOperationException error) { throw new ArgumentException("The compiled runtime selection is invalid.", error); }
+        // A pooled service can dispatch to a different member. Never count that as a local readiness observation.
+        if (command.Name == "stage-replica" && selection.Kind != FerruleRunnerKind.Docker)
+            throw new ArgumentException("Replica staging requires its local compiled runtime.");
         var logins = QualificationLogins.ToDictionary(login => login.Role, login => Login(environment, login.Setting, login.Role), StringComparer.Ordinal);
         await using var qualifications = new PostgresBuildQualificationStore(logins["braid_qualification_writer"], writer: true);
         await using var builds = new PostgresBuildStore(logins["braid_build_reader"], writer: false);
@@ -124,7 +136,8 @@ internal static class ReleaseCommands
             var execution = new CompiledBuildExecution(runs, new BuildControlService(builds, projects, new PostgresRevisionReportMetadataReader(reports), evidence),
                 builds, new PostgresBuildObjectStore(builds, NoNativeObjects.Instance, command.Actor), runtime);
             var service = new BuildQualificationService(qualifications, runs, regressionRuns, cases, execution, projects);
-            result = await service.PutAsync(command.Actor, command.Mapping, command.Values[1], command.Values[0], token);
+            var package = command.Name is "stage-package" or "stage-replica" ? await MappingPackage.ReadAsync(Console.OpenStandardInput(), PostgresBuildStore.MaximumArtifactBytes, token) : null;
+            result = await service.PutAsync(command.Actor, command.Mapping, command.Name == "stage-replica" ? Guid.NewGuid() : command.Values[1], command.Values[0], token, package);
         }
         finally
         {
@@ -142,16 +155,58 @@ internal static class ReleaseCommands
             BuildQualificationRequestOutcome.Unavailable => "unavailable",
             _ => "refused"
         };
+        if (command.Name == "stage-replica" && result.Qualification is { } fresh)
+            outcome = result.Outcome == BuildQualificationRequestOutcome.Created && await ReplicaAsync(command, environment, fresh.Id, token) ? "ready" : "refused";
         return result.Qualification is { } qualification
             ? (outcome, [("qualificationId", qualification.Id.ToString("D")), ("buildId", qualification.Artifact.Intent.BuildId.ToString("D")),
                 ("artifactSha256", qualification.Artifact.ContentDigest.Value), ("runtimeImage", qualification.RuntimeImage)])
             : (outcome, []);
     }
 
+    private static async Task<int> ExportAsync(Command command, Func<string, string?> environment, CancellationToken token)
+    {
+        if (!Console.IsOutputRedirected) return Error("redirectRequired", 2);
+        string Reader(string role) => Login(environment, QualificationLogins.Single(login => login.Role == role).Setting, role);
+        await using var builds = new PostgresBuildStore(Reader("braid_build_reader"), writer: false);
+        await using var runs = new PostgresBuildRunStore(Reader("braid_build_run_reader"), BuildRunDatabaseProfile.Reader);
+        await using var access = new PostgresDatabase(Reader("braid_runtime"));
+        await using var reports = new PostgresRevisionReportDatabase(Reader("braid_report_reader"));
+        await using var evidence = new PostgresRegressionRunStore(Reader("braid_run_reader"), writer: false);
+        await using var cases = new PostgresRegressionCaseStore(Reader("braid_case_reader"), RegressionCaseDatabaseProfile.Reader);
+        var admissions = new BuildControlService(builds, new PostgresProjectReader(access), new PostgresRevisionReportMetadataReader(reports), new RegressionRunReadService(evidence, cases));
+        var scope = command.Mapping;
+        var run = await runs.ReadAsync(command.Actor, scope.OrganizationId, command.Values[0], token);
+        if (run?.State != BuildRunState.Succeeded || run.Artifact is not { } artifact || run.Actor != command.Actor.PrincipalId ||
+            run.Intent.BuildId != command.Values[0] || run.Intent.Revision.MappingId != scope.MappingId || run.Intent.Revision.ProjectId != scope.ProjectId ||
+            run.Intent.Revision.OrganizationId != scope.OrganizationId || await admissions.ReadAsync(command.Actor, run.Intent, token) is null) return Error("refused", 3);
+        var published = await builds.ReadPublishedPackageAsync(command.Actor, scope.OrganizationId, command.Values[0], token);
+        if (published is null || published.Publication.Actor != run.Actor || !published.Publication.Manifest.Matches(artifact, published.Bytes) ||
+            await admissions.ReadAsync(command.Actor, run.Intent, token) is null) return Error("refused", 3);
+        await new MappingPackage(published.Publication.Manifest, published.Bytes).WriteAsync(Console.OpenStandardOutput(), token);
+        return 0;
+    }
+
+    private static async Task<bool> ReplicaAsync(Command command, Func<string, string?> environment, Guid? proof, CancellationToken token)
+    {
+        var secret = environment("BRAID_REPLICA_CREDENTIAL");
+        if (secret is not { Length: 64 } || !secret.All(char.IsAsciiHexDigit)) throw new ArgumentException("Invalid replica credential.");
+        await using var releases = new PostgresLocalReleaseStore(Login(environment, ReleaseWriter, "braid_release_writer"), writer: true);
+        var credential = Convert.FromHexString(secret);
+        try { return await releases.RecordReplicaAsync(command.Actor, command.Target!, proof, credential, token); }
+        finally { System.Security.Cryptography.CryptographicOperations.ZeroMemory(credential); }
+    }
+
     private static async Task<(string, (string, string?)[])> RegisterAsync(Command command, Func<string, string?> environment, CancellationToken token)
     {
         var target = new LocalReleaseTarget(command.Target!, FerruleBuildCompiler.Profile, Image(environment(RuntimeImageSetting)));
         await using var releases = new PostgresLocalReleaseStore(Login(environment, ReleaseWriter, "braid_release_writer"), writer: true);
+        if (command.Name == "register-replica-target")
+        {
+            var roster = environment("BRAID_REPLICA_VERIFIERS") ?? throw new ArgumentException("Missing replica roster.");
+            if (roster.Length > 32 * 65 || roster.Split(',').Any(hash => hash.Length != 64 || hash.Any(c => c is not (>= '0' and <= '9') and not (>= 'a' and <= 'f'))))
+                throw new ArgumentException("Invalid replica roster.");
+            return (await releases.RegisterReplicasAsync(command.Actor, target, roster.Split(','), token) ? "registered" : "refused", [("targetId", target.Reference.TargetId.ToString("D"))]);
+        }
         var outcome = await releases.RegisterAsync(command.Actor, target, token);
         return (outcome switch
         {
@@ -208,21 +263,24 @@ internal static class ReleaseCommands
         // COMMAND ACTOR ORGANIZATION PROJECT MAPPING, then the build and qualification, or the target and its values.
         var shape = arguments.Length > 0 ? arguments[0] switch
         {
-            "qualify-build" => (Target: false, Values: 2),
-            "register-release-target" or "disable-release-target" => (Target: true, Values: 0),
+            "qualify-build" or "stage-package" => (Target: false, Values: 2),
+            "export-package" => (Target: false, Values: 1),
+            "register-release-target" or "register-replica-target" or "disable-release-target" or "withdraw-replica" => (Target: true, Values: 0),
+            "stage-replica" => (Target: true, Values: 1),
             "activate-release" or "rollback-release" => (Target: true, Values: 3),
             _ => (Target: false, Values: -1)
         } : (Target: false, Values: -1);
         if (shape.Values < 0 || arguments.Length != 5 + (shape.Target ? 3 : 0) + shape.Values) throw new ArgumentException("Invalid release command arguments.");
         var actor = new ActorContext(new PrincipalId(Identifier(arguments[1])));
         var mapping = new MappingScope(Identifier(arguments[2]), Identifier(arguments[3]), Identifier(arguments[4]));
-        if (!shape.Target) return new(arguments[0], actor, mapping, null, [Identifier(arguments[5]), Identifier(arguments[6])], null);
+        if (!shape.Target) return new(arguments[0], actor, mapping, null, arguments[5..].Select(Identifier).ToArray(), null);
         if (!long.TryParse(arguments[6], NumberStyles.None, CultureInfo.InvariantCulture, out var version) || version < 1 ||
             arguments[6] != version.ToString(CultureInfo.InvariantCulture))
             throw new ArgumentException("Invalid environment version.");
         var target = new ReleaseTargetReference(mapping, new(new(mapping.OrganizationId, mapping.ProjectId), Identifier(arguments[5]), version),
             Identifier(arguments[7]));
         if (shape.Values == 0) return new(arguments[0], actor, mapping, target, [], null);
+        if (shape.Values == 1) return new(arguments[0], actor, mapping, target, [Identifier(arguments[8])], null);
         Guid? expected = arguments[10] == "none" && arguments[0] == "activate-release" ? null : Identifier(arguments[10]);
         var values = new[] { Identifier(arguments[8]), Identifier(arguments[9]) };
         if (arguments[0] == "rollback-release" && (values[1] == values[0] || values[1] == expected)) throw new ArgumentException("Invalid rollback source.");

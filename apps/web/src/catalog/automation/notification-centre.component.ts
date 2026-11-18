@@ -4,6 +4,7 @@ import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { ActivatedRoute, RouterLink } from "@angular/router";
 import { finalize, switchMap } from "rxjs";
 import { CatalogContextStore } from "../catalog-context";
+import { OrganizationSelection } from "../organization-selection";
 import { CatalogStatusComponent } from "../catalog-shell.component";
 import { createCatalogRead } from "../catalog-state";
 import { isCatalogId } from "../catalog-types";
@@ -84,7 +85,9 @@ import {
                     [attr.data-tone]="item.read ? null : 'running'"
                     >{{ item.read ? "Read" : "Unread" }}</span
                   >
-                  <a [routerLink]="item.link">Open related page</a>
+                  <a [routerLink]="selection.link(item.link)"
+                    >Open related page</a
+                  >
                   @if (!item.read) {
                     <button
                       class="catalog-button"
@@ -110,12 +113,12 @@ import {
         }
         <nav class="catalog-pagination" aria-label="Notification pages">
           @if (v.data.nextId || after()) {
-            <a class="catalog-page-link" routerLink="/notifications">Newest</a>
+            <a class="catalog-page-link" [routerLink]="[]">Newest</a>
           }
           @if (v.data.nextId) {
             <a
               class="catalog-page-link"
-              routerLink="/notifications"
+              [routerLink]="[]"
               [queryParams]="{ after: v.data.nextId }"
               >Older notifications</a
             >
@@ -140,6 +143,7 @@ export class NotificationCentreComponent {
   readonly message = signal("");
   readonly after = signal<string | null>(null);
   readonly label = notificationEventLabel;
+  readonly selection = inject(OrganizationSelection);
   private readonly api = inject(AutomationApi);
   private readonly contexts = inject(CatalogContextStore);
   private readonly destroy = inject(DestroyRef);

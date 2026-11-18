@@ -29,21 +29,23 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend, IExecutionAd
     private readonly IInspectionWorkerRunner _runner;
     private readonly string _backendBuild;
     private readonly PreviewExecutionProfile _profile;
-    private string SelectedProfile => _profile switch
+    private readonly IReadOnlyList<NativeDocumentFormat> _nativeFormats;
+    private NativeDocumentFormat? NativeFormat => NativeDocumentFormat.FromExecution(_profile);
+    private string SelectedProfile => NativeFormat?.Profile ?? _profile switch
     {
         PreviewExecutionProfile.CsvDocument => CsvDocumentPolicy.Profile,
         PreviewExecutionProfile.XmlDocument => XmlPreviewAdmission.Profile,
         PreviewExecutionProfile.Document => DocumentPreviewPolicy.Profile,
         _ => PreviewPolicy.Profile
     };
-    private string SelectedProtocol => _profile switch
+    private string SelectedProtocol => NativeFormat?.Profile ?? _profile switch
     {
         PreviewExecutionProfile.CsvDocument => CsvProtocolVersion,
         PreviewExecutionProfile.XmlDocument => XmlPreviewAdmission.Profile,
         PreviewExecutionProfile.Document => DocumentProtocolVersion,
         _ => ProtocolVersion
     };
-    private string SelectedAdapter => _profile switch
+    private string SelectedAdapter => NativeFormat?.AdapterBuild ?? _profile switch
     {
         PreviewExecutionProfile.CsvDocument => CsvAdapterBuild,
         PreviewExecutionProfile.XmlDocument => XmlAdapterBuild,
@@ -58,12 +60,14 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend, IExecutionAd
     {
     }
 
-    public FerrulePreviewBackend(IInspectionWorkerRunner runner, PreviewExecutionProfile profile, bool xmlEnabled = false)
+    public FerrulePreviewBackend(IInspectionWorkerRunner runner, PreviewExecutionProfile profile, bool xmlEnabled = false,
+        IReadOnlyList<NativeDocumentFormat>? nativeFormats = null)
     {
         ArgumentNullException.ThrowIfNull(runner);
         if (!Enum.IsDefined(profile))
             throw new ArgumentOutOfRangeException(nameof(profile));
         _profile = profile;
+        _nativeFormats = nativeFormats?.ToArray() ?? [];
         _xmlEnabled = xmlEnabled;
         if (runner is DockerInspectionWorkerRunner docker && docker.Profile != DockerWorkerProfile.Preview)
             throw new ArgumentException("Preview requires a runner configured with the preview worker profile.", nameof(runner));
@@ -79,7 +83,7 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend, IExecutionAd
     {
         ArgumentNullException.ThrowIfNull(request);
         if (request.Profile is { } requested && requested != _profile)
-            return await new FerrulePreviewBackend(_runner, requested, _xmlEnabled).PreviewAsync(request, cancellationToken).ConfigureAwait(false);
+            return await new FerrulePreviewBackend(_runner, requested, _xmlEnabled, _nativeFormats).PreviewAsync(request, cancellationToken).ConfigureAwait(false);
         ArgumentNullException.ThrowIfNull(request.Artifact);
         ArgumentNullException.ThrowIfNull(request.Target);
         ArgumentNullException.ThrowIfNull(request.Primary);
@@ -133,6 +137,20 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend, IExecutionAd
             return LocalFailure(artifact, MappingPreviewStatus.UnsupportedCapability, "preview.xmlDisabled", "XML previews are not enabled.");
         if (_profile != PreviewExecutionProfile.XmlDocument && request.NamedInputs.Prepend(request.Primary).Any(input => input?.XmlMetadata is not null))
             return Invalid("XML metadata requires its own admission profile.");
+        if (NativeFormat is { } nativeFormat)
+        {
+            if (nativeFormat == NativeDocumentFormat.Xlsx && _runner is ProcessWorkerRunner or FerruleServiceRunner)
+                return LocalFailure(artifact, MappingPreviewStatus.UnsupportedCapability, "preview.xlsxOutputUnavailable", NativeDocumentFormat.XlsxOutputRefusal);
+            if (!_nativeFormats.Contains(nativeFormat)) return LocalFailure(artifact, MappingPreviewStatus.UnsupportedCapability, "preview.nativeDisabled", "This native document profile is not enabled.");
+            if (request.NamedInputs.Count != 0 || request.Target.Kind == PreviewTargetKind.Named) return Invalid("Native documents require primary boundaries.");
+            try
+            {
+                if (request.Primary.DocumentSettings != NativeDocumentNativeSettings.Read(artifact, nativeFormat).Input) return Invalid("Native input settings do not match the revision.");
+                nativeFormat.CheckBytes(request.Primary.Bytes);
+            }
+            catch (PreviewRunException) { return Invalid("Invalid native document or saved settings."); }
+        }
+        else if (request.NamedInputs.Prepend(request.Primary).Any(input => input?.DocumentSettings is not null)) return Invalid("Native settings require a matching profile.");
         var limits = request.Limits;
         if (limits.MaximumInputBytes is < 1 or > PreviewPolicy.MaximumInputBytes
             || limits.MaximumOutputBytes is < 1 or > PreviewPolicy.MaximumOutputBytes
@@ -157,7 +175,7 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend, IExecutionAd
                 return Invalid("Named inputs must have distinct bounded names.", input?.Name);
             total += input.ByteCount;
         }
-        if (_profile != PreviewExecutionProfile.CsvDocument && (request.Primary.ByteCount == 0 || request.NamedInputs.Any(input => input.ByteCount == 0)))
+        if (!NativeDocumentPolicy.AllowsEmpty(_profile) && (request.Primary.ByteCount == 0 || request.NamedInputs.Any(input => input.ByteCount == 0)))
             return Invalid("Input documents cannot be empty.");
         if (total > limits.MaximumInputBytes)
             return LocalFailure(artifact, MappingPreviewStatus.ResourceLimit, "preview.inputLimit", "The input documents exceed the preview input limit.");
@@ -339,14 +357,21 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend, IExecutionAd
         Require(result.RecordsWritten <= long.MaxValue);
         var boundaries = result.Artifacts.Select(item => item?.BoundaryId).ToArray();
         Require(ExpectedBoundaries(request.Target, boundaries));
-        if (_profile == PreviewExecutionProfile.CsvDocument)
+        if (_profile == PreviewExecutionProfile.CsvDocument || NativeFormat is not null)
             Require(boundaries.Length == 1 && boundaries[0] == PrimaryOutput);
         var artifacts = new List<PreviewOutputArtifact>(result.Artifacts.Count);
         long total = 0;
         foreach (var item in result.Artifacts)
         {
+            var settings = item.FlexTextSettings is { } flex ? new NativeDocumentSettings(FlexTextDocumentPolicy.SettingsSchema, FlexTextSettingsJson.Read(flex).LayoutJson) :
+                item.XlsxSettings is { } sheet ? new NativeDocumentSettings(XlsxDocumentPolicy.SettingsSchema, XlsxSettingsJson.Encode(XlsxSettingsJson.Read(sheet))) :
+                item.DocumentSettings is { } saved ? NativeDocumentSettingsJson.Read(saved) : null;
+            Require((item.FlexTextSettings is not null) == (NativeFormat == NativeDocumentFormat.FlexText) &&
+                (item.XlsxSettings is not null) == (NativeFormat == NativeDocumentFormat.Xlsx) &&
+                (item.DocumentSettings is not null) == (NativeFormat == NativeDocumentFormat.Protobuf || NativeFormat == NativeDocumentFormat.Xbrl));
             Require((_profile switch
             {
+                _ when NativeFormat is { } format => item.CsvDialect is null && item.XmlMetadata is null && item.MediaType == format.MediaType && settings == NativeDocumentNativeSettings.Read(artifact, format).Output,
                 PreviewExecutionProfile.CsvDocument => CsvDocumentPolicy.Admits(item.CsvDialect, item.MediaType),
                 PreviewExecutionProfile.XmlDocument => item.CsvDialect is null && item.XmlMetadata is { } xml &&
                     XmlDocumentPolicy.Admits(XmlDocumentMetadataJson.Read(xml, XmlDocumentRole.Output), XmlDocumentRole.Output, item.MediaType),
@@ -364,8 +389,9 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend, IExecutionAd
             var bytes = output.AsSpan(offset + 4, (int)frameLength).ToArray();
             offset += 4 + (int)frameLength;
             if (_profile != PreviewExecutionProfile.XmlDocument && item.XmlMetadata is not null) throw new ProtocolException();
+            NativeFormat?.CheckBytes(bytes);
             var verified = new PreviewOutputArtifact(item.BoundaryId, item.TargetName, item.TargetNameTruncated, item.MediaType, (long)item.RecordsWritten, bytes, item.CsvDialect,
-                item.XmlMetadata is { } value ? XmlDocumentMetadataJson.Read(value, XmlDocumentRole.Output) : null);
+                item.XmlMetadata is { } value ? XmlDocumentMetadataJson.Read(value, XmlDocumentRole.Output) : null, settings);
             Require(verified.Digest == digest);
             artifacts.Add(verified);
         }

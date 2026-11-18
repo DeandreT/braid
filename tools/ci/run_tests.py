@@ -210,8 +210,16 @@ def require_prerequisites(groups: Sequence[str], assembly: Path) -> None:
     requested = set(groups)
     if requested - {"fast", "live-provider", "native-windows", "incremental-build"}:
         require(sys.platform == "linux", "the selected groups require Linux")
-    if requested & {"integration", "packaged-browser"}:
+    if requested & {"integration", "packaged-browser", "host-replica-pilot", "sftp-loopback", "trigger-emulators"}:
         postgres()
+    if "host-replica-pilot" in requested:
+        value("BRAID_HOST_REPLICA_PILOT", "1")
+    if "sftp-loopback" in requested:
+        file("BRAID_SFTP_TEST_PYTHON", executable=True)
+    if "trigger-emulators" in requested:
+        tool(os.environ.get("BRAID_DOCKER_EXECUTABLE") or "docker")
+        value("BRAID_TRIGGER_EMULATORS", "compose")
+        value("BRAID_TRIGGERS_ACCEPT_EULA", "Y")
     if "integration" in requested:
         tool("bash")
         value("BRAID_AZURITE_IMAGE", "mcr.microsoft.com/azure-storage/azurite@sha256:830430c1da1a2d537e08f3e6764dd1f5ae00cf0346bcaf625b968ec3f0971fd5")

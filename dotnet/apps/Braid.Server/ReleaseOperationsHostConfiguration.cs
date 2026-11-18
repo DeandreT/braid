@@ -32,6 +32,8 @@ internal static class ReleaseOperationsHostConfiguration
         services.AddKeyedSingleton<PostgresLocalReleaseStore>("operations-writer", (_, _) => new(writer, true));
         services.AddKeyedSingleton<PostgresBuildQualificationStore>("operations", (_, _) => new(qualification, false));
         services.AddSingleton<IReleaseOperationsStore>(provider => provider.GetRequiredKeyedService<PostgresLocalReleaseStore>("operations-reader"));
+        services.AddSingleton<Braid.Deployment.Triggers.ITriggerOperationsStore>(provider => provider.GetRequiredKeyedService<PostgresLocalReleaseStore>("operations-writer"));
+        services.AddSingleton<Braid.Deployment.Triggers.ITriggerAdministrationStore>(_ => new PostgresTriggerAdministrationStore(writer));
         services.AddSingleton(provider => new ReleaseOperationsService(provider.GetRequiredKeyedService<PostgresLocalReleaseStore>("operations-writer"),
             provider.GetRequiredKeyedService<PostgresLocalReleaseStore>("operations-reader"), provider.GetRequiredKeyedService<PostgresBuildQualificationStore>("operations")));
     }

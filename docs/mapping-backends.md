@@ -148,7 +148,7 @@ Inherited design-time HTTP paths do not authorize worker network access.
 ### Direct worker profiles for native documents
 
 The worker accepts one primary input and produces one new primary document for
-each profile below. Both boundaries must declare the same family. The saved
+each profile below. Both boundaries must explicitly declare the formats shown. The saved
 options, not filenames or media types, select Ferrule's bounded document reader
 and writer. Each frame carries its byte length and SHA-256 digest, with an 8 MiB
 aggregate input limit and a separate 8 MiB aggregate output limit. An execution
@@ -157,12 +157,19 @@ failure publishes no artifact frames.
 | Worker protocol | Saved settings and output |
 | --- | --- |
 | `braid.ferrule-flextext-preview.v1` | The canonical saved FlexText layout (up to 16 KiB) must match the boundary schema. Input and output are UTF-8; a declared empty document is distinct from a missing frame. Output modes that pad fixed columns or collect whole record sets or switch arms before checking size are refused. |
-| `braid.ferrule-xlsx-preview.v1` | Read a flat worksheet and write a new workbook. Sheet, start row, column positions and headers come from the saved mapping. Updating an existing file, formulas and external links are outside this profile. |
+| `braid.ferrule-xlsx-preview.v1` | The native codec reads a flat worksheet and writes a new workbook. Direct worker only. The restricted service refuses workbook output before execution because the pinned writer requires a worksheet thread. The catalog does not offer this profile. Updating an existing file, formulas and external links are outside this profile. |
+| `braid.ferrule-xlsx-to-json-preview.v1` | Worker protocol only. Read one flat worksheet using the saved source options and return plain JSON; no workbook writer is invoked. Named boundaries, dynamic outputs and other target options are refused. |
 | `braid.ferrule-protobuf-preview.v1` | Use the embedded schema, imports and root message. Return binary bytes, not text; the output must decode against the saved target schema. |
 | `braid.ferrule-xbrl-preview.v1` | Read and write an instance with the saved source and target instance options. A taxonomy reference does not authorize fetching a file or making a network request. |
 
-These are direct worker protocols, **not** persisted preview or regression
-profiles, public HTTP capabilities or workbench options. Generated C# builds
+The catalog enables the FlexText, Protobuf and XBRL profiles separately for saved-revision previews and
+exact-byte regression. Configure `BRAID_PREVIEWS_<FORMAT>_ENABLED` on the server
+and preview worker, or `BRAID_REGRESSIONS_<FORMAT>_ENABLED` on the server and
+regression worker, with `FORMAT` set to `FLEXTEXT`, `PROTOBUF` or `XBRL`.
+The parent workflow must also be enabled. Each flag defaults to false.
+Run recovery binds the stored input length, digest and canonical boundary
+settings to the original revision. Regression cases retain the original bytes,
+clock, limits and runtime identity. Generated C# builds
 refuse these boundary formats with `unsupportedFlexTextBuild`,
 `unsupportedXlsxBuild`, `unsupportedProtobufBuild` or `unsupportedXbrlBuild`;
 there is no new mapping endpoint format. PDF rendering and database connections

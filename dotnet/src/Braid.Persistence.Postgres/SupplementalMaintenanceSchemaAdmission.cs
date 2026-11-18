@@ -9,7 +9,7 @@ internal static class SupplementalMaintenanceSchemaAdmission
 {
     internal static string[] TriggerNames(string table) => MaintenanceSchemaContract.Triggers
         .Where(trigger => trigger.Table == table).Select(trigger => trigger.Name).Concat(AutomationSchemaAdmission.TriggerNames(table))
-        .Concat(table == "revision_ingestions" ? new[] { "chat_mapping_write_commit", "revision_ingestions_creation_guard" } : []).ToArray();
+        .Concat(table == "revision_ingestions" ? new[] { "chat_mapping_write_commit", "revision_ingestions_creation_guard" } : []).Concat(OrganizationSwitchingSchemaAdmission.TriggerNames(table)).ToArray();
 
     internal static string[] IndexNames(IEnumerable<string> tables) => MaintenanceSchemaContract.Indexes
         .Where(index => tables.Contains(index.Table, StringComparer.Ordinal)).Select(index => index.Name).ToArray();
@@ -29,6 +29,7 @@ internal static class SupplementalMaintenanceSchemaAdmission
     {
         await AutomationSchemaAdmission.ValidateTriggersAsync(connection, transaction, cancellationToken);
         var chatWrites = await ChatSchemaContract.ValidateMappingCommitAuditAsync(connection, transaction, cancellationToken);
+        await OrganizationSwitchingSchemaAdmission.ValidateAsync(connection, transaction, cancellationToken);
         // Loading these descriptors verifies the embedded source digest and all
         // required pristine PostgreSQL captures before inspecting a live schema.
         var tables = RevisionDerivationSchemaContract.Tables.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
@@ -189,7 +190,7 @@ internal static class SupplementalMaintenanceSchemaAdmission
                 AND NOT trigger_row.tgname=ANY($2::text[])
             """, connection, transaction);
         command.Parameters.AddWithValue(tables.Keys.ToArray());
-        command.Parameters.AddWithValue(AutomationSchemaAdmission.AllTriggerNames);
+        command.Parameters.AddWithValue(AutomationSchemaAdmission.AllTriggerNames.Concat(OrganizationSwitchingSchemaAdmission.AllTriggerNames).ToArray());
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {

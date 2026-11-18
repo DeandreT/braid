@@ -2,6 +2,10 @@
   "extends": "./tsconfig.json",
   "compilerOptions": { "noEmit": true, "types": ["node"] },
   "include": [
+    "playwright.usage.config.ts",
+    "tests/ai-usage.spec.ts",
+    "tests/ai-quotas.spec.ts",
+    "tests/audit.spec.ts",
     "playwright.dependency-security.config.ts",
     "tests/dependency-security-forms.spec.ts",
     "playwright.automation.config.ts",

@@ -81,17 +81,30 @@
             id="preview-admission"
             class="preview-text"
             [value]="
-              preview.xmlProfile()
-                ? 'xml'
-                : preview.csvProfile()
-                  ? 'csv'
-                  : preview.documentProfile()
-                    ? 'document'
-                    : 'json'
+              preview.native()
+                ? preview.native()!.profile
+                : preview.xmlProfile()
+                  ? 'xml'
+                  : preview.csvProfile()
+                    ? 'csv'
+                    : preview.documentProfile()
+                      ? 'document'
+                      : 'json'
             "
             (change)="setProfile($any($event.target).value)"
           >
             <option value="json">Legacy JSON</option>
+            @for (format of nativeFormats; track format.key) {
+              @if (
+                context().features.nativePreviewProfiles?.includes(
+                  format.profile
+                )
+              ) {
+                <option [value]="format.profile">
+                  {{ format.label }} (saved settings)
+                </option>
+              }
+            }
             @if (context().features.xmlPreview === true) {
               <option value="xml">
                 XML (saved boundaries, native preview only)
@@ -107,6 +120,12 @@
             }
           </select>
         </div>
+        @if (preview.native(); as format) {
+          <p class="preview-hint">
+            {{ format.label }} uses the saved primary boundaries. Downloads and
+            regression comparisons keep the original bytes.
+          </p>
+        }
         @if (preview.xmlProfile()) {
           <p class="preview-hint">
             Safe XML uses the saved native boundaries, never filenames. Schema
@@ -205,13 +224,15 @@
                     #fileInput
                     type="file"
                     [attr.accept]="
-                      preview.xmlProfile()
-                        ? null
-                        : preview.csvProfile()
-                          ? '.csv,.tsv,text/csv,text/tab-separated-values'
-                          : preview.documentProfile()
-                            ? null
-                            : 'application/json,.json'
+                      preview.native()
+                        ? '.' + preview.native()!.extension
+                        : preview.xmlProfile()
+                          ? null
+                          : preview.csvProfile()
+                            ? '.csv,.tsv,text/csv,text/tab-separated-values'
+                            : preview.documentProfile()
+                              ? null
+                              : 'application/json,.json'
                     "
                     (change)="chooseFile(item.id, $event)"
                   />
@@ -242,6 +263,7 @@
             type="button"
             (click)="preview.addInput()"
             [disabled]="
+              !!preview.native() ||
               preview.csvProfile() ||
               preview.inputs().length >= limits.inputDocuments
             "
@@ -324,7 +346,10 @@
             >
               <option value="all">All outputs</option>
               <option value="primary">Primary output only</option>
-              <option value="named" [disabled]="preview.csvProfile()">
+              <option
+                value="named"
+                [disabled]="!!preview.native() || preview.csvProfile()"
+              >
                 One named output
               </option>
             </select>
@@ -386,6 +411,18 @@
                 · Cancellation requested
               }
             </p>
+            @if (run.state === "completed" || run.state === "canceled") {
+              <braid-delete-item
+                [context]="context()"
+                [target]="{
+                  kind: 'preview',
+                  organizationId: context().allowedOrganizationId,
+                  runId: run.runId,
+                }"
+                label="this preview run"
+                (deleted)="preview.discard()"
+              />
+            }
             @if (run.state === "completed" && run.outcome === "succeeded") {
               <p class="preview-hint">
                 This sample ran successfully. It has not been compared with a
@@ -480,6 +517,11 @@
                           <button
                             class="catalog-button"
                             type="button"
+                            [disabled]="
+                              output.mediaType === 'application/x-protobuf' ||
+                              output.mediaType ===
+                                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                            "
                             (click)="show(output)"
                           >
                             Show {{ targetLabel(output) }}

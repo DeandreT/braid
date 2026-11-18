@@ -18,6 +18,14 @@ public sealed class BusinessRouteMetadata
     public override string ToString() => nameof(BusinessRouteMetadata);
 }
 
+/// <summary>Marks an authenticated identity-only read: session cookie or bearer, never a business scope.</summary>
+public sealed class IdentityRouteMetadata
+{
+    internal static readonly IdentityRouteMetadata Instance = new();
+    private IdentityRouteMetadata() { }
+    public override string ToString() => nameof(IdentityRouteMetadata);
+}
+
 /// <summary>The supported security contract: which schemes each operation admits, generated from route metadata.</summary>
 internal static class ApiSecurity
 {
@@ -34,6 +42,12 @@ internal static class ApiSecurity
         endpoints.MapGroup("").WithMetadata(BusinessRouteMetadata.Instance);
 
     internal static bool IsBusiness(EndpointMetadataCollection metadata) => metadata.GetMetadata<BusinessRouteMetadata>() is not null;
+
+    /// <summary>Identity/discovery routes carry <see cref="IdentityRouteMetadata"/>.</summary>
+    internal static RouteGroupBuilder IdentityRoutes(this IEndpointRouteBuilder endpoints) =>
+        endpoints.MapGroup("").WithMetadata(IdentityRouteMetadata.Instance);
+
+    internal static bool IsIdentityRead(EndpointMetadataCollection metadata) => metadata.GetMetadata<IdentityRouteMetadata>() is not null;
 
     internal static void Transform(OpenApiDocument document, IReadOnlyList<ApiDescriptionGroup> groups)
     {
@@ -86,17 +100,29 @@ internal static class ApiSecurity
                 "A refused token answers 401 with WWW-Authenticate: Bearer error=\"invalid_token\"; a valid token without an enabled Braid binding answers 403."
         };
         var business = new HashSet<(string, HttpMethod)>();
+        var identity = new HashSet<(string, HttpMethod)>();
         foreach (var description in groups.SelectMany(group => group.Items))
-            if (description.RelativePath is { } path && description.HttpMethod is { } method &&
-                IsBusiness(new EndpointMetadataCollection(description.ActionDescriptor.EndpointMetadata)))
-                business.Add(("/" + path, new HttpMethod(method)));
+            if (description.RelativePath is { } path && description.HttpMethod is { } method)
+            {
+                var metadata = new EndpointMetadataCollection(description.ActionDescriptor.EndpointMetadata);
+                if (IsBusiness(metadata)) business.Add(("/" + path, new HttpMethod(method)));
+                else if (IsIdentityRead(metadata)) identity.Add(("/" + path, new HttpMethod(method)));
+            }
         document.Paths ??= new OpenApiPaths();
         foreach (var (path, item) in document.Paths)
         {
             if (item.Operations is null) continue;
             foreach (var (method, operation) in item.Operations)
             {
-                if (business.Contains((path, method)))
+                if (identity.Contains((path, method)))
+                {
+                    operation.Security =
+                    [
+                        Requirement(document, [SessionScheme]),
+                        new OpenApiSecurityRequirement { [new OpenApiSecuritySchemeReference(BearerScheme, document)] = [ScopeTemplate] }
+                    ];
+                }
+                else if (business.Contains((path, method)))
                 {
                     var safe = method == HttpMethod.Get || method == HttpMethod.Head;
                     operation.Security =

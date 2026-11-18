@@ -14,6 +14,7 @@ import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, RouterLink } from "@angular/router";
 import { finalize, of, switchMap } from "rxjs";
 import { CatalogContextStore } from "../catalog-context";
+import { OrganizationSelection } from "../organization-selection";
 import { BrowserSessionState } from "../../auth/browser-session-state";
 import { UnsentWork } from "../../workbench/unsent-work";
 import {
@@ -29,6 +30,22 @@ import {
   type OriginalOperation,
 } from "./operations-api";
 
+const pilotFields = [
+  ["sourceBinding", "Source binding ID"],
+  ["source", "Source connector ID"],
+  ["sourceVersion", "Source connector version"],
+  ["destinationBinding", "Destination binding ID"],
+  ["destination", "Destination connector ID"],
+  ["destinationVersion", "Destination connector version"],
+  ["tenant", "Machine tenant ID"],
+  ["principal", "Machine principal ID"],
+  ["application", "Machine application ID"],
+  ["cron", "UTC cron schedule"],
+  ["effectiveUtc", "Effective UTC (YYYY-MM-DDTHH:mm:ssZ)"],
+  ["tzVersion", "Host time zone database version"],
+  ["referenceName", "Optional named JSON input"],
+  ["referenceJson", "Optional JSON reference document (3 KiB maximum)"],
+] as const;
 @Component({
   selector: "braid-operations-page",
   imports: [FormsModule, RouterLink],
@@ -38,6 +55,7 @@ import {
 })
 export class OperationsPageComponent {
   readonly context = inject(CatalogContextStore);
+  readonly selection = inject(OrganizationSelection);
   private readonly api = inject(OperationsApi);
   private readonly route = inject(ActivatedRoute);
   private readonly destroy = inject(DestroyRef);
@@ -92,6 +110,10 @@ export class OperationsPageComponent {
   qualification = "";
   source = "";
   confirming = false;
+  delivery = "";
+  deliveryVersion = "";
+  resolution = "accepted";
+  acknowledgeDuplicateRisk = false;
   private scope: CatalogMappingScope | null = null;
 
   constructor() {
@@ -223,6 +245,74 @@ export class OperationsPageComponent {
     this.load();
   }
 
+  /** Only a delivery whose remote outcome is unknown can be resolved, at the version it was read. */
+  selectDelivery(row: OperationsPage["items"][number]): void {
+    if (
+      this.pending() ||
+      row.kind !== "delivery" ||
+      row["phase"] !== "unknown" ||
+      !isCatalogId(row["delivery_id"])
+    )
+      return;
+    this.pilotOpen = false;
+    this.delivery = row["delivery_id"];
+    this.deliveryVersion = String(row["version"]);
+    this.resolution = "accepted";
+    this.acknowledgeDuplicateRisk = false;
+    this.confirming = false;
+    this.draftChanged();
+  }
+
+  clearDelivery(): void {
+    if (this.pending()) return;
+    this.resetDelivery();
+    this.draftChanged();
+  }
+
+  private resetDelivery(): void {
+    this.delivery = "";
+    this.deliveryVersion = "";
+    this.resolution = "accepted";
+    this.acknowledgeDuplicateRisk = false;
+    this.confirming = false;
+  }
+
+  pilotOpen = false;
+  pilotTrigger = "";
+  pilotGeneration = "0";
+  pilotAction = "configure";
+  get pilotFields() {
+    return this.pilotAction === "configureQueue"
+      ? pilotFields.filter(
+          ([k]) =>
+            ![
+              "referenceName",
+              "referenceJson",
+              "effectiveUtc",
+              "cron",
+              "tzVersion",
+            ].includes(k),
+        )
+      : pilotFields;
+  }
+  get configuring() {
+    return ["configure", "configureQueue", "configureBlob"].includes(
+      this.pilotAction,
+    );
+  }
+  pilotValues: Record<string, string> = {};
+
+  selectPilot(row: OperationsPage["items"][number]): void {
+    if (this.pending() || row.kind !== "trigger") return;
+    this.resetDelivery();
+    this.pilotOpen = true;
+    this.pilotTrigger = row.trigger_id;
+    this.pilotGeneration = row.generation;
+    this.pilotAction = row.enabled ? "pause" : "enable";
+    this.confirming = false;
+    this.draftChanged();
+  }
+
   send(): void {
     const scope = this.scope;
     if (!scope || this.busy() || (!this.confirming && !this.pending())) return;
@@ -243,6 +333,80 @@ export class OperationsPageComponent {
           let original = this.pending();
           if (original && original.owner !== catalogOwner(context))
             throw new Error("Different workspace owner");
+          if (!original && this.pilotOpen) {
+            if (
+              ![this.target, this.pilotTrigger, this.environment].every(
+                isCatalogId,
+              ) ||
+              !/^(0|[1-9][0-9]*)$/.test(this.pilotGeneration)
+            )
+              throw new Error("Invalid pilot route");
+            const fields = Object.fromEntries(
+              pilotFields.map(([key]) => [
+                key,
+                this.configuring &&
+                this.pilotFields.some(([field]) => field === key)
+                  ? this.pilotValues[key] || null
+                  : null,
+              ]),
+            );
+            original = {
+              id: crypto.randomUUID(),
+              target: this.target,
+              version: this.pilotGeneration,
+              owner: catalogOwner(context),
+              pilot: { trigger: this.pilotTrigger, action: this.pilotAction },
+              body: JSON.stringify({
+                environmentId: this.environment,
+                environmentVersion: this.environmentVersion,
+                ...fields,
+                ...(this.configuring && this.pilotAction !== "configure"
+                  ? {
+                      destinationKind: this.pilotValues["destinationKind"],
+                      inputMediaType: this.pilotValues["inputMediaType"],
+                      envelope: this.pilotValues["envelope"],
+                    }
+                  : {}),
+              }),
+            };
+            this.pendingForm = {
+              target: this.targetSignature(),
+              action: this.actionSignature(),
+            };
+            this.pending.set(original);
+          }
+          if (!original && this.delivery) {
+            // A resend may duplicate a delivery the receiver already took; it needs explicit acknowledgement.
+            if (
+              ![this.target, this.environment, this.delivery].every(
+                isCatalogId,
+              ) ||
+              !/^[1-9][0-9]*$/.test(this.deliveryVersion) ||
+              !/^[1-9][0-9]*$/.test(this.environmentVersion) ||
+              !["accepted", "abandoned", "resend"].includes(this.resolution) ||
+              (this.resolution === "resend") !== this.acknowledgeDuplicateRisk
+            )
+              throw new Error("Invalid delivery resolution");
+            original = {
+              id: crypto.randomUUID(),
+              target: this.target,
+              version: this.deliveryVersion,
+              owner: catalogOwner(context),
+              delivery: this.delivery,
+              body: JSON.stringify({
+                resolution: this.resolution,
+                environmentId: this.environment,
+                environmentVersion: this.environmentVersion,
+                acknowledgement:
+                  this.resolution === "resend" ? "duplicateRisk" : null,
+              }),
+            };
+            this.pendingForm = {
+              target: this.targetSignature(),
+              action: this.actionSignature(),
+            };
+            this.pending.set(original);
+          }
           if (!original) {
             if (
               ![this.target, this.environment].every(isCatalogId) ||
@@ -301,13 +465,24 @@ export class OperationsPageComponent {
             );
             return;
           }
+          const actionUnchanged =
+            this.pendingForm?.action === this.actionSignature();
           this.pending.set(null);
+          if (original.delivery) this.resetDelivery();
+          if (original.pilot && actionUnchanged) {
+            this.pilotOpen = false;
+            this.pilotValues = {};
+            this.pilotGeneration = "0";
+            this.pilotTrigger = "";
+            this.pilotAction = "configure";
+          }
+
           // Acknowledging a request is not permission to discard edits made while it ran.
           if (this.pendingForm?.target === this.targetSignature()) {
             this.version = "";
             this.savedTarget.set(this.targetSignature());
           }
-          if (this.pendingForm?.action === this.actionSignature()) {
+          if (actionUnchanged) {
             this.confirming = false;
             this.savedAction.set(this.actionSignature());
           }
@@ -324,13 +499,17 @@ export class OperationsPageComponent {
             error instanceof HttpErrorResponse &&
             [400, 404, 409, 412, 415, 428].includes(error.status)
           ) {
+            const resolving = this.pending()?.delivery !== undefined;
             this.pending.set(null);
             this.pendingForm = null;
             this.confirming = false;
+            if (resolving) this.resetDelivery();
             this.draftChanged();
             this.message.set(
               error.status === 412
-                ? "The target version changed. Refresh and review before trying again."
+                ? resolving
+                  ? "The delivery is no longer unknown or was sent again. Refresh deliveries and review before resolving."
+                  : "The target version changed. Refresh and review before trying again."
                 : "The operation was refused.",
             );
           } else
@@ -360,6 +539,15 @@ export class OperationsPageComponent {
       this.qualification,
       this.source,
       this.confirming,
+      this.delivery,
+      this.deliveryVersion,
+      this.resolution,
+      this.acknowledgeDuplicateRisk,
+      this.pilotOpen,
+      this.pilotTrigger,
+      this.pilotGeneration,
+      this.pilotAction,
+      this.pilotValues,
     ]);
   }
 
@@ -391,7 +579,12 @@ export class OperationsPageComponent {
     this.until = "";
     this.caller = "";
     this.outcome = "";
-    this.confirming = false;
+    this.resetDelivery();
+    this.pilotOpen = false;
+    this.pilotValues = {};
+    this.pilotTrigger = "";
+    this.pilotGeneration = "0";
+    this.pilotAction = "configure";
     this.section = "targets";
     this.saveFormBaselines();
     this.draftChanged();

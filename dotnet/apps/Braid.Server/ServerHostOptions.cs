@@ -116,7 +116,7 @@ internal sealed class ServerHostOptions
         // Conversations pin verified reports; refuse the inconsistent profile before any delivery is opened.
         if (chat && !reports.Enabled) throw Failure();
         var previews = new CatalogPreviewOptions(Flag(read, "BRAID_PREVIEWS_ENABLED"), csvEnabled: Flag(read, CatalogPreviewOptions.CsvEnabledSetting),
-            xmlEnabled: Flag(read, Braid.Application.XmlPreviewAdmission.EnabledSetting));
+            xmlEnabled: Flag(read, Braid.Application.XmlPreviewAdmission.EnabledSetting), nativeFormats: Braid.Application.NativeDocumentFormat.EnabledFormats(read, false));
         var builds = CatalogBuildHostConfiguration.ReadRuntime(read, catalogEnabled: true);
         _ = ReleaseOperationsHostConfiguration.ReadEnabled(read, catalogEnabled: true);
         // Native admission and derivation run only through a separately hosted, pinned runner; this host never runs

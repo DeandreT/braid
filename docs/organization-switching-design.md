@@ -2,6 +2,8 @@
 
 ## Design scope
 
+Migration `0057_organization_switching.sql` creates the membership incarnation and restricted discovery routine. Provision `braid_organization_discovery` as a separate CONNECT-only login before applying 0057. For local Compose set `BRAID_LOCAL_ORGANIZATION_DISCOVERY_PASSWORD`, or use `deploy/local/postgres-add-organization-discovery-role.sh` on an existing database without that login. Supply its connection string to the session host through `BRAID_ORGANIZATION_DISCOVERY_CONNECTION_STRING_FILE`. Without that credential, discovery fails closed; it never borrows a business or migration login.
+
 This design adds request-local organization selection using global principals and
 organization memberships. It keeps identity providers and machine-endpoint
 authorization unchanged. [Archive/deletion](archive-deletion-design.md) must

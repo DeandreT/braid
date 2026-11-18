@@ -47,6 +47,7 @@ impl PreviewRequestHeader {
                 | XML_PREVIEW_PROTOCOL_VERSION
                 | crate::flextext_document::PROFILE
                 | crate::xlsx_document::PROFILE
+                | crate::xlsx_document::READ_JSON_PROFILE
                 | crate::native_document::PROTOBUF_PROFILE
                 | crate::native_document::XBRL_PROFILE
         )
@@ -63,6 +64,9 @@ impl PreviewRequestHeader {
         self.protocol_version == FLEXTEXT_PREVIEW_PROTOCOL_VERSION
     }
 
+    pub fn reads_xlsx(&self) -> bool {
+        self.is_xlsx_preview() || self.protocol_version == crate::xlsx_document::READ_JSON_PROFILE
+    }
     pub fn is_xlsx_preview(&self) -> bool {
         self.protocol_version == XLSX_PREVIEW_PROTOCOL_VERSION
     }
@@ -215,7 +219,7 @@ impl PreviewResponse {
             protocol_version: header
                 .map_or(PREVIEW_PROTOCOL_VERSION, |header| {
                     if header.is_flextext_preview()
-                        || header.is_xlsx_preview()
+                        || header.reads_xlsx()
                         || header.native_format().is_some()
                     {
                         &header.protocol_version
@@ -238,7 +242,7 @@ impl PreviewResponse {
             profile: header
                 .map_or(PREVIEW_PROFILE, |header| {
                     if header.is_flextext_preview()
-                        || header.is_xlsx_preview()
+                        || header.reads_xlsx()
                         || header.native_format().is_some()
                     {
                         &header.protocol_version

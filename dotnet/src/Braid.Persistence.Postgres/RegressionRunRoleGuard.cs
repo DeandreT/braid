@@ -47,6 +47,7 @@ internal static partial class RegressionRunRoleGuard
     // run-reader/writer login. It grants no execution or source-table rights.
     internal static async Task ValidateContractAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken token)
     {
+        if (await LifecycleCatalogAdmission.ValidateIfInstalledAsync(connection, transaction, token)) return;
         await using (var check = new NpgsqlCommand("""
             SELECT p.proname,p.prosrc,p.prosecdef,p.provolatile,l.lanname,pg_catalog.oidvectortypes(p.proargtypes),p.proargnames[1:p.pronargs],
                 p.proowner=(SELECT oid FROM pg_catalog.pg_roles WHERE rolname='braid_migrator')

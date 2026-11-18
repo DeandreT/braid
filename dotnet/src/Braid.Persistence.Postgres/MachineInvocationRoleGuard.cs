@@ -6,6 +6,9 @@ namespace Braid.Persistence.Postgres;
 /// <summary>Admits the two machine invocation logins and the exact 0024 contract, plus the release contract it reads.</summary>
 internal static class MachineInvocationRoleGuard
 {
+    internal const string HostOrderChecksum = "2c60244079205d7a1eece9303f3aec37bf1ef147a67b2048b2143c0deaedda67";
+    internal static readonly string[] HostTables = ["host_order_pins", "host_target_slots"];
+    internal static readonly string[] AttemptFunctions = ["claim_machine_attempt", "finish_machine_attempt"];
     internal const string Fingerprint = "db1363ae7e46e305d971c082463024c349b77d2c46836dd7dbe2b0918d736d37";
     internal static readonly string[] Tables = ["invocation_grants", "invocation_grant_audit", "machine_invocations", "machine_invocation_audit", "machine_invocation_results"];
     internal static readonly string[] Names = ["guard_machine_invocation", "guard_machine_invocation_history", "machine_invocation_grant",
@@ -14,8 +17,6 @@ internal static class MachineInvocationRoleGuard
     internal static readonly string[] GrantFunctions = ["write_invocation_grant", "read_invocation_grants"];
     internal static readonly string[] InvocationFunctions = ["claim_machine_invocation", "finish_machine_invocation", "purge_machine_invocation_results"];
     private static readonly Lazy<Dictionary<string, Match>> Definitions = new(() => BuildRoleGuard.LoadFunctions("0024_machine_invocation.sql", Names.Length));
-    private static readonly Lazy<Dictionary<string, Match>> ReleaseDefinitions = new(() =>
-        BuildRoleGuard.LoadFunctions("0022_local_releases.sql", LocalReleaseRoleGuard.Names.Length));
 
     internal static async Task ValidateAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, bool grants, CancellationToken token)
     {
@@ -57,9 +58,10 @@ internal static class MachineInvocationRoleGuard
 
     internal static async Task ValidateContractAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken token)
     {
+        if (await LifecycleCatalogAdmission.ValidateIfInstalledAsync(connection, transaction, token)) return;
         // The grant and claim functions read the release pointer and its qualified build; admit that contract unchanged.
         await QualificationRoleGuard.ValidateContractAsync(connection, transaction, token);
-        await BuildRoleGuard.ValidateFunctionsAsync(connection, transaction, LocalReleaseRoleGuard.Names, ReleaseDefinitions.Value, token);
+        await LocalReleaseRoleGuard.ValidateFunctionsAsync(connection, transaction, await LocalReleaseRoleGuard.ReplicasInstalledAsync(connection, transaction, token), token);
         if (await ReleaseOperationsRoleGuard.InstalledAsync(connection, transaction, token))
             await ReleaseOperationsRoleGuard.ValidateAsync(connection, transaction, token);
         else
@@ -81,8 +83,34 @@ internal static class MachineInvocationRoleGuard
                 definitions = new(definitions);
                 definitions["guard_machine_invocation"] = BuildRoleGuard.LoadFunctions("0027_administration.sql", AdministrationRoleGuard.Names.Length)["guard_machine_invocation"];
             }
-        await BuildRoleGuard.ValidateFunctionsAsync(connection, transaction, Names, definitions, token);
+        await ValidateOrderContractAsync(connection, transaction, definitions, token);
         if (await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, Tables, token) != Fingerprint) throw Invalid();
+    }
+
+    internal static async Task ValidateOrderContractAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
+        Dictionary<string, Match> definitions, CancellationToken token)
+    {
+        await using var installed = new NpgsqlCommand("SELECT to_regclass('braid.host_order_pins') IS NOT NULL", connection, transaction);
+        if (await installed.ExecuteScalarAsync(token) is true)
+        {
+            var host = BuildRoleGuard.LoadFunctions("0048_host_orders.sql", 3);
+            definitions = new(definitions)
+            {
+                ["claim_machine_attempt"] = definitions["claim_machine_invocation"],
+                ["finish_machine_attempt"] = definitions["finish_machine_invocation"],
+                ["claim_machine_invocation"] = host["claim_machine_invocation"],
+                ["finish_machine_invocation"] = host["finish_machine_invocation"],
+                ["guard_host_order"] = host["guard_host_order"]
+            };
+            var fingerprint = await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, HostTables, token);
+            if (fingerprint != "a6051dbac0b52c929038326588072df8418f51548f003dec6499ed6203127861") throw Invalid();
+        }
+        if (await TriggerRoleGuard.InstalledAsync(connection, transaction, token))
+        {
+            definitions = new(definitions) { ["guard_machine_invocation"] = TriggerRoleGuard.LedgerGuard, ["guard_host_order"] = TriggerRoleGuard.HostGuard };
+            await TriggerRoleGuard.ValidateSchemaAsync(connection, transaction, token);
+        }
+        await BuildRoleGuard.ValidateFunctionsAsync(connection, transaction, definitions.Keys.ToArray(), definitions, token);
     }
 
     private static InvalidOperationException Invalid() => new("Machine invocation database contract unavailable.");

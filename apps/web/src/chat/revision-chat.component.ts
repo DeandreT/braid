@@ -1,3 +1,4 @@
+import { DeleteItemComponent } from "../catalog/deletion/delete-item.component";
 import { DOCUMENT } from "@angular/common";
 import {
   Component,
@@ -18,6 +19,7 @@ import { firstValueFrom, fromEvent, map, switchMap, takeUntil } from "rxjs";
 import { BrowserSessionState } from "../auth/browser-session-state";
 import { RouterLink } from "@angular/router";
 import { CatalogContextStore } from "../catalog/catalog-context";
+import { OrganizationSelection } from "../catalog/organization-selection";
 import { CatalogApi } from "../catalog/catalog-api";
 import {
   catalogOwner,
@@ -84,7 +86,7 @@ interface ProposalReviewState {
 
 @Component({
   selector: "braid-revision-chat",
-  imports: [HelpLinkComponent, RouterLink, RegressionStatusComponent],
+  imports: [DeleteItemComponent, HelpLinkComponent, RouterLink, RegressionStatusComponent],
   templateUrl: "./revision-chat.component.html",
   styleUrl: "./revision-chat.component.css",
 })
@@ -107,9 +109,9 @@ export class RevisionChatComponent {
   readonly isWorkspace = isWorkspace;
   readonly citationName = citationName;
   readonly citationLink = (citation: WorkspaceCitation): string => {
-    const link = citationLink(citation),
+    const link = this.selection.link(citationLink(citation)),
       current = this.current();
-    return link.startsWith("/chat/resources?") &&
+    return /^(?:\/organizations\/[^/]+)?\/chat\/resources\?/.test(link) &&
       current &&
       isWorkspace(current)
       ? `${link}&conversationId=${encodeURIComponent(current.conversationId)}`
@@ -121,6 +123,7 @@ export class RevisionChatComponent {
   }>();
   private readonly api = inject(ChatApi);
   private readonly contexts = inject(CatalogContextStore);
+  readonly selection = inject(OrganizationSelection);
   private readonly catalog = inject(CatalogApi);
   private readonly recovery = inject(ChatViewRecovery);
   private readonly element = inject<ElementRef<HTMLElement>>(ElementRef);
@@ -1432,15 +1435,19 @@ export class RevisionChatComponent {
       controller = new AbortController();
     this.operations.add(controller);
     try {
+      // The page organization's qualified context, with its admission incarnation and token.
       const context = await firstValueFrom(
-        this.catalog.context().pipe(
-          // Another routine check can start while catalog context is in flight.
-          // Wait for it; temporary dispatch suspension is not an owner change.
-          switchMap((context) =>
-            this.sessions.whenSettled().pipe(map(() => context)),
+        this.catalog
+          .organizationContext(this.context().allowedOrganizationId)
+          .pipe(
+            map((read) => read.context),
+            // Another routine check can start while catalog context is in flight.
+            // Wait for it; temporary dispatch suspension is not an owner change.
+            switchMap((context) =>
+              this.sessions.whenSettled().pipe(map(() => context)),
+            ),
+            takeUntil(fromEvent(controller.signal, "abort")),
           ),
-          takeUntil(fromEvent(controller.signal, "abort")),
-        ),
       );
       const expected = this.context();
       if (generation !== this.generation || controller.signal.aborted)
@@ -1811,6 +1818,10 @@ export class RevisionChatComponent {
             "profileUnavailable",
             "turnNotStarted",
             "turnActive",
+            "quotaTurnLimitReached",
+            "quotaTokenLimitReached",
+            "quotaTokenBoundUnavailable",
+            "quotaCoverageUnavailable",
           ].includes(error.code)
         )
           this.pending = null;
@@ -1873,6 +1884,19 @@ export class RevisionChatComponent {
     }
     await this.reconnect();
   }
+  /** A confirmed owner deletion: drop the conversation locally without another read of its content. */
+  conversationDeleted(id: string): void {
+    if (this.current()?.conversationId !== id) return;
+    this.stopStream();
+    this.current.set(null);
+    this.selected.set(null);
+    this.events.set([]);
+    this.hasEarlier.set(false);
+    this.conversations.update((list) =>
+      list.filter((v) => v.conversationId !== id),
+    );
+  }
+
   private stopStream(): void {
     this.transcriptController?.abort();
     this.transcriptController = null;
@@ -2332,6 +2356,14 @@ export class RevisionChatComponent {
         "The original question conflicts with the saved request. It has not been replaced.",
       turnNotStarted:
         "The question did not start. Its text is retained; send it again only when you are ready.",
+      quotaTurnLimitReached:
+        "The AI turn limit has been reached. Your question is retained and has not started.",
+      quotaTokenLimitReached:
+        "The remaining token budget cannot cover this entire turn. Your question is retained and has not started.",
+      quotaTokenBoundUnavailable:
+        "This model profile cannot guarantee the configured hard token cap. Your question is retained and has not started.",
+      quotaCoverageUnavailable:
+        "Incomplete usage or unsettled reservations prevent quota admission. Your question is retained and has not started.",
       incompatible:
         "The chat response could not be verified. No unverified content was accepted.",
       notFound: "This conversation is unavailable or access has changed.",

@@ -1,0 +1,25 @@
+{
+  "UserConfig": {
+    "Namespaces": [
+      {
+        "Name": "sbemulatorns",
+        "Queues": [
+          { "Name": "braid-orders-1", "Properties": { "DeadLetteringOnMessageExpiration": false, "DefaultMessageTimeToLive": "PT1H", "DuplicateDetectionHistoryTimeWindow": "PT20S", "ForwardDeadLetteredMessagesTo": "", "ForwardTo": "", "LockDuration": "PT30S", "MaxDeliveryCount": 5, "RequiresDuplicateDetection": false, "RequiresSession": false } },
+          { "Name": "braid-orders-2", "Properties": { "DeadLetteringOnMessageExpiration": false, "DefaultMessageTimeToLive": "PT1H", "DuplicateDetectionHistoryTimeWindow": "PT20S", "ForwardDeadLetteredMessagesTo": "", "ForwardTo": "", "LockDuration": "PT30S", "MaxDeliveryCount": 5, "RequiresDuplicateDetection": false, "RequiresSession": false } },
+          { "Name": "braid-orders-3", "Properties": { "DeadLetteringOnMessageExpiration": false, "DefaultMessageTimeToLive": "PT1H", "DuplicateDetectionHistoryTimeWindow": "PT20S", "ForwardDeadLetteredMessagesTo": "", "ForwardTo": "", "LockDuration": "PT30S", "MaxDeliveryCount": 5, "RequiresDuplicateDetection": false, "RequiresSession": false } },
+          { "Name": "braid-orders-4", "Properties": { "DeadLetteringOnMessageExpiration": false, "DefaultMessageTimeToLive": "PT1H", "DuplicateDetectionHistoryTimeWindow": "PT20S", "ForwardDeadLetteredMessagesTo": "", "ForwardTo": "", "LockDuration": "PT30S", "MaxDeliveryCount": 5, "RequiresDuplicateDetection": false, "RequiresSession": false } },
+          { "Name": "braid-orders-5", "Properties": { "DeadLetteringOnMessageExpiration": false, "DefaultMessageTimeToLive": "PT1H", "DuplicateDetectionHistoryTimeWindow": "PT20S", "ForwardDeadLetteredMessagesTo": "", "ForwardTo": "", "LockDuration": "PT30S", "MaxDeliveryCount": 5, "RequiresDuplicateDetection": false, "RequiresSession": false } }
+        ],
+        "Topics": [
+          { "Name": "braid-input-topic", "Properties": { "DefaultMessageTimeToLive": "PT1H", "RequiresDuplicateDetection": false }, "Subscriptions": [
+            { "Name": "braid-in", "Properties": { "LockDuration": "PT30S", "MaxDeliveryCount": 5, "RequiresSession": false }, "Rules": [] }
+          ] },
+          { "Name": "braid-deliveries", "Properties": { "DefaultMessageTimeToLive": "PT1H", "DuplicateDetectionHistoryTimeWindow": "PT20S", "RequiresDuplicateDetection": false }, "Subscriptions": [
+            { "Name": "braid-receipts", "Properties": { "DeadLetteringOnMessageExpiration": false, "DefaultMessageTimeToLive": "PT1H", "LockDuration": "PT30S", "MaxDeliveryCount": 5, "ForwardDeadLetteredMessagesTo": "", "ForwardTo": "", "RequiresSession": false }, "Rules": [] }
+          ] }
+        ]
+      }
+    ],
+    "Logging": { "Type": "File" }
+  }
+}

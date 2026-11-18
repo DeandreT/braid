@@ -20,6 +20,26 @@ public sealed partial class BearerHttpIntegrationTests(PostgresFixture postgres)
     private const string Context = AuthHttpFixture.ContextPath;
 
     [PostgresFact]
+    public Task Accounting_reads_use_the_selected_organization_and_current_authority_for_both_credentials() => AuthHttpFixture.RunAsync(postgres, async test =>
+    {
+        var jar = await test.LoginAsync(); var token = Token(test); var seed = test.Data.Seed;
+        await test.Data.Case.ExecuteAsync("UPDATE braid.organization_memberships SET active=false WHERE organization_id=$1 AND principal_id=$2", seed.OrganizationB, seed.Alice);
+        foreach (var tail in new[] { "/audit", "/usage", "/administration/ai-quotas" })
+        {
+            var allowed = $"/api/v1/organizations/{seed.OrganizationA:D}{tail}";
+            var refused = $"/api/v1/organizations/{seed.OrganizationB:D}{tail}";
+            foreach (var session in new[] { true, false })
+            {
+                var read = session ? await test.SendAsync(allowed, jar) : await BearerAsync(test, allowed, token);
+                Assert.Equal(HttpStatusCode.OK, read.Status);
+                var denied = session ? await test.SendAsync(refused, jar) : await BearerAsync(test, refused, token);
+                Assert.Equal(HttpStatusCode.NotFound, denied.Status);
+                Assert.Equal(0, denied.Record.Audits);
+            }
+        }
+    }, administration: true, bearerBurst: 100);
+
+    [PostgresFact]
     public Task Browser_sign_in_and_a_bearer_token_resolve_the_same_principal_and_the_same_fresh_authority() => AuthHttpFixture.RunAsync(postgres, async test =>
     {
         var jar = await test.LoginAsync();
@@ -37,17 +57,25 @@ public sealed partial class BearerHttpIntegrationTests(PostgresFixture postgres)
             "Bearer context differed from the session context for the same person.");
         NoSession(bearer); AuthHttpFixture.Check(bearer.Record.Resolves == 1 && bearer.Record.CatalogReads > 0, "Bearer context skipped fresh identity or authority.");
         // Representative reads: the same fresh authority answers both credentials identically.
-        foreach (var path in new[] { Projects(test), Mapping(test), Mapping(test) + "/metadata", "/api/v1/help/sections", "/api/v1/help/sections/overview" })
+        // Business reads freshly admit authority; the exact help routes require only fresh identity.
+        foreach (var (path, identityOnly) in new[] {
+            (Projects(test), false), (Mapping(test), false), (Mapping(test) + "/metadata", false),
+            ("/api/v1/help/sections", true), ("/api/v1/help/sections/overview", true) })
         {
             var byCookie = await test.SendAsync(path, jar); var byBearer = await BearerAsync(test, path, token);
             AuthHttpFixture.Check(byCookie.Status == HttpStatusCode.OK && byBearer.Status == HttpStatusCode.OK
                 && Encoding.UTF8.GetString(byCookie.Body) == Encoding.UTF8.GetString(byBearer.Body)
-                && byBearer.Record.CatalogReads > 0, "A bearer read differed from the same principal's session read.");
+                && byBearer.Record.Resolves == 1 && byBearer.Record.Audits == 0 && byCookie.Record.Audits == 0
+                && (identityOnly ? byCookie.Record.CatalogReads == 0 && byBearer.Record.CatalogReads == 0
+                    : byCookie.Record.CatalogReads > 0 && byBearer.Record.CatalogReads > 0),
+                "A bearer/session read changed its response, fresh identity or exact business/identity-only admission.");
             NoSession(byBearer);
         }
         // A mutation needs no antiforgery with a bearer token, runs exactly once and is audited before it runs.
-        var status = await test.StatusAsync(jar);
-        var cookieEdit = await EditAsync(test, "Session edit", jar: jar, epoch: status.Epoch);
+        var businessToken = cookieContext.GetProperty("requestToken").GetString();
+        AuthHttpFixture.Check(businessToken is { Length: > 0 and <= 4096 }, "The session context returned no bounded business request token.");
+        jar.Apply(session);
+        var cookieEdit = await EditAsync(test, "Session edit", jar: jar, epoch: businessToken);
         AuthHttpFixture.Check(cookieEdit.Status == HttpStatusCode.OK && cookieEdit.Record.MetadataWrites == 1 && cookieEdit.Record.Audits == 0,
             "The session edit did not run exactly once without an API audit.");
         var bearerEdit = await EditAsync(test, "Bearer edit", token: token);

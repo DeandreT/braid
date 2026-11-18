@@ -21,6 +21,7 @@ set -euo pipefail
 }
 
 regression_passwords=()
+: "${BRAID_LOCAL_TRIGGER_WORKER_PASSWORD:?Set a separate trigger worker password}"
 for role in CASE_READER CASE_WRITER RUN_READER RUN_WRITER COMPARISON BUILD_READER BUILD_WRITER BUILD_RUN_READER BUILD_RUN_WRITER BUILD_DISPATCHER BUILD_METADATA QUALIFICATION_READER QUALIFICATION_WRITER RELEASE_READER RELEASE_WRITER INVOCATION_GRANT_WRITER INVOCATION_WRITER API_AUDIT_WRITER DRAFT_READER DRAFT_WRITER; do
   variable=BRAID_LOCAL_${role}_PASSWORD
   [[ -n ${!variable:-} ]] || { echo "Set $variable." >&2; exit 1; }
@@ -47,6 +48,7 @@ for role in READER WRITER APPROVER; do
   creation_passwords+=("${!variable}")
 done
 unset creation_passwords previous
+export BRAID_LOCAL_ORGANIZATION_DISCOVERY_PASSWORD=${BRAID_LOCAL_ORGANIZATION_DISCOVERY_PASSWORD:-}
 # An absent opt-in credential creates an unusable password login. Existing stacks
 # can migrate without enabling administration or delivering another credential.
 
@@ -87,6 +89,7 @@ psql --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <
 \getenv release_reader_password BRAID_LOCAL_RELEASE_READER_PASSWORD
 \getenv release_writer_password BRAID_LOCAL_RELEASE_WRITER_PASSWORD
 \getenv invocation_grant_writer_password BRAID_LOCAL_INVOCATION_GRANT_WRITER_PASSWORD
+\getenv trigger_worker_password BRAID_LOCAL_TRIGGER_WORKER_PASSWORD
 \getenv invocation_writer_password BRAID_LOCAL_INVOCATION_WRITER_PASSWORD
 \getenv api_audit_writer_password BRAID_LOCAL_API_AUDIT_WRITER_PASSWORD
 \getenv administration_password BRAID_LOCAL_ADMINISTRATION_PASSWORD
@@ -98,6 +101,7 @@ psql --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <
 \getenv creation_reader_password BRAID_LOCAL_CREATION_READER_PASSWORD
 \getenv creation_writer_password BRAID_LOCAL_CREATION_WRITER_PASSWORD
 \getenv creation_approver_password BRAID_LOCAL_CREATION_APPROVER_PASSWORD
+\getenv discovery_password BRAID_LOCAL_ORGANIZATION_DISCOVERY_PASSWORD
 CREATE ROLE braid_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS
   PASSWORD :'migrator_password';
 CREATE ROLE braid_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS
@@ -168,6 +172,7 @@ CREATE ROLE braid_release_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINH
   PASSWORD :'release_writer_password';
 CREATE ROLE braid_invocation_grant_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
   PASSWORD :'invocation_grant_writer_password';
+CREATE ROLE braid_trigger_worker LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD :'trigger_worker_password';
 CREATE ROLE braid_invocation_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
   PASSWORD :'invocation_writer_password';
 CREATE ROLE braid_api_audit_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
@@ -184,6 +189,10 @@ CREATE ROLE braid_spec_maintenance LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOI
 CREATE ROLE braid_creation_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD :'creation_reader_password';
 CREATE ROLE braid_creation_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD :'creation_writer_password';
 CREATE ROLE braid_creation_approver LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD :'creation_approver_password';
+CREATE ROLE braid_organization_discovery LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'discovery_password';
+-- No password unless explicitly provisioned; never reuse the migration login.
+CREATE ROLE braid_lifecycle_worker LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
 ALTER DATABASE braid OWNER TO braid_migrator;
 CREATE SCHEMA braid_search_extensions AUTHORIZATION braid_migrator;
 CREATE EXTENSION pg_trgm WITH SCHEMA braid_search_extensions;
@@ -195,9 +204,10 @@ REVOKE ALL ON DATABASE braid FROM PUBLIC;
 GRANT CONNECT ON DATABASE braid TO braid_runtime, braid_ingest, braid_catalog_reader, braid_catalog_editor, braid_project_creator, braid_report_reader, braid_deriver, braid_maintenance, braid_identity_reader, braid_payload_permission_reader, braid_session_reader, braid_session_writer, braid_chat_reader, braid_chat_writer, braid_chat_lifecycle, braid_chat_approver, braid_preview_reader, braid_preview_writer, braid_case_reader, braid_case_writer, braid_run_reader, braid_run_writer, braid_build_reader, braid_build_writer, braid_build_run_reader, braid_build_run_writer, braid_build_dispatcher, braid_build_metadata_reader;
 GRANT CONNECT ON DATABASE braid TO braid_qualification_reader,braid_qualification_writer,braid_comparison_settler;
 GRANT CONNECT ON DATABASE braid TO braid_release_reader,braid_release_writer;
-GRANT CONNECT ON DATABASE braid TO braid_invocation_grant_writer,braid_invocation_writer;
+GRANT CONNECT ON DATABASE braid TO braid_invocation_grant_writer,braid_invocation_writer,braid_trigger_worker;
 GRANT CONNECT ON DATABASE braid TO braid_api_audit_writer;
 GRANT CONNECT ON DATABASE braid TO braid_administration;
+GRANT CONNECT ON DATABASE braid TO braid_lifecycle_worker, braid_organization_discovery;
 GRANT CONNECT ON DATABASE braid TO braid_draft_reader,braid_draft_writer;
 GRANT CONNECT ON DATABASE braid TO braid_spec_reader,braid_spec_writer,braid_spec_maintenance;
 GRANT CONNECT ON DATABASE braid TO braid_creation_reader,braid_creation_writer,braid_creation_approver;

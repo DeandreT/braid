@@ -18,7 +18,7 @@ public sealed class RegressionDeploymentProvisioningTests
         "CHAT_LIFECYCLE", "CHAT_APPROVER", "PREVIEW_READER", "PREVIEW_WRITER", "CASE_READER", "CASE_WRITER", "RUN_READER", "RUN_WRITER", "COMPARISON",
         "BUILD_READER", "BUILD_WRITER", "BUILD_RUN_READER", "BUILD_RUN_WRITER", "BUILD_DISPATCHER", "BUILD_METADATA",
         "QUALIFICATION_READER", "QUALIFICATION_WRITER", "RELEASE_READER", "RELEASE_WRITER", "INVOCATION_GRANT_WRITER", "INVOCATION_WRITER",
-        "API_AUDIT_WRITER", "ADMINISTRATION", "DRAFT_READER", "DRAFT_WRITER", "SPEC_READER", "SPEC_WRITER", "SPEC_MAINTENANCE", "CREATION_READER", "CREATION_WRITER", "CREATION_APPROVER"
+        "API_AUDIT_WRITER", "ADMINISTRATION", "DRAFT_READER", "DRAFT_WRITER", "SPEC_READER", "SPEC_WRITER", "SPEC_MAINTENANCE", "CREATION_READER", "CREATION_WRITER", "CREATION_APPROVER", "TRIGGER_WORKER", "ORGANIZATION_DISCOVERY"
     ];
 
     [Theory]
@@ -142,7 +142,7 @@ public sealed class RegressionDeploymentProvisioningTests
         var init = File.ReadAllText(Path.Combine(Repository(), "deploy/local/postgres-init.sh"));
         // Administration remains deliberately opt-in; the init script supplies its empty default itself.
         Assert.Contains("export BRAID_LOCAL_ADMINISTRATION_PASSWORD=${BRAID_LOCAL_ADMINISTRATION_PASSWORD:-}", init, StringComparison.Ordinal);
-        string[] optional = ["ADMINISTRATION", "SPEC_READER", "SPEC_WRITER", "SPEC_MAINTENANCE", "CREATION_READER", "CREATION_WRITER", "CREATION_APPROVER"];
+        string[] optional = ["ADMINISTRATION", "SPEC_READER", "SPEC_WRITER", "SPEC_MAINTENANCE", "CREATION_READER", "CREATION_WRITER", "CREATION_APPROVER", "ORGANIZATION_DISCOVERY"];
         foreach (var role in optional)
             Assert.Contains($"export BRAID_LOCAL_{role}_PASSWORD=${{BRAID_LOCAL_{role}_PASSWORD:-}}", init, StringComparison.Ordinal);
         return RequiredPasswordRoles(init).Except(optional, StringComparer.Ordinal).ToArray();
@@ -159,6 +159,8 @@ public sealed class RegressionDeploymentProvisioningTests
             Assert.Contains($"export BRAID_SPEC_{role.ToUpperInvariant()}_PASSWORD=${{BRAID_SPEC_{role.ToUpperInvariant()}_PASSWORD:-}}", text, StringComparison.Ordinal);
         }
         Assert.Contains("CREATE ROLE braid_chat_approver LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS", text, StringComparison.Ordinal);
+        foreach (var role in new[] { "trigger_worker", "organization_discovery", "lifecycle_worker" })
+            Assert.Contains($"CREATE ROLE braid_{role} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS", text, StringComparison.Ordinal);
         foreach (var role in new[] { "reader", "writer", "approver" })
         {
             Assert.Contains($"CREATE ROLE braid_creation_{role} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS", text, StringComparison.Ordinal);

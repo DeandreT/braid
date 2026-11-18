@@ -127,6 +127,9 @@ public sealed class PostgresChatEditProposalTests(PostgresFixture fixture)
                 await using var blocked = await PostgresServerSessionTestSupport.PrepareBlockedAsync(gate, application, gate.ProcessID);
                 retry = approve.ExecuteScalarAsync();
                 await PostgresServerSessionTestSupport.WaitBlockedAsync(blocked, retry);
+                // Only the in-flight invocation needs the scheduling hook. Restore the
+                // exact installed definition before admitting the independent ingestion.
+                await f.Test.Case.ExecuteAsync(original);
                 // Finalization uses a different connection and commits while approval holds
                 // its conversation/proposal locks. A timeout here also detects a lock cycle.
                 using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));

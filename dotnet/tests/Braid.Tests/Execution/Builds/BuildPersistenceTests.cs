@@ -103,6 +103,10 @@ public sealed class BuildPersistenceTests(PostgresFixture fixture)
         var recovered = await fresh.ReadAsync(test.Actor, test.Intent.Revision.OrganizationId, test.Intent.BuildId);
         Assert.Equal(test.Intent.Fingerprint, recovered!.Artifact.Intent.Fingerprint);
         Assert.Equal(bytes.Copy(), await new PostgresBuildObjectStore(fresh, new NoNative(), test.Actor).ReadVerifiedAsync(test.Intent.Revision, recovered.Object));
+        Assert.Equal(publication.Manifest.CopyCanonicalBytes(), recovered.Manifest.CopyCanonicalBytes());
+        var manifest = MappingPackageManifest.Decode(recovered.Manifest.CopyCanonicalBytes());
+        Assert.True(manifest.Matches(reference, bytes));
+        Assert.False(manifest.Matches(reference, new BuildBytes([255, 3, 2, 1], test.Intent.Profile.MaximumArtifactBytes)));
     }
 
     [PostgresFact]
@@ -399,9 +403,9 @@ public sealed class BuildPersistenceTests(PostgresFixture fixture)
         internal ActorContext Actor => Runs.Actor;
 
         internal static async Task<Context> CreateAsync(PostgresFixture fixture, bool pass = true, bool nullContent = false, int? migrations = null, bool documents = false, bool interchanges = false,
-            CsvDocumentDialect? csvDialect = null)
+            CsvDocumentDialect? csvDialect = null, bool shipment = false, byte[]? nativeBytes = null, BuildBackendIdentity? actualBackend = null)
         {
-            documents |= interchanges;
+            documents |= interchanges || shipment;
             var runs = await RegressionRunPostgresTestSupport.CreateAsync(fixture, migrations, csvDialect is not null ? value => new(
                 value.CaseId, value.Version, value.Owner, value.Name, value.Revision, value.NativeDigest,
                 new(value.Runtime.BackendId, value.Runtime.EngineRevision, value.Runtime.BackendBuild, value.Runtime.AdapterBuild, CsvDocumentPolicy.Profile),
@@ -410,11 +414,12 @@ public sealed class BuildPersistenceTests(PostgresFixture fixture)
                 Braid.Application.Regression.RegressionOutputSet.Capture([Braid.Application.Regression.RegressionOutput.Capture(
                     Braid.Application.Regression.RegressionOutputKey.Primary, "value\n"u8, mediaType: CsvDialectJson.MediaType(csvDialect), csvDialect: csvDialect)])) : documents ? value => new(
                 value.CaseId, value.Version, value.Owner, value.Name, value.Revision, value.NativeDigest,
-                new(value.Runtime.BackendId, value.Runtime.EngineRevision, value.Runtime.BackendBuild, value.Runtime.AdapterBuild, DocumentPreviewPolicy.Profile),
-                new(PreviewTargetSelection.All, value.Replay.CurrentDateTime, value.Replay.Limits, new(null, DocumentPreviewTestData.Input("x12")), [], []),
+                new(actualBackend?.BackendId ?? value.Runtime.BackendId, actualBackend?.EngineRevision ?? value.Runtime.EngineRevision,
+                    actualBackend?.EngineBuild ?? value.Runtime.BackendBuild, actualBackend?.AdapterVersion ?? value.Runtime.AdapterBuild, DocumentPreviewPolicy.Profile),
+                new(PreviewTargetSelection.All, value.Replay.CurrentDateTime, value.Replay.Limits, new(null, shipment ? Shipment945Fixture.Input : DocumentPreviewTestData.Input("x12")), [], []),
                 Braid.Application.Regression.RegressionComparisonService.ExactBytesPolicy,
                 Braid.Application.Regression.RegressionOutputSet.Capture([Braid.Application.Regression.RegressionOutput.Capture(
-                    Braid.Application.Regression.RegressionOutputKey.Primary, DocumentPreviewTestData.Input("x12"), mediaType: "application/edi-x12")])) : null);
+                    Braid.Application.Regression.RegressionOutputKey.Primary, shipment ? (nativeBytes is null ? Shipment945Fixture.Expected : Shipment945Fixture.NativeExpected) : DocumentPreviewTestData.Input("x12"), mediaType: "application/edi-x12")])) : null, nativeBytes);
             PostgresBuildStore? store = null;
             try
             {
@@ -454,8 +459,8 @@ public sealed class BuildPersistenceTests(PostgresFixture fixture)
                 Assert.Equal(BuildControlOutcome.Created, await store.SaveEnvironmentAsync(runs.Actor, new(environment, profile, true)));
                 var format = csvDialect is not null ? csvDialect.Delimiter == "\t" ? "tsv" : "csv" : documents ? "x12" : "fixture-bytes";
                 var intent = new BuildIntent(Guid.NewGuid(), scope, runs.Value.NativeDigest,
-                    new("ferrule", "engine", "build", "adapter"), profile,
-                    [new(BuildBoundaryKind.PrimaryInput, null, format, csvDialect), new(BuildBoundaryKind.PrimaryOutput, null, format, csvDialect)], environment, Guid.NewGuid(), runs.RunId);
+                    actualBackend ?? new("ferrule", "engine", "build", "adapter"), profile,
+                    [new(BuildBoundaryKind.PrimaryInput, null, shipment ? "json" : format, csvDialect), new(BuildBoundaryKind.PrimaryOutput, null, format, csvDialect)], environment, Guid.NewGuid(), runs.RunId);
                 var nativeId = await runs.Cases.Case.ScalarAsync<Guid>("SELECT native_object_id FROM braid.mapping_revisions LIMIT 1");
                 var count = await runs.Cases.Case.ScalarAsync<long>("SELECT native_byte_count FROM braid.mapping_revisions LIMIT 1");
                 return new()

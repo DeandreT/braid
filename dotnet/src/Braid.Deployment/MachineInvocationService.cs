@@ -1,3 +1,4 @@
+using Braid.Deployment.Triggers;
 using System.Globalization;
 using System.Text.Json;
 using Braid.Application;
@@ -21,8 +22,8 @@ public sealed class MachineInvocationRequest
         if (primary.Name is not null || namedInputs.Any(input => input is null || input.Name is null) || parameters.Any(parameter => parameter is null))
             throw new ArgumentException("Invalid machine invocation request.");
         Primary = primary;
-        NamedInputs = namedInputs.OrderBy(input => input.Name, StringComparer.Ordinal).ToArray();
-        Parameters = parameters.OrderBy(parameter => parameter.Name, StringComparer.Ordinal).ToArray();
+        NamedInputs = Array.AsReadOnly(namedInputs.OrderBy(input => input.Name, StringComparer.Ordinal).ToArray());
+        Parameters = Array.AsReadOnly(parameters.OrderBy(parameter => parameter.Name, StringComparer.Ordinal).ToArray());
         if (NamedInputs.Select(input => input.Name).Distinct(StringComparer.Ordinal).Count() != NamedInputs.Count ||
             Parameters.Select(parameter => parameter.Name).Distinct(StringComparer.Ordinal).Count() != Parameters.Count)
             throw new ArgumentException("Input and parameter names must be unique.");
@@ -105,7 +106,7 @@ public sealed record MachineInvocationResult(MachineInvocationStatus Status, boo
 /// <summary>
 /// Runs a machine request against the target's current release through <see cref="LocalReleaseInvocation"/>, under the
 /// authority of that release's publisher. The ledger claims the request first, so a recorded outcome is returned again
-/// instead of running twice. The current release is resolved on every attempt and fenced before and after execution.
+/// instead of running twice. Host claims pin their activated release; historical ledger claims fence the active pointer.
 /// </summary>
 public sealed class MachineInvocationService
 {
@@ -147,11 +148,12 @@ public sealed class MachineInvocationService
             case MachineInvocationClaimStatus.InProgress: return new(MachineInvocationStatus.InProgress);
             case MachineInvocationClaimStatus.Refused: return new(MachineInvocationStatus.Refused);
             case MachineInvocationClaimStatus.NoRelease: return new(MachineInvocationStatus.NoRelease);
+            case MachineInvocationClaimStatus.Capacity: return new(MachineInvocationStatus.Unavailable, Outcome: MachineInvocationOutcome.Busy);
         }
         var publisher = claim.Publisher ?? throw new InvalidOperationException("A claimed machine invocation has no publisher.");
         var clock = time.GetUtcNow().UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'", CultureInfo.InvariantCulture);
         Attempt attempt;
-        try { attempt = await RunAsync(new ActorContext(publisher), target, requestId, request, clock, token).ConfigureAwait(false); }
+        try { attempt = await RunAsync(new ActorContext(publisher), target, requestId, request, claim.ReleaseId, clock, token).ConfigureAwait(false); }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             // Release the attempt so the caller can retry under the same ID; a lost release expires with the lease.
@@ -170,19 +172,80 @@ public sealed class MachineInvocationService
         };
     }
 
-    private sealed record Attempt(MachineInvocationOutcome Outcome, MachineInvocationProvenance? Provenance = null, byte[]? Response = null);
+    public async Task<TriggeredInvocationResult> InvokeTriggeredAsync(ITriggeredInvocationLedger triggered, ReleaseTargetReference target, Guid workId,
+        MachineCaller caller, CancellationToken token)
+    {
+        ArgumentNullException.ThrowIfNull(triggered); ArgumentNullException.ThrowIfNull(target); ArgumentNullException.ThrowIfNull(caller);
+        token.ThrowIfCancellationRequested();
+        var claim = await triggered.ClaimPinnedAsync(target, workId, caller, token).ConfigureAwait(false);
+        switch (claim.Status)
+        {
+            case TriggerClaimStatus.Recorded:
+                return new(claim.Outcome == MachineInvocationOutcome.Completed ? TriggeredInvocationStatus.Completed : TriggeredInvocationStatus.Failed, claim.Outcome);
+            case TriggerClaimStatus.InProgress: return new(TriggeredInvocationStatus.InProgress);
+            case TriggerClaimStatus.Refused: return new(TriggeredInvocationStatus.Refused);
+            case TriggerClaimStatus.Fenced: return new(TriggeredInvocationStatus.Fenced);
+            case TriggerClaimStatus.ReleaseSuperseded: return new(TriggeredInvocationStatus.ReleaseSuperseded);
+        }
+        var pin = claim.Pin!; var configuration = claim.Configuration!;
+        var clock = time.GetUtcNow().UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'", CultureInfo.InvariantCulture);
+        Attempt attempt;
+        try
+        {
+            // The stored request is rebuilt from the admitted configuration version and must reproduce the stored digest.
+            var request = PilotRouteInputs.Request(configuration, claim.CopyInput());
+            attempt = request.Digest != claim.RequestDigest
+                ? new(MachineInvocationOutcome.IntegrityFailure)
+                : await RunAsync(new ActorContext(pin.Publisher), target, claim.RequestId, request, pin.Provenance.ReleaseId, clock, token, requireActivePin: true).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            using var release = new CancellationTokenSource(releaseBound);
+            try
+            {
+                await triggered.FinishAndEnqueueAsync(target, workId, claim.ClaimId, caller.ApplicationId, MachineInvocationOutcome.Unavailable,
+                    null, null, null, null, release.Token).ConfigureAwait(false);
+            }
+            catch (Exception error) when (error is not (OutOfMemoryException or StackOverflowException)) { }
+            throw;
+        }
+        catch (ArgumentException) { attempt = new(MachineInvocationOutcome.InvalidInput); }
+        // Every produced output needs an explicit route and every route a produced output; otherwise nothing is enqueued.
+        if (attempt.Outcome == MachineInvocationOutcome.Completed &&
+            !configuration.RoutesCover(attempt.Outputs!.Outputs.Select(output => output.Key.IsPrimary ? null : output.Key.Name)))
+            attempt = new(MachineInvocationOutcome.IntegrityFailure, attempt.Provenance);
+        if (attempt.Provenance is { } provenance && provenance != pin.Provenance)
+            attempt = new(MachineInvocationOutcome.ReleaseChanged);
+        var finish = await triggered.FinishAndEnqueueAsync(target, workId, claim.ClaimId, caller.ApplicationId, attempt.Outcome, attempt.Provenance,
+            attempt.Provenance is null ? null : clock, attempt.Response, attempt.Response is null ? null : attempt.Outputs, token).ConfigureAwait(false);
+        return finish switch
+        {
+            TriggerFinishStatus.Recorded => new(attempt.Outcome switch
+            {
+                MachineInvocationOutcome.Completed => TriggeredInvocationStatus.Completed,
+                MachineInvocationOutcome.Unavailable or MachineInvocationOutcome.Busy or MachineInvocationOutcome.ReleaseChanged => TriggeredInvocationStatus.Retry,
+                _ => TriggeredInvocationStatus.Failed
+            }, attempt.Outcome),
+            TriggerFinishStatus.Fenced => new(TriggeredInvocationStatus.Fenced),
+            TriggerFinishStatus.ReleaseSuperseded => new(TriggeredInvocationStatus.ReleaseSuperseded),
+            _ => new(TriggeredInvocationStatus.Retry)
+        };
+    }
+
+    private sealed record Attempt(MachineInvocationOutcome Outcome, MachineInvocationProvenance? Provenance = null, byte[]? Response = null, RegressionOutputSet? Outputs = null);
 
     private async Task<Attempt> RunAsync(ActorContext actor, ReleaseTargetReference target, Guid requestId, MachineInvocationRequest request,
-        string clock, CancellationToken token)
+        Guid? pin, string clock, CancellationToken token, bool requireActivePin = false)
     {
         try
         {
             var before = await releases.ReadTargetAsync(actor, target, token).ConfigureAwait(false);
             if (before is null || !before.Enabled || before.Target.Reference != target) return new(MachineInvocationOutcome.Refused);
-            if (before.ActiveReleaseId is not { } active) return new(MachineInvocationOutcome.ReleaseChanged);
+            if (requireActivePin && before.ActiveReleaseId != pin) return new(MachineInvocationOutcome.ReleaseChanged);
+            if ((pin ?? before.ActiveReleaseId) is not { } active) return new(MachineInvocationOutcome.ReleaseChanged);
             var release = await releases.ReadAsync(actor, target, active, token).ConfigureAwait(false);
             if (release is null || release.Phase != ReleasePhase.Active || release.Intent.ReleaseId != active)
-                return await ChangedAsync(actor, target, active, MachineInvocationOutcome.Refused, null, token).ConfigureAwait(false);
+                return await ChangedAsync(actor, target, pin is null ? active : null, MachineInvocationOutcome.Refused, null, token).ConfigureAwait(false);
             var provenance = MachineInvocationProvenance.From(release.Intent);
             var intent = release.Intent.Qualification.Artifact.Intent;
             var documents = BuildWorkerProtocol.IsDocumentProfile(intent.Profile.Id);
@@ -199,9 +262,8 @@ public sealed class MachineInvocationService
             try { replay = new(PreviewTargetSelection.All, clock, limits, request.Primary, request.NamedInputs, request.Parameters, token); }
             catch (RegressionCaseException error)
             { return new(error.Failure == RegressionCaseFailure.ResourceLimit ? MachineInvocationOutcome.ResourceLimit : MachineInvocationOutcome.InvalidInput, provenance); }
-            var result = await invocations(actor).ExecuteAsync(actor, target, replay, token).ConfigureAwait(false);
+            var result = await invocations(actor).ExecuteAsync(actor, target, replay, token, pin).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
-            // The pointer never returns to an earlier release ID, so an unchanged value proves this release ran.
             var outcome = result.Outcome switch
             {
                 CompiledBuildOutcome.Completed => MachineInvocationOutcome.Completed,
@@ -224,7 +286,7 @@ public sealed class MachineInvocationService
                 outcome = MachineInvocationOutcome.IntegrityFailure;
             var response = outcome == MachineInvocationOutcome.Completed ? Encode(requestId, provenance, clock, result.Outputs!, documents) : null;
             if (response?.Length > MachineInvocationPolicy.MaximumRetainedBytes) (outcome, response) = (MachineInvocationOutcome.ResourceLimit, null);
-            return await ChangedAsync(actor, target, active, outcome, provenance, token, response).ConfigureAwait(false);
+            return await ChangedAsync(actor, target, pin is null ? active : null, outcome, provenance, token, response, response is null ? null : result.Outputs).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
         catch (Exception error) when (error is not (OutOfMemoryException or StackOverflowException or AccessViolationException))
@@ -235,13 +297,13 @@ public sealed class MachineInvocationService
     }
 
     // A rollback, new activation or disable during the attempt makes it retryable, never a stale delivery.
-    private async Task<Attempt> ChangedAsync(ActorContext actor, ReleaseTargetReference target, Guid active, MachineInvocationOutcome outcome,
-        MachineInvocationProvenance? provenance, CancellationToken token, byte[]? response = null)
+    private async Task<Attempt> ChangedAsync(ActorContext actor, ReleaseTargetReference target, Guid? active, MachineInvocationOutcome outcome,
+        MachineInvocationProvenance? provenance, CancellationToken token, byte[]? response = null, RegressionOutputSet? outputs = null)
     {
         var after = await releases.ReadTargetAsync(actor, target, token).ConfigureAwait(false);
         if (after is null || !after.Enabled) return new(MachineInvocationOutcome.Refused, provenance);
-        if (after.ActiveReleaseId != active) return new(MachineInvocationOutcome.ReleaseChanged, provenance);
-        return new(outcome, provenance, response);
+        if (active is not null && after.ActiveReleaseId != active) return new(MachineInvocationOutcome.ReleaseChanged, provenance);
+        return new(outcome, provenance, response, outputs);
     }
 
     private static MachineInvocationResult Recorded(MachineInvocationOutcome outcome, byte[]? response, Guid? release, bool replayed) => outcome switch

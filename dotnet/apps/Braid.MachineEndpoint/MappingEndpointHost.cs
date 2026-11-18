@@ -77,6 +77,9 @@ internal static class MappingEndpointHost
                 services.AddSingleton(resources.Calls);
                 services.AddSingleton<MappingEndpointRoutes>();
                 services.AddHostedService<ResultPurge>();
+                if (TriggerHostPlan.Read(Environment.GetEnvironmentVariable, (p, n) => Braid.Storage.FileSystem.ProtectedHostFiles.ReadText(p,n)) is { } local)
+                    services.AddHostedService(sp => new TriggerWorkerHost(local.Plan, local.Connection, resources, (p,n) => Braid.Storage.FileSystem.ProtectedHostFiles.ReadText(p,n), TimeProvider.System));
+                SftpRouteWorker.Register(services, Environment.GetEnvironmentVariable);
             })
             .ConfigureWebHostDefaults(web =>
             {
