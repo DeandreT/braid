@@ -26,6 +26,36 @@ not compute output values using a second implementation of mapping semantics.
 Each adapter publishes the capabilities of a particular revision and operation,
 not a single global boolean such as "Ferrule supports deployment."
 
+## Choosing a document path
+
+The machine endpoint's document request carries base64 bytes and a declared
+media type for each input. It is not a generic upload endpoint. Its OpenAPI
+document admits JSON, X12, EDIFACT, CSV and TSV; the released build must also
+admit the exact boundaries (including the saved CSV dialect). A preview that
+can read a document is not evidence that the generated mapping can read it.
+
+- **X12 and EDIFACT:** use the document preview and segment comparison. The
+  compiled single-interchange profile and the explicit X12 interchange profile
+  have different admission rules. Do not select the single-interchange profile
+  merely because the media type matches.
+- **CSV and TSV:** the saved delimiter selects the dialect, not the extension.
+  Preview tables and row comparison do not rewrite downloaded bytes.
+- **XML:** [structured XML previews](xml-previews.md) and saved exact-byte
+  cases are separate from compiled execution. Neither an internal canonicalizer
+  nor the XML design's proposed build ID enables a public endpoint.
+- **FlexText, Protobuf and XBRL:** use native previews and saved exact-byte
+  cases. A layout, message descriptor or instance declaration belongs to the
+  revision, not the upload. These are not generated C# endpoint formats.
+- **XLSX:** flat workbook read to JSON is a worker protocol, not a catalog
+  preview. New workbook output needs a worksheet thread and is direct-worker
+  only. There is no catalog workbook-output table or compiled endpoint.
+- **PDF:** the pinned Ferrule bounded document profile rejects PDF output. A
+  renderer dependency, or a worker for reading specification PDFs, is not a
+  mapping-output capability. Admission requires a bounded renderer verified
+  under the existing sandbox, without new privileges.
+- **Database connections and updates to existing workbooks** require external
+  state and are outside the pure document contract.
+
 ## Native artifact envelope
 
 An immutable revision contains:
