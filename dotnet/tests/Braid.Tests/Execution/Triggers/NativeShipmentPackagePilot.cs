@@ -24,7 +24,7 @@ public sealed class NativeShipmentPilotFactAttribute : FactAttribute
 
 [Collection(PostgresCollection.Name)]
 [System.Runtime.Versioning.SupportedOSPlatform("linux")]
-public sealed class NativeShipmentPackagePilot(PostgresFixture fixture, ITestOutputHelper output)
+public sealed partial class NativeShipmentPackagePilot(PostgresFixture fixture, ITestOutputHelper output)
 {
     [NativeShipmentPilotFact]
     public Task Real_package_must_qualify_before_activation_and_rollback_loads_original_artifact() => Rehearse(false);
@@ -32,7 +32,10 @@ public sealed class NativeShipmentPackagePilot(PostgresFixture fixture, ITestOut
     [NativeShipmentPilotFact(transport: true)]
     public Task Sftp_orders_execute_the_pinned_DLL_and_a_lost_MDN_does_not_block_a_second_target_or_rollback() => Rehearse(true);
 
-    private async Task Rehearse(bool transport)
+    [NativeShipmentPilotFact]
+    public Task Timeout_and_child_memory_limit_leave_sibling_orders_within_local_budget() => Rehearse(false, boundedFaults: true);
+
+    private async Task Rehearse(bool transport, bool boundedFaults = false)
     {
         var root = FerruleServiceTestSupport.TemporaryRoot();
         try
@@ -99,16 +102,20 @@ public sealed class NativeShipmentPackagePilot(PostgresFixture fixture, ITestOut
             }
             var qa = await Stage(original, false); Assert.Equal(BuildQualificationRequestOutcome.Created, qa.Outcome);
             var a = await test.Request(qa.Qualification!, null); Assert.Equal(ReleaseTransitionOutcome.Activated, await test.Apply(a)); await Invoke(a);
-            Assert.Equal(BuildQualificationRequestOutcome.NotQualified, (await Stage(Intent(), true)).Outcome); await Invoke(a);
-            var qb = await Stage(Intent(), false); Assert.Equal(BuildQualificationRequestOutcome.Created, qb.Outcome);
-            var b = await test.Request(qb.Qualification!, a.ReleaseId); Assert.Equal(ReleaseTransitionOutcome.Activated, await test.Apply(b)); await Invoke(b);
+            var b = a;
+            if (!boundedFaults)
+            {
+                Assert.Equal(BuildQualificationRequestOutcome.NotQualified, (await Stage(Intent(), true)).Outcome); await Invoke(a);
+                var qb = await Stage(Intent(), false); Assert.Equal(BuildQualificationRequestOutcome.Created, qb.Outcome);
+                b = await test.Request(qb.Qualification!, a.ReleaseId); Assert.Equal(ReleaseTransitionOutcome.Activated, await test.Apply(b)); await Invoke(b);
+            }
             async Task<ReleaseIntent> Rollback()
             {
                 var rollback = await test.Request(qa.Qualification!, b.ReleaseId, ReleaseAction.Rollback, a.ReleaseId);
                 Assert.Equal(ReleaseTransitionOutcome.Activated, await test.Apply(rollback)); await Invoke(rollback);
                 return rollback;
             }
-            if (!transport) await Rollback();
+            if (!transport && !boundedFaults) await Rollback();
             else
             {
                 var peer = new LocalReleaseTarget(new(target.Mapping, target.Environment, Guid.NewGuid()), original.Profile, runtime.RuntimeImage);
@@ -122,6 +129,17 @@ public sealed class NativeShipmentPackagePilot(PostgresFixture fixture, ITestOut
                 await using var grants = new PostgresInvocationGrantStore(test.Case.RegressionConnectionString("braid_invocation_grant_writer"));
                 Assert.Equal(InvocationGrantOutcome.Applied, await grants.GrantAsync(actor, new(Guid.NewGuid(), target, callerA)));
                 Assert.Equal(InvocationGrantOutcome.Applied, await grants.GrantAsync(actor, new(Guid.NewGuid(), peer.Reference, callerB)));
+                if (boundedFaults)
+                {
+                    await using var ledger = new PostgresInvocationLedger(test.Case.RegressionConnectionString("braid_invocation_writer"));
+                    MachineInvocationService Service(IInspectionWorkerRunner worker) => new(ledger, test.Store, principal => new(test.Store,
+                        new(runs, new BuildControlService(builds, projects, new PostgresRevisionReportMetadataReader(reports), new RegressionRunReadService(evidence, cases)),
+                            builds, new PostgresBuildObjectStore(builds, new LocalReleasePersistenceTests.NoNative(), principal), new FerruleCompiledBuildRuntime(worker, backend))),
+                        TimeProvider.System, Braid.MachineEndpoint.MappingEndpointResources.Limits);
+                    foreach (var memory in new[] { false, true })
+                        await BoundedOrders(root, memory, Service, b, peerRelease, new(callerA, appA, DateTimeOffset.UtcNow.AddMinutes(5)), new(callerB, appB, DateTimeOffset.UtcNow.AddMinutes(5)));
+                    return;
+                }
                 var loopback = new SftpAs2RouteTests(fixture, output);
                 Assert.NotEqual(a.Qualification.Artifact.Intent.BuildId, b.Qualification.Artifact.Intent.BuildId);
                 await loopback.RunNativeRoute(test, callerA, appA, b, runtime, async unknown =>

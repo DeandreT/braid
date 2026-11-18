@@ -8,6 +8,7 @@ Native.RequirePrivacy();
 await Task.Yield(); // The real host must support the asynchronous managed entrypoint as well.
 var outside = (await Console.In.ReadToEndAsync()).Trim();
 if (outside.Length is < 1 or > 4096) return 1;
+if (outside == "bounded-address-space") Environment.Exit(Native.RefuseReservation());
 // Qualification of post-ready exits: managed code can end the hosted process with any status.
 if (outside.StartsWith("exit=", StringComparison.Ordinal) && int.TryParse(outside.AsSpan(5), out var status))
 {
@@ -55,6 +56,19 @@ return 0;
 
 internal static class Native
 {
+    // One Linux x86-64 virtual reservation. No writable pages, touches, retry or host memory pressure.
+    internal static int RefuseReservation()
+    {
+        const ulong cap = 3UL << 30;
+        if (RuntimeInformation.ProcessArchitecture != Architecture.X64 || GetLimit(9, out var limits) != 0 ||
+            limits.Soft != cap || limits.Hard != cap) return 1;
+        var address = Map(0, (nuint)(cap + 4096), 0, 0x22, -1, 0); // PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS
+        // A successful reservation is a test failure; process exit also releases it.
+        return address == -1 && Marshal.GetLastPInvokeError() == 12 ? 73 : 1;
+    }
+    [StructLayout(LayoutKind.Sequential)] private struct Limits { public ulong Soft, Hard; }
+    [DllImport("libc", EntryPoint = "getrlimit")] private static extern int GetLimit(int resource, out Limits limits);
+    [DllImport("libc", EntryPoint = "mmap", SetLastError = true)] private static extern nint Map(nint address, nuint length, int protection, int flags, int fd, long offset);
     [DllImport("libc", EntryPoint = "prctl", SetLastError = true)] internal static extern int Prctl(int option, ulong a, ulong b, ulong c, ulong d);
     [DllImport("libc", EntryPoint = "syscall", SetLastError = true)] internal static extern long Syscall(long number, ulong a, ulong b, ulong c, ulong d, ulong e, ulong f);
 
