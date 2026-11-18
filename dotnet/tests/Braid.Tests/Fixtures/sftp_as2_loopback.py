@@ -26,6 +26,7 @@ signal.alarm(180)
 os.umask(0o077)
 root = pathlib.Path(sys.argv[1])  # unique directory owned by this test
 lose_mdn = sys.argv[2:] == ['lose-mdn']
+lose_first_mdn = sys.argv[2:] == ['lose-first-mdn']
 content = base64.b64decode(sys.stdin.readline().strip(), validate=True)
 assert 0 < len(content) <= 65536
 expected = base64.b64decode(sys.stdin.readline().strip(), validate=True)
@@ -121,12 +122,13 @@ class Partner(http.server.BaseHTTPRequestHandler):
                 serialization.Encoding.DER, [pkcs7.PKCS7Options.Binary, pkcs7.PKCS7Options.DetachedSignature])
             return b'--outer\r\n' + message + b'\r\n--outer\r\nContent-Type: application/pkcs7-signature\r\nContent-Transfer-Encoding: base64\r\n\r\n' + base64.b64encode(signature) + b'\r\n--outer--\r\n'
         reply = signed_report(report)
-        if lose_mdn:
+        if lose_mdn or (lose_first_mdn and not (root / 'delayed.mdn').exists()):
             (root / 'delayed.mdn').write_bytes(reply)
             (root / 'conflicting.mdn').write_bytes(signed_report(report.replace(mic.encode(), base64.b64encode(hashlib.sha256(b'other').digest()))))
             self.close_connection = True
             self.connection.shutdown(socket.SHUT_RDWR)  # separately supplied later, never a callback
-            threading.Thread(target=server.shutdown, daemon=True).start()
+            if lose_mdn:
+                threading.Thread(target=server.shutdown, daemon=True).start()
             return
         self.send_response(200)
         self.send_header('Content-Type', 'multipart/signed; protocol="application/pkcs7-signature"; micalg=sha-256; boundary=outer')

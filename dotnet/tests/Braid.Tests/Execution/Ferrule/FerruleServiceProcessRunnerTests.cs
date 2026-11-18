@@ -20,6 +20,78 @@ namespace Braid.Tests;
 public sealed class FerruleServiceProcessRunnerTests
 {
     [ServiceEquivalenceFact]
+    public async Task FlexText_and_EDI_replies_match_on_valid_invalid_valid_requests()
+    {
+        var root = TemporaryRoot();
+        var workers = new List<IAsyncDisposable>();
+        Exception? primary = null;
+        try
+        {
+            var docker = Own(workers, new DockerInspectionWorkerRunner(new DockerInspectionWorkerOptions("/usr/bin/docker",
+                Environment.GetEnvironmentVariable("BRAID_FERRULE_WORKER_IMAGE")!, profile: DockerWorkerProfile.Preview)));
+            var child = Own(workers, new ProcessWorkerRunner(Options(root, DockerWorkerProfile.Preview)));
+            var comparing = new ComparingRunner(docker, child);
+            var format = NativeDocumentFormat.FlexText;
+            var native = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "FerruleFixtures", "flextext.native.json"));
+            var artifact = NativeArtifact.Admit(Scope, native, PreviewPolicy.MaximumNativeBytes);
+            var settings = NativeDocumentNativeSettings.Read(artifact, format);
+            var backend = new FerrulePreviewBackend(comparing, format.Execution, nativeFormats: [format]);
+            foreach (var input in new[] { "Résumé 🧵"u8.ToArray(), Array.Empty<byte>(), "after"u8.ToArray() })
+            {
+                var result = await backend.PreviewAsync(new(artifact, PreviewTargetSelection.Primary,
+                    new(null, input, documentSettings: settings.Input), [], [], "2026-11-18T12:00:00Z", PreviewLimits.Default));
+                Assert.Equal(MappingPreviewStatus.Succeeded, result.Status);
+                var output = Assert.Single(result.Artifacts);
+                Assert.Equal(settings.Output, output.DocumentSettings);
+                Assert.Equal(input, output.CopyBytes());
+                if (input.Length == 0)
+                {
+                    // Native has to consume these exact frames: the managed adapter itself rejects invalid UTF-8.
+                    byte[] bad = [0xff];
+                    var header = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new {
+                        protocolVersion = format.Profile, requestId = Guid.NewGuid(), revision = Scope,
+                        nativeDigest = artifact.Digest.Value, documentId = "entry.native.json", target = new {kind = "primary"},
+                        currentDateTime = "2026-11-18T12:00:00Z", parameters = Array.Empty<object>(),
+                        inputs = new[] { new {role = "primary", byteLength = bad.Length, sha256 = Sha256Digest.FromBytes(bad).Value} }, limits = PreviewLimits.Default
+                    }, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+                    using var frame = new MemoryStream();
+                    foreach (var part in new[] {header, native, bad})
+                    {
+                        byte[] size = new byte[4]; System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(size, part.Length);
+                        frame.Write(size); frame.Write(part);
+                    }
+                    var refused = await comparing.RunAsync(frame.ToArray(), default);
+                    Assert.Equal(refused.Output.Length-4, System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(refused.Output));
+                    using var response = System.Text.Json.JsonDocument.Parse(refused.Output.AsMemory(4));
+                    Assert.Equal("invalidInput", response.RootElement.GetProperty("failure").GetProperty("code").GetString());
+                }
+            }
+            foreach (var family in new[] {"x12", "edifact"})
+            {
+                var request = DocumentPreviewTestData.Request(Scope, family);
+                var edi = new FerrulePreviewBackend(comparing, PreviewExecutionProfile.Document);
+                foreach (var valid in new[] {true, false, true})
+                {
+                    var result = await edi.PreviewAsync(valid ? request : request with {Primary = new(null, "broken envelope"u8)});
+                    if (!valid) { Assert.Equal(MappingPreviewStatus.InvalidInput, result.Status); Assert.Empty(result.Artifacts); }
+                    else { Assert.Equal(MappingPreviewStatus.Succeeded, result.Status); Assert.Single(result.Artifacts); }
+                }
+            }
+            var mixed = DocumentPreviewTestData.Request(Scope, "x12") with
+            {
+                Artifact = NativeArtifact.Admit(Scope, DocumentPreviewTestData.InterchangeNative(), PreviewPolicy.MaximumNativeBytes),
+                Primary = new(null, Encoding.UTF8.GetBytes(DocumentPreviewTestData.MixedX12())),
+                Target = PreviewTargetSelection.Primary
+            };
+            var mixedResult = await new FerrulePreviewBackend(comparing).PreviewAsync(mixed);
+            Assert.Equal(MappingPreviewStatus.Succeeded, mixedResult.Status);
+            Assert.Contains("SECOND", Encoding.UTF8.GetString(Assert.Single(mixedResult.Artifacts).CopyBytes()));
+            Assert.Equal(11, comparing.Compared);
+        }
+        catch (Exception error) { primary = error; }
+        finally { await CompleteCleanupAsync(workers, root, primary); }
+    }
+    [ServiceEquivalenceFact]
     public async Task Csv_and_tsv_use_the_same_bounded_bytes_and_dialect_in_Docker_and_service_children()
     {
         var root = TemporaryRoot();

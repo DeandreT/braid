@@ -14,6 +14,37 @@ const document = (text: string, mediaType = "application/edi-x12") => ({
   mediaType,
 });
 
+test("FlexText layout belongs to the saved artifact, including empty output", () => {
+  const settings = {
+    schema: "braid.flextext-settings.v1",
+    optionsJson: '{"root_name":"Document"}',
+  };
+  for (const text of ["", "Line 1\r\nRésumé 🧵"]) {
+    const artifact = {
+      ...document(text, "text/plain"),
+      documentSettings: settings,
+    };
+    const view = displayDocument(artifact);
+    expect(view.flexLayout).toBe(settings.optionsJson);
+    expect(view.text).toBe(text);
+    expect(view.document).toBe(artifact);
+    expect(view.byteCount).toBe(Buffer.byteLength(text));
+  }
+  expect(displayDocument(document("text", "text/plain")).flexLayout).toBeNull();
+  expect(
+    displayDocument({
+      ...document("text", "text/plain"),
+      documentSettings: { ...settings, schema: "other" },
+    }).flexLayout,
+  ).toBeNull();
+});
+
+test("an incomplete EDI display window is raw, not a complete segment list", () => {
+  const value = displayDocument(document(x12 + " ".repeat(65536)));
+  expect(value.truncated).toBe(true);
+  expect(value.segments).toBeNull();
+});
+
 test("EDI representation uses declared media and keeps exact source bytes", () => {
   const source = document(x12);
   const value = displayDocument(source);

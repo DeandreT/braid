@@ -75,17 +75,25 @@ public sealed class SftpAs2RouteTests(PostgresFixture fixture, ITestOutputHelper
         ReleaseIntent release, byte[] expectedArtifact, Func<Guid, Task>? whileUnknown = null, bool rebind = false)
         => RunRoute(test.Releases, target, caller, app, release, expectedArtifact, whileUnknown, rebind);
 
+    [SftpLoopbackFact]
+    public async Task Pending_delivery_survives_partner_key_rotation_and_authorized_resend_uses_saved_output()
+    {
+        await using var test = await MachineInvocationPersistenceTests.Context.CreateAsync(fixture, migrations: 65, shipment: true);
+        await RunRoute(test.Releases, test.Target, test.Caller, test.Application, test.Release, [2, 3], null, false, rotate: true);
+    }
+
     internal Task RunNativeRoute(LocalReleasePersistenceTests.Context test, MachinePrincipal caller, Guid app, ReleaseIntent release,
         Braid.MappingBackends.FerruleCompiledBuildRuntime runtime, Func<Guid, Task>? whileUnknown = null)
         => RunRoute(test, release.Target, caller, app, release, null, whileUnknown, false, runtime);
 
     private async Task RunRoute(LocalReleasePersistenceTests.Context test, ReleaseTargetReference target, MachinePrincipal caller, Guid app,
-        ReleaseIntent release, byte[]? expectedArtifact, Func<Guid, Task>? whileUnknown, bool rebind, Braid.MappingBackends.FerruleCompiledBuildRuntime? native = null)
+        ReleaseIntent release, byte[]? expectedArtifact, Func<Guid, Task>? whileUnknown, bool rebind, Braid.MappingBackends.FerruleCompiledBuildRuntime? native = null, bool rotate = false)
     {
         var directory = Directory.CreateTempSubdirectory("braid-route-");
         var start = new ProcessStartInfo(Environment.GetEnvironmentVariable("BRAID_SFTP_TEST_PYTHON")!) { RedirectStandardInput = true, RedirectStandardOutput = true, UseShellExecute = false };
         start.ArgumentList.Add(Path.Combine(AppContext.BaseDirectory, "Fixtures", "sftp_as2_loopback.py")); start.ArgumentList.Add(directory.FullName);
         if (whileUnknown is not null) start.ArgumentList.Add("lose-mdn");
+        else if (rotate) start.ArgumentList.Add("lose-first-mdn");
         using var child = Process.Start(start)!;
         try
         {
@@ -142,6 +150,42 @@ public sealed class SftpAs2RouteTests(PostgresFixture fixture, ITestOutputHelper
             var mappedMs = timer.ElapsedMilliseconds;
             Task<bool> Dispatch() => dispatcher.DispatchAsync(target, route.DestinationBindingId, default);
             Task<string> Phase() => test.Case.ScalarAsync<string>("SELECT phase FROM braid.trigger_deliveries WHERE delivery_id=$1", id);
+            if (rotate)
+            {
+                var saved = await test.Case.ScalarAsync<byte[]>("SELECT p.body FROM braid.trigger_payloads p JOIN braid.trigger_deliveries d USING(organization_id,receipt_id) WHERE d.delivery_id=$1", id);
+                Assert.Equal(expectedWire, saved);
+                var rotated = new TriggerRoute(null, route.DestinationBindingId, route.Kind, new(route.Connector.ConnectorId, 2));
+                using var rsa = RSA.Create(2048);
+                using var replacement = new CertificateRequest("CN=rotated-fixture", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1)
+                    .CreateSelfSigned(DateTimeOffset.UtcNow.AddHours(-1), DateTimeOffset.UtcNow.AddHours(1));
+                var next = partner with { Version = As2OutputDestination.BindingVersion(rotated.Connector, rotated.DestinationBindingId),
+                    EncryptionCertificate = replacement, ReceiptCertificate = replacement };
+                var fenceStore = new PostgresAs2ClaimFenceStore(fences);
+                var v2 = new As2OutputDestination(rotated.Connector, rotated.DestinationBindingId, next, client, fenceStore);
+                var v1 = new As2OutputDestination(route.Connector, route.DestinationBindingId, partner, client, fenceStore);
+                var nextConfig = new TriggerConfiguration(config.TriggerId, target, config.Kind, config.SourceBindingId, source.Connector, caller, app,
+                    config.InputMediaType, config.Parameters, [rotated], config.Policies, config.Envelope, schedule);
+                Assert.Equal(TriggerOperationOutcome.Applied, await admin.OperateAsync(test.Actor, target, new(Guid.NewGuid(), config.TriggerId, TriggerAction.Configure, 2, nextConfig)));
+                Assert.Equal(rotated, Assert.Single((await store.ReadDefinitionAsync(target, config.TriggerId))!.Configuration.Routes));
+                var onlyNew = new TriggerDeliveryDispatcher(store, [v2], TimeProvider.System);
+                Assert.True(await onlyNew.DispatchAsync(target, route.DestinationBindingId, default));
+                Assert.Equal("pending", await Phase());
+                Assert.Equal(1L, await test.Case.ScalarAsync<long>("SELECT count(*) FROM braid.trigger_events WHERE delivery_id=$1 AND outcome='knownNotAccepted'", id));
+                Assert.Equal(0L, await test.Case.ScalarAsync<long>("SELECT count(*) FROM braid.as2_send_fences WHERE delivery_id=$1", id));
+                Assert.False(File.Exists(Path.Combine(directory.FullName, "accepted.log")));
+                dispatcher = new(store, [v2, v1], TimeProvider.System);
+                Assert.True(await Dispatch()); Assert.Equal("unknown", await Phase()); Assert.False(await Dispatch());
+                var op = Guid.NewGuid();
+                Assert.Equal(TriggerResolutionOutcome.Stale, await test.Store.ResolveDeliveryAsync(test.Actor, target, id, Guid.NewGuid(), 1, TriggerDeliveryResolution.Resend));
+                Assert.Equal("unknown", await Phase()); Assert.False(await Dispatch());
+                for (var replay = 0; replay < 2; replay++)
+                    Assert.Equal(TriggerResolutionOutcome.Applied, await test.Store.ResolveDeliveryAsync(test.Actor, target, id, op, 2, TriggerDeliveryResolution.Resend));
+                Assert.True(await Dispatch()); Assert.Equal("accepted", await Phase()); Assert.False(await Dispatch());
+                var wireEvidence = $"<{id:N}@braid.invalid> {Convert.ToHexStringLower(SHA256.HashData(saved))}";
+                Assert.Equal(new[] { wireEvidence, wireEvidence }, File.ReadAllLines(Path.Combine(directory.FullName, "accepted.log")));
+                Assert.Equal(2L, await test.Case.ScalarAsync<long>("SELECT count(*) FROM braid.as2_send_fences WHERE delivery_id=$1 AND send_number IN (2,3) AND binding_version=$2 AND receipt_cert_sha256=$3", id, partner.Version, cert.GetCertHashString(HashAlgorithmName.SHA256)));
+                return;
+            }
             Assert.True(await Dispatch());
             var totalMs = timer.ElapsedMilliseconds;
             Assert.Equal(whileUnknown is null ? "accepted" : "unknown", await Phase());

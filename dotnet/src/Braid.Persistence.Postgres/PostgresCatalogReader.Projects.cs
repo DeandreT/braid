@@ -78,6 +78,8 @@ public sealed partial class PostgresCatalogReader
                  AND membership.principal_id = admitted.principal_id AND membership.active
                  AND membership.role IN ('viewer', 'runner', 'publisher', 'administrator')
                 WHERE project.organization_id = admitted.organization_id AND (@afterId::uuid IS NULL OR project.id > @afterId)
+                AND NOT EXISTS (SELECT 1 FROM ONLY braid.resource_lifecycles l WHERE l.organization_id=project.organization_id
+                    AND l.project_id=project.id AND l.mapping_id IS NULL AND l.state='archived')
                 ORDER BY project.id LIMIT @fetchLimit
             ) child ON true ORDER BY child.project_id
             """);
