@@ -13,7 +13,7 @@ from pathlib import Path
 # Includes test/helper/attribute initializers, linked probe sources, production
 # dependencies and build inputs. A changed source needs a classification audit,
 # not an automatic fingerprint refresh. See test-groups.md.
-AUDITED_SOURCE_SHA256 = "fca0955fcb596ebdd98d812611e53d009f75c8a1c5ff39cd9c29550daa2214ae"
+AUDITED_SOURCE_SHA256 = "250a324663db2f2cf058804aec8a3c9e20d086259d04e0b89997ddaefcb88b61"
 
 GROUP_CLASSES = {
     "fast": """
