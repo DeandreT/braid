@@ -111,12 +111,13 @@ public sealed class FerruleServiceCompileTests
         => await DocumentCompilerParity(primaryEdi, true, family, oversized: true);
 
     [System.Runtime.Versioning.SupportedOSPlatform("linux")]
-    private static async Task DocumentCompilerParity(bool ediOutput, bool namedOutput, string family = "x12", bool oversized = false)
+    private static async Task DocumentCompilerParity(bool ediOutput, bool namedOutput, string family = "x12", bool oversized = false, string? acknowledgement = null)
     {
         var root = TemporaryRoot();
         try
         {
-            var native = JsonNode.Parse(DocumentPreviewTestData.Native(family))!;
+            var input = acknowledgement is null ? DocumentPreviewTestData.Input(family) : Encoding.ASCII.GetBytes(acknowledgement);
+            var native = JsonNode.Parse(DocumentPreviewTestData.Native(family, acknowledgement))!;
             if (oversized) native["source_options"] = new JsonObject { ["json_document"] = true };
             if (!ediOutput) native["target_options"] = new JsonObject { ["json_document"] = true };
             foreach (var side in new[] { "source", "target" })
@@ -126,14 +127,6 @@ public sealed class FerruleServiceCompileTests
                 {
                     segments.Single(value => (string?)value!["name"] == "ISA")!["kind"]!["children"]![11]!["fixed"] = "00501";
                     segments.Single(value => (string?)value!["name"] == "GS")!["kind"]!["children"]![7]!["fixed"] = "005010";
-                }
-                else
-                {
-                    var syntax = segments.Single(value => (string?)value!["name"] == "UNB")!["kind"]!["children"]![0]!["kind"]!["children"]!;
-                    syntax[0]!["fixed"] = "UNOC";
-                    syntax[1]!["fixed"] = "3";
-                    var message = segments.Single(value => (string?)value!["name"] == "UNH")!["kind"]!["children"]![1]!["kind"]!["children"]!;
-                    foreach (var (index, value) in new[] { "ORDERS", "D", "96A", "UN" }.Index()) message[index]!["fixed"] = value;
                 }
             }
             if (namedOutput) native["extra_targets"] = new JsonArray(new JsonObject
@@ -167,7 +160,7 @@ public sealed class FerruleServiceCompileTests
             foreach (var target in targets)
             {
                 var replay = new RegressionReplay(target, "2026-10-24T12:00:00Z", PreviewLimits.Default,
-                    new(null, oversized ? JsonInput(family, 20_000) : DocumentPreviewTestData.Input(family)), [], []);
+                    new(null, oversized ? JsonInput(family, 20_000) : input), [], []);
                 var interpreted = await new FerrulePreviewBackend(previewRunner).PreviewAsync(new(
                     NativeArtifact.Admit(Scope, bytes, PreviewPolicy.MaximumNativeBytes), target, replay.Primary, [], [], replay.CurrentDateTime, replay.Limits)
                 { Profile = PreviewExecutionProfile.Document });
@@ -186,6 +179,7 @@ public sealed class FerruleServiceCompileTests
                 for (var index = 0; index < interpreted.Artifacts.Count; index++)
                 {
                     Assert.Equal(interpreted.Artifacts[index].Bytes, result.Outputs.Outputs[index].CopyBytes());
+                    if (acknowledgement is not null) Assert.Equal(Encoding.ASCII.GetBytes(acknowledgement.Replace("~", "~\n", StringComparison.Ordinal)), result.Outputs.Outputs[index].CopyBytes());
                     Assert.Equal(interpreted.Artifacts[index].MediaType, result.Outputs.Outputs[index].MediaType);
                 }
             }
@@ -194,11 +188,11 @@ public sealed class FerruleServiceCompileTests
                 Assert.Empty(Directory.EnumerateFileSystemEntries(root));
                 return;
             }
-            var trailer = family == "x12" ? "SE*3*0330" : "UNT+3+330";
-            foreach (var broken in family == "x12" ? new[] { "SE*9*0330", "SE*3*9999" } : ["UNT+9+330", "UNT+3+9999"])
+            var trailer = family == "x12" ? acknowledgement is null ? "SE*3*0330" : "SE*6*0330" : "UNT+3+330";
+            foreach (var broken in family == "x12" ? new[] { "SE*9*0330", trailer.Replace("0330", "9999", StringComparison.Ordinal) } : ["UNT+9+330", "UNT+3+9999"])
             {
                 var replay = new RegressionReplay(PreviewTargetSelection.All, "2026-10-24T12:00:00Z", PreviewLimits.Default,
-                    new(null, Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(DocumentPreviewTestData.Input(family)).Replace(trailer, broken, StringComparison.Ordinal))), [], []);
+                    new(null, Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(input).Replace(trailer, broken, StringComparison.Ordinal))), [], []);
                 var result = await runtime.ExecuteAsync(artifactReference, artifact, replay);
                 Assert.Equal(CompiledBuildOutcome.InvalidInput, result.Outcome);
                 Assert.Null(result.Outputs);
@@ -216,6 +210,11 @@ public sealed class FerruleServiceCompileTests
         }
         finally { Directory.Delete(root, recursive: true); }
     }
+
+    [ServiceCompileFact]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public Task X12_999_preserves_acknowledged_controls_and_rejection_codes() => DocumentCompilerParity(true, false,
+        acknowledgement: DocumentPreviewTestData.X12.Replace("GS*PO", "GS*FA", StringComparison.Ordinal).Replace("ST*850*0330~BEG*00*SA*BRAID-330~SE*3", "ST*999*0330~AK1*PO*329~AK2*850*0329~IK5*R~AK9*R*1*1*0~SE*6", StringComparison.Ordinal));
 
     private static byte[] JsonInput(string family, int businessLength)
     {
