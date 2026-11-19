@@ -17,7 +17,7 @@ public sealed class FerruleCompiledBuildRuntime : ICompiledBuildRuntime
             (runner is FerruleServiceRunner service && service.ProfileName != FerruleServiceProtocol.CompiledProfile))
             throw new ArgumentException("Compiled execution requires its dedicated sandbox profile.", nameof(runner));
         if (compiler.BackendId != "ferrule" || compiler.EngineRevision != BuildWorkerProtocol.Engine ||
-            compiler.AdapterVersion is not (FerruleBuildCompiler.Adapter or FerrulePreviewBackend.DocumentAdapterBuild or FerrulePreviewBackend.CsvAdapterBuild or FerrulePreviewBackend.XmlAdapterBuild))
+            compiler.AdapterVersion is not (FerruleBuildCompiler.Adapter or FerrulePreviewBackend.DocumentAdapterBuild or FerrulePreviewBackend.CsvAdapterBuild or FerrulePreviewBackend.XmlAdapterBuild) && !NativeDocumentFormat.CatalogFormats.Any(f => f.AdapterBuild == compiler.AdapterVersion))
             throw new ArgumentException("A qualified compiler identity is required.", nameof(compiler));
         if (runner.BuildIdentity.Length != 71 || !runner.BuildIdentity.StartsWith("sha256:", StringComparison.Ordinal) ||
             runner.BuildIdentity[7..].Any(c => c is not (>= 'a' and <= 'f') and not (>= '0' and <= '9')))
@@ -34,10 +34,11 @@ public sealed class FerruleCompiledBuildRuntime : ICompiledBuildRuntime
         var documents = BuildWorkerProtocol.IsDocumentProfile(artifact.Intent.Profile.Id);
         var csv = artifact.Intent.Profile.Id == BuildWorkerProtocol.CsvProfile;
         var xml = artifact.Intent.Profile.Id == BuildWorkerProtocol.XmlProfile;
-        var profile = xml ? FerruleBuildCompiler.XmlProfile : csv ? FerruleBuildCompiler.CsvProfile : artifact.Intent.Profile == FerruleBuildCompiler.X12InterchangesProfile ? FerruleBuildCompiler.X12InterchangesProfile :
+        var native = BuildWorkerProtocol.NativeFormat(artifact.Intent.Profile.Id);
+        var profile = native is not null ? FerruleBuildCompiler.NativeProfile(artifact.Intent.Profile.Id) : xml ? FerruleBuildCompiler.XmlProfile : csv ? FerruleBuildCompiler.CsvProfile : artifact.Intent.Profile == FerruleBuildCompiler.X12InterchangesProfile ? FerruleBuildCompiler.X12InterchangesProfile :
             documents ? FerruleBuildCompiler.DocumentProfile : FerruleBuildCompiler.Profile;
         var expectedCompiler = new BuildBackendIdentity(compiler.BackendId, compiler.EngineRevision, compiler.EngineBuild,
-            xml ? FerrulePreviewBackend.XmlAdapterBuild : csv ? FerrulePreviewBackend.CsvAdapterBuild : documents ? FerrulePreviewBackend.DocumentAdapterBuild : FerruleBuildCompiler.Adapter);
+            native?.AdapterBuild ?? (xml ? FerrulePreviewBackend.XmlAdapterBuild : csv ? FerrulePreviewBackend.CsvAdapterBuild : documents ? FerrulePreviewBackend.DocumentAdapterBuild : FerruleBuildCompiler.Adapter));
         if (artifact.Intent.Backend != expectedCompiler || artifact.Intent.Profile != profile ||
             csv && !BuildWorkerProtocol.AdmitsCsvPlan(artifact.Intent.Boundaries) ||
             artifact.Intent.Boundaries.Any(value => !BuildWorkerProtocol.AdmitsBoundary(profile.Id, value.Format, value.CsvDialect)))
@@ -54,7 +55,7 @@ public sealed class FerruleCompiledBuildRuntime : ICompiledBuildRuntime
         {
             var boundary = artifact.Intent.Boundaries.Single(value => value.Name == input.Name &&
                 value.Kind == (input.Name is null ? BuildBoundaryKind.PrimaryInput : BuildBoundaryKind.NamedInput));
-            if (input.XmlMetadata != boundary.XmlMetadata || input.CsvDialect != boundary.CsvDialect || input.ByteCount == 0 && !csv)
+            if (input.DocumentSettings != boundary.DocumentSettings || input.XmlMetadata != boundary.XmlMetadata || input.CsvDialect != boundary.CsvDialect || input.ByteCount == 0 && !csv)
                 return new(CompiledBuildOutcome.InvalidInput);
         }
         var header = CompiledRuntimeProtocol.For(artifact, replay);

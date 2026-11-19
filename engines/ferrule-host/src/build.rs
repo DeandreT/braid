@@ -251,7 +251,7 @@ pub fn generate(
         if project.execution_contract.is_some() {
             return Err(refusal);
         }
-        let files = if profile == FLEX_PROFILE {
+        let mut files = if profile == FLEX_PROFILE {
             crate::flextext_document::admit(project).map_err(|_| refusal)?;
             crate::flextext_document::admit_saved_metadata(native, project).map_err(|_| refusal)?;
             let program = ferrule_codegen::lower(project).map_err(|_| refusal)?;
@@ -287,6 +287,27 @@ pub fn generate(
             }
         }
         .into_files();
+        // Fixed host ABI for the three primary-only profiles. No mapping text
+        // or caller-supplied type or method name is interpolated here.
+        let body = match profile {
+            FLEX_PROFILE => {
+                "return all ? M.ExecuteFlexTextBytesOutputsWithHost(input, host) : M.ExecuteFlexTextBytesSelectedTargetWithHost(input, FerruleTargetSelection.Primary(), host);"
+            }
+            PB_PROFILE => {
+                "return all ? M.ExecuteProtobufOutputs(input, [], host).Single().Bytes : M.ExecuteSelectedProtobufOutput(input, [], FerruleTargetSelection.Primary(), host).Bytes;"
+            }
+            _ => {
+                "var extras = new System.Collections.Generic.Dictionary<string, byte[]>(); return all ? M.ExecuteXbrlBytesOutputs(input, extras, host).Primary : M.ExecuteXbrlBytesSelectedTarget(input, extras, FerruleTargetSelection.Primary(), host);"
+            }
+        };
+        let bridge = format!(
+            "using System.Linq; using Ferrule.Runtime; using M = Ferrule.Generated.GeneratedMapping; namespace Braid.Generated; public static class NativeDocument {{ public static byte[] Execute(byte[] input, bool all, FerruleExecutionContext host) {{ {body} }} }}"
+        );
+        files.push(ferrule_codegen::GeneratedFile::new(
+            ferrule_codegen::ArtifactPath::new("Runtime/BraidNativeDocument.cs")
+                .map_err(|_| refusal)?,
+            bridge.into_bytes(),
+        ));
         check_files(&files)?;
         let mut boundaries = Vec::new();
         for (kind, options) in [

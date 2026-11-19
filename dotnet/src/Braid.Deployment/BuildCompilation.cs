@@ -48,6 +48,9 @@ public static class BuildCompilation
             if (name is not ("GeneratedMapping.cs" or "GeneratedTargetBuilder.cs") &&
                 !(reply.Header.Profile is (BuildWorkerProtocol.DocumentProfile or BuildWorkerProtocol.X12InterchangesProfile) && name == "GeneratedMapping.Documents.cs") &&
                 !(reply.Header.Profile == BuildWorkerProtocol.CsvProfile && name is ("GeneratedMapping.Csv.cs" or "GeneratedMapping.CsvDocument.cs")) &&
+                !(reply.Header.Profile == BuildWorkerProtocol.FlexProfile && name == "GeneratedMapping.FlexTextBytes.cs") &&
+                !(reply.Header.Profile == BuildWorkerProtocol.ProtoProfile && name == "GeneratedMapping.Protobuf.cs") &&
+                !(reply.Header.Profile == BuildWorkerProtocol.XbrlProfile && name == "GeneratedMapping.Xbrl.cs") &&
                 !(name.StartsWith("Runtime/", StringComparison.Ordinal) && name.EndsWith(".cs", StringComparison.Ordinal))) throw Invalid();
             var path = Path.Combine(directory, name); Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await File.WriteAllBytesAsync(path, reply.Contents[i], token).ConfigureAwait(false); names.Add(name);
