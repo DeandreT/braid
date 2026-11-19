@@ -15,7 +15,7 @@ public sealed class PostgresAccountDisplayMetadataTests(PostgresFixture fixture)
             await old.MigrateAsync();
         Assert.False(await test.ScalarAsync<bool>("SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname='braid_account_display')"));
         await test.MigrateAsync();
-        await using var connection = new Npgsql.NpgsqlConnection(test.RegressionConnectionString("braid_lifecycle_worker"));
+        await using var connection = new Npgsql.NpgsqlConnection(new Npgsql.NpgsqlConnectionStringBuilder(test.RegressionConnectionString("braid_lifecycle_worker")) { Pooling = false }.ConnectionString);
         await connection.OpenAsync();
         await using var tx = await connection.BeginTransactionAsync();
         await using var path = new Npgsql.NpgsqlCommand("SET LOCAL search_path=pg_catalog", connection, tx);
