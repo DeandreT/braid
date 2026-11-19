@@ -25,11 +25,23 @@ internal static class DocumentPreviewTestData
         return first + "\n" + second;
     }
 
-    internal static byte[] InterchangeNative(bool configuredSyntax = false)
+    internal static string MixedContrl => "UNA;|.! $" + Contrl.Replace(':', ';').Replace('+', '|').Replace('\'', '$') + "\n" +
+        Contrl.Replace("A330", "A331", StringComparison.Ordinal).Replace("M1", "M2", StringComparison.Ordinal).Replace("PREVIOUS", "SECOND", StringComparison.Ordinal).Replace("+7'", "+4'", StringComparison.Ordinal);
+
+    internal static byte[] InterchangeNative(bool configuredSyntax = false, bool contrl = false)
     {
-        var document = JsonNode.Parse(Native("x12"))!;
+        var document = JsonNode.Parse(contrl ? Native("edifact", Contrl) : Native("x12"))!;
         var segments = document["source"]!["kind"]!["children"]!.AsArray();
         JsonNode Segment(string tag) => segments.Single(value => (string?)value!["name"] == tag)!.DeepClone();
+        var interchanges = contrl ? EdifactInterchanges() : X12Interchanges();
+        interchanges["repeating"] = true;
+        JsonObject EdifactInterchanges()
+        {
+            var messages = Group("Messages", new JsonArray(Segment("UNH"), Segment("UCI"), Segment("UNT"))); messages["repeating"] = true;
+            return Group("Interchanges", new JsonArray(Segment("UNB"), messages, Segment("UNZ")));
+        }
+        JsonObject X12Interchanges()
+        {
         var isa = Segment("ISA"); isa["repeating"] = true; isa["kind"]!["children"]![11]!["fixed"] = "00501";
         var gs = Segment("GS"); gs["repeating"] = true; gs["kind"]!["children"]![7]!["fixed"] = "005010";
         var ge = Segment("GE"); ge["repeating"] = true;
@@ -38,11 +50,12 @@ internal static class DocumentPreviewTestData
         beg["kind"]!["children"]!.AsArray().Add(repeated);
         var messages = Group("Messages", new JsonArray(Segment("ST"), beg, Segment("SE"))); messages["repeating"] = true;
         var groups = Group("Groups", new JsonArray(gs, messages, ge)); groups["repeating"] = true;
-        var interchanges = Group("Interchanges", new JsonArray(isa, groups, iea)); interchanges["repeating"] = true;
+            return Group("Interchanges", new JsonArray(isa, groups, iea));
+        }
         var schema = Group("Document", new JsonArray(interchanges));
         document["source"] = schema;
         document["target"] = schema.DeepClone();
-        document["source_options"] = new JsonObject { ["edi_kind"] = "x12", ["x12_interchange_version"] = "00501" };
+        if (!contrl) document["source_options"] = new JsonObject { ["edi_kind"] = "x12", ["x12_interchange_version"] = "00501" };
         if (configuredSyntax) document["source_options"]!["x12_separators"] = new JsonObject { ["element"] = "*", ["component"] = ":", ["segment"] = "~", ["repetition"] = "^", ["release"] = null };
         document["target_options"] = new JsonObject { ["json_document"] = true };
         document["graph"] = new JsonObject { ["nodes"] = new JsonObject() };
@@ -51,13 +64,16 @@ internal static class DocumentPreviewTestData
         return Encoding.UTF8.GetBytes(document.ToJsonString());
     }
 
-    internal static byte[] Native(string family)
+    internal const string Contrl = "UNB+UNOC:3+BRAIDACK+BRAIDPARTNER+261024:1200+A330'UNH+M1+CONTRL:D:96A:UN'UCI+PREVIOUS+BRAIDPARTNER+BRAIDACK+7'UNT+3+M1'UNZ+1+A330'";
+    internal static byte[] ContrlExpected => Encoding.ASCII.GetBytes(Contrl.Replace("'", "'\n", StringComparison.Ordinal));
+
+    internal static byte[] Native(string family, string? envelope = null)
     {
         var nodes = new JsonObject();
         var segments = new JsonArray();
         var scopes = new JsonArray();
         var next = 1;
-        foreach (var segment in (family == "x12" ? X12 : Edifact).Split(family == "x12" ? '~' : '\'', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var segment in (envelope ?? (family == "x12" ? X12 : Edifact)).Split(family == "x12" ? '~' : '\'', StringSplitOptions.RemoveEmptyEntries))
         {
             var elements = segment.Split(family == "x12" ? '*' : '+');
             var fields = new JsonArray();
@@ -73,7 +89,9 @@ internal static class DocumentPreviewTestData
                     for (var part = 0; part < elements[index].Split(':').Length; part++)
                     {
                         var component = "c" + (part + 1);
-                        components.Add(Scalar(component));
+                        var scalar = Scalar(component);
+                        if ((elements[0], index) is ("UNB", 1) or ("UNH", 2)) scalar["fixed"] = elements[index].Split(':')[part];
+                        components.Add(scalar);
                         componentBindings.Add(Bind(component, [elements[0], name, component]));
                     }
                     fields.Add(Group(name, components));

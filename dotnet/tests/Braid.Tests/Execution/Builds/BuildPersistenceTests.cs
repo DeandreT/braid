@@ -405,9 +405,9 @@ public sealed class BuildPersistenceTests(PostgresFixture fixture)
         internal ActorContext Actor => Runs.Actor;
 
         internal static async Task<Context> CreateAsync(PostgresFixture fixture, bool pass = true, bool nullContent = false, int? migrations = null, bool documents = false, bool interchanges = false,
-            CsvDocumentDialect? csvDialect = null, bool shipment = false, byte[]? nativeBytes = null, BuildBackendIdentity? actualBackend = null, byte[]? xmlExpected = null)
+            CsvDocumentDialect? csvDialect = null, bool shipment = false, byte[]? nativeBytes = null, BuildBackendIdentity? actualBackend = null, byte[]? xmlExpected = null, bool contrl = false)
         {
-            documents |= interchanges || shipment;
+            documents |= interchanges || shipment || contrl;
             var runs = await RegressionRunPostgresTestSupport.CreateAsync(fixture, migrations, xmlExpected is not null ? value => new(
                 value.CaseId, value.Version, value.Owner, value.Name, value.Revision, value.NativeDigest,
                 new(actualBackend!.BackendId, actualBackend.EngineRevision, actualBackend.EngineBuild, actualBackend.AdapterVersion, XmlPreviewAdmission.Profile),
@@ -424,10 +424,10 @@ public sealed class BuildPersistenceTests(PostgresFixture fixture)
                 value.CaseId, value.Version, value.Owner, value.Name, value.Revision, value.NativeDigest,
                 new(actualBackend?.BackendId ?? value.Runtime.BackendId, actualBackend?.EngineRevision ?? value.Runtime.EngineRevision,
                     actualBackend?.EngineBuild ?? value.Runtime.BackendBuild, actualBackend?.AdapterVersion ?? value.Runtime.AdapterBuild, DocumentPreviewPolicy.Profile),
-                new(PreviewTargetSelection.All, value.Replay.CurrentDateTime, value.Replay.Limits, new(null, shipment ? Shipment945Fixture.Input : DocumentPreviewTestData.Input("x12")), [], []),
+                new(PreviewTargetSelection.All, value.Replay.CurrentDateTime, value.Replay.Limits, new(null, contrl ? Encoding.ASCII.GetBytes(DocumentPreviewTestData.Contrl) : shipment ? Shipment945Fixture.Input : DocumentPreviewTestData.Input("x12")), [], []),
                 Braid.Application.Regression.RegressionComparisonService.ExactBytesPolicy,
                 Braid.Application.Regression.RegressionOutputSet.Capture([Braid.Application.Regression.RegressionOutput.Capture(
-                    Braid.Application.Regression.RegressionOutputKey.Primary, shipment ? (nativeBytes is null ? Shipment945Fixture.Expected : Shipment945Fixture.NativeExpected) : DocumentPreviewTestData.Input("x12"), mediaType: "application/edi-x12")])) : null, nativeBytes);
+                    Braid.Application.Regression.RegressionOutputKey.Primary, contrl ? DocumentPreviewTestData.ContrlExpected : shipment ? (nativeBytes is null ? Shipment945Fixture.Expected : Shipment945Fixture.NativeExpected) : DocumentPreviewTestData.Input("x12"), mediaType: contrl ? "application/edifact" : "application/edi-x12")])) : null, nativeBytes);
             PostgresBuildStore? store = null;
             try
             {
@@ -465,7 +465,7 @@ public sealed class BuildPersistenceTests(PostgresFixture fixture)
                 var environment = new BuildEnvironmentReference(new(scope.OrganizationId, scope.ProjectId), Guid.NewGuid(), 1);
                 var profile = xmlExpected is not null ? Braid.MappingBackends.FerruleBuildCompiler.XmlProfile : csvDialect is not null ? Braid.MappingBackends.FerruleBuildCompiler.CsvProfile : interchanges ? Braid.MappingBackends.FerruleBuildCompiler.X12InterchangesProfile : documents ? Braid.MappingBackends.FerruleBuildCompiler.DocumentProfile : FixtureBuildCompiler.Profile;
                 Assert.Equal(BuildControlOutcome.Created, await store.SaveEnvironmentAsync(runs.Actor, new(environment, profile, true)));
-                var format = xmlExpected is not null ? "xml" : csvDialect is not null ? csvDialect.Delimiter == "\t" ? "tsv" : "csv" : documents ? "x12" : "fixture-bytes";
+                var format = xmlExpected is not null ? "xml" : csvDialect is not null ? csvDialect.Delimiter == "\t" ? "tsv" : "csv" : contrl ? "edifact" : documents ? "x12" : "fixture-bytes";
                 var intent = new BuildIntent(Guid.NewGuid(), scope, runs.Value.NativeDigest,
                     actualBackend ?? new("ferrule", "engine", "build", "adapter"), profile,
                     [new(BuildBoundaryKind.PrimaryInput, null, shipment ? "json" : format, csvDialect, xmlExpected is null ? null : XmlDocumentMetadata.WithoutHints), new(BuildBoundaryKind.PrimaryOutput, null, format, csvDialect, xmlExpected is null ? null : XmlDocumentMetadata.WithoutHints)], environment, Guid.NewGuid(), runs.RunId);
