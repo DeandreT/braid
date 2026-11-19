@@ -14,9 +14,10 @@ import {
   switchMap,
   throwError,
   timeout,
-  type Observable,
+  Observable,
 } from "rxjs";
 import { BrowserSessionState } from "../../auth/browser-session-state";
+import { verifiedDownload } from "./verified-download";
 import {
   nativeFormats,
   nativeProfile,
@@ -194,6 +195,47 @@ export class PreviewApi {
             );
           }),
         );
+    });
+  }
+
+  download(
+    scope: CatalogRevisionScope,
+    runId: string,
+    output: PreviewOutput,
+    current: () => void,
+    progress: (received: number) => void,
+  ): Observable<Blob> {
+    return this.request(scope, (generation) => {
+      if (!isCatalogId(runId) || !outputDescriptor(output))
+        throw new PreviewError("invalidLink");
+      return new Observable<Blob>((subscriber) => {
+        const controller = new AbortController();
+        const check = () => {
+          this.current(generation);
+          current();
+        };
+        const timer = setTimeout(
+          () => subscriber.error(new PreviewError("timedOut")),
+          30000,
+        );
+        verifiedDownload(
+          `${runPath(scope, runId)}/outputs/${output.ordinal}`,
+          output,
+          controller.signal,
+          check,
+          progress,
+        )
+          .then((blob) => {
+            check();
+            subscriber.next(blob);
+            subscriber.complete();
+          })
+          .catch((error) => subscriber.error(error));
+        return () => {
+          clearTimeout(timer);
+          controller.abort();
+        };
+      });
     });
   }
 
