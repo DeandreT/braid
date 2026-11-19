@@ -12,6 +12,40 @@ namespace Braid.Tests;
 [Collection(PostgresCollection.Name)]
 public sealed class PostgresRegressionRunTests(PostgresFixture fixture)
 {
+    [NativeShipmentPilotFact]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public async Task Canonical_XML_reopens_the_pinned_case_and_retains_the_original_observation()
+    {
+        var root = FerruleServiceTestSupport.TemporaryRoot();
+        try
+        {
+            var options = FerruleCompiledServiceTests.Options(root);
+            await using var runner = new Braid.MappingBackends.Workers.ProcessCompiledRuntimeRunner(new(options.NativeIdentity,
+                options.RuntimeAssembly, options.LauncherExecutable, root, options.DotnetRoot)
+                { Operation = Braid.MappingBackends.Workers.CompiledRuntimeOperation.XmlCanonicalComparison });
+            var worker = new SavedXmlComparison(new Braid.MappingBackends.XmlCanonicalComparisonWorker(runner, new(new(8192, 8), new(4096, 4096, 8192))));
+            var metadata = XmlDocumentMetadata.WithoutHints;
+            RegressionOutputSet Output(string xml) => RegressionOutputSet.Capture([RegressionOutput.Capture(RegressionOutputKey.Primary,
+                Encoding.UTF8.GetBytes(xml), mediaType: XmlDocumentPolicy.MediaType, xmlMetadata: metadata)]);
+            var observed = Output("<Order code=\"A\"></Order>");
+            await using var test = await Context.CreateAsync(fixture, nativeBytes: XmlPreviewWorkflowTests.Native, configure: old => new(
+                old.CaseId, 1, old.Owner, old.Name, old.Revision, old.NativeDigest,
+                new(old.Runtime.BackendId, old.Runtime.EngineRevision, old.Runtime.BackendBuild, Braid.MappingBackends.FerrulePreviewBackend.XmlAdapterBuild, XmlPreviewAdmission.Profile),
+                new(PreviewTargetSelection.Primary, old.Replay.CurrentDateTime, PreviewLimits.Default,
+                    new(null, XmlPreviewWorkflowTests.Input, xmlMetadata: metadata), [], []), SavedXmlComparison.Policy, Output("<Order code='A'/>")));
+            Assert.Equal(RegressionRunSubmitOutcome.Created, await test.SubmitAsync());
+            var comparison = await worker.CompareAsync(test.Value, MappingPreviewStatus.Succeeded, observed, default);
+            Assert.True(await test.CompleteAsync(await test.ClaimAsync(), RegressionCaseExecution.Complete(MappingPreviewStatus.Succeeded, observed, comparison, XmlPreviewAdmission.Profile)));
+            var reader = new RegressionRunReadService(test.Reader, test.Cases.Reader, worker);
+            var result = (await reader.ReadAsync(test.Actor, test.Organization, test.RunId))!.Result!;
+            Assert.Equal(SavedXmlComparison.Policy, result.Comparison!.Policy);
+            Assert.Equal(RegressionComparisonOutcome.Passed, result.Comparison.Outcome);
+            Assert.Equal(observed.Outputs[0].CopyBytes(), Assert.Single(result.Outputs!.Outputs).CopyBytes());
+            Assert.Equal(RegressionRunSubmitOutcome.Replayed, await test.SubmitAsync());
+            Assert.Null(await reader.ReadAsync(new(new PrincipalId(Guid.NewGuid())), test.Organization, test.RunId));
+        }
+        finally { Directory.Delete(root); }
+    }
     [PostgresFact]
     public async Task Document_case_and_run_retain_media_options_and_recompute_after_storage()
     {
