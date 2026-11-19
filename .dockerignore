@@ -1,9 +1,9 @@
 # The container build context is the repository root; send only image inputs.
 **
-!.npmrc
+!bunfig.toml
 !global.json
 !package.json
-!package-lock.json
+!bun.lock
 !apps/web/
 !deploy/container/
 !dotnet/

@@ -118,8 +118,8 @@ export type Input = {
   organization: string;
   assets: string[];
   home: string;
-  node: string;
-  nodeSha256: string;
+  bun: string;
+  bunSha256: string;
   proxy: string;
   chromium: string;
   chromiumSha256: string;
@@ -186,8 +186,8 @@ export function input(): Input {
     "organization",
     "assets",
     "home",
-    "node",
-    "nodeSha256",
+    "bun",
+    "bunSha256",
     "chromium",
     "chromiumSha256",
     "proxy",
@@ -199,8 +199,8 @@ export function input(): Input {
     "scenario",
     "organization",
     "home",
-    "node",
-    "nodeSha256",
+    "bun",
+    "bunSha256",
     "chromium",
     "chromiumSha256",
     "proxy",
@@ -239,7 +239,7 @@ export function input(): Input {
   );
   requireOwned(
     process.env.HOME === result.home &&
-      realpathSync(process.execPath) === result.node,
+      realpathSync(process.execPath) === result.bun,
   );
   const proxy = new URL(result.proxy);
   requireOwned(
@@ -254,7 +254,7 @@ export function input(): Input {
       !proxy.hash,
   );
   requireOwned(
-    digest(readFileSync(result.node)) === result.nodeSha256 &&
+    digest(readFileSync(result.bun)) === result.bunSha256 &&
       digest(readFileSync(result.chromium)) === result.chromiumSha256,
   );
   return result;

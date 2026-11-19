@@ -488,7 +488,7 @@ await runBrowserFixture({
         "SELECT coalesce(json_agg(row_to_json(a)),'[]'::json) FROM braid.revision_derivation_attempts a WHERE " +
           scopeSql(records.pending.scope),
       );
-    // This independent Node-core watchdog cannot be delayed by the owner's synchronous SQL child.
+    // This independent watchdog cannot be delayed by the owner's synchronous SQL child.
     // Its sole authority is SIGCONT of the captured same PID/start ticks; no credentials or environment dump.
     const watchdogSource = `import {readFileSync} from 'node:fs';
       const pid=Number(process.argv[1]),start=process.argv[2];
@@ -542,13 +542,7 @@ await runBrowserFixture({
       const identity = ownedChild(host);
       const watcher = spawn(
         process.execPath,
-        [
-          "--input-type=module",
-          "--eval",
-          watchdogSource,
-          String(host.child.pid),
-          identity.startTicks,
-        ],
+        ["--eval", watchdogSource, String(host.child.pid), identity.startTicks],
         { stdio: ["pipe", "pipe", "ignore"], env: { PATH: process.env.PATH } },
       );
       pending.watch = watcher;

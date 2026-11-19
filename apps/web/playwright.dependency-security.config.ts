@@ -19,7 +19,7 @@ export default defineConfig({
   },
   webServer: {
     command:
-      "node ../../node_modules/@angular/cli/bin/ng.js serve --host 127.0.0.1 --port 5237 --proxy-config proxy.synthetic.conf.json --no-hmr --live-reload=false",
+      "bun ../../node_modules/@angular/cli/bin/ng.js serve --host 127.0.0.1 --port 5237 --proxy-config proxy.synthetic.conf.json --no-hmr --live-reload=false",
     url: "http://127.0.0.1:5237",
     reuseExistingServer: false,
     timeout: 120_000,

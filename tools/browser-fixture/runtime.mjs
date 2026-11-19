@@ -1,4 +1,4 @@
-// Root-operated browser fixture. Node core only; no product or historical operator imports.
+// Root-operated browser fixture. Standard library only; no product or historical operator imports.
 // Configuration, journals and child output stay outside repositories and publications.
 import { spawn, execFileSync } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";

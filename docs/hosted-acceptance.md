@@ -126,7 +126,7 @@ a new conversation.
 ## Running it
 
 For explicit provider emulation, set `BRAID_ACCEPTANCE_MODEL_FIXTURE=true`. The
-test-only Node service implements the Ollama wire protocol and requests the real
+test-only service implements the Ollama wire protocol and requests the real
 workspace catalog or payload tool (and `search_mapping` for revision
 chat); the application still retrieves and verifies its own
 evidence and citations. No model cache or Ollama image is used in this mode.
@@ -136,7 +136,7 @@ described below.
 Prerequisites:
 
 - Docker with BuildKit (`docker buildx`), which `engines/ferrule-host` requires.
-- `npm ci` in the repository and `BRAID_CHROMIUM_EXECUTABLE` naming a Chromium build.
+- Bun 1.4.5, `bun install --frozen-lockfile` at the repository root, and `BRAID_CHROMIUM_EXECUTABLE` naming a Chromium build.
 - A Docker volume holding an Ollama model cache with a chat model that supports tool calls,
   by default `braid-ollama-models` with `qwen2.5:1.5b`:
 
@@ -155,7 +155,7 @@ deploy/compose/acceptance-test.sh
 | `BRAID_ACCEPTANCE_BROWSER_WRAPPER` | Command prefix for the browser run, for example `xvfb-run -a`. |
 | `BRAID_ACCEPTANCE_MODEL_FIXTURE` | Explicit `true` selects the deterministic provider emulator; the default is `false`. |
 | `BRAID_ACCEPTANCE_OLLAMA_VOLUME`, `BRAID_ACCEPTANCE_CHAT_MODEL` | The model cache volume and model name. |
-| `BRAID_ACCEPTANCE_NODE_IMAGE` | The Node image for the issuer, the relays and the model fixture (pinned by digest by default). |
+| `BRAID_ACCEPTANCE_BUN_IMAGE` | The Bun image for the issuer, the relays and the model fixture (pinned by digest by default). |
 | `BRAID_FERRULE_NATIVE_IMAGE` | A tag or registry digest of an `engines/ferrule-host` build to use instead of building it. |
 | `BRAID_IMAGE`, `BRAID_EDGE_IMAGE`, `BRAID_WORKER_IMAGE`, `BRAID_FERRULE_SERVICE_IMAGE` | Prebuilt images to use instead of building them; they are not removed. |
 | `BRAID_ACCEPTANCE_LOG_DIRECTORY` | On failure, keep the service logs and the browser failure context there. |

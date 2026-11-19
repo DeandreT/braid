@@ -1,6 +1,6 @@
 # Mapping metadata browser fixture
 
-This Node-core fixture tests the mapping metadata editor against the packaged
+This Bun fixture tests the mapping metadata editor against the packaged
 host. It imports the shared browser-fixture runtime. All metadata PATCH requests
 originate in the browser.
 
@@ -21,11 +21,11 @@ schema prefixes `braid.mapping-metadata-browser-operator-config.v1` and
 pins and exact daemon. Its source manifest must include this operator and shared
 runtime; `operatorSha256` binds this entrypoint. All three ordinary publication
 maps are required. Choose two distinct concrete loopback origins once; no fallback
-or retarget. Node-only variables are `BRAID_MAPPING_METADATA_BROWSER_OPERATOR`,
+or retarget. Host-side variables are `BRAID_MAPPING_METADATA_BROWSER_OPERATOR`,
 `BRAID_MAPPING_METADATA_BROWSER_OPERATOR_CONFIG`,
 `BRAID_MAPPING_METADATA_BROWSER_MANIFEST`, `BRAID_MAPPING_METADATA_BASE_URL`.
 The last two equal private config. The browser owner spawns
-`node [absoluteOperator, '--config', privateConfig]` with private pipes.
+`bun <absoluteOperator> --config <privateConfig>` with private pipes.
 
 Setup provisions Administrator/Publisher/Runner/Viewer project roles,
 initializes strict v2 storage and uploads a primary basic mapping and
@@ -88,7 +88,7 @@ relation+column/routine/default ACL evidence, migration journal and private inod
 mode/byte identities. Checkpoints, pre-control admission and cleanup require exact
 equality; they do not adopt unacknowledged edits or compare counts alone.
 
-After EACH actual200 PATCH, the browser Node owner privately validates actual
+After EACH actual200 PATCH, the browser fixture privately validates actual
 scope/body/strong ETag and accepted strings, then awaits capture-edit BEFORE any
 next owner action/checkpoint. The operator checks DB text hashes and exact version,
 then permits only primary name/description/version/updated_at. Changed text must
@@ -116,9 +116,9 @@ including credentials/ACLs/journal/files, before advancing.
 
 Two browser contexts loaded at one actual tag prove the second CAS412, retained
 draft and explicit Review latest/resubmit; no automatic PATCH. For final authority
-recheck, Node holds the actual request before forwarding after fresh admission,
+recheck, the fixture holds the actual request before forwarding after fresh admission,
 commits the fixed role change, then observes the real opaque404/no mutation. For
-response loss, Node forwards the PATCH once, validates its completed200, captures
+response loss, the fixture forwards the PATCH once, validates its completed200, captures
 that exact delta, THEN aborts delivery to the page. The page stays uncertain and
 reconciles through deliberate GET only; matching current values are not an edit
 acknowledgement or receipt. This is browser delivery loss, not DB COMMIT-ACK loss.

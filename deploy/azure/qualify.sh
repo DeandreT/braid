@@ -616,7 +616,7 @@ read -r -a grant_arguments <<<"$(deployment_output braid-qualify-endpoints mappi
   fail endpoint-deployed 'the deployment did not report the endpoint origin and its grant'
 pass endpoint-deployed "$(evidence app "$endpoint_app" origin "$origin" target "$target")"
 
-node_image=$(sed -nE 's/^ARG NODE_IMAGE=(.+)$/\1/p' "$source_tree/deploy/container/Dockerfile")
+bun_image=$(sed -nE 's/^ARG BUN_IMAGE=(.+)$/\1/p' "$source_tree/deploy/container/Dockerfile")
 # The caller job holds the current tokens as secure deployment parameters, written to a private file.
 deploy_caller() {
   jq -n --rawfile caller "$work/caller.token" --rawfile foreign "$work/foreign.token" --rawfile expiring "$work/expiring.token" \
@@ -625,7 +625,7 @@ deploy_caller() {
     >"$work/caller-parameters.json"
   azg deployment group create --name braid-qualify-caller \
     --template-file "$source_tree/deploy/azure/qualification/caller.bicep" --parameters "@$work/caller-parameters.json" \
-    --parameters "name=$caller_job" "environmentName=$prefix-env" "image=$node_image" "tags=$tags_json" --output none
+    --parameters "name=$caller_job" "environmentName=$prefix-env" "image=$bun_image" "tags=$tags_json" --output none
   rm -f -- "$work/caller-parameters.json"
 }
 deploy_caller

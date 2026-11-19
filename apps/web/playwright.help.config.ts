@@ -19,7 +19,7 @@ export default defineConfig({
   webServer: {
     // No API proxy: every request is answered by the synthetic routes or fails.
     command:
-      "node ../../node_modules/@angular/cli/bin/ng.js serve --host 127.0.0.1 --port 5187 --no-hmr",
+      "bun ../../node_modules/@angular/cli/bin/ng.js serve --host 127.0.0.1 --port 5187 --no-hmr",
     url: "http://127.0.0.1:5187",
     reuseExistingServer: false,
     timeout: 120000,

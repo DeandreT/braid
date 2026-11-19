@@ -2,12 +2,12 @@
 # acceptance relays: non-root, read-only, no capabilities, on the internal models network only.
 services:
   model:
-    image: ${BRAID_ACCEPTANCE_NODE_IMAGE:?Set the pinned Node image}
+    image: ${BRAID_ACCEPTANCE_BUN_IMAGE:?Set the pinned Bun image}
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     user: "65532:65532"
-    command: [node, /opt/acceptance/model.mjs]
+    command: [bun, /opt/acceptance/model.mjs]
     environment:
       BRAID_ACCEPTANCE_CHAT_MODEL: ${BRAID_ACCEPTANCE_CHAT_MODEL:-braid-fixture}
     volumes: !override
@@ -16,7 +16,7 @@ services:
       test:
         [
           CMD,
-          node,
+          bun,
           -e,
           "fetch('http://127.0.0.1:11434/api/tags').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
         ]

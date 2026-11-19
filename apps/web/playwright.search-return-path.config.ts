@@ -16,7 +16,7 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: {
-    command: "npm run dev -- --port 5184 --no-hmr",
+    command: "bun run dev --port 5184 --no-hmr",
     url: "http://127.0.0.1:5184",
     reuseExistingServer: false,
     gracefulShutdown: { signal: "SIGTERM", timeout: 15000 },

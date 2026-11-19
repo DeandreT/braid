@@ -60,7 +60,7 @@ a complete private persistence baseline; no-op saves must change nothing.
 An explicit native append separately checks that metadata validators remain
 unchanged.
 
-Run `npm run test:mapping-metadata-browser` with the fixture's explicit private
+Run `bun run test:mapping-metadata-browser` with the fixture's explicit private
 bindings and pinned browser. The script uses an alternate virtual display.
 
 The actual metadata scenario mediates each already-allowlisted browser GET through

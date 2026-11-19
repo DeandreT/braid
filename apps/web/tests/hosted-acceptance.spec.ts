@@ -460,13 +460,11 @@ async function generate(
   const reports = target.getByRole("region", { name: "Saved reports" });
   await settleReports(reports);
   if (await done.isVisible()) return;
-  const disclosure = reports
-    .locator("details")
-    .filter({
-      has: reports
-        .page()
-        .getByText("Report controls and evidence", { exact: true }),
-    });
+  const disclosure = reports.locator("details").filter({
+    has: reports
+      .page()
+      .getByText("Report controls and evidence", { exact: true }),
+  });
   if (
     !(await disclosure.evaluate(
       (element) => (element as HTMLDetailsElement).open,

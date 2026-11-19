@@ -16,7 +16,7 @@ The exact existing config/source/manifest/admission/three-publication closure
 maps, hash-bound outer observer admission, fixed worker/PG images, owned0700
 private directory and0600 config/release requirements apply unchanged.
 
-Spawn with Node `[operator, '--config', configuration]`. Node-only settings are:
+Start the operator with `bun <operator> --config <configuration>`. Host-side settings are:
 
 - `BRAID_NATIVE_MAPPING_UPLOAD_BROWSER_OPERATOR`: absolute reviewed operator.
 - `BRAID_NATIVE_MAPPING_UPLOAD_BROWSER_OPERATOR_CONFIG`: private0600 config.
@@ -124,14 +124,14 @@ well as by digest/length. New native inode is queried as text, with actual
 mount/device/data-parent identity checks; no unsafe inode Number conversion.
 Absence and Bound seal hashes match durable registry facts. Full seal validity
 is also provided by the unchanged checked v2 publication path before its
-actual terminal response; no new Node seal decoder claims independent parsing.
+actual terminal response; the fixture does not independently decode the seal.
 No additional stage/temp/fence/path is silently excluded.
 
 Current minus only the identified additions must equal the retained trusted
 snapshot (all other rows, heads, reports, journal, roles/passwords/memberships,
 object ACLs and every old file hash/inode/mode/link). A separate PostgreSQL
-ordered full-row digest preserves full numeric/timestamp precision before Node
-JSON conversion. Full-state hash is fixed BEFORE exclusion comparison and
+ordered full-row digest preserves full numeric/timestamp precision before the fixture
+converts the result to JSON. Full-state hash is fixed BEFORE exclusion comparison and
 rechecked before advance, so later unexplained state is not adopted. Every
 other owner control/checkpoint and final cleanup starts with full equality,
 including worker-create count. Fixed Publisher<->Viewer CAS advances only that
@@ -147,12 +147,12 @@ network/volume identities are normally settled by the inherited runtime.
 
 One shared automatic NativeMappingUploadOwner spans controlled and actual test
 files with global trace/video/screenshot off and no per-file worker options.
-Node holds bytes, keys, query, cookies/tokens and original response facts only
+The fixture holds bytes, keys, query, cookies/tokens and original response facts only
 in private memory. No raw native/request values are printed or attached.
 Owner HTTP observations record URL.pathname only. The public manifest and
 closed pipe never expose credentials or private storage references.
 
-Terminal own-receipt GET and source-free resume use Node/browser-owned product
+Terminal own-receipt GET and source-free resume use fixture/browser-owned product
 HTTP when the page has no terminal Resume. Pending/needsSource use controlled
 UI responses. The browser checks original-request recovery after response loss,
 exact-byte saves, permission changes, durability and immutable revision navigation.

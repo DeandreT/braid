@@ -121,8 +121,8 @@ button.
 ## Browser checks
 
 `apps/web/playwright.chat.config.ts` runs the focused synthetic API suite with an
-offscreen browser. From `apps/web`, run `npx playwright test --config
-playwright.chat.config.ts` using the repository's pinned Node/npm versions.
+offscreen browser. After the frozen install, run `bun run --cwd apps/web test:e2e
+--config playwright.chat.config.ts` from the repository root with Bun 1.4.5.
 These checks exercise standalone and shared-panel presentation, exact focus,
 revision-pinned continuation, profile/disclosure markers, current-owner fencing, request
 recovery, stream framing and revision/report-bound citation selection. The pure
@@ -146,9 +146,9 @@ and does not start a native worker.
 
 Build the frontend, publish `Braid.Server`, and build `Braid.Tests` at the same
 source revision. Prepare the existing owned-browser admission record with
-`tools/auth-browser-https/admit.mjs --approved`, pointing its server input at the
+`bun tools/auth-browser-https/admit.mjs --approved`, pointing its server input at the
 published server and `wwwroot` directory. The admission record pins the asset,
-Node and Chromium hashes. Under the full shared browser lock and an assigned
+Bun and Chromium hashes. Under the full shared browser lock and an assigned
 Xvfb display, set `BRAID_WORKSPACE_CHAT_BROWSER=true` and run only
 `ChatWorkspaceBrowserTests` with the admitted paths. The test requires the actual
 PostgreSQL fixture settings described in [development](development.md).

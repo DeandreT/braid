@@ -172,7 +172,7 @@ Private recovery state lives in tab memory; mutations are never retried automati
 The normal shipped Angular entry remains `src/main.ts`. The separately selected
 `browser-session-probe` build imports the actual application components/services
 through a test-only entry and produces a distinct, nonshipped publication.
-`npm run build:browser-session-probe` builds it; `npm run test:browser-session`
+`bun run build:browser-session-probe` builds it; `bun run test:browser-session`
 selects its controlled suite on an alternate virtual display.
 
 The controlled owner requires independently admitted, separate immutable app and

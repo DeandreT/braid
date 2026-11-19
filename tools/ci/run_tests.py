@@ -247,7 +247,7 @@ def require_prerequisites(groups: Sequence[str], assembly: Path) -> None:
         value("BRAID_WORKSPACE_CHAT_BROWSER", "true")
         require(bool(os.environ.get("DISPLAY")), "use the existing isolated browser owner with an assigned display")
         # The existing admission owner validates the exact published host, probe,
-        # node/npm/browser bytes and network custody. Never run admit.mjs here.
+        # Bun/browser bytes and network custody. Never run admit.mjs here.
     if requested & {"installed-documents", "installed-document-probes"}:
         installed_documents()
     if "installed-document-probes" in requested:

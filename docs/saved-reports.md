@@ -67,7 +67,7 @@ is a separate catalog action that resolves the mapping's latest revision once.
 
 ## Verification
 
-The report suite uses `npm run test:reports-browser` at the packaged API's exact
+The report suite uses `bun run test:reports-browser` at the packaged API's exact
 configured origin with disposable PostgreSQL, private storage and the pinned
 native worker. Its fixture instructions live in
 [the report browser tools](../tools/reports-browser/README.md). Actual mappings

@@ -28,7 +28,7 @@ export default defineConfig({
       ? `${process.env.BRAID_CHAT_UI_SOURCE}/apps/web`
       : undefined,
     command:
-      "npm run dev -- --port 5178 --proxy-config proxy.synthetic.conf.json --no-hmr",
+      "bun run dev --port 5178 --proxy-config proxy.synthetic.conf.json --no-hmr",
     url: "http://127.0.0.1:5178",
     reuseExistingServer: false,
     timeout: 120000,

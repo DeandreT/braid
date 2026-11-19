@@ -81,18 +81,18 @@ def main():
 
     tooling = Path('/srv/example-build/cache/braid-tooling')
     dotnet = tooling / 'dotnet/dotnet'
-    node = tooling / 'node-v22.23.3-linux-x64/bin/node'
+    bun = tooling / 'bun-1.4.5/bun-linux-x64/bun'
     home = tooling / 'browser-home'; home.mkdir(mode=0o700, exist_ok=True)
     temporary = private / 'build-temp'; temporary.mkdir(mode=0o700)
     packages = tooling / 'nuget'; packages.mkdir(mode=0o755, exist_ok=True)
-    environment = {'PATH': str(dotnet.parent) + ':' + str(node.parent) + ':/usr/bin:/bin', 'HOME': str(home),
+    environment = {'PATH': str(dotnet.parent) + ':' + str(bun.parent) + ':/usr/bin:/bin', 'HOME': str(home),
                    'TMPDIR': str(temporary), 'DOTNET_ROOT': str(dotnet.parent), 'DOTNET_CLI_HOME': str(home),
                    'DOTNET_ADD_GLOBAL_TOOLS_TO_PATH': 'false', 'DOTNET_NOLOGO': '1',
                    'DOTNET_SKIP_FIRST_TIME_EXPERIENCE': '1', 'DOTNET_CLI_TELEMETRY_OPTOUT': '1',
                    'DOTNET_PROCESSOR_COUNT': '2', 'MSBUILDDISABLENODEREUSE': '1',
                    'NUGET_PACKAGES': str(packages), 'NUGET_HTTP_CACHE_PATH': str(tooling / 'nuget-http'), 'LANG': 'C.UTF-8'}
     assert subprocess.check_output([str(dotnet), '--version'], env=environment, text=True).strip() == '10.0.112'
-    assert subprocess.check_output([str(node), '--version'], env=environment, text=True).strip() == 'v22.23.3'
+    assert subprocess.check_output([str(bun), '--version'], env=environment, text=True).strip() == '1.4.5'
     products = {}
     reused = None
     if data.get('reuseConfig'):
@@ -162,7 +162,7 @@ def main():
               'publications': {**products, 'admission': bound(product_admission)}}
     config_path = private / 'config.json'; private_json(config_path, config)
     result = {'fixtureId': data['fixtureId'], 'config': str(config_path), 'manifest': str(manifest_path),
-              'readOrigin': data['readOrigin'], 'node': str(node), 'dotnet': str(dotnet),
+              'readOrigin': data['readOrigin'], 'bun': str(bun), 'dotnet': str(dotnet),
               'operator': str(source / ('tools/' + ('build' if scenario == 'build' else 'regression') + '-browser/operator.mjs')),
               'launcher': str(source / 'tools/regression-browser/run_linux.py'), 'privateRoot': str(private)}
     Path(data['result']).write_text(json.dumps(result) + '\n')

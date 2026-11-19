@@ -23,7 +23,9 @@
   @if (presented()) {
     <fieldset [disabled]="busy() || !contexts.settled()">
       @if (organization(); as snapshot) {
-        <a class="catalog-button" [routerLink]="selection.link('/retention')">Data retention</a>
+        <a class="catalog-button" [routerLink]="selection.link('/retention')"
+          >Data retention</a
+        >
         <h2>Organization members</h2>
         <div class="table-scroll">
           <table>

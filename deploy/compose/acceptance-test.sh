@@ -89,12 +89,13 @@ fail() {
 }
 
 # A dedicated client stage can qualify itself on the same packaged stack without borrowing a browser.
+[[ $(bun --version) == "$(<"$repository/.bun-version")" ]] || fail 'Install the Bun version pinned in .bun-version.'
 case ${BRAID_ACCEPTANCE_STAGE_ONLY:-false} in
   true) [[ -x ${BRAID_ACCEPTANCE_STAGE:-} && -z ${BRAID_ACCEPTANCE_HOLD:-} ]] ||
     fail 'Stage-only acceptance requires an executable BRAID_ACCEPTANCE_STAGE and no hold.' ;;
   false)
     [[ -x ${BRAID_CHROMIUM_EXECUTABLE:-} ]] || fail 'Set BRAID_CHROMIUM_EXECUTABLE to a Chromium executable.'
-    [[ -d $repository/node_modules/@playwright/test ]] || fail 'Run npm ci in the repository first.' ;;
+    [[ -d $repository/node_modules/@playwright/test ]] || fail 'Run bun install --frozen-lockfile in the repository first.' ;;
   *) fail 'BRAID_ACCEPTANCE_STAGE_ONLY must be true or false' ;;
 esac
 export BRAID_ACCEPTANCE_OLLAMA_VOLUME=${BRAID_ACCEPTANCE_OLLAMA_VOLUME:-braid-ollama-models}
@@ -105,7 +106,7 @@ case ${BRAID_ACCEPTANCE_MODEL_FIXTURE:-false} in
   true) export BRAID_ACCEPTANCE_MODEL_FIXTURE=true ;;
   *) fail 'BRAID_ACCEPTANCE_MODEL_FIXTURE must be true or false' ;;
 esac
-export BRAID_ACCEPTANCE_NODE_IMAGE=${BRAID_ACCEPTANCE_NODE_IMAGE:-docker.io/library/node@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392}
+export BRAID_ACCEPTANCE_BUN_IMAGE=${BRAID_ACCEPTANCE_BUN_IMAGE:-$(sed -nE 's/^ARG BUN_IMAGE=(.+)$/\1/p' "$repository/deploy/container/Dockerfile")}
 
 build() {
   local tag=$1
@@ -194,7 +195,7 @@ BRAID_FERRULE_SERVICE_IDENTITY=sha256:$worker_digest
 docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
   --label "com.docker.compose.project=$project" --tmpfs /tmp:size=256m,mode=1777 \
   --memory 3g --pids-limit 256 "$BRAID_FERRULE_SERVICE_IMAGE" identity >"$work/compiler-identity.json"
-BRAID_FERRULE_COMPILE_TOOLCHAIN=$(node -e '
+BRAID_FERRULE_COMPILE_TOOLCHAIN=$(bun -e '
   const fs = require("node:fs");
   const value = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
   const pin = /^sha256:[a-f0-9]{64}$/;
@@ -296,7 +297,7 @@ else
   echo 'Running the browser flows'
   # An optional command prefix for the browser run, for example a virtual display or a lock.
   read -r -a wrapper <<<"${BRAID_ACCEPTANCE_BROWSER_WRAPPER:-}"
-  (cd "$repository/apps/web" && "${wrapper[@]}" npx playwright test --config playwright.hosted-acceptance.config.ts) ||
+  (cd "$repository/apps/web" && "${wrapper[@]}" bun run test:e2e --config playwright.hosted-acceptance.config.ts) ||
     fail 'browser flows'
   # Each use of the application's own recovery controls on a slow host, the chat attempts the
   # local model needed for a turn with a tool call and verified citations, and the attempt that

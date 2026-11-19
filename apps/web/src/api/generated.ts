@@ -1,6 +1,6 @@
 /**
  * Generated from contracts/braid-v1.json. Do not edit manually.
- * Refresh with: npm run contracts:generate
+ * Refresh with: bun run contracts:generate
  */
 export interface paths {
   "/api/auth/callback/entra": {
@@ -3137,6 +3137,7 @@ export interface components {
       format: string;
       kind: string;
       name: null | string;
+      xmlMetadata?: null | components["schemas"]["XmlDocumentMetadataV1"];
     };
     BuildCapabilitiesV1: {
       approveBuilds: boolean;
@@ -3149,6 +3150,7 @@ export interface components {
       profile: components["schemas"]["BuildRuntimeV1"];
       readOwnMetadata: boolean;
       submitBuilds: boolean;
+      xmlProfile?: null | components["schemas"]["BuildRuntimeV1"];
     };
     BuildCsvDialectV1: {
       delimiter: string;
@@ -3165,6 +3167,7 @@ export interface components {
       documentProfile?: null | components["schemas"]["BuildRuntimeV1"];
       interchangeProfile?: null | components["schemas"]["BuildRuntimeV1"];
       profile: components["schemas"]["BuildRuntimeV1"];
+      xmlProfile?: null | components["schemas"]["BuildRuntimeV1"];
     };
     BuildEnvironmentPageV1: {
       environments: components["schemas"]["BuildEnvironmentV1"][];

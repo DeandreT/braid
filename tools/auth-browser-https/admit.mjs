@@ -56,8 +56,8 @@ try {
     process.env.BRAID_HOST_TEST_SERVER_PATH ?? "",
   );
   const chromium = ordinary(process.env.BRAID_CHROMIUM_EXECUTABLE ?? "");
-  const node = ordinary(process.execPath),
-    npm = executable("npm"),
+  demand(process.versions.bun === "1.4.5");
+  const bun = ordinary(process.execPath),
     certutil = executable("certutil");
   // Required existing Xvfb lane tools, without executing or silently installing them.
   executable("xvfb-run");
@@ -118,10 +118,8 @@ try {
     serverAssembly,
     serverSha256: hash(readFileSync(serverAssembly)),
     assets,
-    node,
-    nodeSha256: hash(readFileSync(node)),
-    npm,
-    npmSha256: hash(readFileSync(npm)),
+    bun,
+    bunSha256: hash(readFileSync(bun)),
     chromium,
     chromiumSha256: hash(readFileSync(chromium)),
     certutil,

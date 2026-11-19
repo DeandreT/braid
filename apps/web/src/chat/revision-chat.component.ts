@@ -86,7 +86,12 @@ interface ProposalReviewState {
 
 @Component({
   selector: "braid-revision-chat",
-  imports: [DeleteItemComponent, HelpLinkComponent, RouterLink, RegressionStatusComponent],
+  imports: [
+    DeleteItemComponent,
+    HelpLinkComponent,
+    RouterLink,
+    RegressionStatusComponent,
+  ],
   templateUrl: "./revision-chat.component.html",
   styleUrl: "./revision-chat.component.css",
 })

@@ -5,7 +5,7 @@
 #   docker build -f deploy/container/Dockerfile --target braid-mapping-endpoint -t braid-mapping-endpoint:local .
 # See docs/runtime-packaging.md. Every base image is pinned by digest.
 
-ARG NODE_IMAGE=docker.io/library/node:22.23.3-bookworm-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392
+ARG BUN_IMAGE=docker.io/oven/bun:1.4.5-slim@sha256:b780593f3e10918cbdaec3d5a08d52224b9198069a65eb47812085c2ec007643
 ARG ASPNET_IMAGE=mcr.microsoft.com/dotnet/aspnet:10.0.12-noble@sha256:222759b391a1aaf241166672c8f99b2d4ada452e7b5319f3c6e8f265a37b5ad4
 ARG CADDY_IMAGE=docker.io/library/caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
 ARG DOCKER_CLI_IMAGE=docker.io/library/docker:29.8.1-cli@sha256:018edbc908e08fcc9dbf029c812c34251e9b4719e6f71ca0e5eae2a987d014ca
@@ -31,17 +31,16 @@ COPY engines/ferrule-edit-wasm engines/ferrule-edit-wasm
 COPY tools/edit-core tools/edit-core
 RUN python3 tools/edit-core/build.py --install --destination /package/edit --manifest /package/edit-assets.generated.ts
 
-FROM ${NODE_IMAGE} AS web
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 NPM_CONFIG_UPDATE_NOTIFIER=false NPM_CONFIG_FUND=false NPM_CONFIG_AUDIT=false NG_BUILD_MAX_WORKERS=2
-RUN npm install --global npm@12.1.0
+FROM ${BUN_IMAGE} AS web
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 NG_BUILD_MAX_WORKERS=2
 WORKDIR /src
-COPY package.json package-lock.json .npmrc ./
+COPY package.json bun.lock bunfig.toml ./
 COPY apps/web/package.json apps/web/package.json
-RUN npm ci
+RUN bun install --frozen-lockfile
 COPY apps/web apps/web
 COPY --from=edit-assets /package/edit apps/web/public/edit
 COPY --from=edit-assets /package/edit-assets.generated.ts apps/web/src/edit/edit-assets.generated.ts
-RUN npm run build
+RUN bun run build
 
 FROM ${ASPNET_IMAGE} AS build
 # The pinned SDK band is published as an archive, not as an SDK image.

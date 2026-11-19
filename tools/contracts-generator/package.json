@@ -2,10 +2,11 @@
   "name": "@braid/contracts-generator",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "bun@1.4.5",
   "type": "module",
   "scripts": {
-    "generate": "node generate.mjs",
-    "check": "node generate.mjs --check"
+    "generate": "bun generate.mjs",
+    "check": "bun generate.mjs --check"
   },
   "devDependencies": {
     "openapi-typescript": "7.13.0",

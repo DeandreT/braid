@@ -26,7 +26,7 @@ to generate and review a mapping. For server setup, see
 
 ## Verification
 
-The maintained browser lane is `npm run test:spec-intake-browser`. It covers
+The maintained browser lane is `bun run test:spec-intake-browser`. It covers
 capability discovery, structural uploads, Partial/refusal evidence, recovery and
 access fencing using controlled API responses. It also checks page navigation,
 pasted text, citation rendering, reload, deletion, CAS replay, lost-response
@@ -34,4 +34,4 @@ inventory reconciliation, identity changes, auth failures, mobile overflow and
 accessibility. Run browser checks through the isolated-display procedure in
 [development](development.md).
 
-Run `npm run test:spec-intake-browser` with the pinned Node/npm toolchain and `BRAID_CHROMIUM_EXECUTABLE` when using a separately installed Chromium. Root and contracts-generator dependencies use their existing lockfiles via `npm ci`.
+Use Bun 1.4.5 and the [frozen install commands](development.md#manual-hosting-and-frontend-development). Run `bun run test:spec-intake-browser` from the repository root. Set `BRAID_CHROMIUM_EXECUTABLE` when using a separately installed Chromium.

@@ -13,7 +13,7 @@ interface Binding {
   config: string;
   manifest: string;
   readOrigin: string;
-  node: string;
+  bun: string;
   dotnet: string;
   operator: string;
   launcher?: string;
@@ -64,7 +64,7 @@ export class ExecutionOwner<M extends ExecutionManifest = ExecutionManifest> {
         "PATH=" +
           b.dotnet.slice(0, b.dotnet.lastIndexOf("/")) +
           ":" +
-          b.node.slice(0, b.node.lastIndexOf("/")) +
+          b.bun.slice(0, b.bun.lastIndexOf("/")) +
           ":/usr/bin:/bin",
         "DOTNET_ROOT=" + b.dotnet.slice(0, b.dotnet.lastIndexOf("/")),
         "DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=false",
@@ -77,7 +77,7 @@ export class ExecutionOwner<M extends ExecutionManifest = ExecutionManifest> {
         "-B",
         b.launcher || b.operator.replace(/operator\.mjs$/, "run_linux.py"),
         b.config,
-        b.node,
+        b.bun,
         b.operator,
       ],
       { stdio: "pipe", windowsHide: true },

@@ -4,7 +4,7 @@ import { format } from "prettier";
 
 const args = process.argv.slice(2);
 if (args.length > 1 || (args.length === 1 && args[0] !== "--check")) {
-  console.error("Usage: node tools/contracts-generator/generate.mjs [--check]");
+  console.error("Usage: bun tools/contracts-generator/generate.mjs [--check]");
   process.exit(1);
 }
 
@@ -13,7 +13,7 @@ const directory = new URL("../../apps/web/src/api/", import.meta.url);
 const output = new URL("generated.ts", directory);
 const header = `/**
  * Generated from contracts/braid-v1.json. Do not edit manually.
- * Refresh with: npm run contracts:generate
+ * Refresh with: bun run contracts:generate
  */
 `;
 const ast = await openapiTS(schema, { alphabetize: true });
@@ -30,7 +30,7 @@ if (args[0] === "--check") {
   }
   if (current !== generated) {
     console.error(
-      "Angular API types are missing or stale. Run npm run contracts:generate.",
+      "Angular API types are missing or stale. Run bun run contracts:generate.",
     );
     process.exitCode = 1;
   } else {

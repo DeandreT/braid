@@ -127,10 +127,10 @@ toolchain and wasm-bindgen 0.2.129. `tools/edit-core/package-assets.py` checks t
 wasm import allowlist, refuses qualification exports, copies the `/edit/` assets
 and generates the Angular integrity manifest. Build and package the module before
 the Angular build. Generated binaries stay outside Git. The separate qualification
-module exposes checkpoint digests only for native/Node/Chromium equivalence tests.
+module exposes checkpoint digests only for native/Bun/Chromium equivalence tests.
 
 The live acceptance harness reuses the owned preview fixture with `--editing`:
-`node tools/preview-browser/run.mjs --editing --publications <published-hosts> --worker-image sha256:<qualified-image>`.
+`bun tools/preview-browser/run.mjs --editing --publications <published-hosts> --worker-image sha256:<qualified-image>`.
 Run it under the environment's isolated virtual display and browser-resource lock.
 It owns and removes its PostgreSQL container, network, volumes, private storage and
 host processes; it never connects to an existing application database.

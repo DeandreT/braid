@@ -111,7 +111,7 @@ deadline, memory and isolation policy; only request/response frame limits differ
 `engines/ferrule-edit-wasm` exports session open/apply/undo/redo and a typed view.
 The page does not receive an encoder API. Its separate qualification build exposes
 a checkpoint digest and reports, allowing `tools/edit-core/cross-target.mjs` to
-compare actual Node wasm execution with the native worker. The import check
+compare actual Bun WASM execution with the native worker. The import check
 verifies both import names and their generated implementations, allowing only
 wasm-bindgen's error throw and error-string conversion intrinsics.
 

@@ -59,7 +59,7 @@ failure and never a synthetic empty-success response or direct-save fallback.
 
 ## Local verification
 
-Use the pinned Node/npm toolchain, `npm ci --ignore-scripts`, the project checks
+Use Bun 1.4.5, `bun install --frozen-lockfile --ignore-scripts`, the project checks
 and production build. Pure tests are in `mapping-proposal-types.spec.ts`;
 browser tests are in `chat-proposal-review.spec.ts` and `chat-mapping-writes.spec.ts`.
 

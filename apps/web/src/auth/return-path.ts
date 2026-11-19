@@ -92,7 +92,8 @@ export function isReturnPath(value: unknown): value is string {
 }
 
 function allowedQuery(path: string[], values: Map<string, string>): boolean {
-  if (path[0] === "retention" || path[0] === "quotas") return path.length === 1 && values.size === 0;
+  if (path[0] === "retention" || path[0] === "quotas")
+    return path.length === 1 && values.size === 0;
   if (path[0] === "usage") return path.length === 1 && values.size === 0;
   if (path[0] === "audit") return path.length === 1 && values.size === 0;
   if (path.length === 1 && path[0] === "chat") {
@@ -255,9 +256,16 @@ function unqualified(path: string[]): string[] | null {
   if (path[0] === "organizations") {
     const rest = path.slice(2);
     return id(path[1] ?? "") &&
-      ["chat", "chat/resources", "notifications", "administration", "audit", "usage", "quotas", "retention"].includes(
-        rest.join("/"),
-      )
+      [
+        "chat",
+        "chat/resources",
+        "notifications",
+        "administration",
+        "audit",
+        "usage",
+        "quotas",
+        "retention",
+      ].includes(rest.join("/"))
       ? rest
       : null;
   }

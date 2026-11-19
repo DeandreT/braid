@@ -15,7 +15,7 @@ export default defineConfig({
   },
   webServer: {
     command:
-      "npm run dev -- --port 5189 --proxy-config proxy.synthetic.conf.json --no-hmr",
+      "bun run dev --port 5189 --proxy-config proxy.synthetic.conf.json --no-hmr",
     url: "http://127.0.0.1:5189",
     reuseExistingServer: false,
     timeout: 120000,

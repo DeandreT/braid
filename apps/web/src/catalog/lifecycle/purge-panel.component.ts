@@ -65,7 +65,9 @@ import {
         </p>
         @if (review.body.activeReleases !== "0") {
           <p role="alert">
-            {{ review.body.activeReleases }} release targets still retain this scope through an active release, pinned order, trigger, or replica. Retirement alone may not clear this hold.
+            {{ review.body.activeReleases }} release targets still retain this
+            scope through an active release, pinned order, trigger, or replica.
+            Retirement alone may not clear this hold.
           </p>
         } @else if (review.body.confirmation) {
           <label>

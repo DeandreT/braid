@@ -103,16 +103,23 @@ async function install(page: Page, session = false) {
               : { mode: "development" }),
         },
       });
+    const catalog = session
+      ? {
+          ...context,
+          mode: "session",
+          identityContext: fixture.identityContext,
+          actorPrincipalId: fixture.actor,
+        }
+      : context;
     if (url.pathname === "/api/v1/catalog/context")
+      return route.fulfill({ json: catalog });
+    if (url.pathname === `/api/v1/organizations/${org}/context`)
       return route.fulfill({
-        json: session
-          ? {
-              ...context,
-              mode: "session",
-              identityContext: fixture.identityContext,
-              actorPrincipalId: fixture.actor,
-            }
-          : context,
+        json: {
+          schemaVersion: "braid.organization-context.v1",
+          admissionVersion: "1",
+          catalog,
+        },
       });
     if (url.pathname === "/api/v1/health")
       return route.fulfill({
@@ -137,7 +144,7 @@ async function install(page: Page, session = false) {
         return route.fulfill({
           json: {
             invitationId: principal,
-            redemptionPath: "/invitations#" + "a".repeat(64),
+            redemptionPath: `/organizations/${org}/invitations#${"a".repeat(64)}`,
           },
         });
       return route.fulfill({ json: { outcome: "updated" } });
@@ -616,6 +623,10 @@ test("administration remains keyboard reachable without widening the mobile page
     page.getByRole("heading", { name: "Organization members", exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Refresh access" }).focus();
+  await page.keyboard.press("Tab");
+  await expect(
+    page.getByRole("link", { name: "Data retention" }),
+  ).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(
     page

@@ -34,7 +34,7 @@ public sealed class ChatWorkspaceBrowserTests(PostgresFixture fixture)
         var admission = PrivateQualificationFiles.Input<QualificationAdmission>(root, record);
         Assert.True(admission.Version == 1 && admission.Approved && admission.Root == root);
         Assert.True(Path.IsPathFullyQualified(admission.SourceRoot) && new DirectoryInfo(admission.SourceRoot).LinkTarget is null);
-        Check(admission.Node, admission.NodeSha256); Check(admission.Npm, admission.NpmSha256);
+        Check(admission.Bun, admission.BunSha256);
         Check(admission.Chromium, admission.ChromiumSha256); Check(admission.ServerAssembly, admission.ServerSha256);
         var web = Path.Combine(Path.GetDirectoryName(admission.ServerAssembly)!, "wwwroot");
         Assert.Contains("index.html", admission.Assets.Keys);
@@ -78,7 +78,7 @@ public sealed class ChatWorkspaceBrowserTests(PostgresFixture fixture)
         proxy.Target = api.Origin;
         using var child = new Process
         {
-            StartInfo = new ProcessStartInfo(admission.Npm)
+            StartInfo = new ProcessStartInfo(admission.Bun)
             {
                 WorkingDirectory = admission.SourceRoot,
                 UseShellExecute = false,
@@ -90,6 +90,7 @@ public sealed class ChatWorkspaceBrowserTests(PostgresFixture fixture)
         child.StartInfo.Environment.Clear();
         foreach (var name in new[] { "PATH", "LANG", "LC_ALL", "DISPLAY", "XAUTHORITY" })
             if (Environment.GetEnvironmentVariable(name) is { } value) child.StartInfo.Environment[name] = value;
+        child.StartInfo.Environment["PATH"] = Path.GetDirectoryName(admission.Bun) + ":" + (child.StartInfo.Environment["PATH"] ?? "/usr/bin:/bin");
         child.StartInfo.Environment["HOME"] = root;
         child.StartInfo.Environment["TMPDIR"] = root;
         child.StartInfo.Environment["DOTNET_ADD_GLOBAL_TOOLS_TO_PATH"] = "false";
@@ -97,7 +98,7 @@ public sealed class ChatWorkspaceBrowserTests(PostgresFixture fixture)
         child.StartInfo.Environment["BRAID_WORKSPACE_CHAT_ORIGIN"] = proxy.Origin.GetLeftPart(UriPartial.Authority);
         child.StartInfo.Environment["BRAID_WORKSPACE_CHAT_OUTPUT"] = Path.Combine(root, "chat-browser-output");
         child.StartInfo.Environment["BRAID_WORKSPACE_CHAT_REVISION_PATH"] = CatalogRevisionReportHttpTestSupport.RevisionPath(reports.Revision)["/api/v1".Length..].Insert(0, "/catalog");
-        foreach (var argument in new[] { "--workspace", "@braid/web", "run", "test:e2e", "--", "--config", "playwright.chat-real.config.ts" })
+        foreach (var argument in new[] { "run", "--cwd", "apps/web", "test:e2e", "--config", "playwright.chat-real.config.ts" })
             child.StartInfo.ArgumentList.Add(argument);
         Assert.True(child.Start());
         var stdout = child.StandardOutput.ReadToEndAsync();

@@ -4,14 +4,29 @@ import { test } from "node:test";
 
 // Exercise the dependencies actually resolved by the production forms and CLI
 // schema consumers. These tests use small synthetic values and never fetch URLs.
-const require = createRequire(import.meta.url);
-const formsRequire = createRequire(
-  require.resolve("@angular/forms/package.json"),
+const webRequire = createRequire(
+  new URL("../apps/web/package.json", import.meta.url),
 );
-const ajvRequire = createRequire(require.resolve("ajv"));
+const cliRequire = createRequire(
+  webRequire.resolve("@angular/cli/package.json"),
+);
+const devkitRequire = createRequire(cliRequire.resolve("@angular-devkit/core"));
+const formsRequire = createRequire(
+  webRequire.resolve("@angular/forms/package.json"),
+);
+const buildRequire = createRequire(
+  webRequire.resolve("@angular/build/package.json"),
+);
+const ajvRequire = createRequire(devkitRequire.resolve("ajv"));
 const { z } = formsRequire("zod");
 const uri = ajvRequire("fast-uri");
-const Ajv = require("ajv");
+const Ajv = devkitRequire("ajv");
+
+test("the Angular builder resolves the pinned Vite override", () => {
+  const { overrides } = webRequire("../../package.json");
+  assert.equal(typeof overrides.vite, "string");
+  assert.equal(buildRequire("vite/package.json").version, overrides.vite);
+});
 
 test("Zod preserves valid and invalid bounded-array validation", () => {
   const schema = z.array(z.string()).max(2);

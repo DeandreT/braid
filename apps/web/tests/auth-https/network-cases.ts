@@ -3,7 +3,7 @@ import type { HttpsFixture } from "./fixture";
 import { zeroBaseline, exactBackstops } from "./backstop-counters";
 
 // Real-browser case bodies. They run through the SAME owned fixture/parent host,
-// not a policy model, secondary Fetch owner or Node HTTP substitute.
+// not a policy model, secondary Fetch owner or server-side HTTP substitute.
 export class NetworkCaseOwner {
   private readonly originals: Promise<unknown>[] = [];
   private readonly observers: Promise<PromiseSettledResult<unknown>[]>[] = [];
