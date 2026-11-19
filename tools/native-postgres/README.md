@@ -7,17 +7,18 @@ existing application database.
 Use Python 3.12, the SDK pinned by `global.json`, and PostgreSQL 16.15. Select the
 already-installed native binaries and a shared native NuGet cache. The work and
 results roots must exist, be absolute and contain no links or junctions. Keep the
-work root short (for example `C:/example/braid-native-checks`); the launcher refuses a
+work root short; the launcher refuses a
 source prefix over 80 characters before building. Results must be outside the
-disposable work root.
+disposable work root. Set the following PowerShell variables to your installed
+tools, NuGet package cache and existing work/results directories.
 
 ```powershell
 py -3.12 tools/native-postgres/run.py `
-  --dotnet "$env:LOCALAPPDATA/ITS/Tooling/braid-dotnet-10.0.112/dotnet.exe" `
-  --postgres-bin "$env:LOCALAPPDATA/ITS/Tooling/braid-postgres-16.15-1/pgsql/bin" `
-  --nuget-packages "$env:LOCALAPPDATA/ITS/Tooling/braid-nuget/packages" `
-  --work-root C:/example/braid-native-checks `
-  --results-root "$env:LOCALAPPDATA/Temp/opencode" `
+  --dotnet "$DotnetExecutable" `
+  --postgres-bin "$PostgresBin" `
+  --nuget-packages "$NuGetPackages" `
+  --work-root "$WorkRoot" `
+  --results-root "$ResultsRoot" `
   --filter 'FullyQualifiedName~RegressionDeploymentProvisioningTests' `
   --expected-tests 6
 ```

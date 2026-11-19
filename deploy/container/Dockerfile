@@ -12,6 +12,7 @@ ARG DOCKER_CLI_IMAGE=docker.io/library/docker:29.8.1-cli@sha256:018edbc908e08fcc
 
 # Same-replica edge for the trustedProxyOneHop host transport.
 FROM ${CADDY_IMAGE} AS edge
+COPY LICENSE /usr/share/doc/braid/LICENSE
 # File capabilities would make exec fail once every capability is dropped; port 8080 needs none.
 RUN setcap -r /usr/bin/caddy
 COPY deploy/container/Caddyfile /etc/braid/Caddyfile
@@ -30,17 +31,21 @@ COPY engines/ferrule-host engines/ferrule-host
 COPY engines/ferrule-edit-wasm engines/ferrule-edit-wasm
 COPY tools/edit-core tools/edit-core
 RUN python3 tools/edit-core/build.py --install --destination /package/edit --manifest /package/edit-assets.generated.ts
+RUN cp "$(rustc +1.98.1 --print sysroot)/share/doc/rust/COPYRIGHT-library.html" /package/edit/third-party/rust-std-COPYRIGHT.html
 
 FROM ${BUN_IMAGE} AS web
+ARG BRAID_VERSION=""
+ARG BRAID_SOURCE_ARCHIVE=""
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 NG_BUILD_MAX_WORKERS=2
 WORKDIR /src
 COPY package.json bun.lock bunfig.toml ./
 COPY apps/web/package.json apps/web/package.json
 RUN bun install --frozen-lockfile
 COPY apps/web apps/web
+COPY LICENSE LICENSE
 COPY --from=edit-assets /package/edit apps/web/public/edit
 COPY --from=edit-assets /package/edit-assets.generated.ts apps/web/src/edit/edit-assets.generated.ts
-RUN bun run build
+RUN bun run build && bun apps/web/tools/package-notices.mjs "$BRAID_VERSION" "$BRAID_SOURCE_ARCHIVE"
 
 FROM ${ASPNET_IMAGE} AS build
 # The pinned SDK band is published as an archive, not as an SDK image.
@@ -77,6 +82,7 @@ RUN dotnet publish dotnet/apps/Braid.Server/Braid.Server.csproj --configuration 
 
 # Server and one-shot operator commands share one image and one dependency closure.
 FROM ${ASPNET_IMAGE} AS braid
+COPY LICENSE /usr/share/doc/braid/LICENSE
 COPY --from=build /out/app /app
 COPY deploy/container/braid-entrypoint.sh /app/bin/braid-entrypoint
 COPY --from=build --chown=1654:1654 /out/state/braid /var/lib/braid
@@ -97,6 +103,7 @@ RUN dotnet restore dotnet/apps/Braid.Worker/Braid.Worker.csproj --locked-mode \
         --output /out/worker -p:UseAppHost=false
 
 FROM ${ASPNET_IMAGE} AS braid-worker
+COPY LICENSE /usr/share/doc/braid/LICENSE
 COPY --from=worker-build /out/worker /app/worker
 COPY deploy/container/braid-entrypoint.sh /app/bin/braid-entrypoint
 COPY --from=docker-cli /usr/local/bin/docker /usr/bin/docker
@@ -118,6 +125,7 @@ RUN dotnet restore dotnet/apps/Braid.MachineEndpoint/Braid.MachineEndpoint.cspro
         --output /out/tools/release -p:UseAppHost=false -p:OpenApiGenerateDocuments=false
 
 FROM ${ASPNET_IMAGE} AS braid-mapping-endpoint
+COPY LICENSE /usr/share/doc/braid/LICENSE
 COPY --from=endpoint-build /out/endpoint /app/endpoint
 COPY --from=endpoint-build /out/tools /app/tools
 COPY deploy/container/braid-entrypoint.sh /app/bin/braid-entrypoint

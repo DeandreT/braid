@@ -7,6 +7,10 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import uuid
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import qualification_storage as storage
 
 
 def sha(path):
@@ -53,16 +57,21 @@ def main():
     data = json.loads(Path(sys.argv[1]).read_text())
     scenario = data.get('scenario', 'regression')
     assert scenario in ('regression', 'build')
-    mount = json.loads(subprocess.check_output(['findmnt', '-J', '-T', '/srv/example-build', '-o', 'TARGET,FSTYPE,UUID,FSROOT,OPTIONS']))['filesystems'][0]
-    assert mount['target'] == '/srv/example-build' and mount['fstype'] == 'btrfs' and mount['uuid'] == '00000000-0000-4000-8000-000000000001' and mount['fsroot'] == '/@example-build'
-    assert 'rw' in mount['options'].split(',') and 'compress=zstd:3' in mount['options']
-    host = os.statvfs('/mnt/example-host')
-    assert host.f_bavail * host.f_frsize >= 25 * 2**30
-    base = Path('/srv/example-build/work') / ('braid-regression-' + data['fixtureId'])
-    private = Path('/srv/example-build/data') / ('braid-regression-' + data['fixtureId'])
-    for parent in (base.parent, private.parent, Path('/srv/example-build/cache/braid-tooling')):
-        actual = json.loads(subprocess.check_output(['findmnt', '-J', '-T', str(parent), '-o', 'TARGET,FSTYPE,UUID,FSROOT,OPTIONS']))['filesystems'][0]
-        assert actual == mount
+    profile = storage.read_profile(data['storageProfile'])
+    storage.require_host_reserve(profile)
+    name = 'braid-regression-' + str(uuid.UUID(data['fixtureId']))
+    base = storage.admitted_path(profile['workRoot'], profile) / name
+    private = storage.admitted_path(profile['dataRoot'], profile) / name
+    tooling = storage.admitted_path(profile['cacheRoot'], profile)
+    dotnet = storage.admitted_path(profile['dotnet'], profile, directory=False)
+    bun = storage.admitted_path(profile['bun'], profile, directory=False)
+    storage.admitted_path(profile['dockerRoot'], profile)
+    if base == private:
+        raise ValueError('Use separate work and private data roots.')
+    for dirname in ('browser-home', 'nuget', 'nuget-http'):
+        candidate = tooling / dirname
+        if candidate.exists() or candidate.is_symlink():
+            storage.admitted_path(candidate, profile)
     assert not base.exists() and not private.exists()
     base.mkdir(mode=0o700); private.mkdir(mode=0o700)
     source = base / 'source'; source.mkdir(mode=0o755)
@@ -79,9 +88,6 @@ def main():
     for name, digest in data['webHashes'].items():
         assert sha(web / name) == digest
 
-    tooling = Path('/srv/example-build/cache/braid-tooling')
-    dotnet = tooling / 'dotnet/dotnet'
-    bun = tooling / 'bun-1.4.5/bun-linux-x64/bun'
     home = tooling / 'browser-home'; home.mkdir(mode=0o700, exist_ok=True)
     temporary = private / 'build-temp'; temporary.mkdir(mode=0o700)
     packages = tooling / 'nuget'; packages.mkdir(mode=0o755, exist_ok=True)
@@ -117,9 +123,9 @@ def main():
         for key in ['server', 'worker', 'databaseTool', 'storageTool']:
             product = old['publications'][key]
             output = Path(product['directory'])
-            assert output.is_relative_to(Path('/srv/example-build/work')) and not output.is_symlink()
-            actual = json.loads(subprocess.check_output(['findmnt', '-J', '-T', str(output), '-o', 'TARGET,FSTYPE,UUID,FSROOT,OPTIONS']))['filesystems'][0]
-            assert actual == mount
+            storage.admitted_path(output, profile)
+            if not output.is_relative_to(base.parent):
+                raise ValueError('Retained publication is outside the configured work root.')
             files = list(output.rglob('*'))
             assert all(not item.is_symlink() for item in files)
             hashes = {str(item.relative_to(output)): sha(item) for item in files if item.is_file()}
@@ -161,7 +167,8 @@ def main():
               'source': {'workspace': str(source), 'commit': data['commit'], 'tree': data['tree'], 'manifest': bound(source_manifest), 'admission': bound(source_admission)},
               'publications': {**products, 'admission': bound(product_admission)}}
     config_path = private / 'config.json'; private_json(config_path, config)
-    result = {'fixtureId': data['fixtureId'], 'config': str(config_path), 'manifest': str(manifest_path),
+    result = {'fixtureId': data['fixtureId'], 'distribution': data['distribution'], 'storageProfile': data['storageProfile'],
+              'config': str(config_path), 'manifest': str(manifest_path),
               'readOrigin': data['readOrigin'], 'bun': str(bun), 'dotnet': str(dotnet),
               'operator': str(source / ('tools/' + ('build' if scenario == 'build' else 'regression') + '-browser/operator.mjs')),
               'launcher': str(source / 'tools/regression-browser/run_linux.py'), 'privateRoot': str(private)}

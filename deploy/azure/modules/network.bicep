@@ -6,6 +6,7 @@ param addressSpace string
 param appsSubnetPrefix string
 param databaseSubnetPrefix string
 param endpointsSubnetPrefix string
+param serviceBusDnsEnabled bool = false
 param tags object
 
 resource network 'Microsoft.Network/virtualNetworks@2024-05-01' = {
@@ -57,12 +58,12 @@ resource network 'Microsoft.Network/virtualNetworks@2024-05-01' = {
 }
 
 // Flexible Server private access needs a zone ending in .postgres.database.azure.com.
-var zoneNames = [
+var zoneNames = concat([
   '${databaseServerName}.private.postgres.database.azure.com'
   'privatelink.vaultcore.azure.net'
   'privatelink.file.${environment().suffixes.storage}'
   'privatelink.blob.${environment().suffixes.storage}'
-]
+], serviceBusDnsEnabled ? ['privatelink.servicebus.windows.net'] : [])
 
 resource zones 'Microsoft.Network/privateDnsZones@2024-06-01' = [for zone in zoneNames: {
   name: zone
@@ -90,3 +91,4 @@ output databaseZoneId string = zones[0].id
 output vaultZoneId string = zones[1].id
 output fileZoneId string = zones[2].id
 output blobZoneId string = zones[3].id
+output serviceBusZoneId string = serviceBusDnsEnabled ? zones[4].id : ''

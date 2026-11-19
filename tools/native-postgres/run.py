@@ -54,7 +54,7 @@ def validate(options: Options) -> None:
         raise QualificationError("Select the native dotnet.exe, not a shell launcher.")
     # Leave room for nested runtime dependencies copied into the test output.
     if len(str(options.work_root / "native-0123456789ab/source").encode("utf-16-le")) // 2 > 80:
-        raise QualificationError("Choose a shorter work root, for example C:/example/braid-native-checks.")
+        raise QualificationError("Choose a shorter work root; the source prefix must be at most 80 characters.")
     if not options.selection.strip() or len(options.selection) > 4096 or any(c in options.selection for c in "\0\r\n"):
         raise QualificationError("A bounded, nonempty test filter is required.")
     if not 30 <= options.phase_seconds <= 86400:

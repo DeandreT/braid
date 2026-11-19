@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Azure.Core;
+using Azure.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using Braid.Storage.FileSystem;
 using Azure.Messaging.ServiceBus;
@@ -19,11 +21,13 @@ namespace Braid.MachineEndpoint;
 /// The operator-private trigger host file for this endpoint's one target. It names connectors, private-file references and receive
 /// bounds only; trigger definitions, routes and policies stay in the database and are re-read for every order.
 /// </summary>
-internal sealed record TriggerHostPlan(string TokenFile, string? ServiceBusEmulatorConnectionFile,
+internal sealed record TriggerHostPlan(string? TokenFile, string? ServiceBusEmulatorConnectionFile, Guid? ManagedIdentityClientId, string? ServiceBusNamespace,
     IReadOnlyList<TriggerHostPlan.Queue> Queues, IReadOnlyList<TriggerHostPlan.Schedule> Schedules, IReadOnlyList<TriggerHostPlan.Destination> Destinations)
 {
     internal const string FileSetting = "BRAID_ENDPOINT_LOCAL_TRIGGER_HOST_FILE";
     internal const string ConnectionSetting = "BRAID_ENDPOINT_LOCAL_TRIGGER_CONNECTION_STRING";
+    internal const string ManagedFileSetting = "BRAID_ENDPOINT_TRIGGER_HOST_FILE";
+    internal const string ManagedConnectionSetting = "BRAID_ENDPOINT_TRIGGER_WORKER_CONNECTION_STRING";
     private const int MaximumFileCharacters = 256 * 1024;
     private const int MaximumEntries = 64;
 
@@ -36,27 +40,40 @@ internal sealed record TriggerHostPlan(string TokenFile, string? ServiceBusEmula
     {
         var file = environment(FileSetting) is { Length: > 0 } path ? path : null;
         var connection = environment(ConnectionSetting + "_FILE") is { Length: > 0 } secret ? secret : null;
-        if (file is null && connection is null) return null;
+        var managed = environment(ManagedFileSetting) is not null || environment(ManagedConnectionSetting + "_FILE") is not null;
+        if (environment(ConnectionSetting) is not null || environment(ManagedConnectionSetting) is not null) throw Invalid();
+        if (managed)
+        {
+            if (file is not null || connection is not null) throw Invalid();
+            file = environment(ManagedFileSetting);
+            connection = environment(ManagedConnectionSetting + "_FILE");
+        }
+        if (!managed && file is null && connection is null) return null;
         if (file is null || connection is null || !Path.IsPathFullyQualified(file) || !Path.IsPathFullyQualified(connection))
             throw new ArgumentException("Trigger hosting requires both its host file and its restricted worker connection file.");
-        return (Parse(privateReader(file, MaximumFileCharacters)), MappingEndpointSettings.Connection(connection, "braid_trigger_worker", environment));
+        return (Parse(privateReader(file, MaximumFileCharacters), managed), MappingEndpointSettings.Connection(connection, "braid_trigger_worker", environment));
     }
 
-    internal static TriggerHostPlan Parse(string json)
+    internal static TriggerHostPlan Parse(string json, bool managed = false)
     {
         HostFile? value;
         try { value = JsonSerializer.Deserialize<HostFile>(json, Options); }
         catch (JsonException) { throw Invalid(); }
-        if (value is not { Version: 1, TokenFile: { } tokenFile } || !Path.IsPathFullyQualified(tokenFile) ||
+        if (value is null || (managed
+                ? value.Version != 2 || value.TokenFile is not null || value.ServiceBusEmulatorConnectionFile is not null ||
+                  value.ManagedIdentityClientId is null || value.ManagedIdentityClientId == Guid.Empty ||
+                  value.ServiceBusNamespace is { } ns && !ValidAzureHost(ns, ".servicebus.windows.net")
+                : value.Version != 1 || value.TokenFile is not { } tokenFile || !Path.IsPathFullyQualified(tokenFile) ||
+                  value.ServiceBusNamespace is not null || value.ManagedIdentityClientId is not null) ||
             value.Queues.Count + value.Schedules.Count is 0 or > MaximumEntries || value.Destinations.Count > MaximumEntries ||
-            value.Queues.Count > 0 && value.ServiceBusEmulatorConnectionFile is null ||
+            value.Queues.Count > 0 && value.ServiceBusEmulatorConnectionFile is null && value.ServiceBusNamespace is null ||
             value.ServiceBusEmulatorConnectionFile is { } emulator && !Path.IsPathFullyQualified(emulator))
             throw Invalid();
         var queues = value.Queues.Select(queue => new Queue(Id(queue.TriggerId), new(new(queue.ConnectorId, queue.ConnectorVersion), queue.QueueName,
             queue.PrefetchCount, queue.MaximumConcurrentCalls, TimeSpan.FromSeconds(queue.RetryBackoffSeconds), queue.Subscription))).ToArray();
         var schedules = value.Schedules.Select(schedule => schedule.TickSeconds is < 5 or > 3600 ? throw Invalid()
             : new Schedule(Id(schedule.TriggerId), new(schedule.ConnectorId, schedule.ConnectorVersion), Storage(schedule.ServiceUri, schedule.Container,
-                schedule.Credential), schedule.Prefix, schedule.PageSize, TimeSpan.FromSeconds(schedule.TickSeconds))).ToArray();
+                schedule.Credential, value.ManagedIdentityClientId), schedule.Prefix, schedule.PageSize, TimeSpan.FromSeconds(schedule.TickSeconds))).ToArray();
         var destinations = value.Destinations.Select(item =>
         {
             var connector = new TriggerConnectorReference(item.ConnectorId, item.ConnectorVersion);
@@ -64,12 +81,12 @@ internal sealed record TriggerHostPlan(string TokenFile, string? ServiceBusEmula
             {
                 "https" => new HttpsDestinationConnector(connector, new Uri(item.Endpoint ?? throw Invalid()), hosted: true,
                     item.AcceptedStatuses ?? throw Invalid(), item.RejectedStatuses ?? [], item.SigningKeyFile ?? throw Invalid()),
-                "serviceBusTopic" when value.ServiceBusEmulatorConnectionFile is not null =>
+                "serviceBusTopic" when value.ServiceBusEmulatorConnectionFile is not null || value.ServiceBusNamespace is not null =>
                     item.TopicName is { Length: > 0 and <= 260 } topic ? (connector, topic) : throw Invalid(),
                 "sftp" => new SftpDestinationConnector(connector, item.Host ?? throw Invalid(), item.Port ?? 22, item.UserName ?? throw Invalid(),
                     item.HostKeySha256 ?? throw Invalid(), item.PasswordFile, item.PrivateKeyFile, item.Root ?? throw Invalid(), item.Prefix ?? throw Invalid(),
                     SftpPublishContract.NoReplaceRename),
-                "blob" => (connector, Storage(item.ServiceUri, item.Container, item.Credential), item.Prefix ?? throw Invalid()),
+                "blob" => (connector, Storage(item.ServiceUri, item.Container, item.Credential, value.ManagedIdentityClientId), item.Prefix ?? throw Invalid()),
                 _ => throw Invalid()
             };
             return new Destination(Id(item.BindingId), item.Kind, settings);
@@ -77,12 +94,27 @@ internal sealed record TriggerHostPlan(string TokenFile, string? ServiceBusEmula
         if (queues.Select(item => item.TriggerId).Concat(schedules.Select(item => item.TriggerId)).Distinct().Count() != queues.Length + schedules.Length ||
             destinations.Select(item => item.BindingId).Distinct().Count() != destinations.Length)
             throw Invalid();
-        return new(tokenFile, value.ServiceBusEmulatorConnectionFile, queues, schedules, destinations);
+        return new(value.TokenFile, value.ServiceBusEmulatorConnectionFile, value.ManagedIdentityClientId, value.ServiceBusNamespace, queues, schedules, destinations);
     }
 
     private static Guid Id(Guid value) => value == Guid.Empty ? throw Invalid() : value;
-    private static BlobStorageOptions Storage(string? serviceUri, string? container, string? credential) =>
-        new(new Uri(serviceUri ?? throw Invalid()), container ?? throw Invalid(), credential == "emulator" ? BlobStorageCredentialKind.Emulator : throw Invalid());
+    private static bool ValidAzureHost(string host, string suffix) =>
+        host.EndsWith(suffix, StringComparison.Ordinal) && Uri.CheckHostName(host) == UriHostNameType.Dns &&
+        host[..^suffix.Length] is { Length: >= 1 and <= 63 } label &&
+        char.IsAsciiLetterOrDigit(label[0]) && char.IsAsciiLetterOrDigit(label[^1]) &&
+        label.All(c => char.IsAsciiLetterOrDigit(c) || c == '-');
+
+    private static BlobStorageOptions Storage(string? serviceUri, string? container, string? credential, Guid? identity)
+    {
+        if (!Uri.TryCreate(serviceUri, UriKind.Absolute, out var uri)) throw Invalid();
+        var kind = (identity, credential) switch
+        {
+            (not null, "managedIdentity") when ValidAzureHost(uri.Host, ".blob.core.windows.net") => BlobStorageCredentialKind.ManagedIdentity,
+            (null, "emulator") => BlobStorageCredentialKind.Emulator,
+            _ => throw Invalid()
+        };
+        return new(uri, container ?? throw Invalid(), kind, identity);
+    }
     private static ArgumentException Invalid() => new("Invalid trigger host file.");
 
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
@@ -93,8 +125,9 @@ internal sealed record TriggerHostPlan(string TokenFile, string? ServiceBusEmula
         MaxDepth = 8
     };
 
-    private sealed record HostFile(int Version, string TokenFile, string? ServiceBusEmulatorConnectionFile,
-        IReadOnlyList<QueueEntry> Queues, IReadOnlyList<ScheduleEntry> Schedules, IReadOnlyList<DestinationEntry> Destinations);
+    private sealed record HostFile(int Version, IReadOnlyList<QueueEntry> Queues, IReadOnlyList<ScheduleEntry> Schedules,
+        IReadOnlyList<DestinationEntry> Destinations, string? TokenFile = null, string? ServiceBusEmulatorConnectionFile = null,
+        Guid? ManagedIdentityClientId = null, string? ServiceBusNamespace = null);
     private sealed record QueueEntry(Guid TriggerId, string ConnectorId, long ConnectorVersion, string QueueName, int PrefetchCount, int MaximumConcurrentCalls,
         int RetryBackoffSeconds, string? Subscription = null);
     private sealed record ScheduleEntry(Guid TriggerId, string ConnectorId, long ConnectorVersion, string ServiceUri, string Container, string Credential,
@@ -115,10 +148,14 @@ internal sealed class TriggerWorkerHost(TriggerHostPlan plan, string connection,
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         await using var store = new PostgresTriggerWorkStore(connection);
+        var credential = plan.ManagedIdentityClientId is { } client
+            ? new ManagedIdentityCredential(ManagedIdentityId.FromUserAssignedClientId(client.ToString("D"))) : null;
         await using var bus = plan.ServiceBusEmulatorConnectionFile is { } emulator
             ? ServiceBusQueueTrigger.CreateEmulatorClient(privateReader(emulator, 4096).Trim())
-            : null;
-        Task<MachineCaller> Caller(CancellationToken token) => resources.Validator.ValidateAsync(privateReader(plan.TokenFile, 16384).TrimEnd('\r', '\n'), token);
+            : plan.ServiceBusNamespace is { } ns ? new ServiceBusClient(ns, credential!, ServiceBusQueueTrigger.Options()) : null;
+        Task<MachineCaller> Caller(CancellationToken token) => credential is null
+            ? resources.Validator.ValidateAsync(privateReader(plan.TokenFile!, 16384).TrimEnd('\r', '\n'), token)
+            : ManagedCallerAsync(credential, resources.Settings.Audience, plan.ManagedIdentityClientId!.Value, resources.Validator, token);
         var destinations = plan.Destinations.Select(item => item.Settings switch
         {
             HttpsDestinationConnector https => (IOutputDestination)new HttpsOutputDestination(https, privateReader, time),
@@ -133,6 +170,16 @@ internal sealed class TriggerWorkerHost(TriggerHostPlan plan, string connection,
             plan.Schedules.Select(item => (item.TriggerId, item.Tick, (ITriggerSource)new BlobTriggerSource(item.Connector, item.Storage, item.Prefix, item.PageSize)))
                 .ToArray(),
             destinations, plan.Destinations.Select(item => item.BindingId).ToArray(), execute, Caller, () => zoneData, time).RunAsync(stoppingToken);
+    }
+
+    // The SDK handles token refresh. Route authority still comes from normal endpoint token validation
+    // and the current database grant, never from a configured client/principal ID.
+    internal static async Task<MachineCaller> ManagedCallerAsync(TokenCredential credential, Guid audience, Guid client,
+        IMachineTokenValidator validator, CancellationToken token)
+    {
+        var access = await credential.GetTokenAsync(new TokenRequestContext([$"api://{audience:D}/.default"]), token);
+        var caller = await validator.ValidateAsync(access.Token, token);
+        return caller.ApplicationId == client ? caller : throw new MachineTokenException(MachineTokenFailure.Denied);
     }
 
     /// <summary>The image's IANA data release; a schedule reviewed against another release refuses its tick visibly.</summary>

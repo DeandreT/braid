@@ -145,7 +145,9 @@ positive control must work, otherwise the result is inconclusive.
 
 Build the native image first from `engines/ferrule-host`, then use
 `tools/build-worker/build_image.py --native-image sha256:<id> --tag <tag>
---work-root <existing-work-directory>`. The launcher binds a temporary local
+--work-root <existing-work-directory>`. On Linux set `BRAID_STORAGE_PROFILE`
+to an independently provisioned [storage profile](qualification-storage.md).
+The launcher binds a temporary local
 reference to that exact image ID and independently checks the native binary's
 hash in the Docker build. Registry builds may use a native manifest digest with
 the corresponding verified binary hash. Test the exact combined

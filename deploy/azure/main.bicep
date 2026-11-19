@@ -106,7 +106,7 @@ param apiBearerScope string = ''
 @description('Client IDs of the public client applications allowed to present bearer tokens (1-16), for example the braid CLI registration. Required with apiBearerEnabled.')
 param apiBearerClientIds array = []
 
-@description('Machine-facing mapping endpoints, one internal container app per registered release target: name (2-12 lowercase characters), projectId, mappingId, environmentId, environmentVersion, targetId, and optional concurrency (1-4, default 4), maxReplicas (default 4) and callers ([{ grantId, objectId }]). They execute through the Ferrule service, so they require ferruleRunner = service. Empty deploys none.')
+@description('Machine-facing mapping endpoints, one internal container app per registered release target: name (2-12 lowercase characters), projectId, mappingId, environmentId, environmentVersion, targetId, and optional concurrency (1-4, default 4), maxReplicas (default 4), callers ([{ grantId, objectId }]) and triggers (see docs/azure-deployment.md#triggers). They execute through the Ferrule service, so they require ferruleRunner = service. Empty deploys none.')
 param mappingEndpoints array = []
 
 @description('Application (client) ID of the mapping endpoint app registration: the audience of callers\' app-only access tokens. Required with mappingEndpoints.')
@@ -172,6 +172,8 @@ var names = {
 
 // Mapping endpoints run their compiled artifacts through the Ferrule service container app.
 var mappingEndpointsEnabled = deployApplication && ferruleRunner == 'service' && !empty(mappingEndpoints)
+// Endpoints with a triggers object also host that target's triggers (docs/azure-deployment.md#triggers).
+var triggerTargets = mappingEndpointsEnabled ? filter(mappingEndpoints, endpoint => contains(endpoint, 'triggers')) : []
 
 // Explicit feature combinations: an inconsistent request fails the deployment with its reason rather than
 // deploying hosts that refuse to start. Each branch is evaluated only when selected.
@@ -201,6 +203,7 @@ module network 'modules/network.bicep' = {
     appsSubnetPrefix: appsSubnetPrefix
     databaseSubnetPrefix: databaseSubnetPrefix
     endpointsSubnetPrefix: endpointsSubnetPrefix
+    serviceBusDnsEnabled: !empty(triggerTargets)
     tags: tags
   }
 }
@@ -421,6 +424,21 @@ module worker 'modules/worker.bicep' = if (workerEnabled) {
   }
 }
 
+module triggers 'modules/triggers.bicep' = [for endpoint in triggerTargets: {
+  name: 'triggers-${endpoint.name}'
+  params: {
+    location: location
+    identityName: '${name}-${endpoint.name}-trigger-identity'
+    serviceBusName: '${name}-sb-${uniqueString(resourceGroup().id, compactSuffix, endpoint.name)}'
+    storageName: '${name}t${uniqueString(resourceGroup().id, compactSuffix, endpoint.name)}'
+    endpointsSubnetId: network.outputs.endpointsSubnetId
+    serviceBusZoneId: network.outputs.serviceBusZoneId
+    blobZoneId: network.outputs.blobZoneId
+    trigger: endpoint.triggers
+    tags: tags
+  }
+}]
+
 module mappingEndpoint 'modules/mapping-endpoint.bicep' = if (mappingEndpointsEnabled) {
   name: 'mapping-endpoint'
   params: {
@@ -442,6 +460,13 @@ module mappingEndpoint 'modules/mapping-endpoint.bicep' = if (mappingEndpointsEn
     ferruleServiceIdentity: ferruleServiceIdentity
     compileToolchain: ferruleCompileToolchain
     compiledRuntimeIdentity: compiledRuntimeIdentity
+    triggerRegistrations: [for (endpoint, i) in triggerTargets: {
+      name: endpoint.name
+      identityId: triggers[i].outputs.identityId
+      identityClientId: triggers[i].outputs.identityClientId
+      serviceBusNamespace: triggers[i].outputs.serviceBusNamespace
+      blobServiceUri: triggers[i].outputs.blobServiceUri
+    }]
     tags: tags
   }
 }
@@ -462,3 +487,5 @@ output identityPrincipalId string = identity.properties.principalId
 output workerName string = worker.?outputs.name ?? ''
 output mappingEndpointOrigins array = mappingEndpoint.?outputs.origins ?? []
 output mappingEndpointGrantArguments array = mappingEndpoint.?outputs.grantArguments ?? []
+@description('Grant each target\'s trigger identity an invocation grant on that target.')
+output triggerPrincipals array = [for (endpoint, i) in triggerTargets: { name: endpoint.name, principalId: triggers[i].outputs.identityPrincipalId }]

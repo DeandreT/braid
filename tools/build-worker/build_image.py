@@ -4,44 +4,35 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import platform
 import re
 import subprocess
 import sys
 import tempfile
 import uuid
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import qualification_storage as storage
 
 OWNER_LABEL = 'io.braid.compiler.source-owner'
 
 
-def admit_work_root(work_root, policy=None):
-    """Admit only native Windows, the original WSL data volume, or native Linux dedicated."""
+def admit_work_root(work_root, profile_path=None):
+    """On Linux verify storage against the operator's independent expectations."""
     if not work_root.is_absolute() or not work_root.is_dir():
         raise RuntimeError('The work root must already exist and be absolute.')
     work_root = work_root.resolve(strict=True)
     if sys.platform == 'win32':
-        if policy is not None:
-            raise RuntimeError('A Linux work-root policy cannot be used on native Windows.')
+        if profile_path is not None:
+            raise RuntimeError('A Linux storage profile cannot be used on native Windows.')
         return work_root
-    mount = json.loads(subprocess.check_output([
-        'findmnt', '-J', '-T', str(work_root), '-o', 'SOURCE,TARGET,FSTYPE,UUID,FSROOT,OPTIONS',
-    ], text=True))['filesystems'][0]
-    options = mount.get('options', '').split(',')
-    policy = policy or ('linux-dedicated' if mount.get('target') == '/mnt/example-build' else 'wsl-btrfs')
-    writable_btrfs = mount.get('fstype') == 'btrfs' and 'rw' in options and 'ro' not in options
-    if policy == 'linux-dedicated':
-        if not (writable_btrfs and mount.get('target') == '/mnt/example-build' and mount.get('source') == '/dev/disk/by-label/example-build'):
-            raise RuntimeError('The compiler build work root is not on the approved writable dedicated Btrfs volume.')
-    elif policy == 'wsl-btrfs':
-        if not (writable_btrfs and mount.get('target') == '/srv/example-build'
-                and mount.get('uuid') == '00000000-0000-4000-8000-000000000001'
-                and mount.get('fsroot') == '/@example-build' and 'compress=zstd:3' in options):
-            raise RuntimeError('The compiler build work root is not on the approved Btrfs data volume.')
-        host = os.statvfs('/mnt/example-host')
-        if host.f_bavail * host.f_frsize < 25 * 2**30:
-            raise RuntimeError('The Windows host free-space floor is not met.')
-    else:
-        raise RuntimeError('Unknown compiler build work-root policy.')
+    if sys.platform != 'linux':
+        raise RuntimeError('Unsupported build platform.')
+    profile = storage.read_profile(profile_path or os.environ.get('BRAID_STORAGE_PROFILE'))
+    wsl = 'microsoft' in platform.release().lower() or 'windowsHostMount' in profile
+    storage.require_volume(work_root, profile, wsl=wsl)
+    if wsl:
+        storage.require_host_reserve(profile)
     return work_root
 
 
@@ -81,10 +72,10 @@ def cleanup_reference(native_image, reference, acknowledged):
         raise RuntimeError('Native source reference cleanup could not be verified.')
 
 
-def prepare_image(native_image, tag, work_root, policy=None, build_docker_config=None):
+def prepare_image(native_image, tag, work_root, profile_path=None, build_docker_config=None):
     if not re.fullmatch(r'sha256:[a-f0-9]{64}', native_image):
         raise RuntimeError('An exact native image ID is required.')
-    work_root = admit_work_root(work_root, policy)
+    work_root = admit_work_root(work_root, profile_path)
     root = Path(__file__).resolve().parents[2]
     def output(*command):
         return subprocess.check_output(['docker', *command], text=True).strip()
@@ -169,13 +160,12 @@ def main():
     parser.add_argument('--native-image', required=True, help='Exact sha256 native Docker image ID')
     parser.add_argument('--tag', required=True, help='Resulting compiler image tag')
     parser.add_argument('--work-root', required=True, type=Path, help='Existing disposable-work directory on an approved volume')
-    parser.add_argument('--work-root-policy', choices=('linux-dedicated', 'wsl-btrfs'),
-                        help='Require one Linux storage policy (otherwise detect an approved volume; native Windows retains its existing path rules)')
+    parser.add_argument('--storage-profile', help='Absolute path to Linux mount expectations (or set BRAID_STORAGE_PROFILE)')
     parser.add_argument('--build-docker-config', help='DOCKER_CONFIG override for the build only, not extraction or cleanup')
     args = parser.parse_args()
     if not re.fullmatch(r'sha256:[a-f0-9]{64}', args.native_image):
         parser.error('An exact native image ID is required.')
-    prepare_image(args.native_image, args.tag, args.work_root, args.work_root_policy, args.build_docker_config)
+    prepare_image(args.native_image, args.tag, args.work_root, args.storage_profile, args.build_docker_config)
 
 
 if __name__ == '__main__':

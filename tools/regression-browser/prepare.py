@@ -14,16 +14,22 @@ def sha(path):
         return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
-def linux(path):
+def linux(path, distribution):
     text = path.resolve().as_posix()
     if not re.match(r'^[A-Za-z]:/', text):
         raise ValueError('Use a native Windows drive path.')
-    return '/mnt/' + text[0].lower() + text[2:]
+    result = subprocess.check_output(['wsl.exe', '--distribution', distribution, '--exec',
+                                      'wslpath', '-a', '-u', str(path.resolve())], text=True).strip()
+    if not result.startswith('/'):
+        raise ValueError('The selected distribution could not translate the Windows path.')
+    return result
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--work-root', type=Path, required=True)
+    parser.add_argument('--distribution', required=True, help='Installed WSL distribution name')
+    parser.add_argument('--storage-profile', required=True, help='Absolute Linux path to the operator storage profile')
     parser.add_argument('--bun', type=Path, required=True)
     parser.add_argument('--worker-image', required=True)
     parser.add_argument('--scenario', choices=['regression', 'build'], default='regression')
@@ -31,6 +37,10 @@ def main():
     parser.add_argument('--mutation-port', type=int, default=4115)
     parser.add_argument('--reuse-bindings', type=Path, help='Reuse verified publications only when every runtime input and emitted web byte is unchanged.')
     args = parser.parse_args()
+    if not args.distribution.strip() or not args.storage_profile.startswith('/'):
+        parser.error('Supply a distribution and an absolute Linux storage profile path.')
+    def translate(path):
+        return linux(path, args.distribution)
     assert os.name == 'nt' and args.work_root.is_absolute() and args.work_root.is_dir()
     assert re.fullmatch(r'sha256:[a-f0-9]{64}', args.worker_image)
     assert 1024 <= args.read_port <= 65535 and 1024 <= args.mutation_port <= 65535 and args.read_port != args.mutation_port
@@ -65,17 +75,18 @@ def main():
     web = root / 'apps/web/dist/braid/browser'
     web_hashes = {path.relative_to(web).as_posix(): sha(path) for path in sorted(web.rglob('*')) if path.is_file()}
     result = output / 'bindings.json'
-    data = {'fixtureId': identity, 'scenario': args.scenario, 'archive': linux(archive), 'web': linux(web), 'webHashes': web_hashes,
+    data = {'fixtureId': identity, 'scenario': args.scenario, 'archive': translate(archive), 'web': translate(web), 'webHashes': web_hashes,
+            'distribution': args.distribution, 'storageProfile': args.storage_profile,
             'sourceManifest': manifest, 'commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip(),
             'tree': subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], cwd=root, text=True).strip(),
             'workerImage': args.worker_image, 'readOrigin': f'http://127.0.0.1:{args.read_port}',
-            'mutationOrigin': f'http://127.0.0.1:{args.mutation_port}', 'result': linux(result)}
+            'mutationOrigin': f'http://127.0.0.1:{args.mutation_port}', 'result': translate(result)}
     if args.reuse_bindings:
         previous = json.loads(args.reuse_bindings.read_text())
         data['reuseConfig'] = previous['config']
     config = output / 'prepare-input.json'; config.write_text(json.dumps(data) + '\n')
-    subprocess.run(['wsl.exe', '--distribution', 'Example-Build-Linux', '--user', 'root', '--exec', '/usr/bin/python3', '-I', '-B',
-                    linux(root / 'tools/regression-browser/prepare_linux.py'), linux(config)], check=True)
+    subprocess.run(['wsl.exe', '--distribution', args.distribution, '--user', 'root', '--exec', '/usr/bin/python3', '-I', '-B',
+                    translate(root / 'tools/regression-browser/prepare_linux.py'), translate(config)], check=True)
     print('Browser bindings:', result)
 
 

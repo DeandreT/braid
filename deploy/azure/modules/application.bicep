@@ -111,6 +111,7 @@ var roles = [
   { key: 'invocation-grant-writer', env: 'INVOCATION_GRANT_WRITER' }
   { key: 'invocation-writer', env: 'INVOCATION_WRITER' }
   { key: 'api-audit-writer', env: 'API_AUDIT_WRITER' }
+  { key: 'trigger-worker', env: 'TRIGGER_WORKER' }
 ]
 
 // A separately hosted inspection worker; the settings stay dormant until native upload or

@@ -6,6 +6,44 @@ the containers in your deployment. All five image references describe the same
 storage, TLS ingress, identity registration, credentials, network policy and
 feature choices belong to the consuming environment.
 
+## Get the matching source and licenses
+
+The product release `vX.Y.Z` links to its source release `source-vX.Y.Z`.
+Use the named **`braid-vX.Y.Z-source.tar.gz`** asset, not the hosting site's
+automatic snapshot: the asset also contains the pinned Ferrule checkout,
+vendored Rust crates, browser and .NET dependency sources, notices, and
+instructions for rebuilding. The server's sign-in page and Help page both
+link to **Licenses and source** (`/licenses.html`) without requiring an
+account to read that static page.
+
+Download the archive, `source.json` and `source.json.bundle` into the same
+directory. From the trusted checkout, set `DOWNLOAD_DIR` to that directory,
+`REPO` to the trusted owner/repository, `TAG` to the **product** tag and
+`COMMIT` to its expected full commit. Verify before extracting:
+
+```sh
+cosign verify-blob --bundle "$DOWNLOAD_DIR/source.json.bundle" \
+  --certificate-identity "https://github.com/${REPO}/.github/workflows/release-images.yml@refs/tags/${TAG}" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com "$DOWNLOAD_DIR/source.json"
+# Python 3.12+
+python3 tools/release/source_archive.py verify \
+  --version "$TAG" --commit "$COMMIT" --output "$DOWNLOAD_DIR"
+```
+
+Read the archive's `README.md`, `BUILD.json`
+and `package-sources/index.json` for the exact coverage and rebuild
+prerequisites. Its `braid/LICENSE` and `ferrule/LICENSE` apply to those
+projects; other components retain their own licenses. An OCI image's
+`io.braid.source.archive` and `io.braid.source.sha256` config labels identify
+the matching public archive. Compare the latter with the verified
+`source.json` value after verifying the image signature.
+
+Keep those source assets with mirrored images. If you redistribute a modified
+build, publish matching sources and notices and set `BRAID_VERSION` and
+`BRAID_SOURCE_ARCHIVE` when building its web UI. The link accepts a public
+HTTPS archive on any host. If hosting the UI and source separately, verify
+that recipients can actually download the archive without a login.
+
 ## Select and pin the images
 
 1. Select the exact `vX.Y.Z` tag from the trusted product repository and record

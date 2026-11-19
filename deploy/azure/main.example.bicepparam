@@ -37,6 +37,8 @@ param apiBearerClientIds = []
 // for example { name: 'orders', projectId: '…', mappingId: '…', environmentId: '…',
 // environmentVersion: 1, targetId: '…', callers: [{ grantId: '…', objectId: '…' }] }.
 param mappingEndpoints = []
+// An endpoint may add triggers: { queues: [...], schedules: [...], destinations: [...] }.
+// See docs/azure-deployment.md#triggers for identity grants and the registration format.
 param mappingEndpointAudience = ''
 param mappingEndpointAdministratorId = ''
 param ferruleServiceEndpointClientCertificateSha256 = ''

@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import MagicMock, patch
@@ -11,12 +12,28 @@ from unittest.mock import MagicMock, patch
 import build_image
 
 
+class StorageProfileTests(unittest.TestCase):
+    def test_load_requires_trusted_profile_and_ancestry(self):
+        storage = build_image.storage
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder).resolve() / 'storage.json'
+            path.write_text('{"requiredOptions": ["rw"]}', encoding='utf-8')
+            with patch.object(storage.os, 'geteuid', return_value=42, create=True), \
+                    patch.object(Path, 'lstat', autospec=True) as lstat:
+                lstat.side_effect = lambda p: SimpleNamespace(st_uid=42, st_mode=0o100600)
+                self.assertEqual(storage.read_profile(str(path)), {'requiredOptions': ['rw']})
+                for uid, mode in [(7, 0o100600), (42, 0o100620), (42, 0o100602)]:
+                    for bad in (path, path.parent):
+                        lstat.side_effect = lambda p: SimpleNamespace(st_uid=uid if p == bad else 42,
+                                                                      st_mode=mode if p == bad else 0o100600)
+                        with self.subTest(uid=uid, mode=mode, bad=bad), self.assertRaises(ValueError):
+                            storage.read_profile(str(path))
+
+
 class AdmissionTests(unittest.TestCase):
-    dedicated = {'target': '/mnt/example-build', 'source': '/dev/disk/by-label/example-build', 'fstype': 'btrfs',
-             'uuid': 'native-volume', 'fsroot': '/', 'options': 'rw,relatime,compress=zstd:3'}
-    wsl = {'target': '/srv/example-build', 'source': '/dev/sdc', 'fstype': 'btrfs',
-           'uuid': '00000000-0000-4000-8000-000000000001', 'fsroot': '/@example-build',
-           'options': 'rw,relatime,compress=zstd:3'}
+    volume = {'target': '/fixture', 'source': '/dev/example', 'fstype': 'btrfs',
+              'uuid': '00000000-0000-4000-8000-000000000001', 'fsroot': '/fixture-volume',
+              'options': 'rw,relatime,compress=zstd:3'}
 
     def setUp(self):
         self.root = MagicMock(spec=Path)
@@ -25,63 +42,74 @@ class AdmissionTests(unittest.TestCase):
         self.root.resolve.return_value = self.root
         self.root.__str__.return_value = '/approved/work'
         self.mount = self.enterContext(patch.object(build_image.subprocess, 'check_output'))
-        self.floor = self.enterContext(patch.object(build_image.os, 'statvfs'))
+        self.floor = self.enterContext(patch.object(build_image.os, 'statvfs', create=True))
         self.floor.return_value = SimpleNamespace(f_bavail=25 * 2**30, f_frsize=1)
         self.enterContext(patch.object(build_image.sys, 'platform', 'linux'))
+        self.kernel = self.enterContext(patch.object(build_image.platform, 'release', return_value='native'))
+        self.profile = {k: self.volume[k] for k in ('target', 'source', 'uuid', 'fsroot')}
+        self.profile['requiredOptions'] = ['compress=zstd:3']
+        self.load = self.enterContext(patch.object(build_image.storage, 'read_profile', return_value=self.profile))
 
-    def admit(self, mount, policy=None):
+    def admit(self, mount):
         self.mount.return_value = json.dumps({'filesystems': [mount]})
-        return build_image.admit_work_root(self.root, policy)
+        return build_image.admit_work_root(self.root)
 
-    def test_dedicated_detected_and_explicit_policy(self):
-        for policy in (None, 'linux-dedicated'):
-            with self.subTest(policy=policy):
-                self.assertIs(self.admit(self.dedicated, policy), self.root)
+    def test_expected_native_volume(self):
+        self.assertIs(self.admit(self.volume), self.root)
         self.floor.assert_not_called()
         self.root.resolve.assert_called_with(strict=True)
         self.assertEqual(self.mount.call_args.args[0], [
             'findmnt', '-J', '-T', '/approved/work', '-o', 'SOURCE,TARGET,FSTYPE,UUID,FSROOT,OPTIONS'])
 
-    def test_original_wsl_policy_and_exact_windows_floor(self):
-        for policy in (None, 'wsl-btrfs'):
-            with self.subTest(policy=policy):
-                self.assertIs(self.admit(self.wsl, policy), self.root)
-        self.floor.assert_called_with('/mnt/example-host')
+    def wsl(self, host_type='9p', host_target='/host'):
+        self.kernel.return_value = 'microsoft-standard-WSL2'
+        self.profile['windowsHostMount'] = '/host'
+        self.mount.side_effect = [json.dumps({'filesystems': [mount]}) for mount in
+                                 [self.volume, {'target': host_target, 'fstype': host_type}]]
+        return build_image.admit_work_root(self.root)
+
+    def test_wsl_checks_actual_windows_mount_and_exact_floor(self):
+        self.assertIs(self.wsl(), self.root)
+        self.floor.assert_called_once_with('/host')
+        for fstype, target in [('ext4', '/host'), ('9p', '/')]:
+            with self.subTest(fstype=fstype, target=target), self.assertRaises(ValueError):
+                self.wsl(fstype, target)
 
     def test_wsl_windows_floor_below_threshold_or_unavailable(self):
         for failure in ('low', 'missing'):
             with self.subTest(failure=failure):
                 self.floor.return_value = SimpleNamespace(f_bavail=25 * 2**30 - 1, f_frsize=1)
                 self.floor.side_effect = OSError('missing Windows host volume') if failure == 'missing' else None
-                with self.assertRaises((RuntimeError, OSError)):
-                    self.admit(self.wsl)
+                with self.assertRaises((ValueError, OSError)):
+                    self.wsl()
 
     def test_wsl_floor_uses_available_blocks_times_fragment_size(self):
         self.floor.return_value = SimpleNamespace(f_bavail=25 * 2**18, f_frsize=4096)
-        self.assertIs(self.admit(self.wsl), self.root)
+        self.assertIs(self.wsl(), self.root)
 
-    def test_each_dedicated_guard_is_required(self):
-        for field, value in [('source', '/dev/disk/by-label/example-root'), ('source', '/dev/disk/by-label/example-other'), ('source', ''),
-                             ('target', '/mnt/other'), ('target', '/mnt/example-build/nested'),
-                             ('fstype', 'ext4'), ('options', 'ro,compress=zstd:3'),
-                             ('options', 'rw,ro'), ('options', '')]:
-            with self.subTest(field=field, value=value), self.assertRaises(RuntimeError):
-                self.admit(dict(self.dedicated, **{field: value}), 'linux-dedicated')
-        self.floor.assert_not_called()
-
-    def test_each_original_wsl_guard_is_required(self):
-        for field, value in [('target', '/srv/other'), ('fstype', 'ext4'), ('uuid', 'foreign'),
+    def test_each_volume_guard_is_required(self):
+        for field, value in [('source', '/dev/other'), ('target', '/other'), ('fstype', 'ext4'), ('uuid', 'foreign'),
                              ('fsroot', '/'), ('options', 'ro,compress=zstd:3'),
                              ('options', 'rw,compress=zstd:30'), ('options', 'rw'),
                              ('options', 'rw,ro,compress=zstd:3')]:
-            with self.subTest(field=field, value=value), self.assertRaises(RuntimeError):
-                self.admit(dict(self.wsl, **{field: value}), 'wsl-btrfs')
+            with self.subTest(field=field, value=value), self.assertRaises(ValueError):
+                self.admit(dict(self.volume, **{field: value}))
         self.floor.assert_not_called()
 
-    def test_wrong_explicit_policy_never_falls_back(self):
-        for mount, policy in [(self.wsl, 'linux-dedicated'), (self.dedicated, 'wsl-btrfs'), (self.dedicated, 'skip')]:
-            with self.subTest(policy=policy), self.assertRaises(RuntimeError):
-                self.admit(mount, policy)
+    def test_wsl_cannot_omit_host_or_compression_settings(self):
+        self.kernel.return_value = 'Microsoft-standard'
+        with self.assertRaises(ValueError):
+            self.admit(self.volume)
+        self.profile.update(windowsHostMount='/host', requiredOptions=['rw'])
+        with self.assertRaises(ValueError):
+            self.admit(self.volume)
+        self.floor.assert_not_called()
+
+    def test_missing_expectations_do_not_adopt_observed_mount(self):
+        for field in self.profile:
+            self.load.return_value = {k: v for k, v in self.profile.items() if k != field}
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self.admit(self.volume)
 
     def test_missing_relative_or_non_directory_root_refused_before_mount_lookup(self):
         for absolute, directory in [(False, True), (True, False), (False, False)]:
@@ -103,16 +131,16 @@ class AdmissionTests(unittest.TestCase):
             build_image.admit_work_root(self.root)
 
     def test_resolved_root_is_what_mount_lookup_admits(self):
-        self.root.resolve.return_value = Path('/mnt/example-build/build/real-root')
-        self.assertEqual(self.admit(self.dedicated), Path('/mnt/example-build/build/real-root'))
-        self.assertEqual(self.mount.call_args.args[0][3], '/mnt/example-build/build/real-root')
+        real = Path('/fixture/build/real-root')
+        self.root.resolve.return_value = real
+        self.assertEqual(self.admit(self.volume), real)
+        self.assertEqual(self.mount.call_args.args[0][3], str(real))
 
     def test_native_windows_keeps_existing_path_admission_without_linux_commands(self):
-        self.root.__str__.return_value = 'C:\\example\\braid-work'
         with patch.object(build_image.sys, 'platform', 'win32'):
             self.assertIs(build_image.admit_work_root(self.root), self.root)
             with self.assertRaises(RuntimeError):
-                build_image.admit_work_root(self.root, 'linux-dedicated')
+                build_image.admit_work_root(self.root, '/fixture/profile.json')
         self.mount.assert_not_called()
         self.floor.assert_not_called()
 
@@ -319,8 +347,8 @@ class PreparationTests(unittest.TestCase):
         self.assert_foreign_untouched()
 
     def test_exact_id_digest_owned_cleanup_and_before_after_checks(self):
-        self.prepare(policy='linux-dedicated')
-        self.admission.assert_called_once_with(Path('/requested/work'), 'linux-dedicated')
+        self.prepare(profile_path='/fixture/profile.json')
+        self.admission.assert_called_once_with(Path('/requested/work'), '/fixture/profile.json')
         self.temp.assert_called_once_with(prefix='native-source-', dir=Path('/approved/work'))
         tag, = self.commands('docker', 'tag')
         self.assertEqual(tag[0][2], self.docker.image)
@@ -352,7 +380,7 @@ class PreparationTests(unittest.TestCase):
             self.prepare(build_docker_config='/private/build-config')
             self.assertEqual(os.environ['DOCKER_CONFIG'], '/normal/config')
         build, = self.commands('docker', 'build')
-        self.assertEqual(build[1]['env']['DOCKER_CONFIG'], '/private/build-config')
+        self.assertEqual(build[1]['env']['DOCKER_CONFIG'], str(Path('/private/build-config').absolute()))
         self.assertEqual(build[1]['env']['DOCKER_BUILDKIT'], '1')
         self.assertTrue(all('env' not in options for cmd, options in self.docker.calls if cmd[:2] != ['docker', 'build']))
 
@@ -360,7 +388,7 @@ class PreparationTests(unittest.TestCase):
         with patch.dict(os.environ, {'DOCKER_CONFIG': '/normal/config', 'DOCKER_BUILDKIT': '0'}):
             self.prepare()
         build, = self.commands('docker', 'build')
-        self.assertEqual(build[1]['env']['DOCKER_CONFIG'], '/normal/config')
+        self.assertEqual(build[1]['env']['DOCKER_CONFIG'], str(Path('/normal/config').absolute()))
         self.assertEqual(build[1]['env']['DOCKER_BUILDKIT'], '0')
 
     def test_relative_build_config_remains_relative_to_the_caller_not_the_checkout(self):
@@ -569,8 +597,8 @@ class EntrypointTests(unittest.TestCase):
     def test_original_cli_and_explicit_storage_and_build_config_options(self):
         common = ['build_image.py', '--native-image', FakeDocker.image, '--tag', 'compiler:result', '--work-root', '/approved/work']
         for options, policy, config in [([], None, None),
-                                        (['--work-root-policy', 'linux-dedicated', '--build-docker-config', '/build/config'],
-                                         'linux-dedicated', '/build/config')]:
+                                        (['--storage-profile', '/fixture/profile.json', '--build-docker-config', '/build/config'],
+                                         '/fixture/profile.json', '/build/config')]:
             with self.subTest(options=options), patch.object(build_image.sys, 'argv', common + options), \
                     patch.object(build_image, 'prepare_image') as prepare:
                 build_image.main()

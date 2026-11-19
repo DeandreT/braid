@@ -19,7 +19,7 @@ public sealed partial class BlobTriggerSource : ITriggerSource
     private readonly int pageSize;
 
     public BlobTriggerSource(TriggerConnectorReference connector, BlobStorageOptions storage, string prefix, int pageSize)
-        : this(connector, BlobPrivateObjectStore.CreateContainerClient(storage is { Credential: BlobStorageCredentialKind.Emulator } ? storage : throw new ArgumentException("Local emulator required."), maxRetries: 0), prefix, pageSize) { }
+        : this(connector, BlobOutputDestination.TriggerContainer(storage), prefix, pageSize) { }
 
     internal BlobTriggerSource(TriggerConnectorReference connector, BlobContainerClient container, string prefix, int pageSize)
     {

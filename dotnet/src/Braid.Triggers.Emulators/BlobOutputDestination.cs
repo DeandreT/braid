@@ -22,7 +22,12 @@ public sealed partial class BlobOutputDestination : IOutputDestination
     private readonly string prefix;
 
     public BlobOutputDestination(TriggerConnectorReference connector, BlobStorageOptions storage, string prefix)
-        : this(connector, BlobPrivateObjectStore.CreateContainerClient(storage is { Credential: BlobStorageCredentialKind.Emulator } ? storage : throw new ArgumentException("Local emulator required."), maxRetries: 0), prefix) { }
+        : this(connector, TriggerContainer(storage), prefix) { }
+
+    internal static BlobContainerClient TriggerContainer(BlobStorageOptions storage) =>
+        BlobPrivateObjectStore.CreateContainerClient(storage is { Credential: BlobStorageCredentialKind.Emulator } or
+            { Credential: BlobStorageCredentialKind.ManagedIdentity, ManagedIdentityClientId: not null }
+            ? storage : throw new ArgumentException("An emulator or explicit trigger identity is required."), maxRetries: 0);
 
     internal BlobOutputDestination(TriggerConnectorReference connector, BlobContainerClient container, string prefix)
     {

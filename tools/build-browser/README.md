@@ -20,7 +20,8 @@ Commit the source, then from the repository root:
 bun install --frozen-lockfile
 py -3.12 -B tools/regression-browser/prepare.py `
   --scenario build `
-  --work-root "$env:LOCALAPPDATA/Temp/opencode" `
+  --work-root "$WindowsWorkRoot" `
+  --distribution "$WslDistribution" --storage-profile "$LinuxStorageProfile" `
   --bun "<bun-1.4.5>/bun.exe" `
   --worker-image sha256:<fixture-owned-qualified-compiler-image>
 ```

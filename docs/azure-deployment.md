@@ -586,3 +586,40 @@ regenerate it after an intended change, set `BRAID_QUALIFY_UPDATE_EXPECTED=1`, t
 - **Provisioning connection.** The provisioning job's PostgreSQL client image has no CA
   bundle, so it uses `sslmode=require` inside the virtual network. Application and migration
   connections use `SSL Mode=VerifyFull`.
+
+## Triggers
+
+To register a managed trigger host, add `triggers` to the target in `mappingEndpoints`.
+Each enabled target gets a separate user-assigned identity. Queue or subscription sources
+and topic destinations get a private Premium Service Bus namespace; Blob sources or
+destinations get a private storage account. Plan for one namespace per broker-enabled
+target, including its Premium capacity and private endpoint. Only public Azure DNS
+suffixes are supported by the managed trigger host.
+
+Use the connector fields in the [local trigger registration](local-trigger-host.md).
+Supply `queues`, `schedules`, and `destinations`; at least one source is required.
+Give a queue source its `queueName`. For a subscription source, set `queueName` to the
+topic and `subscription` to the subscription name. For Blob sources and destinations,
+provide `container` and `prefix`; the template supplies the service URI and identity.
+For an HTTPS destination, `secret` names its signing key in Key Vault. For SFTP,
+`credential` is `password` or `privateKey` and `secret` names that credential in Key Vault.
+Never place credential values in parameters. Use distinct entities for independent
+routes: multiple receivers on one queue or subscription compete for the same messages.
+
+The template assigns receive on each source queue or subscription, send on each output
+topic, read on each source container, and contributor on each output container. Shared
+keys and public network access are disabled for both services. It delivers a version-2
+host file and the `braid_trigger_worker` database login through protected files. An
+existing database provisioned with a disabled trigger login needs its credential set
+by its administrator to match `pg-trigger-worker-connection`.
+
+Use the target's `triggerPrincipals` **principal ID** when granting machine invocation
+on that target. Configure the database trigger definition and matching connector versions
+in Studio Operations, then enable the route. The endpoint requests a token for its
+configured audience using the target's **client ID**. The ordinary endpoint validator
+checks the token before the database checks the current grant and pinned release.
+
+Run `python deploy/azure/tests/managed-trigger-snapshot.py` with Bicep 0.49.2 or
+later on `PATH` to check the resource scopes and rendered endpoint registrations. A live
+qualification still needs to verify private DNS, effective roles, credential delivery
+and queue/Blob delivery in an approved environment.

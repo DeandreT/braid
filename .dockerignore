@@ -1,5 +1,6 @@
 # The container build context is the repository root; send only image inputs.
 **
+!LICENSE
 !bunfig.toml
 !global.json
 !package.json

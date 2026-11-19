@@ -10,6 +10,8 @@ import type { components } from "../src/api/generated";
 
 interface Binding {
   fixtureId: string;
+  distribution: string;
+  storageProfile: string;
   config: string;
   manifest: string;
   readOrigin: string;
@@ -52,11 +54,13 @@ export class ExecutionOwner<M extends ExecutionManifest = ExecutionManifest> {
     this.binding = JSON.parse(readFileSync(path, "utf8")) as Binding;
     const b = this.binding,
       prefix = this.kind.toUpperCase();
+    if (!b.distribution?.trim() || !b.storageProfile?.startsWith("/"))
+      throw new Error("Prepare execution bindings with a Linux storage profile.");
     this.child = spawn(
       "wsl.exe",
       [
         "--distribution",
-        "Example-Build-Linux",
+        b.distribution,
         "--user",
         "root",
         "--exec",
@@ -76,6 +80,7 @@ export class ExecutionOwner<M extends ExecutionManifest = ExecutionManifest> {
         "-I",
         "-B",
         b.launcher || b.operator.replace(/operator\.mjs$/, "run_linux.py"),
+        b.storageProfile,
         b.config,
         b.bun,
         b.operator,
@@ -122,7 +127,7 @@ export class ExecutionOwner<M extends ExecutionManifest = ExecutionManifest> {
       "wsl.exe",
       [
         "--distribution",
-        "Example-Build-Linux",
+        b.distribution,
         "--user",
         "root",
         "--exec",

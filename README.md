@@ -47,3 +47,10 @@ _Workspace chat: ask questions and review proposed changes, with links to their 
 - Build and deploy versions, with rollback to earlier releases.
 - Run deployed mappings through an API.
 - Sign in with Microsoft Entra.
+
+## License
+
+braid is licensed under the [GNU General Public License, version 3 only](LICENSE)
+(`GPL-3.0-only`), the same license as the Ferrule libraries linked into the
+native worker and WebAssembly editor. Third-party materials retain their
+original licenses and [notices](engines/ferrule-host/third-party/README.md).

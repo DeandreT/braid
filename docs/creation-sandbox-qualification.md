@@ -23,12 +23,12 @@ profile limits. A portable authoring/preview example is not an eligible host.
 
 Choose an existing, writable local Btrfs temporary root for the run. Keep the
 checkout, Cargo/.NET output and temporary work off Windows-mounted paths and
-cloud-synced storage. Set `TMPDIR` before starting .NET so the shared temporary-root helper
+cloud-synced directories. Set `TMPDIR` before starting .NET so the shared temporary-root helper
 uses that filesystem:
 
 ```sh
-export TMPDIR=/srv/example-build/work/creation-qualification-tmp
-mkdir -p "$TMPDIR"
+export TMPDIR="${BRAID_TEST_WORK_ROOT:?Set an existing verified Btrfs work directory}"
+test -d "$TMPDIR" && test -w "$TMPDIR" || exit 1
 dotnet test dotnet/tests/Braid.Tests/Braid.Tests.csproj \
   --filter FullyQualifiedName~CreationSandboxQualificationTests \
   --logger 'console;verbosity=normal'

@@ -8,19 +8,21 @@ import subprocess
 import sys
 import time
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import qualification_storage as storage
 
 class OperatorUnsettled(RuntimeError):
     pass
 
 
-def ensure_docker():
+def ensure_docker(docker_root):
     """Called only after mount/headroom admission; never adopts another data root."""
     command = ['/usr/bin/docker', 'info', '--format', '{{.DockerRootDir}} {{.Driver}} {{.CgroupVersion}}']
     result = subprocess.run(command, capture_output=True, text=True)
     if result.returncode != 0:
         subprocess.run(['systemctl', 'start', 'docker.service'], check=True, capture_output=True, text=True)
         result = subprocess.run(command, capture_output=True, text=True)
-    if result.returncode != 0 or result.stdout.strip() != '/srv/example-build/cache/braid-docker overlay2 2':
+    if result.returncode != 0 or result.stdout.strip() != f'{docker_root} overlay2 2':
         raise RuntimeError('The guarded Btrfs Docker daemon is unavailable or has unexpected storage.')
 
 
@@ -56,24 +58,33 @@ def wait_for_operator(command, shutdown_seconds=180):
 
 
 def main():
-    if len(sys.argv) == 4:
+    if len(sys.argv) == 5 and sys.argv[1] != '--isolated':
         os.execv('/usr/bin/unshare', ['unshare', '--mount', '--propagation', 'private',
                                     '/usr/bin/python3', '-I', '-B', __file__, '--isolated', *sys.argv[1:]])
-    assert len(sys.argv) == 5 and sys.argv[1] == '--isolated' and os.geteuid() == 0
-    config, bun, operator = sys.argv[2:]
+    if len(sys.argv) != 6 or sys.argv[1] != '--isolated' or os.geteuid() != 0:
+        raise ValueError('Expected a root-operated isolated fixture.')
+    profile_path, config, bun, operator = sys.argv[2:]
+    profile = storage.read_profile(profile_path)
+    storage.require_host_reserve(profile)
+    docker_root = storage.admitted_path(profile['dockerRoot'], profile)
+    if storage.admitted_path(profile['bun'], profile, directory=False) != Path(bun):
+        raise ValueError('Operator tool does not match storage profile.')
+    storage.admitted_path(profile['dotnet'], profile, directory=False)
+    storage.admitted_path(operator, profile, directory=False)
     data = json.loads(Path(config).read_text())
     identity = data['fixtureId']
-    assert re.fullmatch(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}', identity)
-    private = Path('/srv/example-build/data/braid-regression-' + identity)
-    assert data['privateDirectory'] == str(private) and Path(config).parent == private
-    mount = json.loads(subprocess.check_output(['findmnt', '-J', '-T', str(private), '-o', 'FSTYPE,UUID,FSROOT,OPTIONS']))['filesystems'][0]
-    assert mount['fstype'] == 'btrfs' and mount['uuid'] == '00000000-0000-4000-8000-000000000001' and mount['fsroot'] == '/@example-build'
-    assert 'rw' in mount['options'].split(',') and 'compress=zstd:3' in mount['options']
-    host = os.statvfs('/mnt/example-host')
-    assert host.f_bavail * host.f_frsize >= 25 * 2**30
-    assert not private.is_symlink() and private.stat().st_uid == 0 and private.stat().st_mode & 0o777 == 0o700
+    if not re.fullmatch(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}', identity):
+        raise ValueError('Invalid fixture identity.')
+    private = storage.admitted_path(Path(profile['dataRoot']) / ('braid-regression-' + identity), profile)
+    if data['privateDirectory'] != str(private) or Path(config).parent != private:
+        raise ValueError('The fixture config is outside the configured private directory.')
+    if data['dotnet'] != profile['dotnet']:
+        raise ValueError('Operator SDK does not match storage profile.')
+    if private.stat().st_uid != 0 or private.stat().st_mode & 0o777 != 0o700:
+        raise ValueError('Expected a private, root-owned directory.')
     alias = Path('/run/braid-regression-' + identity)
-    assert data['privateStorageRoot'] == str(alias / 'objects')
+    if data['privateStorageRoot'] != str(alias / 'objects'):
+        raise ValueError('Fixture alias mismatch.')
     alias.mkdir(mode=0o700)  # An empty mountpoint only; all fixture writes land on Btrfs.
     mounted = False
     settled = True
@@ -81,9 +92,11 @@ def main():
         subprocess.run(['/usr/bin/mount', '--bind', str(private), str(alias)], check=True)
         mounted = True
         actual = json.loads(subprocess.check_output(['findmnt', '-J', '-T', str(alias), '-o', 'FSTYPE,UUID,OPTIONS']))['filesystems'][0]
-        assert actual['fstype'] == 'btrfs' and actual['uuid'] == mount['uuid'] and 'rw' in actual['options'].split(',')
-        assert alias.stat().st_ino == private.stat().st_ino and alias.stat().st_dev == private.stat().st_dev
-        ensure_docker()
+        options = actual['options'].split(',')
+        if (actual['fstype'] != 'btrfs' or actual['uuid'] != profile['uuid'] or 'rw' not in options or
+                'ro' in options or not os.path.samefile(alias, private)):
+            raise ValueError('Bound fixture storage did not match the admitted directory.')
+        ensure_docker(docker_root)
         try:
             code = wait_for_operator([bun, operator, '--config', config],
                                      shutdown_seconds=360 if data['schemaVersion'] == 'braid.build-browser-operator-config.v1' else 180)

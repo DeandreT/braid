@@ -1,6 +1,7 @@
 """Offline build evidence tests; no Docker daemon, signing service, or registry is contacted."""
 
 import hashlib
+import io
 import json
 from pathlib import Path
 import tempfile
@@ -15,6 +16,18 @@ def fake_digest(char):
 
 
 class ReleaseEvidenceTests(unittest.TestCase):
+    def test_unavailable_or_wrong_source_never_reaches_docker_push(self):
+        for code, expected in [(22, hashlib.sha256(b"not found").hexdigest()), (0, "0" * 64)]:
+            with self.subTest(code=code), patch.object(release.subprocess, "Popen") as popen, \
+                    patch.object(release.subprocess, "run") as docker:
+                download = popen.return_value.__enter__.return_value
+                download.stdout, download.wait.return_value = io.BytesIO(b"not found"), code
+                with self.assertRaisesRegex(ValueError, "refusing to push"):
+                    release.publish("server", "registry.example/product", "v1.2.3", "c" * 40,
+                                    "https://example.org/repo", Path("unused"), Path("unused"),
+                                    "https://example.org/source", expected)
+                docker.assert_not_called()
+
     def test_ferrule_uses_the_exported_native_manifest_and_measures_the_pushed_service_index(self):
         binary = b"synthetic native bytes"
         native_sha = hashlib.sha256(binary).hexdigest()
@@ -49,9 +62,11 @@ class ReleaseEvidenceTests(unittest.TestCase):
 
             with patch.object(release.subprocess, "run", side_effect=build), \
                     patch.object(release.subprocess, "check_output", side_effect=measure) as reports, \
+                    patch.object(release, "check_download") as source_check, \
                     patch.object(release, "check_attestations") as verify:
                 release.publish("ferruleService", prefix, "v1.2.3", commit, "https://example.org/product",
-                                root / "evidence", root)
+                                root / "evidence", root, "https://example.org/source", "d" * 64)
+            source_check.assert_called_once_with("https://example.org/source", "d" * 64)
             verify.assert_called_once_with(ref)
             self.assertEqual(["identity", "runtime-identity"], [c.args[0][-1] for c in reports.call_args_list])
             self.assertEqual(ref, (root / "evidence/ferruleService.ref").read_text().strip())

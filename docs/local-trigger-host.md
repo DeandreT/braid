@@ -11,3 +11,6 @@ The JSON host file registers connectors, not mapping authority. Use `version: 1`
 - Each destination specifies `bindingId`, `kind`, `connectorId`, `connectorVersion` and its connector settings. `blob` takes the same emulator storage location and prefix; it publishes under the delivery ID without overwrite. `serviceBusTopic` takes `topicName` and sends the delivery ID as the message ID. `https` uses an HTTPS endpoint, explicit accepted and rejected status arrays, and a protected signing key file. `sftp` uses a pinned host key, one protected credential file, and a create-only publish directory. Unknown non-create-only sends require reconciliation.
 
 Service Bus and Blob registrations here accept local development emulators only. `deploy/compose/compose.triggers.yml` defines an opt-in local broker, its SQL dependency, Azurite and an SFTP service. Broker acceptance requires explicit emulator license acceptance. None of these settings provisions a cloud resource or qualifies managed identity or Azure RBAC.
+
+The [Azure registration](azure-deployment.md#triggers) uses a separate version-2 plan with
+a target-specific managed identity. The endpoint refuses mixed local and managed plans.

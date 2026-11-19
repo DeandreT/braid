@@ -30,6 +30,9 @@ param ferruleServiceIdentity string
 param compileToolchain string
 @description('Execution identity the Ferrule service reports for its execute profile; the targets register it as their runtime.')
 param compiledRuntimeIdentity string
+@description('Per-target trigger identities and private service endpoints.')
+param triggerRegistrations array = []
+var triggerResources = toObject(triggerRegistrations, entry => entry.name)
 param tags object
 
 resource environment 'Microsoft.App/managedEnvironments@2024-03-01' existing = {
@@ -86,6 +89,35 @@ var runtimeEnvironment = [
   { name: 'BRAID_DELIVER_FERRULE_SERVICE_CLIENT_PEM', secretRef: 'ferrule-endpoint-client-pem' }
 ]
 
+// Trigger hosting (docs/azure-deployment.md#triggers). Each destination secret named in Key Vault reaches the host
+// only as the private file endpoint-trigger-secret-<index>; the host file names those paths, never the values.
+func triggerSecretFile(index int) string => '/run/braid/secrets/endpoint-trigger-secret-${index}'
+
+func triggerDestination(item object, index int, blobServiceUri string) object => item.kind == 'https' ? {
+  bindingId: item.bindingId, kind: item.kind, connectorId: item.connectorId, connectorVersion: item.connectorVersion
+  endpoint: item.endpoint, acceptedStatuses: item.acceptedStatuses, rejectedStatuses: item.?rejectedStatuses ?? [], signingKeyFile: triggerSecretFile(index)
+} : item.kind == 'sftp' ? union({
+  bindingId: item.bindingId, kind: item.kind, connectorId: item.connectorId, connectorVersion: item.connectorVersion
+  host: item.host, port: item.?port ?? 22, userName: item.userName, hostKeySha256: item.hostKeySha256, root: item.root, prefix: item.prefix
+}, item.credential == 'privateKey' ? { privateKeyFile: triggerSecretFile(index) } : item.credential == 'password' ? { passwordFile: triggerSecretFile(index) } : fail('Unsupported SFTP credential'))
+: item.kind == 'serviceBusTopic' ? {
+  bindingId: item.bindingId, kind: item.kind, connectorId: item.connectorId, connectorVersion: item.connectorVersion, topicName: item.topicName
+} : item.kind == 'blob' ? {
+  bindingId: item.bindingId, kind: item.kind, connectorId: item.connectorId, connectorVersion: item.connectorVersion
+  serviceUri: blobServiceUri, container: item.container, credential: 'managedIdentity', prefix: item.prefix
+} : fail('Unsupported trigger destination kind')
+
+func triggerHostFile(triggers object, resources object) string => string({
+  version: 2
+  managedIdentityClientId: resources.identityClientId
+  serviceBusNamespace: empty(resources.serviceBusNamespace) ? null : resources.serviceBusNamespace
+  queues: triggers.?queues ?? []
+  schedules: map(triggers.?schedules ?? [], schedule => union(schedule, { serviceUri: resources.blobServiceUri, credential: 'managedIdentity' }))
+  destinations: map(range(0, length(triggers.?destinations ?? [])), index => triggerDestination(triggers.destinations[index], index, resources.blobServiceUri))
+})
+
+func triggerSecretIndexes(triggers object) array => filter(range(0, length(triggers.?destinations ?? [])), index => contains(['https', 'sftp'], triggers.destinations[index].kind))
+
 var healthReady = {
   path: '/v1/health/ready'
   port: 8080
@@ -97,7 +129,11 @@ resource endpointApps 'Microsoft.App/containerApps@2024-03-01' = [for endpoint i
   tags: tags
   identity: {
     type: 'UserAssigned'
-    userAssignedIdentities: {
+    // The trigger identity holds the trigger data roles and is the triggers' machine caller; Key Vault and registry stay on identityId.
+    userAssignedIdentities: contains(endpoint, 'triggers') ? {
+      '${identityId}': {}
+      '${triggerResources[endpoint.name].identityId}': {}
+    } : {
       '${identityId}': {}
     }
   }
@@ -117,7 +153,8 @@ resource endpointApps 'Microsoft.App/containerApps@2024-03-01' = [for endpoint i
       secrets: concat(map(logins, login => vaultSecret(vaultUri, identityId, '${login.key}-connection', 'pg-${login.key}-connection')), [
         // A Key Vault certificate's secret is its PEM bundle: the private key and the certificate.
         vaultSecret(vaultUri, identityId, 'ferrule-endpoint-client-pem', 'braid-ferrule-endpoint-client')
-      ])
+      ], contains(endpoint, 'triggers') ? concat([vaultSecret(vaultUri, identityId, 'trigger-worker-connection', 'pg-trigger-worker-connection')],
+        map(triggerSecretIndexes(endpoint.triggers), index => vaultSecret(vaultUri, identityId, 'trigger-secret-${index}', endpoint.triggers.destinations[index].secret))) : [])
     }
     template: {
       // A stop drains calls for up to their 90-second deadline, then joins the runtime's work.
@@ -143,7 +180,12 @@ resource endpointApps 'Microsoft.App/containerApps@2024-03-01' = [for endpoint i
           ], runtimeEnvironment, flatten(map(logins, login => [
             { name: 'BRAID_DELIVER_FILE_ENDPOINT_${login.setting}', secretRef: '${login.key}-connection' }
             { name: 'BRAID_ENDPOINT_${login.setting}_CONNECTION_STRING_FILE', value: '/run/braid/secrets/endpoint-${toLower(replace(login.setting, '_', '-'))}' }
-          ])))
+          ])), contains(endpoint, 'triggers') ? concat([
+            { name: 'BRAID_DELIVER_FILE_ENDPOINT_TRIGGER_HOST', value: triggerHostFile(endpoint.triggers, triggerResources[endpoint.name]) }
+            { name: 'BRAID_ENDPOINT_TRIGGER_HOST_FILE', value: '/run/braid/secrets/endpoint-trigger-host' }
+            { name: 'BRAID_DELIVER_FILE_ENDPOINT_TRIGGER_WORKER', secretRef: 'trigger-worker-connection' }
+            { name: 'BRAID_ENDPOINT_TRIGGER_WORKER_CONNECTION_STRING_FILE', value: '/run/braid/secrets/endpoint-trigger-worker' }
+          ], map(triggerSecretIndexes(endpoint.triggers), index => { name: 'BRAID_DELIVER_FILE_ENDPOINT_TRIGGER_SECRET_${index}', secretRef: 'trigger-secret-${index}' })) : [])
           resources: {
             cpu: json('0.5')
             memory: '1Gi'

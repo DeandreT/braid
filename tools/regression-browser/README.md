@@ -8,9 +8,9 @@ Angular screen.
 
 - Native Windows Python 3.12 and Bun 1.4.5.
 - Headless Chrome for Testing matching the repository browser tooling.
-- Example-Build-Linux Docker Engine, with its data on the verified Btrfs volume.
-- Linux SDK 10.0.112 at `/srv/example-build/cache/braid-tooling/dotnet` and Bun 1.4.5
-  at `/srv/example-build/cache/braid-tooling/bun-1.4.5/bun-linux-x64/bun`.
+- A WSL distribution with systemd, Docker Engine, Linux SDK 10.0.112 and Bun 1.4.5.
+  Provision a [Linux storage profile](../../docs/qualification-storage.md) for the
+  fixture, including the Docker data root and Linux executables on the approved volume.
 - A pinned immutable Ferrule native image ID. Use a fixture-owned
   image distinct from an interactive viewer's image to isolate lifecycle events.
 - At least 25 GiB free on the actual Windows host before Linux writers start.
@@ -41,12 +41,15 @@ and creates normal locked .NET publications on Btrfs. Configuration and journals
 are private files outside the repository.
 
 From the repository root, install the locked workspace dependencies and substitute
-the actual pinned tool path and image ID:
+the actual pinned tool path and image ID. Set `$WindowsWorkRoot` to an existing
+private Windows directory, `$WslDistribution` to the installed distribution name,
+and `$LinuxStorageProfile` to the absolute Linux path of the profile in that distribution:
 
 ```powershell
 bun install --frozen-lockfile
 py -3.12 -B tools/regression-browser/prepare.py `
-  --work-root "$env:LOCALAPPDATA/Temp/opencode" `
+  --work-root "$WindowsWorkRoot" `
+  --distribution "$WslDistribution" --storage-profile "$LinuxStorageProfile" `
   --bun "<bun-1.4.5>/bun.exe" `
   --worker-image sha256:<qualified-native-image-id>
 ```

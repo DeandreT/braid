@@ -118,6 +118,7 @@ LABEL org.opencontainers.image.title="Braid Ferrule service" \
       io.braid.ferrule.worker-sha256="$BRAID_NATIVE_BINARY_SHA256" \
       io.braid.ferrule.compile-sdk="10.0.112"
 COPY --from=native / /
+COPY LICENSE /usr/share/doc/braid/LICENSE
 COPY --from=checked-native /verified-native/ferrule-host /ferrule-host
 # The native layer already holds the dynamic loader at /lib64; the service adds the shared libraries .NET needs.
 COPY --from=sdk /usr/lib/x86_64-linux-gnu /usr/lib/x86_64-linux-gnu

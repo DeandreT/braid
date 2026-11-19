@@ -69,6 +69,7 @@ declare -A logins=(
   [release-reader]=braid_release_reader [release-writer]=braid_release_writer
   [invocation-grant-writer]=braid_invocation_grant_writer [invocation-writer]=braid_invocation_writer
   [api-audit-writer]=braid_api_audit_writer
+  [trigger-worker]=braid_trigger_worker
 )
 
 for key in "${!logins[@]}"; do

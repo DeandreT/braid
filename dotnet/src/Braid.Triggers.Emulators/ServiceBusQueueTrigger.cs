@@ -110,7 +110,7 @@ public sealed class ServiceBusQueueTrigger : IAsyncDisposable
         return new(connectionString, Options());
     }
 
-    private static ServiceBusClientOptions Options() => new()
+    public static ServiceBusClientOptions Options() => new()
     {
         TransportType = ServiceBusTransportType.AmqpTcp,
         RetryOptions = new ServiceBusRetryOptions { Mode = ServiceBusRetryMode.Fixed, MaxRetries = 0, Delay = TimeSpan.FromSeconds(1), TryTimeout = TimeSpan.FromSeconds(30) }

@@ -7,6 +7,9 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
+from urllib.parse import urlsplit
+
+from source_archive import MAX_BYTES, identities
 
 
 # Role -> (image name suffix, deploy/container target). Ferrule has a separate Dockerfile.
@@ -72,7 +75,22 @@ def check_attestations(ref):
         raise ValueError("Missing SPDX SBOM or SLSA provenance for the released platform")
 
 
-def publish(role, prefix, version, commit, source, evidence, temp):
+def check_download(url, sha):
+    parts = urlsplit(url)
+    if (parts.scheme != "https" or not parts.hostname or parts.username is not None or parts.fragment
+            or not re.fullmatch(r"[0-9a-f]{64}", sha)):
+        raise ValueError("Expected a public HTTPS source archive and its SHA-256 digest")
+    # No credentials. -q disables local curlrc (including any configured auth).
+    with subprocess.Popen(["curl", "-qfsSL", "--proto", "=https", "--proto-redir", "=https",
+                           "--max-filesize", str(MAX_BYTES), "--max-time", "900", "--", url],
+                          stdout=subprocess.PIPE) as download:
+        actual = hashlib.file_digest(download.stdout, "sha256").hexdigest()
+        if download.wait() or actual != sha:
+            raise ValueError("Public source unavailable or digest mismatch: refusing to push")
+
+
+def publish(role, prefix, version, commit, source, evidence, temp, archive, sha256):
+    identities(version, commit)
     suffix, target = PRODUCTS[role]
     repository = prefix + suffix
     meta = temp / "result.json"
@@ -81,8 +99,13 @@ def publish(role, prefix, version, commit, source, evidence, temp):
     else:
         sha, inputs = native_source(temp, commit, source)
         options = ["--file", "engines/ferrule-service/Dockerfile", *inputs]
+    check_download(archive, sha256)
+    if target:
+        options += ["--build-arg", "BRAID_SOURCE_ARCHIVE=" + archive, "--build-arg", "BRAID_VERSION=" + version]
     subprocess.run(BUILD + options + [
         "--label", f"org.opencontainers.image.revision={commit}", "--label", f"org.opencontainers.image.source={source}",
+        "--label", "org.opencontainers.image.licenses=GPL-3.0-only", "--label", f"io.braid.source.archive={archive}",
+        "--label", f"io.braid.source.sha256={sha256}",
         "--label", f"org.opencontainers.image.version={version}", "--sbom", f"generator={SCANNER}",
         "--provenance=mode=max", "--tag", f"{repository}:{version}", "--push", "--metadata-file", str(meta), ".",
     ], check=True)
@@ -109,7 +132,10 @@ if __name__ == "__main__":
     parser.add_argument("--version", required=True)
     parser.add_argument("--commit", required=True)
     parser.add_argument("--source", required=True)
+    parser.add_argument("--source-archive", required=True)
+    parser.add_argument("--source-sha256", required=True)
     parser.add_argument("--evidence", type=Path, required=True)
     args = parser.parse_args()
     with tempfile.TemporaryDirectory() as scratch:
-        publish(args.role, args.prefix, args.version, args.commit, args.source, args.evidence, Path(scratch))
+        publish(args.role, args.prefix, args.version, args.commit, args.source, args.evidence, Path(scratch),
+                args.source_archive, args.source_sha256)

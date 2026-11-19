@@ -29,9 +29,10 @@ see [Manual hosting and frontend development](#manual-hosting-and-frontend-devel
 Compiler-image preparation enforces the platform's storage policy in
 [`tools/build-worker/build_image.py`](../tools/build-worker/build_image.py).
 Before the first build, set `BRAID_DEV_HOME` so its `tmp` directory is on an
-admitted storage volume. Native Linux currently requires writable Btrfs at
-`/mnt/example-build`, backed by `/dev/disk/by-label/example-build`. The original WSL route retains its separate
-volume-identity, compression and Windows free-space checks. The default under
+admitted storage volume and set `BRAID_STORAGE_PROFILE` to the absolute path of
+your private [Linux storage profile](qualification-storage.md). The compiler
+requires the configured writable Btrfs device, mount and subvolume. On WSL it
+also checks compression and free space on the Windows backing drive. The default under
 your home directory is not guaranteed to qualify. A rejected work root stops
 preparation; the launcher does not move it or fall back to another disk.
 
