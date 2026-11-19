@@ -118,6 +118,7 @@ internal static class MaintenanceRoleGuard
                 throw new InvalidOperationException("Maintenance metadata requires its dedicated login, unbound scoped transaction and exact restricted privileges.");
         }
 
-        await SupplementalMaintenanceSchemaAdmission.ValidateAsync(connection, transaction, cancellationToken);
+        if (!await LifecycleCatalogAdmission.ValidateIfInstalledAsync(connection, transaction, cancellationToken))
+            await SupplementalMaintenanceSchemaAdmission.ValidateAsync(connection, transaction, cancellationToken);
     }
 }
