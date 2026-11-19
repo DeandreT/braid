@@ -1,4 +1,22 @@
-# Local queue and Blob trigger host
+# Mapping trigger sources and destinations
+
+| Source | Studio Operations route action | API action | Destinations |
+| --- | --- | --- | --- |
+| Service Bus queue or topic subscription | Configure queue or subscription | `configureQueue` | Blob, SFTP, HTTPS, Service Bus topic |
+| Scheduled Blob prefix | Configure Blob schedule | `configureBlob` | Blob, SFTP, HTTPS, Service Bus topic |
+| Scheduled SFTP inbox | Configure SFTP to AS2 pilot | `configure` | AS2 only, through the [local SFTP pilot registration](sftp-as2-route.md) |
+
+The actions use the same administrator-only Operations endpoint and reviewed trigger generation. `Braid.ReleaseTool` manages releases and packages; it has no trigger-authoring command. Operators configure connectors in protected host files and author routes in Studio or through the API. An SFTP **destination** on a queue or Blob route does not enable SFTP **intake**. The managed Azure plan supports queue/subscription and Blob sources, not the SFTP inbox pilot.
+
+## Reading schedule and order outcomes
+
+**Trigger runs** records scheduled occurrences, not remote deliveries. Studio schedules use UTC, a one-hour lookback and bounded catch-up of two: after an outage, the latest two due occurrences in that window are eligible to scan and earlier due occurrences in the window are recorded as `missed`. No run is promised outside the lookback. If a scan is still unfinished, a newly due run is recorded as `skipped`, not queued behind it. An expired scan lease can resume from the last committed page. A later scan can rediscover a file, but the same admitted source version does not become another order.
+
+**Quarantined inputs and orders** shows rejected file versions and failed orders. For example, an SFTP digest mismatch leaves the file untouched and does not stop a valid sibling. A changed file must be published under its new digest. For queue input, retryable infrastructure or capacity failures abandon the message; a redelivery of completed work reuses the original outcome. A changed body under the same message ID is an idempotency conflict. Invalid or failed messages go to the broker's dead-letter queue with a reason; repeated abandonment can also reach the broker's maximum delivery count. Inspect broker dead letters at the broker, not in Studio's delivery list.
+
+**Trigger deliveries** shows what happened after mapping. An accepted mapping has retained the original output in the outbox; it does not establish remote acceptance. Reconcile an unknown send against the original delivery rather than rerunning the order.
+
+## Register the local queue and Blob worker
 
 The mapping endpoint can run a local trigger worker for its registered target. Supply both `BRAID_ENDPOINT_LOCAL_TRIGGER_HOST_FILE` and `BRAID_ENDPOINT_LOCAL_TRIGGER_CONNECTION_STRING_FILE`. The latter is a protected file for the `braid_trigger_worker` login. Leaving both unset starts no worker. This plan is separate from the SFTP-to-AS2 pilot plan.
 

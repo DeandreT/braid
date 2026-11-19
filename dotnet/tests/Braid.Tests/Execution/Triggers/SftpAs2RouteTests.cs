@@ -27,11 +27,31 @@ public sealed class SftpLoopbackFactAttribute : FactAttribute
 [Collection(PostgresCollection.Name)]
 public sealed class SftpAs2RouteTests(PostgresFixture fixture, ITestOutputHelper output)
 {
+    private sealed class TickAt(DateTimeOffset instant) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => instant;
+    }
+
+    private sealed class HoldFirstPage(ITriggerSource inner) : ITriggerSource
+    {
+        public TriggerConnectorReference Connector => inner.Connector;
+        internal TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource Continue { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public async Task<TriggerSourcePage> ListPageAsync(string? cursor, DateTimeOffset cutoff, CancellationToken token)
+        {
+            Started.TrySetResult();
+            await Continue.Task.WaitAsync(token);
+            return await inner.ListPageAsync(cursor, cutoff, token);
+        }
+
+        public Task<TriggerSourceRead> ReadAsync(TriggerSourceItem item, int maximumBytes, CancellationToken token) => inner.ReadAsync(item, maximumBytes, token);
+    }
+
     [SftpLoopbackFact]
     public async Task Sftp_to_pinned_document_runtime_to_durable_outbox_and_signed_https_receipt()
     {
         await using var test = await MachineInvocationPersistenceTests.Context.CreateAsync(fixture, documents: true);
-        await RunRoute(test, test.Target, test.Caller, test.Application, test.Release, [2, 3]);
+        await RunRoute(test.Releases, test.Target, test.Caller, test.Application, test.Release, [2, 3], null, false, checkSchedule: true);
     }
 
     [SftpLoopbackFact]
@@ -87,7 +107,7 @@ public sealed class SftpAs2RouteTests(PostgresFixture fixture, ITestOutputHelper
         => RunRoute(test, release.Target, caller, app, release, null, whileUnknown, false, runtime);
 
     private async Task RunRoute(LocalReleasePersistenceTests.Context test, ReleaseTargetReference target, MachinePrincipal caller, Guid app,
-        ReleaseIntent release, byte[]? expectedArtifact, Func<Guid, Task>? whileUnknown, bool rebind, Braid.MappingBackends.FerruleCompiledBuildRuntime? native = null, bool rotate = false)
+        ReleaseIntent release, byte[]? expectedArtifact, Func<Guid, Task>? whileUnknown, bool rebind, Braid.MappingBackends.FerruleCompiledBuildRuntime? native = null, bool rotate = false, bool checkSchedule = false)
     {
         var directory = Directory.CreateTempSubdirectory("braid-route-");
         var start = new ProcessStartInfo(Environment.GetEnvironmentVariable("BRAID_SFTP_TEST_PYTHON")!) { RedirectStandardInput = true, RedirectStandardOutput = true, UseShellExecute = false };
@@ -136,7 +156,7 @@ public sealed class SftpAs2RouteTests(PostgresFixture fixture, ITestOutputHelper
                 new RegressionRunReadService(evidence, cases)), builds, new PostgresBuildObjectStore(builds, new LocalReleasePersistenceTests.NoNative(), test.Actor), selected);
             await using var ledger = new PostgresInvocationLedger(test.Case.RegressionConnectionString("braid_invocation_writer"));
             var service = new MachineInvocationService(ledger, test.Store, _ => new LocalReleaseInvocation(test.Store, execution), TimeProvider.System, Braid.MachineEndpoint.MappingEndpointResources.Limits);
-            var runner = new ScheduledTriggerRunner(store, store, source, (target, id, caller, token) => service.InvokeTriggeredAsync(store, target, id, caller, token), dispatcher, () => "2025b", TimeProvider.System);
+            var runner = new ScheduledTriggerRunner(store, store, source, (target, id, caller, token) => service.InvokeTriggeredAsync(store, target, id, caller, token), dispatcher, () => "2025b", checkSchedule ? new TickAt(epoch) : TimeProvider.System);
             var timer = Stopwatch.StartNew();
             var result = await runner.TickAsync(target, config.TriggerId, new(caller, app, DateTimeOffset.UtcNow.AddMinutes(5)), default);
             Assert.Equal((1, 1), (result.Admitted, result.Executed));
@@ -193,6 +213,33 @@ public sealed class SftpAs2RouteTests(PostgresFixture fixture, ITestOutputHelper
             var expectedEvidence = await test.Case.ScalarAsync<string>("SELECT message_id || ' ' || payload_sha256 FROM braid.as2_send_fences WHERE delivery_id=$1", id);
             Assert.Equal(expectedEvidence, Assert.Single(witnessed));
             Assert.Equal(expectedWire, await test.Case.ScalarAsync<byte[]>("SELECT p.body FROM braid.trigger_payloads p JOIN braid.trigger_deliveries d USING(organization_id,receipt_id) WHERE d.delivery_id=$1", id));
+            if (checkSchedule)
+            {
+                // A second worker wakes three minutes into an unfinished scan. Advance only the planner's
+                // clock: leases and fencing still use real PostgreSQL time. The first worker lists real SFTP.
+                using var bound = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+                var held = new HoldFirstPage(source);
+                var identity = new MachineCaller(caller, app, DateTimeOffset.UtcNow.AddMinutes(5));
+                Task<ScheduledTickResult> Scan(ITriggerSource inbox, int minute) => new ScheduledTriggerRunner(store, store, inbox,
+                    (_, _, _, _) => throw new InvalidOperationException("Previously admitted input was executed again."), dispatcher,
+                    () => "2025b", new TickAt(epoch.AddMinutes(minute))).TickAsync(target, config.TriggerId, identity, bound.Token);
+                var scanning = Scan(held, 1);
+                try
+                {
+                    await held.Started.Task.WaitAsync(bound.Token);
+                    var overlap = await Scan(source, 4);
+                    Assert.Equal((0, 1, 0, 0), (overlap.Runs, overlap.Missed, overlap.Admitted, overlap.Executed));
+                }
+                finally { held.Continue.TrySetResult(); await scanning; }
+                Assert.Equal(1, (await scanning).Runs);
+                var next = await Scan(source, 5);
+                Assert.Equal((1, 0, 0), (next.Runs, next.Admitted, next.Executed));
+                Assert.Equal("scanned,scanned,missed,skipped,skipped,scanned", await test.Case.ScalarAsync<string>(
+                    "SELECT string_agg(state,',' ORDER BY scheduled_at) FROM braid.trigger_runs WHERE trigger_id=$1", config.TriggerId));
+                Assert.Equal(1L, await test.Case.ScalarAsync<long>("SELECT count(*) FROM braid.trigger_work WHERE trigger_id=$1", config.TriggerId));
+                Assert.False(await Dispatch());
+                Assert.Single(File.ReadAllLines(Path.Combine(directory.FullName, "accepted.log")));
+            }
             output.WriteLine($"{(whileUnknown is null ? "signed receipt" : "lost MDN")} SFTP-to-mapped ms={mappedMs}; SFTP-to-outcome ms={totalMs}");
             Assert.InRange(totalMs, 0L, 30_000L);
             if (whileUnknown is not null)
