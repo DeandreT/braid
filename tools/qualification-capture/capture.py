@@ -243,14 +243,18 @@ def drive(capture: Path, argv: list[str], deadline: float, cancelled: threading.
                                  stderr=subprocess.DEVNULL, close_fds=True)
     except OSError:
         return 'driverStartFailure', b''
-    output, overflow = bytearray(), threading.Event()
+    output, overflow, complete = bytearray(), threading.Event(), threading.Event()
 
     def drain():
-        for chunk in iter(lambda: child.stdout.read1(65536), b''):
-            if len(output) + len(chunk) > STDOUT_LIMIT:
-                overflow.set()
-            else:
-                output.extend(chunk)
+        try:
+            for chunk in iter(lambda: child.stdout.read1(65536), b''):
+                if len(output) + len(chunk) > STDOUT_LIMIT:
+                    overflow.set()
+                else:
+                    output.extend(chunk)
+            complete.set()  # Only EOF proves the output was drained.
+        except OSError:
+            pass  # The owner refuses incomplete output; never serialize the error.
 
     worker = threading.Thread(target=drain, daemon=True)
     worker.start()
@@ -268,6 +272,8 @@ def drive(capture: Path, argv: list[str], deadline: float, cancelled: threading.
     if worker.is_alive():
         return failure or 'outputDidNotSettle', bytes(output)
     child.stdout.close()
+    if not complete.is_set():
+        failure = failure or 'outputDidNotSettle'
     if overflow.is_set():
         failure = failure or 'outputLimit'
     return failure or (None if child.returncode == 0 else 'driverFailed'), bytes(output)
