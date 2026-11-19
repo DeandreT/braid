@@ -68,7 +68,7 @@ public enum BuildBoundaryKind { PrimaryInput, NamedInput, PrimaryOutput, NamedOu
 /// <summary>A physical-format requirement at an exact logical boundary. Names are not filesystem paths.</summary>
 public sealed record BuildBoundary
 {
-    public BuildBoundary(BuildBoundaryKind kind, string? name, string format, CsvDocumentDialect? csvDialect = null)
+    public BuildBoundary(BuildBoundaryKind kind, string? name, string format, CsvDocumentDialect? csvDialect = null, XmlDocumentMetadata? xmlMetadata = null)
     {
         if (!Enum.IsDefined(kind)) throw new BuildContractException(BuildContractFailure.InvalidInput);
         var named = kind is BuildBoundaryKind.NamedInput or BuildBoundaryKind.NamedOutput;
@@ -79,6 +79,8 @@ public sealed record BuildBoundary
         if (format is "csv" or "tsv" ? named || !CsvDocumentPolicy.Admits(csvDialect, BuildWorkerProtocol.MediaType(format)) : csvDialect is not null)
             throw new BuildContractException(BuildContractFailure.InvalidInput);
         CsvDialect = csvDialect;
+        if (xmlMetadata is not null && (format != "xml" || !XmlDocumentPolicy.Admits(xmlMetadata, XmlRole))) throw new BuildContractException(BuildContractFailure.InvalidInput);
+        XmlMetadata = xmlMetadata;
     }
 
     public BuildBoundaryKind Kind { get; }
@@ -86,6 +88,9 @@ public sealed record BuildBoundary
     public string Format { get; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public CsvDocumentDialect? CsvDialect { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public XmlDocumentMetadata? XmlMetadata { get; }
+    internal XmlDocumentRole XmlRole => Kind is BuildBoundaryKind.NamedInput or BuildBoundaryKind.PrimaryInput ? XmlDocumentRole.Input : XmlDocumentRole.Output;
     public override string ToString() => nameof(BuildBoundary);
 }
 

@@ -5,9 +5,9 @@ edition = "2024"
 publish = false
 
 [dependencies]
-ferrule-pdf = { package = "format-pdf", git = "https://github.com/DeandreT/ferrule", rev = "238369bf0071ee8ea097d8c54fa5061f433807fb" }
-ferrule-mapping = { package = "mapping", git = "https://github.com/DeandreT/ferrule", rev = "238369bf0071ee8ea097d8c54fa5061f433807fb" }
-ferrule-ir = { package = "ir", git = "https://github.com/DeandreT/ferrule", rev = "238369bf0071ee8ea097d8c54fa5061f433807fb" }
+ferrule-pdf = { package = "format-pdf", git = "https://github.com/DeandreT/ferrule", rev = "740af0c38ede7d814a17146bab2bffd7301320c9" }
+ferrule-mapping = { package = "mapping", git = "https://github.com/DeandreT/ferrule", rev = "740af0c38ede7d814a17146bab2bffd7301320c9" }
+ferrule-ir = { package = "ir", git = "https://github.com/DeandreT/ferrule", rev = "740af0c38ede7d814a17146bab2bffd7301320c9" }
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = "=1.0.150"
 sha2 = "=0.10.9"

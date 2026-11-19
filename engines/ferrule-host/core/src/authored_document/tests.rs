@@ -36,6 +36,7 @@ fn scalar(name: &str) -> SchemaNode {
 }
 pub(super) fn project() -> Project {
     Project {
+        execution_contract: None,
         source: SchemaNode::group("root", vec![scalar("value")]),
         target: SchemaNode::group("root", vec![scalar("value")]),
         source_path: None,

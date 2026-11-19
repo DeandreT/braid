@@ -13,6 +13,7 @@ public static class CompiledRuntimeProtocol
     public const string Protocol = "braid.ferrule-compiled-json.v1";
     public const string DocumentProtocol = "braid.ferrule-compiled-document.v1";
     public const string CsvProtocol = "braid.ferrule-compiled-csv.v1";
+    public const string XmlProtocol = "braid.ferrule-compiled-xml.v1";
     // 32 parameter values of 4096 UTF-8 bytes can expand sixfold under JSON escaping.
     public const int MaximumHeaderBytes = 1024 * 1024;
     public const int MaximumIntentBytes = 1024 * 1024;
@@ -28,7 +29,8 @@ public static class CompiledRuntimeProtocol
 
     public sealed record Document(string? Name, int ByteCount, string Sha256,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? MediaType = null,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CsvDocumentDialect? CsvDialect = null);
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CsvDocumentDialect? CsvDialect = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] XmlDocumentMetadata? XmlMetadata = null);
     public sealed record Parameter(string Name, string Kind, string Value);
     public sealed record Replay(string Target, string? TargetName, string CurrentDateTime, PreviewLimits Limits,
         Document[] Inputs, Parameter[] Parameters)
@@ -103,7 +105,7 @@ public static class CompiledRuntimeProtocol
             if (input.ByteCount > remaining) throw Invalid();
             var value = Read(bytes, ref offset, input.ByteCount, header.ProtocolVersion == CsvProtocol);
             if (value.Length != input.ByteCount || Sha256Digest.FromBytes(value).Value != input.Sha256) throw Invalid();
-            inputs.Add(new(input.Name, value, input.CsvDialect));
+            inputs.Add(new(input.Name, value, input.CsvDialect, input.XmlMetadata));
             remaining -= value.Length;
         }
         if (offset != bytes.Length) throw Invalid();
@@ -118,8 +120,8 @@ public static class CompiledRuntimeProtocol
     {
         ArgumentNullException.ThrowIfNull(invocation);
         var documents = outputs?.Outputs.Select(value => new Document(value.Key.Name, value.ByteCount, value.Digest.Value,
-            invocation.Header.ProtocolVersion is DocumentProtocol or CsvProtocol ? value.MediaType : null,
-            value.CsvDialect)).ToArray() ?? [];
+            invocation.Header.ProtocolVersion is DocumentProtocol or CsvProtocol or XmlProtocol ? value.MediaType : null,
+            value.CsvDialect, value.XmlMetadata)).ToArray() ?? [];
         if (invocation.Header.ProtocolVersion == Protocol && outputs?.Outputs.Any(value => value.MediaType != PreviewPolicy.MediaType) == true) throw Invalid();
         var request = invocation.Header;
         var header = new Response(request.ProtocolVersion, request.RequestId, request.BuildId, request.IntentDigest, request.ArtifactDigest,
@@ -161,7 +163,7 @@ public static class CompiledRuntimeProtocol
             if (value.Length != document.ByteCount || Sha256Digest.FromBytes(value).Value != document.Sha256) throw Invalid();
             remaining -= value.Length;
             values.Add(RegressionOutput.Capture(document.Name is null ? RegressionOutputKey.Primary : RegressionOutputKey.Named(document.Name), value,
-                mediaType: document.MediaType ?? PreviewPolicy.MediaType, csvDialect: document.CsvDialect));
+                mediaType: document.MediaType ?? PreviewPolicy.MediaType, csvDialect: document.CsvDialect, xmlMetadata: document.XmlMetadata));
         }
         if (offset != bytes.Length) throw Invalid();
         return new(header, header.Status == "succeeded" ? RegressionOutputSet.Capture(values) : null);
@@ -192,6 +194,7 @@ public static class CompiledRuntimeProtocol
                 (i == 0 ? input.Name is not null : !Name(input.Name) || !names.Add(input.Name!))) throw Invalid();
             remaining -= input.ByteCount;
             if (input.MediaType != DeclaredMedia(intent, input.Name, input: true) || input.CsvDialect != DeclaredDialect(intent, input.Name, input: true)) throw Invalid();
+            if (input.XmlMetadata != DeclaredXml(intent, input.Name, true)) throw Invalid();
         }
         _ = Target(request.Replay.Target, request.Replay.TargetName);
         names.Clear();
@@ -219,7 +222,7 @@ public static class CompiledRuntimeProtocol
         {
             if (document is null || document.ByteCount < 0 || document.ByteCount == 0 && request.ProtocolVersion != CsvProtocol || document.ByteCount > remaining ||
                 !Hash(document.Sha256) || !expected.Remove(document.Name) || document.MediaType != DeclaredMedia(intent, document.Name, input: false) ||
-                document.CsvDialect != DeclaredDialect(intent, document.Name, input: false)) throw Invalid();
+                document.CsvDialect != DeclaredDialect(intent, document.Name, input: false) || document.XmlMetadata != DeclaredXml(intent, document.Name, false)) throw Invalid();
             remaining -= document.ByteCount;
         }
         if (expected.Count != 0) throw Invalid();
@@ -228,6 +231,7 @@ public static class CompiledRuntimeProtocol
     public static string ProtocolFor(BuildIntent intent) => intent.Profile.Id switch
     {
         BuildWorkerProtocol.CsvProfile => CsvProtocol,
+        BuildWorkerProtocol.XmlProfile => XmlProtocol,
         BuildWorkerProtocol.DocumentProfile or BuildWorkerProtocol.X12InterchangesProfile => DocumentProtocol,
         // Legacy qualification also uses this grammar to bind replay digests for
         // other backends. Execution admission independently checks runtime support.
@@ -235,6 +239,8 @@ public static class CompiledRuntimeProtocol
     };
     private static CsvDocumentDialect? DeclaredDialect(BuildIntent intent, string? name, bool input) =>
         intent.Profile.Id == BuildWorkerProtocol.CsvProfile ? DeclaredBoundary(intent, name, input).CsvDialect : null;
+    private static XmlDocumentMetadata? DeclaredXml(BuildIntent intent, string? name, bool input) =>
+        intent.Profile.Id == BuildWorkerProtocol.XmlProfile ? DeclaredBoundary(intent, name, input).XmlMetadata : null;
     private static BuildBoundary DeclaredBoundary(BuildIntent intent, string? name, bool input)
     {
         var kind = (input, name is null) switch
@@ -255,7 +261,7 @@ public static class CompiledRuntimeProtocol
     private static Replay Describe(RegressionReplay replay, BuildIntent intent)
     {
         foreach (var input in replay.NamedInputs.Prepend(replay.Primary))
-            if (input.CsvDialect != DeclaredDialect(intent, input.Name, input: true)) throw Invalid();
+            if (input.CsvDialect != DeclaredDialect(intent, input.Name, input: true) || input.XmlMetadata != DeclaredXml(intent, input.Name, true)) throw Invalid();
         return new(replay.Target.Kind switch
         {
             PreviewTargetKind.All => "all",
@@ -264,7 +270,7 @@ public static class CompiledRuntimeProtocol
             _ => throw Invalid()
         }, replay.Target.Name, replay.CurrentDateTime, replay.Limits,
             new[] { replay.Primary }.Concat(replay.NamedInputs).Select(value => new Document(value.Name, value.ByteCount, value.Digest.Value,
-                DeclaredMedia(intent, value.Name, input: true), value.CsvDialect)).ToArray(),
+                DeclaredMedia(intent, value.Name, input: true), value.CsvDialect, value.XmlMetadata)).ToArray(),
             replay.Parameters.Select(value => new Parameter(value.Name, value.Kind switch
             {
                 PreviewParameterKind.String => "string",

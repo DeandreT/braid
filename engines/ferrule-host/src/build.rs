@@ -10,6 +10,7 @@ pub const PROFILE: &str = "braid.ferrule-csharp-json.v1";
 pub const DOCUMENT_PROFILE: &str = "braid.ferrule-csharp-document.v1";
 pub const X12_INTERCHANGES_PROFILE: &str = "braid.ferrule-csharp-x12-interchanges.v1";
 pub const CSV_PROFILE: &str = "braid.ferrule-csharp-csv.v1";
+pub const XML_PROFILE: &str = "braid.ferrule-csharp-xml.v1";
 
 fn document_profile(profile: &str) -> bool {
     matches!(
@@ -38,6 +39,8 @@ pub struct Boundary {
     pub format: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub csv_dialect: Option<crate::csv_document::CsvDialect>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub xml_metadata: Option<crate::xml_document::Metadata>,
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -80,7 +83,9 @@ pub fn handle(header: &[u8], reader: &mut impl Read, writer: &mut impl Write) ->
         native_digest: request.as_ref().map(|r| r.native_digest.as_str()),
         intent_digest: request.as_ref().map(|r| r.intent_digest.as_str()),
         engine_revision: ENGINE_REVISION,
-        profile: if request.as_ref().is_some_and(|r| r.profile == CSV_PROFILE) {
+        profile: if request.as_ref().is_some_and(|r| r.profile == XML_PROFILE) {
+            XML_PROFILE
+        } else if request.as_ref().is_some_and(|r| r.profile == CSV_PROFILE) {
             CSV_PROFILE
         } else if request
             .as_ref()
@@ -126,7 +131,7 @@ pub fn generate(
     if request.protocol_version != PROTOCOL
         || !matches!(
             request.profile.as_str(),
-            PROFILE | DOCUMENT_PROFILE | X12_INTERCHANGES_PROFILE | CSV_PROFILE
+            PROFILE | DOCUMENT_PROFILE | X12_INTERCHANGES_PROFILE | CSV_PROFILE | XML_PROFILE
         )
         || !matches!(request.operation.as_str(), "inspect" | "compile")
         || !valid_context_parts(
@@ -145,6 +150,73 @@ pub fn generate(
         || format!("{:x}", Sha256::digest(native)) != request.native_digest
     {
         return Err("invalidRequest");
+    }
+    if request.profile == XML_PROFILE {
+        let (decoded, xml) =
+            crate::xml_document::admit_native(native).map_err(|_| "unsupportedXmlBuild")?;
+        let project = decoded.project;
+        if project.execution_contract.is_some() {
+            return Err("unsupportedXmlBuild");
+        }
+        let mut boundaries = Vec::new();
+        for (input, names, metadata) in [
+            (
+                true,
+                project
+                    .extra_sources
+                    .iter()
+                    .map(|s| s.name.clone())
+                    .collect::<Vec<_>>(),
+                xml.inputs,
+            ),
+            (
+                false,
+                project
+                    .extra_targets
+                    .iter()
+                    .map(|s| s.name.clone())
+                    .collect(),
+                xml.outputs,
+            ),
+        ] {
+            for (name, metadata) in std::iter::once(None)
+                .chain(names.into_iter().map(Some))
+                .zip(metadata)
+            {
+                let kind = match (input, name.is_some()) {
+                    (true, false) => "primaryInput",
+                    (true, true) => "namedInput",
+                    (false, false) => "primaryOutput",
+                    (false, true) => "namedOutput",
+                };
+                boundaries.push(Boundary {
+                    kind,
+                    name,
+                    format: "xml",
+                    csv_dialect: None,
+                    xml_metadata: Some(metadata),
+                });
+            }
+        }
+        let mut scaffold = Vec::new();
+        for boundary in &boundaries {
+            scaffold.push((boundary.kind, &boundary.name, boundary.format));
+        }
+        framing::encode_bounded(&scaffold, 32 * 1024 - 2048).map_err(|_| "sourceLimit")?;
+        let files = ferrule_codegen_csharp::emit(&xml.program)
+            .map_err(|_| "unsupportedXmlBuild")?
+            .into_files();
+        check_files(&files)?;
+        let manifest = files
+            .iter()
+            .map(|f| SourceFile {
+                path: f.path.as_str().into(),
+                byte_count: f.contents.len(),
+                sha256: format!("{:x}", Sha256::digest(&f.contents)),
+            })
+            .collect::<Vec<_>>();
+        framing::encode_bounded(&manifest, 64 * 1024).map_err(|_| "sourceLimit")?;
+        return Ok((boundaries, files));
     }
     let decoded = decode::decode_native(native).map_err(|_| "invalidMapping")?;
     let project = &decoded.project;
@@ -202,6 +274,7 @@ pub fn generate(
         return Err("unsupported");
     }
     let mut boundaries = vec![Boundary {
+        xml_metadata: None,
         kind: "primaryInput",
         name: None,
         format: format(&project.source_options, project.source_path.as_deref())?,
@@ -221,6 +294,7 @@ pub fn generate(
         }
         boundaries.push(Boundary {
             kind: "namedInput",
+            xml_metadata: None,
             name: Some(source.name.clone()),
             format: format(&source.options, Some(&source.path))?,
             csv_dialect: None,
@@ -228,6 +302,7 @@ pub fn generate(
     }
     boundaries.push(Boundary {
         kind: "primaryOutput",
+        xml_metadata: None,
         name: None,
         format: format(&project.target_options, project.target_path.as_deref())?,
         csv_dialect: if request.profile == CSV_PROFILE {
@@ -247,6 +322,7 @@ pub fn generate(
         }
         boundaries.push(Boundary {
             kind: "namedOutput",
+            xml_metadata: None,
             name: Some(target.name.clone()),
             format: format(&target.options, target.path.as_deref())?,
             csv_dialect: None,
@@ -355,11 +431,15 @@ pub fn generate(
             syntax.into_bytes(),
         ));
     }
+    check_files(&files)?;
+    Ok((boundaries, files))
+}
+fn check_files(files: &[ferrule_codegen::GeneratedFile]) -> Result<(), &'static str> {
     if files.is_empty() || files.len() > 128 {
         return Err("sourceLimit");
     }
     let mut total = 0usize;
-    for file in &files {
+    for file in files {
         total = total
             .checked_add(file.contents.len())
             .ok_or("sourceLimit")?;
@@ -367,7 +447,7 @@ pub fn generate(
             return Err("sourceLimit");
         }
     }
-    Ok((boundaries, files))
+    Ok(())
 }
 fn name(name: &str) -> bool {
     !name.is_empty() && name.len() <= 256 && !name.chars().any(char::is_control)

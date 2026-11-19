@@ -143,6 +143,7 @@ pub fn compile(bytes: &[u8]) -> Result<Checkpoint, EditFailure> {
     check_boundary(&plan.target)?;
     let operations = edit::canonical_script(&plan.edit)?;
     let project = Project {
+        execution_contract: None,
         source: assemble_schema(plan.source.schema)?,
         target: assemble_schema(plan.target.schema)?,
         source_options: assemble_options(plan.source.options)?,

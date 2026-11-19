@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Braid.Application;
 using Braid.Domain;
 
 namespace Braid.Deployment;
@@ -31,6 +32,13 @@ public sealed class BuildIntent
         if (profile.Id == BuildWorkerProtocol.CsvProfile ? !BuildWorkerProtocol.AdmitsCsvPlan(Boundaries) : Boundaries.Any(boundary => boundary.CsvDialect is not null))
             throw new BuildContractException(BuildContractFailure.InvalidInput);
         Environment = environment;
+        if (profile.Id == BuildWorkerProtocol.XmlProfile)
+        {
+            if (Boundaries.Any(b => b.Format != "xml" || b.XmlMetadata is null)) throw new BuildContractException(BuildContractFailure.InvalidInput);
+            XmlDocumentMetadataJson.MeasureOperation(Boundaries.Where(b => b.XmlRole == XmlDocumentRole.Input).Select(b => b.XmlMetadata!).ToArray(),
+                Boundaries.Where(b => b.XmlRole == XmlDocumentRole.Output).Select(b => b.XmlMetadata!).ToArray());
+        }
+        else if (Boundaries.Any(b => b.XmlMetadata is not null)) throw new BuildContractException(BuildContractFailure.InvalidInput);
         ApprovalId = BuildValues.Id(approvalId);
         RegressionEvidenceId = BuildValues.Id(regressionEvidenceId);
         Fingerprint = Sha256Digest.FromBytes(CopyCanonicalBytes());
@@ -88,6 +96,7 @@ public sealed class BuildIntent
                 });
                 json.WriteString("name", boundary.Name);
                 json.WriteString("format", boundary.Format);
+                if (boundary.XmlMetadata is { } metadata) { json.WritePropertyName("xmlMetadata"); XmlDocumentMetadataJson.Write(json, metadata, boundary.XmlRole); }
                 if (boundary.CsvDialect is { } dialect)
                 {
                     json.WritePropertyName("csvDialect");

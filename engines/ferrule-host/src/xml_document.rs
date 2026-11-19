@@ -169,6 +169,9 @@ impl Metadata {
             .validate_xml_schema_hint_options(role == Role::Output)
             .map_err(|_| Error::InvalidOptions)?;
         if let Some(hints) = hints {
+            if hints.derivation.is_some() {
+                return Err(Error::InvalidOptions);
+            }
             hints.validate().map_err(|_| Error::InvalidOptions)?;
         }
         let expected = FormatOptions {
@@ -222,6 +225,7 @@ impl Metadata {
                 return Err(Error::InvalidMetadata);
             }
             XmlSchemaHints {
+                derivation: None,
                 no_namespace_location: hints.no_namespace_location.clone(),
                 locations: hints
                     .locations

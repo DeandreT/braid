@@ -24,7 +24,16 @@ fn emit_compiled_xml_interface_fixture() {
     other["bindings"][0]["node"] = json!(3);
     project["extra_targets"] = json!([{"name":"copy", "schema":project["target"], "root":other, "options":{"xml_document":true}}]);
     let native = serde_json::to_vec(&project).unwrap();
-    let (_, plan) = braid_ferrule_host::xml_document::admit_native(&native).unwrap();
+    let context = support::request("inspect", &native);
+    let build = braid_ferrule_host::build::Request {
+        protocol_version: braid_ferrule_host::build::PROTOCOL.into(),
+        request_id: context.request_id,
+        revision: context.revision,
+        native_digest: support::digest(&native),
+        intent_digest: "a".repeat(64),
+        operation: "compile".into(),
+        profile: braid_ferrule_host::build::XML_PROFILE.into(),
+    };
     let mut request = header(&native, INPUT);
     request.inputs.push(PreviewInput::Named {
         name: "lookup".into(),
@@ -44,9 +53,13 @@ fn emit_compiled_xml_interface_fixture() {
     std::fs::write(root.join("input.xml"), INPUT).unwrap();
     std::fs::write(root.join("primary.xml"), &outputs.outputs[0]).unwrap();
     std::fs::write(root.join("copy.xml"), &outputs.outputs[1]).unwrap();
-    let files = ferrule_codegen_csharp::emit(&plan.program)
-        .unwrap()
-        .into_files();
+    let (boundaries, files) = braid_ferrule_host::build::generate(&build, &native).unwrap();
+    assert_eq!(boundaries.len(), 4);
+    assert!(
+        boundaries
+            .iter()
+            .all(|b| b.format == "xml" && b.xml_metadata.is_some())
+    );
     assert!(files.len() <= 128);
     assert!(files.iter().map(|f| f.contents.len()).sum::<usize>() <= 32 << 20);
     for file in files {

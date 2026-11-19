@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Braid.Application;
 using Braid.Domain;
 
 namespace Braid.Deployment;
@@ -11,7 +12,7 @@ public static class BuildIntentCodec
         if (bytes.Length is < 1 or > 1024 * 1024) throw Invalid();
         try
         {
-            using var document = JsonDocument.Parse(bytes.ToArray(), new JsonDocumentOptions { MaxDepth = 6 });
+            using var document = JsonDocument.Parse(bytes.ToArray(), new JsonDocumentOptions { MaxDepth = 8 });
             var root = document.RootElement;
             if (Text(root, "schema") != BuildIntent.SchemaVersion) throw Invalid();
             var revision = new RevisionScope(Id(root, "organizationId"), Id(root, "projectId"), Id(root, "mappingId"), Id(root, "revisionId"));
@@ -24,7 +25,8 @@ public static class BuildIntentCodec
                 "primaryOutput" => BuildBoundaryKind.PrimaryOutput,
                 "namedOutput" => BuildBoundaryKind.NamedOutput,
                 _ => throw Invalid()
-            }, value.GetProperty("name").ValueKind == JsonValueKind.Null ? null : Text(value, "name"), Text(value, "format"), BuildCsvDialect.ReadOptional(value))).ToArray();
+            }, value.GetProperty("name").ValueKind == JsonValueKind.Null ? null : Text(value, "name"), Text(value, "format"), BuildCsvDialect.ReadOptional(value),
+                value.TryGetProperty("xmlMetadata", out var xml) ? XmlDocumentMetadataJson.Read(xml, Text(value, "kind") is "primaryInput" or "namedInput" ? XmlDocumentRole.Input : XmlDocumentRole.Output) : null)).ToArray();
             var intent = new BuildIntent(Id(root, "buildId"), revision, Sha256Digest.Parse(Text(root, "nativeDigest")),
                 new(Text(root, "backendId"), Text(root, "engineRevision"), Text(root, "engineBuild"), Text(root, "adapterVersion")),
                 new(Text(root, "profileId"), root.GetProperty("profileVersion").GetInt32(), Text(root, "runtime"),
