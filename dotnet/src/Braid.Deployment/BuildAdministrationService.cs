@@ -24,7 +24,7 @@ public interface IBuildApprovalRevocation
 /// <summary>Administrator version creation and own revocation never imply fresh approval or compilation.</summary>
 public sealed class BuildAdministrationService(IBuildMetadataReader metadata, IBuildEnvironmentCommands environments,
     IBuildApprovalRevocation approvals, IProjectReader projects, BuildRuntimeProfile profile, BuildRuntimeProfile? documentProfile = null,
-    BuildRuntimeProfile? interchangeProfile = null, BuildRuntimeProfile? csvProfile = null)
+    BuildRuntimeProfile? interchangeProfile = null, BuildRuntimeProfile? csvProfile = null, BuildRuntimeProfile? xmlProfile = null)
 {
     public async Task<BuildEnvironmentRequestResult> PutEnvironmentAsync(ActorContext actor, BuildEnvironmentReference reference,
         BuildEnvironmentSelection selection, CancellationToken token = default)
@@ -42,7 +42,8 @@ public sealed class BuildAdministrationService(IBuildMetadataReader metadata, IB
         }
         var selectedProfile = selection.Matches(profile) ? profile : documentProfile is not null && selection.Matches(documentProfile) ? documentProfile :
             interchangeProfile is not null && selection.Matches(interchangeProfile) ? interchangeProfile :
-            csvProfile is not null && csvProfile.Id == BuildWorkerProtocol.CsvProfile && selection.Matches(csvProfile) ? csvProfile : null;
+            csvProfile is not null && csvProfile.Id == BuildWorkerProtocol.CsvProfile && selection.Matches(csvProfile) ? csvProfile :
+            xmlProfile?.Id == BuildWorkerProtocol.XmlProfile && selection.Matches(xmlProfile) ? xmlProfile : null;
         if (selectedProfile is null) return new(BuildEnvironmentRequestOutcome.PreconditionFailed);
         var result = await environments.SaveEnvironmentAsync(actor, new(reference, selectedProfile, true), token).ConfigureAwait(false);
         if (result == BuildControlOutcome.Refused) return new(BuildEnvironmentRequestOutcome.Refused);

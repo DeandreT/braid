@@ -10,7 +10,7 @@ public sealed record BuildSubmissionRequestResult(BuildSubmissionRequestOutcome 
 public sealed class BuildSubmissionService(IBuildMetadataReader metadata, IBuildRunReader reader, IBuildRunCommands commands,
     IBuildAdmissionReader admissions, IProjectReader projects, BuildBackendIdentity backend, BuildRuntimeProfile profile,
     BuildBackendIdentity? documentBackend = null, BuildRuntimeProfile? documentProfile = null, BuildRuntimeProfile? interchangeProfile = null,
-    BuildBackendIdentity? csvBackend = null, BuildRuntimeProfile? csvProfile = null)
+    BuildBackendIdentity? csvBackend = null, BuildRuntimeProfile? csvProfile = null, BuildBackendIdentity? xmlBackend = null, BuildRuntimeProfile? xmlProfile = null)
 {
     public async Task<BuildSubmissionRequestResult> PutAsync(ActorContext actor, MappingScope mapping, Guid buildId, Guid approvalId,
         CancellationToken token = default)
@@ -36,7 +36,8 @@ public sealed class BuildSubmissionService(IBuildMetadataReader metadata, IBuild
             !(intent.Backend == backend && intent.Profile == profile || documentBackend is not null &&
                 intent.Backend == documentBackend && (intent.Profile == documentProfile || intent.Profile == interchangeProfile) ||
                 csvBackend is not null && csvProfile is not null && intent.Backend == csvBackend && intent.Profile == csvProfile &&
-                    intent.Profile.Id == BuildWorkerProtocol.CsvProfile && BuildWorkerProtocol.AdmitsCsvPlan(intent.Boundaries)))
+                    intent.Profile.Id == BuildWorkerProtocol.CsvProfile && BuildWorkerProtocol.AdmitsCsvPlan(intent.Boundaries) ||
+                xmlBackend is not null && intent.Backend == xmlBackend && intent.Profile == xmlProfile && intent.Profile.Id == BuildWorkerProtocol.XmlProfile))
             return new(BuildSubmissionRequestOutcome.PreconditionFailed);
         var admitted = await admissions.ReadAsync(actor, intent, token).ConfigureAwait(false);
         if (admitted is null) return new(BuildSubmissionRequestOutcome.Refused);

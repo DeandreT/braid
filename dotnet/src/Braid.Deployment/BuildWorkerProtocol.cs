@@ -15,6 +15,12 @@ public static class BuildWorkerProtocol
     public const string DocumentProfile = "braid.ferrule-csharp-document.v1";
     public const string X12InterchangesProfile = "braid.ferrule-csharp-x12-interchanges.v1";
     public const string CsvProfile = "braid.ferrule-csharp-csv.v1";
+    public static bool XmlBuildEnabled(Func<string, string?> read) => read("BRAID_BUILDS_XML_ENABLED") switch
+    {
+        null or "false" => false,
+        "true" => true,
+        _ => throw new ArgumentException("XML build enablement must be true or false.")
+    };
     public const string XmlProfile = "braid.ferrule-csharp-xml.v1";
     public static bool IsDocumentProfile(string profile) => profile is DocumentProfile or X12InterchangesProfile or CsvProfile or XmlProfile;
     public static string PreviewProfileFor(string profile) => profile == XmlProfile ? XmlPreviewAdmission.Profile : profile == CsvProfile ? CsvDocumentPolicy.Profile :

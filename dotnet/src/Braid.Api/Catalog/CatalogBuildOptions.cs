@@ -7,7 +7,7 @@ public sealed record CatalogBuildOptions
 {
     public CatalogBuildOptions(bool enabled = false, BuildBackendIdentity? backend = null, BuildRuntimeProfile? profile = null,
         BuildBackendIdentity? documentBackend = null, BuildRuntimeProfile? documentProfile = null, BuildRuntimeProfile? interchangeProfile = null,
-        BuildBackendIdentity? csvBackend = null, BuildRuntimeProfile? csvProfile = null)
+        BuildBackendIdentity? csvBackend = null, BuildRuntimeProfile? csvProfile = null, BuildBackendIdentity? xmlBackend = null, BuildRuntimeProfile? xmlProfile = null)
     {
         if (enabled && (backend is null || profile is null)) throw new ArgumentException("Build API requires an explicit trusted runtime selection.");
         Enabled = enabled; Backend = backend; Profile = profile;
@@ -24,8 +24,15 @@ public sealed record CatalogBuildOptions
              csvProfile.RuntimeVersion != BuildWorkerProtocol.RuntimeVersion || backend is null || csvBackend!.BackendId != backend.BackendId ||
              csvBackend.EngineRevision != backend.EngineRevision || csvBackend.EngineBuild != backend.EngineBuild))
             throw new ArgumentException("CSV builds require the explicitly configured compiler and runtime profile pair.");
+        if ((xmlBackend is null) != (xmlProfile is null) || xmlProfile is not null &&
+            (xmlProfile != Braid.MappingBackends.FerruleBuildCompiler.XmlProfile || backend is null || xmlBackend != new BuildBackendIdentity("ferrule",
+                BuildWorkerProtocol.Engine, backend.EngineBuild, Braid.MappingBackends.FerrulePreviewBackend.XmlAdapterBuild)))
+            throw new ArgumentException("XML builds require the pinned XML compiler and profile.");
+        XmlBackend = xmlBackend; XmlProfile = xmlProfile;
         CsvBackend = csvBackend; CsvProfile = csvProfile;
     }
+    public BuildRuntimeProfile? XmlProfile { get; }
+    public BuildBackendIdentity? XmlBackend { get; }
     public bool Enabled { get; }
     public BuildBackendIdentity? Backend { get; }
     public BuildRuntimeProfile? Profile { get; }

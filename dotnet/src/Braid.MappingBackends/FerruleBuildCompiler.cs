@@ -30,17 +30,19 @@ public sealed class FerruleCsvBuildBoundaryReader : ICsvBuildBoundaryReader
     private readonly IPrivateObjectStore storage;
     private readonly BuildBackendIdentity backend;
 
+    private readonly string inspectionProfile;
     public FerruleCsvBuildBoundaryReader(IInspectionWorkerRunner runner, IRevisionReportMetadataReader sources,
-        IProjectReader projects, IPrivateObjectStore storage)
+        IProjectReader projects, IPrivateObjectStore storage, bool xml = false)
     {
         if (runner is DockerInspectionWorkerRunner docker && docker.Profile != DockerWorkerProfile.Build)
             throw new ArgumentException("CSV metadata inspection requires the compiler profile.", nameof(runner));
         this.runner = runner ?? throw new ArgumentNullException(nameof(runner));
         this.sources = sources ?? throw new ArgumentNullException(nameof(sources));
+        inspectionProfile = xml ? BuildWorkerProtocol.XmlProfile : BuildWorkerProtocol.CsvProfile;
         this.projects = projects ?? throw new ArgumentNullException(nameof(projects));
         this.storage = storage ?? throw new ArgumentNullException(nameof(storage));
         var identity = runner is ICompilationIdentitySource source ? source.CompilationBuildIdentity : runner.BuildIdentity;
-        backend = new("ferrule", BuildWorkerProtocol.Engine, InspectionTransport.RequireImage(identity!), FerrulePreviewBackend.CsvAdapterBuild);
+        backend = new("ferrule", BuildWorkerProtocol.Engine, InspectionTransport.RequireImage(identity!), xml ? FerrulePreviewBackend.XmlAdapterBuild : FerrulePreviewBackend.CsvAdapterBuild);
     }
 
     public async Task<CsvBuildBoundaryObservation?> ReadAsync(ActorContext actor, RevisionReportSource source, CancellationToken token = default)
@@ -53,7 +55,7 @@ public sealed class FerruleCsvBuildBoundaryReader : ICsvBuildBoundaryReader
         if (!await Current().ConfigureAwait(false)) return null;
         // No build intent exists yet. The native digest binds this read-only inspection's correlation field.
         var request = new BuildWorkerProtocol.Request(BuildWorkerProtocol.Protocol, Guid.NewGuid().ToString("D"), source.Scope,
-            source.NativeObject.Digest.Value, source.NativeObject.Digest.Value, "inspect", BuildWorkerProtocol.CsvProfile);
+            source.NativeObject.Digest.Value, source.NativeObject.Digest.Value, "inspect", inspectionProfile);
         var process = await runner.RunAsync(BuildWorkerProtocol.EncodeRequest(request, native), token).ConfigureAwait(false);
         if (process.Failure != WorkerProcessFailure.None) return null;
         var reply = BuildWorkerProtocol.DecodeReply(process.Output, request);
