@@ -9,7 +9,8 @@ public sealed record BuildCsvDialectV1(string Schema, string Delimiter, [propert
     bool HasHeaderRow, bool Utf8Bom, bool PreserveEmptyStrings);
 public sealed record BuildBoundaryV1(string Kind, string? Name, string Format,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BuildCsvDialectV1? CsvDialect = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] XmlDocumentMetadataV1? XmlMetadata = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] XmlDocumentMetadataV1? XmlMetadata = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] NativeDocumentSettingsV1? DocumentSettings = null);
 public sealed record BuildEnvironmentReferenceV1(string OrganizationId, string ProjectId, string EnvironmentId, string Version);
 public sealed record BuildEnvironmentV1(BuildEnvironmentReferenceV1 Reference, BuildRuntimeV1 Profile, bool Active,
     string CreatorPrincipalId, string CreatedAtUtc);
@@ -20,7 +21,8 @@ public sealed record BuildEnvironmentCapabilitiesV1(BuildRuntimeV1 Profile, bool
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BuildRuntimeV1? DocumentProfile = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BuildRuntimeV1? InterchangeProfile = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BuildRuntimeV1? CsvProfile = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BuildRuntimeV1? XmlProfile = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BuildRuntimeV1? XmlProfile = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<BuildRuntimeV1>? ByteProfiles = null);
 public sealed record BuildApprovalPutV1(string BuildId, string RevisionId, string EnvironmentId, string EnvironmentVersion, string RegressionEvidenceId);
 public sealed record BuildApprovalV1(string ApprovalId, string BuildId, CatalogRevisionScopeV1 Revision, string NativeDigest,
     BuildBackendV1 Backend, BuildRuntimeV1 Profile, IReadOnlyList<BuildBoundaryV1> Boundaries, BuildEnvironmentReferenceV1 Environment,
@@ -39,4 +41,5 @@ public sealed record BuildCapabilitiesV1(BuildBackendV1 Backend, BuildRuntimeV1 
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BuildRuntimeV1? InterchangeProfile = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BuildBackendV1? CsvBackend = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BuildRuntimeV1? CsvProfile = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BuildRuntimeV1? XmlProfile = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BuildRuntimeV1? XmlProfile = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<BuildRuntimeV1>? ByteProfiles = null);

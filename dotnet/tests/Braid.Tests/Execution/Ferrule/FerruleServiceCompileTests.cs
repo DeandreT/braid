@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using Braid.Application;
 using Braid.Application.Regression;
 using Braid.Deployment;
+using Braid.Contracts.Projections;
 using Braid.Domain;
 using Braid.MappingBackends;
 using Braid.MappingBackends.Workers;
@@ -20,6 +21,53 @@ namespace Braid.Tests;
 [Collection(FerruleServiceProcessCollection.Name)]
 public sealed class FerruleServiceCompileTests
 {
+    [ServiceCompileTheory]
+    [InlineData("flextext.native", BuildWorkerProtocol.FlexProfile)]
+    [InlineData("protobuf.native", BuildWorkerProtocol.ProtoProfile)]
+    [InlineData("xbrl-instance.native", BuildWorkerProtocol.XbrlProfile)]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public async Task Native_byte_profile_compiles_saved_primary_settings_into_an_assembly(string fixture, string profile)
+    {
+        var root = TemporaryRoot();
+        try
+        {
+            await using var runner = new ProcessCompileRunner(CompileOptions(root));
+            var (request, native) = BuildWorkerProtocol.DecodeRequest(BuildFrame(fixture, "compile"));
+            request = request with { Profile = profile };
+            var reply = await runner.RunAsync(BuildWorkerProtocol.EncodeRequest(request, native), default);
+            Assert.Equal(WorkerProcessFailure.None, reply.Failure);
+            var artifact = BuildWorkerProtocol.DecodeReply(reply.Output, request);
+            Assert.Equal("supported", artifact.Header.Status);
+            var format = BuildWorkerProtocol.NativeFormat(profile)!;
+            var settings = NativeDocumentNativeSettings.Read(NativeArtifact.Admit(Scope, native, PreviewPolicy.MaximumNativeBytes), format);
+            Assert.Equal(settings.Input, artifact.Header.Boundaries.Single(b => b.Kind == "primaryInput").DocumentSettings);
+            Assert.Equal(settings.Output, artifact.Header.Boundaries.Single(b => b.Kind == "primaryOutput").DocumentSettings);
+            Assert.Equal("Ferrule.Generated.dll", Assert.Single(artifact.Header.Files).Path);
+            Assert.True(Assert.Single(artifact.Contents).AsSpan().StartsWith("MZ"u8));
+            var runtimeProfile = FerruleBuildCompiler.NativeProfile(profile);
+            var backend = new BuildBackendIdentity("ferrule", BuildWorkerProtocol.Engine, runner.CompilationBuildIdentity!, format.AdapterBuild);
+            var intent = new BuildIntent(Guid.NewGuid(), Scope, Sha256Digest.FromBytes(native), backend, runtimeProfile,
+                artifact.Header.Boundaries.Select(BuildWorkerProtocol.ToBoundary).ToArray(), new(new(Scope.OrganizationId, Scope.ProjectId), Guid.NewGuid(), 1), Guid.NewGuid(), Guid.NewGuid());
+            var bytes = new BuildBytes(artifact.Contents[0], runtimeProfile.MaximumArtifactBytes);
+            var reference = BuildArtifactReference.Create(intent, new(intent.Revision, intent.NativeDigest, backend, runtimeProfile, intent.Boundaries, CapabilityStatus.Supported), bytes.Digest, bytes.Length);
+            await using var child = new ProcessCompiledRuntimeRunner(FerruleCompiledServiceTests.Options(root));
+            await using var interpreter = new ProcessWorkerRunner(new(Executable!, DockerWorkerProfile.Preview, root));
+            var preview = new FerrulePreviewBackend(interpreter, format.Execution, nativeFormats: [format]);
+            var runtime = new FerruleCompiledBuildRuntime(child, backend);
+            var input = new PreviewInputDocument(null, profile switch { BuildWorkerProtocol.FlexProfile => "hello"u8.ToArray(), BuildWorkerProtocol.ProtoProfile => [10, 5, 104, 101, 108, 108, 111], _ => DocumentPreviewTestData.XbrlInstance("5") }, documentSettings: settings.Input);
+            foreach (var target in new[] { PreviewTargetSelection.All, PreviewTargetSelection.Primary })
+            {
+                var replay = new RegressionReplay(target, "2026-10-24T12:00:00Z", PreviewLimits.Default, input, [], []);
+                var interpreted = await preview.PreviewAsync(new(NativeArtifact.Admit(Scope, native, PreviewPolicy.MaximumNativeBytes), target, input, [], [], replay.CurrentDateTime, replay.Limits) { Profile = format.Execution });
+                Assert.Equal(MappingPreviewStatus.Succeeded, interpreted.Status);
+                var result = await runtime.ExecuteAsync(reference, bytes, replay);
+                Assert.Equal(CompiledBuildOutcome.Completed, result.Outcome);
+                Assert.Equal(Assert.Single(interpreted.Artifacts).CopyBytes(), Assert.Single(result.Outputs!.Outputs).CopyBytes());
+            }
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     [ServiceCompileFact]
     [System.Runtime.Versioning.SupportedOSPlatform("linux")]
     public async Task Structured_xml_public_compiler_and_child_preserve_bytes_and_classify_input()

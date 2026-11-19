@@ -71,7 +71,7 @@ const succeeded = run("completed", {
 
 /** A controlled preview API: each GET of the run returns the next scripted state. */
 class Previews {
-  outputBytes = output;
+  outputBytes: string | Buffer = output;
   outputMedia = "application/json";
   readonly submissions: { key: string; body: Submission }[] = [];
   cancels = 0;
@@ -87,10 +87,15 @@ class Previews {
     allowed = true,
     enabled = true,
     xml = false,
+    workbook = false,
   ) {
     const context = structuredClone(synthetic.context);
     context.features.preview = enabled;
     context.features.xmlPreview = enabled && xml;
+    if (workbook)
+      context.features.nativePreviewProfiles = [
+        "braid.ferrule-xlsx-preview.v1",
+      ];
     const mapping = structuredClone(synthetic.mapping);
     mapping.access = {
       role: role as typeof mapping.access.role,
@@ -1051,4 +1056,92 @@ test("viewers cannot run previews and a disabled feature shows no form", async (
   await new Previews(page).install("publisher", true, false);
   await open(page);
   await expect(panel(page)).toHaveCount(0);
+});
+
+test("portable workbook shows ordered cells and downloads the unchanged ZIP", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1600 });
+  const media =
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    profile = "braid.ferrule-xlsx-preview.v1";
+  const bytes = Buffer.from(
+    JSON.parse(
+      (await import("node:fs")).readFileSync(
+        new URL(
+          "../../../dotnet/tests/Braid.Tests/Fixtures/xlsx-portable-bytes.json",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    ),
+    "base64",
+  );
+  const settings = {
+    schema: "braid.xlsx-settings.v1",
+    optionsJson: JSON.stringify({
+      schema: "braid.xlsx-settings.v1",
+      sheet: "Order",
+      startRow: 1,
+      columns: [],
+      headers: [],
+      hasHeaderRow: true,
+    }),
+  };
+  const previews = new Previews(page);
+  previews.outputBytes = bytes;
+  previews.outputMedia = media;
+  previews.states = [
+    run("completed", {
+      outcome: "succeeded",
+      recordsWritten: "2",
+      primaryDocumentSettings: settings,
+      provenance: {
+        ...succeeded.provenance!,
+        profile,
+        adapterBuild: "braid.ferrule-xlsx-preview-adapter.v1",
+      },
+      outputs: [
+        {
+          ...succeeded.outputs[0]!,
+          targetName: "Order",
+          boundaryId: "primary-output",
+          mediaType: media,
+          recordsWritten: "2",
+          documentSettings: settings,
+          byteCount: bytes.length,
+          sha256: createHash("sha256").update(bytes).digest("hex"),
+        },
+      ],
+    }),
+  ];
+  await previews.install("publisher", true, true, false, true);
+  await open(page);
+  const region = panel(page);
+  await region.getByLabel("Preview admission").selectOption(profile);
+  await region
+    .locator('input[type="file"]')
+    .first()
+    .setInputFiles({ name: "order.xlsx", mimeType: media, buffer: bytes });
+  await region
+    .getByRole("button", { name: "Run preview", exact: true })
+    .click();
+  await region.getByRole("button", { name: "Show Order", exact: true }).click();
+  const view = documentView(page);
+  await expect(view.getByRole("columnheader")).toHaveText([
+    "label",
+    "quantity",
+  ]);
+  await expect(view.getByRole("cell")).toHaveText(["<A>&", "-1", "東京", "17"]);
+  await view
+    .getByRole("cell", { name: "17", exact: true })
+    .scrollIntoViewIfNeeded();
+  if (process.env.BRAID_WORKBOOK_SCREENSHOT)
+    await view.screenshot({ path: process.env.BRAID_WORKBOOK_SCREENSHOT });
+  const download = page.waitForEvent("download");
+  await region.getByRole("button", { name: "Download Order" }).click();
+  const stream = await (await download).createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(chunk as Buffer);
+  expect(Buffer.concat(chunks)).toEqual(bytes);
 });

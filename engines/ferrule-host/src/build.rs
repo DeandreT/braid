@@ -11,6 +11,15 @@ pub const DOCUMENT_PROFILE: &str = "braid.ferrule-csharp-document.v1";
 pub const X12_INTERCHANGES_PROFILE: &str = "braid.ferrule-csharp-x12-interchanges.v1";
 pub const CSV_PROFILE: &str = "braid.ferrule-csharp-csv.v1";
 pub const XML_PROFILE: &str = "braid.ferrule-csharp-xml.v1";
+pub const FLEX_PROFILE: &str = "braid.ferrule-csharp-flextext.v1";
+pub const PB_PROFILE: &str = "braid.ferrule-csharp-protobuf.v1";
+pub const XBRL_PROFILE: &str = "braid.ferrule-csharp-xbrl.v1";
+
+fn native_profile(id: &str) -> Option<&'static str> {
+    [FLEX_PROFILE, PB_PROFILE, XBRL_PROFILE]
+        .into_iter()
+        .find(|profile| *profile == id)
+}
 
 fn document_profile(profile: &str) -> bool {
     matches!(
@@ -41,6 +50,8 @@ pub struct Boundary {
     pub csv_dialect: Option<crate::csv_document::CsvDialect>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub xml_metadata: Option<crate::xml_document::Metadata>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub document_settings: Option<crate::native_document::Settings>,
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -83,7 +94,9 @@ pub fn handle(header: &[u8], reader: &mut impl Read, writer: &mut impl Write) ->
         native_digest: request.as_ref().map(|r| r.native_digest.as_str()),
         intent_digest: request.as_ref().map(|r| r.intent_digest.as_str()),
         engine_revision: ENGINE_REVISION,
-        profile: if request.as_ref().is_some_and(|r| r.profile == XML_PROFILE) {
+        profile: if let Some(profile) = request.as_ref().and_then(|r| native_profile(&r.profile)) {
+            profile
+        } else if request.as_ref().is_some_and(|r| r.profile == XML_PROFILE) {
             XML_PROFILE
         } else if request.as_ref().is_some_and(|r| r.profile == CSV_PROFILE) {
             CSV_PROFILE
@@ -131,7 +144,14 @@ pub fn generate(
     if request.protocol_version != PROTOCOL
         || !matches!(
             request.profile.as_str(),
-            PROFILE | DOCUMENT_PROFILE | X12_INTERCHANGES_PROFILE | CSV_PROFILE | XML_PROFILE
+            PROFILE
+                | DOCUMENT_PROFILE
+                | X12_INTERCHANGES_PROFILE
+                | CSV_PROFILE
+                | XML_PROFILE
+                | FLEX_PROFILE
+                | PB_PROFILE
+                | XBRL_PROFILE
         )
         || !matches!(request.operation.as_str(), "inspect" | "compile")
         || !valid_context_parts(
@@ -195,6 +215,7 @@ pub fn generate(
                     format: "xml",
                     csv_dialect: None,
                     xml_metadata: Some(metadata),
+                    document_settings: None,
                 });
             }
         }
@@ -220,6 +241,107 @@ pub fn generate(
     }
     let decoded = decode::decode_native(native).map_err(|_| "invalidMapping")?;
     let project = &decoded.project;
+    if let Some(profile) = native_profile(&request.profile) {
+        use crate::native_document::{self, NativeFormat};
+        let (format, refusal) = match profile {
+            FLEX_PROFILE => ("flexText", "unsupportedFlexTextBuild"),
+            PB_PROFILE => ("protobuf", "unsupportedProtobufBuild"),
+            _ => ("xbrl", "unsupportedXbrlBuild"),
+        };
+        if project.execution_contract.is_some() {
+            return Err(refusal);
+        }
+        let mut files = if profile == FLEX_PROFILE {
+            crate::flextext_document::admit(project).map_err(|_| refusal)?;
+            crate::flextext_document::admit_saved_metadata(native, project).map_err(|_| refusal)?;
+            let program = ferrule_codegen::lower(project).map_err(|_| refusal)?;
+            ferrule_codegen_csharp::emit_with_flextext_bytes(
+                &program,
+                &project.source_options,
+                &project.target_options,
+            )
+            .map_err(|_| refusal)?
+        } else {
+            let family = if profile == PB_PROFILE {
+                NativeFormat::Protobuf
+            } else {
+                NativeFormat::Xbrl
+            };
+            native_document::admit(family, project).map_err(|_| refusal)?;
+            native_document::admit_saved_metadata(family, native, project).map_err(|_| refusal)?;
+            if profile == PB_PROFILE {
+                ferrule_codegen_csharp::emit_with_protobuf_bytes(project).map_err(|_| refusal)?
+            } else {
+                use ferrule_codegen_csharp::xbrl_documents::{Policy, emit};
+                let program = ferrule_codegen::lower(project).map_err(|_| refusal)?;
+                emit(
+                    &program,
+                    &Policy {
+                        source: project.source_options.xbrl.as_ref().ok_or(refusal)?,
+                        target: project.target_options.xbrl.as_ref().ok_or(refusal)?,
+                        extra_sources: &[],
+                        extra_targets: &[],
+                    },
+                )
+                .map_err(|_| refusal)?
+            }
+        }
+        .into_files();
+        // Fixed host ABI for the three primary-only profiles. No mapping text
+        // or caller-supplied type or method name is interpolated here.
+        let body = match profile {
+            FLEX_PROFILE => {
+                "return all ? M.ExecuteFlexTextBytesOutputsWithHost(input, host) : M.ExecuteFlexTextBytesSelectedTargetWithHost(input, FerruleTargetSelection.Primary(), host);"
+            }
+            PB_PROFILE => {
+                "return all ? M.ExecuteProtobufOutputs(input, [], host).Single().Bytes : M.ExecuteSelectedProtobufOutput(input, [], FerruleTargetSelection.Primary(), host).Bytes;"
+            }
+            _ => {
+                "var extras = new System.Collections.Generic.Dictionary<string, byte[]>(); return all ? M.ExecuteXbrlBytesOutputs(input, extras, host).Primary : M.ExecuteXbrlBytesSelectedTarget(input, extras, FerruleTargetSelection.Primary(), host);"
+            }
+        };
+        let bridge = format!(
+            "using System.Linq; using Ferrule.Runtime; using M = Ferrule.Generated.GeneratedMapping; namespace Braid.Generated; public static class NativeDocument {{ public static byte[] Execute(byte[] input, bool all, FerruleExecutionContext host) {{ {body} }} }}"
+        );
+        files.push(ferrule_codegen::GeneratedFile::new(
+            ferrule_codegen::ArtifactPath::new("Runtime/BraidNativeDocument.cs")
+                .map_err(|_| refusal)?,
+            bridge.into_bytes(),
+        ));
+        check_files(&files)?;
+        let mut boundaries = Vec::new();
+        for (kind, options) in [
+            ("primaryInput", &project.source_options),
+            ("primaryOutput", &project.target_options),
+        ] {
+            let settings = if profile == FLEX_PROFILE {
+                let settings = crate::flextext_document::settings(options).map_err(|_| refusal)?;
+                native_document::Settings {
+                    schema: settings.schema,
+                    options_json: settings.layout_json,
+                }
+            } else {
+                native_document::settings(
+                    if profile == PB_PROFILE {
+                        NativeFormat::Protobuf
+                    } else {
+                        NativeFormat::Xbrl
+                    },
+                    options,
+                )
+                .map_err(|_| refusal)?
+            };
+            boundaries.push(Boundary {
+                kind,
+                name: None,
+                format,
+                csv_dialect: None,
+                xml_metadata: None,
+                document_settings: Some(settings),
+            });
+        }
+        return Ok((boundaries, files));
+    }
     for options in [&project.source_options, &project.target_options]
         .into_iter()
         .chain(project.extra_sources.iter().map(|source| &source.options))
@@ -280,6 +402,7 @@ pub fn generate(
         return Err("unsupported");
     }
     let mut boundaries = vec![Boundary {
+        document_settings: None,
         xml_metadata: None,
         kind: "primaryInput",
         name: None,
@@ -300,6 +423,7 @@ pub fn generate(
         }
         boundaries.push(Boundary {
             kind: "namedInput",
+            document_settings: None,
             xml_metadata: None,
             name: Some(source.name.clone()),
             format: format(&source.options, Some(&source.path))?,
@@ -308,6 +432,7 @@ pub fn generate(
     }
     boundaries.push(Boundary {
         kind: "primaryOutput",
+        document_settings: None,
         xml_metadata: None,
         name: None,
         format: format(&project.target_options, project.target_path.as_deref())?,
@@ -328,6 +453,7 @@ pub fn generate(
         }
         boundaries.push(Boundary {
             kind: "namedOutput",
+            document_settings: None,
             xml_metadata: None,
             name: Some(target.name.clone()),
             format: format(&target.options, target.path.as_deref())?,

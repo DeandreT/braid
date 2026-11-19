@@ -47,7 +47,7 @@ can read a document is not evidence that the generated mapping can read it.
   comparison in a regression case does not qualify an artifact for release.
 - **FlexText, Protobuf and XBRL:** use native previews and saved exact-byte
   cases. A layout, message descriptor or instance declaration belongs to the
-  revision, not the upload. These are not generated C# endpoint formats.
+  revision, not the upload. Opt-in builds admit primary string Store layouts, scalar Protobuf messages, and instant-period XBRL tables respectively. The compiled endpoint takes the media type and bytes; it reads settings from the activated release, never from caller overrides.
 - **XLSX:** flat workbook read to JSON is a worker protocol, not a catalog
   preview. New workbook output needs a worksheet thread and is direct-worker
   only. There is no catalog workbook-output table or compiled endpoint.
@@ -201,10 +201,7 @@ regression worker, with `FORMAT` set to `FLEXTEXT`, `PROTOBUF` or `XBRL`.
 The parent workflow must also be enabled. Each flag defaults to false.
 Run recovery binds the stored input length, digest and canonical boundary
 settings to the original revision. Regression cases retain the original bytes,
-clock, limits and runtime identity. Generated C# builds
-refuse these boundary formats with `unsupportedFlexTextBuild`,
-`unsupportedXlsxBuild`, `unsupportedProtobufBuild` or `unsupportedXbrlBuild`;
-there is no new mapping endpoint format. PDF rendering and database connections
+clock, limits and runtime identity. To enable bounded byte builds, set `BRAID_BUILDS_<FORMAT>_ENABLED=true` on the build API and build worker, with the same compiler identity and transport used for boundary inspection. Each flag defaults to false. Unsupported layouts remain refusals. XLSX is not included. PDF rendering and database connections
 are not admitted by these profiles.
 
 The [flat CSV document core](csv-documents.md) has a separate direct-preview and

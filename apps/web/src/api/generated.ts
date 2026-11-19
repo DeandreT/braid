@@ -3134,6 +3134,8 @@ export interface components {
     };
     BuildBoundaryV1: {
       csvDialect?: null | components["schemas"]["BuildCsvDialectV1"];
+      documentSettings?:
+        null | components["schemas"]["NativeDocumentSettingsV1"];
       format: string;
       kind: string;
       name: null | string;
@@ -3142,6 +3144,7 @@ export interface components {
     BuildCapabilitiesV1: {
       approveBuilds: boolean;
       backend: components["schemas"]["BuildBackendV1"];
+      byteProfiles?: null | components["schemas"]["BuildRuntimeV1"][];
       csvBackend?: null | components["schemas"]["BuildBackendV1"];
       csvProfile?: null | components["schemas"]["BuildRuntimeV1"];
       documentBackend?: null | components["schemas"]["BuildBackendV1"];
@@ -3162,6 +3165,7 @@ export interface components {
       utf8Bom: boolean;
     };
     BuildEnvironmentCapabilitiesV1: {
+      byteProfiles?: null | components["schemas"]["BuildRuntimeV1"][];
       canCreateVersions: boolean;
       csvProfile?: null | components["schemas"]["BuildRuntimeV1"];
       documentProfile?: null | components["schemas"]["BuildRuntimeV1"];
@@ -3506,6 +3510,7 @@ export interface components {
         | "braid.ferrule-csv-preview.v1"
         | "braid.ferrule-xml-preview.v1"
         | "braid.ferrule-flextext-preview.v1"
+        | "braid.ferrule-xlsx-preview.v1"
         | "braid.ferrule-protobuf-preview.v1"
         | "braid.ferrule-xbrl-preview.v1"
         | null;
@@ -12357,6 +12362,7 @@ export interface operations {
           "application/edi-x12": string;
           "application/edifact": string;
           "application/json": string;
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
           "application/x-protobuf": string;
           "application/xbrl+xml": string;
           "application/xml": string;

@@ -51,7 +51,9 @@ internal static class CompiledInvocation
         var documents = BuildWorkerProtocol.IsDocumentProfile(request.Intent.Profile.Id) && request.Intent.Boundaries.Any(value => value.Format != "json");
         var csv = request.Intent.Profile.Id == BuildWorkerProtocol.CsvProfile;
         var xml = request.Intent.Profile.Id == BuildWorkerProtocol.XmlProfile;
-        if (request.Intent.Profile.Id is not (BuildWorkerProtocol.Profile or BuildWorkerProtocol.DocumentProfile or BuildWorkerProtocol.X12InterchangesProfile or BuildWorkerProtocol.CsvProfile or BuildWorkerProtocol.XmlProfile) || request.Intent.Profile.Runtime != "dotnet" ||
+        var native = BuildWorkerProtocol.NativeFormat(request.Intent.Profile.Id);
+        if (native is not null && (request.Replay.NamedInputs.Count != 0 || request.Replay.Target.Kind == PreviewTargetKind.Named)) return new("unsupported");
+        if (request.Intent.Profile.Id != BuildWorkerProtocol.Profile && !BuildWorkerProtocol.IsDocumentProfile(request.Intent.Profile.Id) || request.Intent.Profile.Runtime != "dotnet" ||
             request.Intent.Profile.RuntimeVersion != BuildWorkerProtocol.RuntimeVersion || request.Intent.Backend.EngineRevision != BuildWorkerProtocol.Engine ||
             request.Intent.Boundaries.Any(value => !BuildWorkerProtocol.AdmitsBoundary(request.Intent.Profile.Id, value.Format, value.CsvDialect))) return new("unsupported");
         if (csv && (!BuildWorkerProtocol.AdmitsCsvPlan(request.Intent.Boundaries) || request.Replay.NamedInputs.Count != 0 ||
@@ -79,9 +81,9 @@ internal static class CompiledInvocation
             if (assembly.GetName().Name != "Ferrule.Generated") return new("invalidArtifact");
             Type Type(string name) => assembly.GetType(name, throwOnError: true)!;
             var mapping = Type("Ferrule.Generated.GeneratedMapping");
-            var namedType = csv || xml ? null : Type(documents ? "Ferrule.Generated.NamedDocumentBytesInput" : "Ferrule.Generated.NamedJsonBytesInput");
+            var namedType = csv || xml || native is not null ? null : Type(documents ? "Ferrule.Generated.NamedDocumentBytesInput" : "Ferrule.Generated.NamedJsonBytesInput");
             var namedConstructor = namedType?.GetConstructor([typeof(string), typeof(byte[])]);
-            if (!csv && !xml && namedConstructor is null) throw new MissingMethodException();
+            if (!csv && !xml && native is null && namedConstructor is null) throw new MissingMethodException();
             var valueType = Type("Ferrule.Runtime.FerruleValue");
             var pairType = typeof(KeyValuePair<,>).MakeGenericType(typeof(string), valueType);
             var pairConstructor = pairType.GetConstructor([typeof(string), valueType]) ?? throw new MissingMethodException();
@@ -99,7 +101,7 @@ internal static class CompiledInvocation
             MethodInfo? allMethod = null, selectedMethod = null, targetPrimary = null, targetNamed = null, csvMethod = null;
             if (csv)
                 csvMethod = mapping.GetMethod("ExecuteCsvDocumentBytes", BindingFlags.Public | BindingFlags.Static, [typeof(byte[]), executionType]) ?? throw new MissingMethodException();
-            else if (!xml)
+            else if (!xml && native is null)
             {
                 var sourceListType = typeof(IReadOnlyList<>).MakeGenericType(namedType!);
                 allMethod = mapping.GetMethod(documents ? "ExecuteDocumentBytesOutputsWithHost" : "ExecuteJsonBytesOutputsWithSources", BindingFlags.Public | BindingFlags.Static,
@@ -111,7 +113,7 @@ internal static class CompiledInvocation
                     documents ? [typeof(byte[]), targetType, sourceListType, executionType] :
                         [typeof(byte[]), targetType, sourceListType, executionType, Type("Ferrule.Runtime.IFerruleDynamicJsonSourceLoader")]) ?? throw new MissingMethodException();
             }
-            var named = csv || xml ? null : Array.CreateInstance(namedType!, request.Replay.NamedInputs.Count);
+            var named = namedType is null ? null : Array.CreateInstance(namedType, request.Replay.NamedInputs.Count);
             for (var i = 0; !xml && i < request.Replay.NamedInputs.Count; i++)
             {
                 var item = request.Replay.NamedInputs[i];
@@ -129,7 +131,15 @@ internal static class CompiledInvocation
             var execution = executionConstructor.Invoke(["entry.native.json", "entry.native.json", request.Replay.CurrentDateTime, parameters]);
             stage = "execution";
             var outputs = new List<RegressionOutput>();
-            if (xml)
+            if (native is not null)
+            {
+                var invoke = Type("Braid.Generated.NativeDocument").GetMethod("Execute", BindingFlags.Public | BindingFlags.Static, [typeof(byte[]), typeof(bool), executionType]) ?? throw new MissingMethodException();
+                var body = (byte[])invoke.Invoke(null, [request.Replay.Primary.CopyBytes(), request.Replay.Target.Kind == PreviewTargetKind.All, execution])!;
+                if (body.Length > request.Replay.Limits.MaximumOutputBytes || body.Length > NativeDocumentFormat.MaximumBytes) return new("resourceLimit");
+                outputs.Add(RegressionOutput.Capture(RegressionOutputKey.Primary, body, mediaType: native.MediaType,
+                    documentSettings: request.Intent.Boundaries.Single(b => b.Kind == BuildBoundaryKind.PrimaryOutput).DocumentSettings));
+            }
+            else if (xml)
             {
                 var declared = request.Intent.Boundaries.Where(b => b.Kind == BuildBoundaryKind.NamedOutput).Select(b => b.Name!).ToArray();
                 var result = CompiledXmlBytes.Invoke(assembly, execution, request.Replay.Target.Kind == PreviewTargetKind.All, request.Replay.Target.Name,

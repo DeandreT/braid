@@ -32,17 +32,18 @@ public sealed class FerruleCsvBuildBoundaryReader : ICsvBuildBoundaryReader
 
     private readonly string inspectionProfile;
     public FerruleCsvBuildBoundaryReader(IInspectionWorkerRunner runner, IRevisionReportMetadataReader sources,
-        IProjectReader projects, IPrivateObjectStore storage, bool xml = false)
+        IProjectReader projects, IPrivateObjectStore storage, bool xml = false, string? byteProfile = null)
     {
         if (runner is DockerInspectionWorkerRunner docker && docker.Profile != DockerWorkerProfile.Build)
             throw new ArgumentException("CSV metadata inspection requires the compiler profile.", nameof(runner));
         this.runner = runner ?? throw new ArgumentNullException(nameof(runner));
         this.sources = sources ?? throw new ArgumentNullException(nameof(sources));
-        inspectionProfile = xml ? BuildWorkerProtocol.XmlProfile : BuildWorkerProtocol.CsvProfile;
+        if (byteProfile is not null && (xml || BuildWorkerProtocol.NativeFormat(byteProfile) is null)) throw new ArgumentException("Invalid byte inspection profile.");
+        inspectionProfile = byteProfile ?? (xml ? BuildWorkerProtocol.XmlProfile : BuildWorkerProtocol.CsvProfile);
         this.projects = projects ?? throw new ArgumentNullException(nameof(projects));
         this.storage = storage ?? throw new ArgumentNullException(nameof(storage));
         var identity = runner is ICompilationIdentitySource source ? source.CompilationBuildIdentity : runner.BuildIdentity;
-        backend = new("ferrule", BuildWorkerProtocol.Engine, InspectionTransport.RequireImage(identity!), xml ? FerrulePreviewBackend.XmlAdapterBuild : FerrulePreviewBackend.CsvAdapterBuild);
+        backend = new("ferrule", BuildWorkerProtocol.Engine, InspectionTransport.RequireImage(identity!), BuildWorkerProtocol.NativeFormat(inspectionProfile)?.AdapterBuild ?? (xml ? FerrulePreviewBackend.XmlAdapterBuild : FerrulePreviewBackend.CsvAdapterBuild));
     }
 
     public async Task<CsvBuildBoundaryObservation?> ReadAsync(ActorContext actor, RevisionReportSource source, CancellationToken token = default)
@@ -86,13 +87,17 @@ public sealed class FerruleBuildCompiler : IBuildCompiler
     private readonly IInspectionWorkerRunner runner;
     private readonly BuildNativeSource sources;
     private readonly bool xmlEnabled;
-    public FerruleBuildCompiler(IInspectionWorkerRunner runner, BuildNativeSource sources, bool xmlEnabled = false)
+    private readonly HashSet<NativeDocumentFormat> enabledFormats;
+    public static BuildRuntimeProfile NativeProfile(string id) => BuildWorkerProtocol.NativeFormat(id) is null ? throw new ArgumentException("Unknown byte profile.", nameof(id)) : new(id, 1, "dotnet", BuildWorkerProtocol.RuntimeVersion, "braid.dotnet-assembly.v1", BuildWorkerProtocol.MaximumSourceBytes);
+    public FerruleBuildCompiler(IInspectionWorkerRunner runner, BuildNativeSource sources, bool xmlEnabled = false, IReadOnlyList<NativeDocumentFormat>? nativeFormats = null)
     {
         ArgumentNullException.ThrowIfNull(runner); ArgumentNullException.ThrowIfNull(sources);
         if (runner is DockerInspectionWorkerRunner docker && docker.Profile != DockerWorkerProfile.Build)
             throw new ArgumentException("Build requires the fixed compiler worker profile.", nameof(runner));
         this.runner = runner; this.sources = sources;
         this.xmlEnabled = xmlEnabled;
+        enabledFormats = new(nativeFormats ?? []);
+        if (!enabledFormats.IsSubsetOf(NativeDocumentFormat.CatalogFormats)) throw new ArgumentException("Unsupported native byte format.", nameof(nativeFormats));
         _ = InspectionTransport.RequireImage(CompilationIdentity);
     }
     private string CompilationIdentity => runner is ICompilationIdentitySource source
@@ -102,10 +107,11 @@ public sealed class FerruleBuildCompiler : IBuildCompiler
     public BuildBackendIdentity DocumentBackend => new("ferrule", BuildWorkerProtocol.Engine, CompilationIdentity, FerrulePreviewBackend.DocumentAdapterBuild);
     public BuildBackendIdentity CsvBackend => new("ferrule", BuildWorkerProtocol.Engine, CompilationIdentity, FerrulePreviewBackend.CsvAdapterBuild);
     public BuildBackendIdentity XmlBackend => new("ferrule", BuildWorkerProtocol.Engine, CompilationIdentity, FerrulePreviewBackend.XmlAdapterBuild);
+    public BuildBackendIdentity NativeBackend(NativeDocumentFormat format) => new("ferrule", BuildWorkerProtocol.Engine, CompilationIdentity, format.AdapterBuild);
     private bool Admits(BuildIntent intent) => (intent.Profile == Profile && intent.Backend == Backend ||
         (intent.Profile == DocumentProfile || intent.Profile == X12InterchangesProfile) && intent.Backend == DocumentBackend ||
         intent.Profile == CsvProfile && intent.Backend == CsvBackend && BuildWorkerProtocol.AdmitsCsvPlan(intent.Boundaries) ||
-        xmlEnabled && intent.Profile == XmlProfile && intent.Backend == XmlBackend) &&
+        xmlEnabled && intent.Profile == XmlProfile && intent.Backend == XmlBackend || BuildWorkerProtocol.NativeFormat(intent.Profile.Id) is { } native && enabledFormats.Contains(native) && intent.Profile == NativeProfile(intent.Profile.Id) && intent.Backend == NativeBackend(native)) &&
         intent.Boundaries.All(boundary => BuildWorkerProtocol.AdmitsBoundary(intent.Profile.Id, boundary.Format, boundary.CsvDialect));
 
     public async Task<BuildCapabilitySnapshot> InspectAsync(BuildIntent intent, CancellationToken token = default)
@@ -113,10 +119,12 @@ public sealed class FerruleBuildCompiler : IBuildCompiler
         token.ThrowIfCancellationRequested();
         var refusal = BuildPreflightService.DocumentRefusal(intent);
         if (!xmlEnabled && intent.Profile == XmlProfile) refusal = BuildPreflightReason.UnsupportedXmlBuild;
+        var nativeFormat = BuildWorkerProtocol.NativeFormat(intent.Profile.Id);
+        if (nativeFormat is not null && !enabledFormats.Contains(nativeFormat)) refusal = intent.Profile.Id switch { BuildWorkerProtocol.FlexProfile => BuildPreflightReason.UnsupportedFlexTextBuild, BuildWorkerProtocol.ProtoProfile => BuildPreflightReason.UnsupportedProtobufBuild, _ => BuildPreflightReason.UnsupportedXbrlBuild };
         if (refusal != BuildPreflightReason.None)
             return new(intent.Revision, intent.NativeDigest, intent.Backend, intent.Profile, intent.Boundaries,
                 CapabilityStatus.Unsupported, refusalReason: refusal);
-        var backend = intent.Profile.Id == BuildWorkerProtocol.XmlProfile ? XmlBackend : intent.Profile.Id == BuildWorkerProtocol.CsvProfile ? CsvBackend : BuildWorkerProtocol.IsDocumentProfile(intent.Profile.Id) ? DocumentBackend : Backend;
+        var backend = nativeFormat is not null ? NativeBackend(nativeFormat) : intent.Profile.Id == BuildWorkerProtocol.XmlProfile ? XmlBackend : intent.Profile.Id == BuildWorkerProtocol.CsvProfile ? CsvBackend : BuildWorkerProtocol.IsDocumentProfile(intent.Profile.Id) ? DocumentBackend : Backend;
         var profile = intent.Profile;
         if (!Admits(intent))
             return intent.Profile.Id == BuildWorkerProtocol.CsvProfile

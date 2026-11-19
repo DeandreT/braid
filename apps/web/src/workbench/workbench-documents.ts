@@ -9,7 +9,11 @@ import { parseCsvDocument, type CsvDocumentResult } from "./csv-document";
 import { xmlOutline, type XmlOutlineLine } from "./xml-outline";
 import { xmlMetadata } from "../catalog/previews/xml-contract";
 import { nativeSettings } from "../catalog/previews/native-document-contract";
-import { workbookMedia, workbookTable, type WorkbookTable } from "./workbook-table";
+import {
+  workbookMedia,
+  workbookTable,
+  type WorkbookTable,
+} from "./workbook-table";
 
 /** Dialect metadata belongs to this exact artifact, never its filename or a sibling output. */
 export type WorkbenchDocument = RegressionDocument & {

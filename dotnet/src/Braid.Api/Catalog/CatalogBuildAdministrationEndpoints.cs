@@ -36,7 +36,7 @@ public static partial class CatalogEndpoints
                 options.InterchangeProfile is { } interchangeProfile ? CatalogBuildMapping.Profile(interchangeProfile) : null,
                 context.RequestServices.GetService<ICsvBuildBoundaryReader>() is not null && options.CsvProfile is { } csvProfile
                     ? CatalogBuildMapping.Profile(csvProfile) : null,
-                options.XmlProfile is { } xml ? CatalogBuildMapping.Profile(xml) : null), context.RequestAborted);
+                options.XmlProfile is { } xml ? CatalogBuildMapping.Profile(xml) : null, options.ByteProfiles?.Select(CatalogBuildMapping.Profile).ToArray()), context.RequestAborted);
             return await BuildProjectAccess(context, admission, project, administrator) ? CaseResponse(bytes) : NotFound();
         });
 

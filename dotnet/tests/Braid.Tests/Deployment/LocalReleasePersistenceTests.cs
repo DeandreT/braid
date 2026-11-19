@@ -382,9 +382,9 @@ public sealed class LocalReleasePersistenceTests(PostgresFixture fixture)
         internal PostgresCase Case => Control.Runs.Cases.Case;
         internal ActorContext Actor => Control.Actor;
         internal static async Task<Context> CreateAsync(PostgresFixture fixture, int? migrations = null, bool documents = false, bool shipment = false,
-            byte[]? nativeBytes = null, BuildBackendIdentity? actualBackend = null, string? runtimeImage = null, byte[]? xmlExpected = null, bool contrl = false)
+            byte[]? nativeBytes = null, BuildBackendIdentity? actualBackend = null, string? runtimeImage = null, byte[]? xmlExpected = null, bool contrl = false, BuildPersistenceTests.ByteCase? bytesCase = null)
         {
-            var control = await BuildPersistenceTests.Context.CreateAsync(fixture, migrations: migrations, documents: documents, shipment: shipment, nativeBytes: nativeBytes, actualBackend: actualBackend, xmlExpected: xmlExpected, contrl: contrl);
+            var control = await BuildPersistenceTests.Context.CreateAsync(fixture, migrations: migrations, documents: documents, shipment: shipment, nativeBytes: nativeBytes, actualBackend: actualBackend, xmlExpected: xmlExpected, contrl: contrl, bytesCase: bytesCase);
             PostgresBuildQualificationStore? qualifications = null; PostgresLocalReleaseStore? releases = null;
             try
             {

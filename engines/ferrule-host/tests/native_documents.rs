@@ -286,3 +286,37 @@ fn generated_builds_refuse_both_formats_explicitly() {
         }
     }
 }
+
+#[test]
+fn opted_in_generation_binds_primary_settings_for_each_adapter() {
+    use braid_ferrule_host::build::{self, FLEX_PROFILE, PB_PROFILE};
+    for (profile, native, format) in [
+        (
+            FLEX_PROFILE,
+            include_bytes!("fixtures/flextext.native.json").to_vec(),
+            "flexText",
+        ),
+        (PB_PROFILE, PROTOBUF.to_vec(), "protobuf"),
+        (build::XBRL_PROFILE, xbrl_native(false), "xbrl"),
+    ] {
+        let context = support::request("inspect", &native);
+        let request = build::Request {
+            protocol_version: build::PROTOCOL.into(),
+            request_id: context.request_id,
+            revision: context.revision,
+            native_digest: support::digest(&native),
+            intent_digest: support::digest(&native),
+            operation: "compile".into(),
+            profile: profile.into(),
+        };
+        let (boundaries, files) = build::generate(&request, &native).expect(format);
+        assert!(!files.is_empty());
+        assert_eq!(boundaries.len(), 2);
+        for (boundary, kind) in boundaries.iter().zip(["primaryInput", "primaryOutput"]) {
+            assert_eq!(boundary.kind, kind);
+            assert_eq!(boundary.format, format);
+            assert!(boundary.name.is_none());
+            assert!(boundary.document_settings.is_some());
+        }
+    }
+}

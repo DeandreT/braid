@@ -40258,6 +40258,16 @@
                 "$ref": "#/components/schemas/XmlDocumentMetadataV1"
               }
             ]
+          },
+          "documentSettings": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NativeDocumentSettingsV1"
+              }
+            ]
           }
         }
       },
@@ -40345,6 +40355,15 @@
                 "$ref": "#/components/schemas/BuildRuntimeV1"
               }
             ]
+          },
+          "byteProfiles": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/BuildRuntimeV1"
+            }
           }
         }
       },
@@ -40438,6 +40457,15 @@
                 "$ref": "#/components/schemas/BuildRuntimeV1"
               }
             ]
+          },
+          "byteProfiles": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/BuildRuntimeV1"
+            }
           }
         }
       },

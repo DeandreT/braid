@@ -68,7 +68,7 @@ public enum BuildBoundaryKind { PrimaryInput, NamedInput, PrimaryOutput, NamedOu
 /// <summary>A physical-format requirement at an exact logical boundary. Names are not filesystem paths.</summary>
 public sealed record BuildBoundary
 {
-    public BuildBoundary(BuildBoundaryKind kind, string? name, string format, CsvDocumentDialect? csvDialect = null, XmlDocumentMetadata? xmlMetadata = null)
+    public BuildBoundary(BuildBoundaryKind kind, string? name, string format, CsvDocumentDialect? csvDialect = null, XmlDocumentMetadata? xmlMetadata = null, NativeDocumentSettings? documentSettings = null)
     {
         if (!Enum.IsDefined(kind)) throw new BuildContractException(BuildContractFailure.InvalidInput);
         var named = kind is BuildBoundaryKind.NamedInput or BuildBoundaryKind.NamedOutput;
@@ -81,6 +81,8 @@ public sealed record BuildBoundary
         CsvDialect = csvDialect;
         if (xmlMetadata is not null && (format != "xml" || !XmlDocumentPolicy.Admits(xmlMetadata, XmlRole))) throw new BuildContractException(BuildContractFailure.InvalidInput);
         XmlMetadata = xmlMetadata;
+        if (documentSettings is not null && (named || format is not ("flexText" or "protobuf" or "xbrl") || !documentSettings.Admits(BuildWorkerProtocol.MediaType(format)))) throw new BuildContractException(BuildContractFailure.InvalidInput);
+        DocumentSettings = documentSettings;
     }
 
     public BuildBoundaryKind Kind { get; }
@@ -90,6 +92,8 @@ public sealed record BuildBoundary
     public CsvDocumentDialect? CsvDialect { get; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public XmlDocumentMetadata? XmlMetadata { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public NativeDocumentSettings? DocumentSettings { get; }
     internal XmlDocumentRole XmlRole => Kind is BuildBoundaryKind.NamedInput or BuildBoundaryKind.PrimaryInput ? XmlDocumentRole.Input : XmlDocumentRole.Output;
     public override string ToString() => nameof(BuildBoundary);
 }
