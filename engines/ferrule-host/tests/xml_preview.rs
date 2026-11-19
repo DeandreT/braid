@@ -11,6 +11,65 @@ use serde_json::{Value, json};
 const NATIVE: &[u8] = include_bytes!("fixtures/xml-closed.native.json");
 const INPUT: &[u8] = b"<Order><code>A</code><quantity>2</quantity></Order>";
 
+// The driver owns a fresh private directory; never accept a mapping or generated project from it.
+#[test]
+#[ignore = "run via tools/compiled-xml/check_interfaces.py with the pinned .NET SDK"]
+fn emit_compiled_xml_interface_fixture() {
+    let root = std::path::PathBuf::from(std::env::var_os("BRAID_XML_FIXTURE_DIRECTORY").unwrap());
+    std::fs::create_dir(&root).expect("a new fixture directory is required");
+    let mut project: Value = serde_json::from_slice(NATIVE).unwrap();
+    project["extra_sources"] = json!([{"name":"lookup", "path":"unused", "schema":project["source"], "options":{"xml_document":true}}]);
+    let mut other = project["root"].clone();
+    project["graph"]["nodes"]["3"] = json!({"kind":"const", "value":"COPY"});
+    other["bindings"][0]["node"] = json!(3);
+    project["extra_targets"] = json!([{"name":"copy", "schema":project["target"], "root":other, "options":{"xml_document":true}}]);
+    let native = serde_json::to_vec(&project).unwrap();
+    let (_, plan) = braid_ferrule_host::xml_document::admit_native(&native).unwrap();
+    let mut request = header(&native, INPUT);
+    request.inputs.push(PreviewInput::Named {
+        name: "lookup".into(),
+        byte_length: INPUT.len() as u32,
+        sha256: support::digest(INPUT),
+    });
+    request.limits.maximum_input_bytes = 256;
+    request.limits.maximum_output_bytes = 1024;
+    let outputs = process_preview(&request, &native, &[INPUT.to_vec(), INPUT.to_vec()]);
+    assert!(
+        outputs.response.failure.is_none(),
+        "{:?}",
+        outputs.response.failure
+    );
+    assert_eq!(outputs.outputs.len(), 2);
+    assert_ne!(outputs.outputs[0], outputs.outputs[1]);
+    std::fs::write(root.join("input.xml"), INPUT).unwrap();
+    std::fs::write(root.join("primary.xml"), &outputs.outputs[0]).unwrap();
+    std::fs::write(root.join("copy.xml"), &outputs.outputs[1]).unwrap();
+    let files = ferrule_codegen_csharp::emit(&plan.program)
+        .unwrap()
+        .into_files();
+    assert!(files.len() <= 128);
+    assert!(files.iter().map(|f| f.contents.len()).sum::<usize>() <= 32 << 20);
+    for file in files {
+        let path = file.path.as_str();
+        if path == "Ferrule.Generated.csproj" {
+            continue;
+        }
+        assert!(
+            matches!(path, "GeneratedMapping.cs" | "GeneratedTargetBuilder.cs")
+                || path
+                    .strip_prefix("Runtime/")
+                    .is_some_and(|name| name.ends_with(".cs")
+                        && name
+                            .split('/')
+                            .all(|part| !part.is_empty() && part != "." && part != "..")),
+            "unexpected generated file: {path}"
+        );
+        let path = root.join(path);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, file.contents).unwrap();
+    }
+}
+
 fn header(native: &[u8], input: &[u8]) -> PreviewRequestHeader {
     let context = support::request("inspect", native);
     PreviewRequestHeader {
