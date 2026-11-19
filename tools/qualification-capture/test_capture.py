@@ -8,12 +8,22 @@ import sys
 import tempfile
 import threading
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import capture
 
 FIXTURES = Path(__file__).resolve().parent / 'fixtures'
 POSIX = unittest.skipUnless(os.name == 'posix', 'the owner runs only on the Linux qualification host')
+
+
+class DrainTests(unittest.TestCase):
+    def test_zero_exit_with_partial_stdout_then_read_error_cannot_pass(self):
+        child = Mock(returncode=0)
+        child.stdout.read1.side_effect = [b'partial', OSError('private fixture detail')]
+        with patch.object(capture.subprocess, 'Popen', return_value=child):
+            result = capture.drive(Path('/unused'), ['fixture'], 10, threading.Event())
+        self.assertEqual(('outputDidNotSettle', b'partial'), result)
+        child.stdout.close.assert_called_once_with()
 
 
 class MarkerTests(unittest.TestCase):
