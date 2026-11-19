@@ -13,10 +13,11 @@ pub const CSV_PROFILE: &str = "braid.ferrule-csharp-csv.v1";
 pub const XML_PROFILE: &str = "braid.ferrule-csharp-xml.v1";
 pub const FLEX_PROFILE: &str = "braid.ferrule-csharp-flextext.v1";
 pub const PB_PROFILE: &str = "braid.ferrule-csharp-protobuf.v1";
+pub const XLSX_PROFILE: &str = "braid.ferrule-csharp-xlsx.v1";
 pub const XBRL_PROFILE: &str = "braid.ferrule-csharp-xbrl.v1";
 
 fn native_profile(id: &str) -> Option<&'static str> {
-    [FLEX_PROFILE, PB_PROFILE, XBRL_PROFILE]
+    [FLEX_PROFILE, PB_PROFILE, XBRL_PROFILE, XLSX_PROFILE]
         .into_iter()
         .find(|profile| *profile == id)
 }
@@ -151,6 +152,7 @@ pub fn generate(
                 | XML_PROFILE
                 | FLEX_PROFILE
                 | PB_PROFILE
+                | XLSX_PROFILE
                 | XBRL_PROFILE
         )
         || !matches!(request.operation.as_str(), "inspect" | "compile")
@@ -244,6 +246,7 @@ pub fn generate(
     if let Some(profile) = native_profile(&request.profile) {
         use crate::native_document::{self, NativeFormat};
         let (format, refusal) = match profile {
+            XLSX_PROFILE => ("xlsx", "unsupportedXlsxBuild"),
             FLEX_PROFILE => ("flexText", "unsupportedFlexTextBuild"),
             PB_PROFILE => ("protobuf", "unsupportedProtobufBuild"),
             _ => ("xbrl", "unsupportedXbrlBuild"),
@@ -251,7 +254,11 @@ pub fn generate(
         if project.execution_contract.is_some() {
             return Err(refusal);
         }
-        let mut files = if profile == FLEX_PROFILE {
+        let mut files = if profile == XLSX_PROFILE {
+            crate::xlsx_document::admit(project).map_err(|_| refusal)?;
+            crate::xlsx_document::admit_saved_metadata(native, project).map_err(|_| refusal)?;
+            ferrule_codegen_csharp::emit_with_flat_xlsx_output(project).map_err(|_| refusal)?
+        } else if profile == FLEX_PROFILE {
             crate::flextext_document::admit(project).map_err(|_| refusal)?;
             crate::flextext_document::admit_saved_metadata(native, project).map_err(|_| refusal)?;
             let program = ferrule_codegen::lower(project).map_err(|_| refusal)?;
@@ -290,6 +297,7 @@ pub fn generate(
         // Fixed host ABI for the three primary-only profiles. No mapping text
         // or caller-supplied type or method name is interpolated here.
         let body = match profile {
+            XLSX_PROFILE => "return M.ExecuteXlsxToXlsxBytes(input, host);",
             FLEX_PROFILE => {
                 "return all ? M.ExecuteFlexTextBytesOutputsWithHost(input, host) : M.ExecuteFlexTextBytesSelectedTargetWithHost(input, FerruleTargetSelection.Primary(), host);"
             }
@@ -314,7 +322,14 @@ pub fn generate(
             ("primaryInput", &project.source_options),
             ("primaryOutput", &project.target_options),
         ] {
-            let settings = if profile == FLEX_PROFILE {
+            let settings = if profile == XLSX_PROFILE {
+                let saved = crate::xlsx_document::settings(options, kind == "primaryOutput")
+                    .map_err(|_| refusal)?;
+                native_document::Settings {
+                    schema: saved.schema.clone(),
+                    options_json: serde_json::to_string(&saved).map_err(|_| refusal)?,
+                }
+            } else if profile == FLEX_PROFILE {
                 let settings = crate::flextext_document::settings(options).map_err(|_| refusal)?;
                 native_document::Settings {
                     schema: settings.schema,

@@ -15,6 +15,12 @@ public sealed class PostgresAccountDisplayMetadataTests(PostgresFixture fixture)
             await old.MigrateAsync();
         Assert.False(await test.ScalarAsync<bool>("SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname='braid_account_display')"));
         await test.MigrateAsync();
+        await using var connection = new Npgsql.NpgsqlConnection(test.RegressionConnectionString("braid_lifecycle_worker"));
+        await connection.OpenAsync();
+        await using var tx = await connection.BeginTransactionAsync();
+        await using var path = new Npgsql.NpgsqlCommand("SET LOCAL search_path=pg_catalog", connection, tx);
+        await path.ExecuteNonQueryAsync();
+        await LifecycleCatalogAdmission.ValidateAsync(connection, tx, default);
         Assert.True(await test.ScalarAsync<bool>("SELECT pg_catalog.to_regclass('braid.account_display_metadata') IS NOT NULL"));
     }
 

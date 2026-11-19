@@ -51,6 +51,8 @@ public sealed partial class NativeShipmentPackagePilot(PostgresFixture fixture, 
     [NativeShipmentPilotFact]
     public Task Qualified_protobuf_byte_release() => Rehearse(false, endpoint: true, byteProfile: BuildWorkerProtocol.ProtoProfile);
     [NativeShipmentPilotFact]
+    public Task Qualified_portable_workbook_release() => Rehearse(false, endpoint: true, byteProfile: BuildWorkerProtocol.WorkbookProfile);
+    [NativeShipmentPilotFact]
     public Task Qualified_xbrl_byte_release() => Rehearse(false, endpoint: true, byteProfile: BuildWorkerProtocol.XbrlProfile);
 
     private async Task Rehearse(bool transport, bool boundedFaults = false, bool endpoint = false, bool xml = false, bool contrl = false, string? byteProfile = null)
@@ -66,17 +68,29 @@ public sealed partial class NativeShipmentPackagePilot(PostgresFixture fixture, 
             await using var interpreter = new ProcessWorkerRunner(FerruleServiceTestSupport.Options(root, DockerWorkerProfile.Preview));
             var family = byteProfile is null ? null : BuildWorkerProtocol.NativeFormat(byteProfile)!;
             BuildPersistenceTests.ByteCase? bytesCase = null;
-            var native = family is not null ? File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "FerruleFixtures", family.Key == "xbrl" ? "xbrl-instance.native.json" : family.Key + ".native.json")) : xml ? File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "FerruleFixtures", "xml-closed.native.json")) : contrl ? DocumentPreviewTestData.Native("edifact", DocumentPreviewTestData.Contrl) : NativeMapping();
+            var native = family is not null ? File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "FerruleFixtures", family.Key == "xlsx" ? "xlsx-portable.native.json" : family.Key == "xbrl" ? "xbrl-instance.native.json" : family.Key + ".native.json")) : xml ? File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "FerruleFixtures", "xml-closed.native.json")) : contrl ? DocumentPreviewTestData.Native("edifact", DocumentPreviewTestData.Contrl) : NativeMapping();
             byte[]? xmlExpected = null;
             var preview = family is not null ? new FerrulePreviewBackend(interpreter, family.Execution, nativeFormats: [family]) : xml ? new FerrulePreviewBackend(interpreter, PreviewExecutionProfile.XmlDocument, xmlEnabled: true) : new FerrulePreviewBackend(interpreter);
             if (family is not null)
             {
                 var artifact = NativeArtifact.Admit(FerruleServiceTestSupport.Scope, native, PreviewPolicy.MaximumNativeBytes);
                 var settings = NativeDocumentNativeSettings.Read(artifact, family);
-                var input = new PreviewInputDocument(null, family.Key switch { "flextext" => "hello"u8.ToArray(), "protobuf" => [10,5,104,101,108,108,111], _ => DocumentPreviewTestData.XbrlInstance("5") }, documentSettings: settings.Input);
+                var input = new PreviewInputDocument(null, family.Key switch { "xlsx" => Convert.FromBase64String(System.Text.Json.JsonSerializer.Deserialize<string>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory,"FerruleFixtures","xlsx-portable-bytes.json")))!), "flextext" => "hello"u8.ToArray(), "protobuf" => [10,5,104,101,108,108,111], _ => DocumentPreviewTestData.XbrlInstance("5") }, documentSettings: settings.Input);
                 var sample = await preview.PreviewAsync(new(artifact, PreviewTargetSelection.All, input, [], [], "2026-10-24T12:00:00Z", PreviewLimits.Default) { Profile = family.Execution });
                 Assert.Equal(MappingPreviewStatus.Succeeded, sample.Status);
                 bytesCase = new(byteProfile!, family.Key == "flextext" ? "flexText" : family.Key, family, input, settings.Output, Assert.Single(sample.Artifacts).CopyBytes());
+                if (family == NativeDocumentFormat.Xlsx)
+                {
+                    bytesCase = bytesCase with { ReplaySaved = async saved => {
+                        var replay = saved.Replay;
+                        var source = NativeArtifact.Admit(saved.Revision, native, PreviewPolicy.MaximumNativeBytes);
+                        Assert.Equal(saved.NativeDigest, source.Digest);
+                        var actual = await preview.PreviewAsync(new(source, replay.Target, replay.Primary, replay.NamedInputs, replay.Parameters, replay.CurrentDateTime, replay.Limits) { Profile = family.Execution });
+                        Assert.Equal(MappingPreviewStatus.Succeeded, actual.Status);
+                        var output = Assert.Single(actual.Artifacts);
+                        return RegressionOutputSet.Capture([RegressionOutput.Capture(RegressionOutputKey.Primary, output.CopyBytes(), mediaType: output.MediaType, documentSettings: output.DocumentSettings)]);
+                    } };
+                }
             }
             if (xml)
             {

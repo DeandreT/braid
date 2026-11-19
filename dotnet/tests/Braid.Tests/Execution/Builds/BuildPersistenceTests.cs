@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json.Nodes;
 using Npgsql;
 using Braid.Application;
+using Braid.Application.Regression;
 using Braid.Contracts.Operations;
 using Braid.Deployment;
 using Braid.Persistence.Postgres;
@@ -11,7 +12,7 @@ namespace Braid.Tests;
 [Collection(PostgresCollection.Name)]
 public sealed class BuildPersistenceTests(PostgresFixture fixture)
 {
-    internal sealed record ByteCase(string Profile, string Format, NativeDocumentFormat Family, PreviewInputDocument Input, NativeDocumentSettings OutputSettings, byte[] Expected);
+    internal sealed record ByteCase(string Profile, string Format, NativeDocumentFormat Family, PreviewInputDocument Input, NativeDocumentSettings OutputSettings, byte[] Expected, Func<RegressionCaseVersion,Task<RegressionOutputSet>>? ReplaySaved = null);
     internal static readonly byte[] XmlInput = "<Order><code>A</code><quantity>2</quantity></Order>"u8.ToArray();
 
     [PostgresFact]
@@ -444,6 +445,14 @@ public sealed class BuildPersistenceTests(PostgresFixture fixture)
                     Braid.Application.Regression.RegressionOutputSet.Capture([Braid.Application.Regression.RegressionOutput.Capture(Braid.Application.Regression.RegressionOutputKey.Primary, [1])]),
                     new Braid.Application.Regression.RegressionComparisonService().Compare(runs.Value.Expected,
                         new(OperationStatusV1.Succeeded, Braid.Application.Regression.RegressionOutputSet.Capture([Braid.Application.Regression.RegressionOutput.Capture(Braid.Application.Regression.RegressionOutputKey.Primary, [1])]))));
+                if (bytesCase?.ReplaySaved is { } replaySaved)
+                {
+                    var saved = (await runs.Cases.Reader.ReadAsync(runs.Actor, runs.Cases.Mapping, runs.Value.CaseId, runs.Value.Version))!;
+                    var observation = await replaySaved(saved);
+                    var comparison = new RegressionComparisonService().Compare(saved.Expected, new(OperationStatusV1.Succeeded, observation));
+                    Assert.Equal(RegressionComparisonOutcome.Passed, comparison.Outcome);
+                    result = RegressionCaseExecution.Complete(MappingPreviewStatus.Succeeded, observation, comparison, saved.Runtime.Profile);
+                }
                 if (!nullContent) await runs.CompleteAsync(claim, result);
                 else
                 {

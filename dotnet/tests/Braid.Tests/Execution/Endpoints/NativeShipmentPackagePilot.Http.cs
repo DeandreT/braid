@@ -76,7 +76,7 @@ public sealed partial class NativeShipmentPackagePilot
                     req.Content = new StringContent(JsonSerializer.Serialize(new { schema = MappingEndpointContract.DocumentRequestSchema, inputs = new[] { new { mediaType, content = Convert.ToBase64String(bytes) } } }), System.Text.Encoding.UTF8, "application/json");
                     return await client.SendAsync(req);
                 }
-                byte[] longer = bytesCase.Family.Key switch { "protobuf" => [10,6,104,101,108,108,111,33], "flextext" => "hello!"u8.ToArray(), _ => DocumentPreviewTestData.XbrlInstance("55") };
+                byte[] longer = bytesCase.Family.Key switch { "xlsx" => Convert.FromBase64String(JsonSerializer.Deserialize<string>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory,"FerruleFixtures","xlsx-portable-longer.json")))!), "protobuf" => [10,6,104,101,108,108,111,33], "flextext" => "hello!"u8.ToArray(), _ => DocumentPreviewTestData.XbrlInstance("55") };
                 foreach (var (body, media, outcome) in new[] { (longer, bytesCase.Family.MediaType, "resourceLimit"), (bytesCase.Input.CopyBytes(), "application/json", "invalidInput") })
                 {
                     using var refused = await Post(body, media, bearer);
@@ -84,6 +84,14 @@ public sealed partial class NativeShipmentPackagePilot
                     using var error = JsonDocument.Parse(await refused.Content.ReadAsByteArrayAsync());
                     Assert.Equal(outcome, error.RootElement.GetProperty("outcome").GetString());
                     Assert.False(error.RootElement.TryGetProperty("outputs", out _));
+                }
+                if (bytesCase.Family == NativeDocumentFormat.Xlsx)
+                {
+                    using var malformed = await Post([..bytesCase.Input.CopyBytes(),0], bytesCase.Family.MediaType, bearer);
+                    Assert.Equal(HttpStatusCode.UnprocessableEntity, malformed.StatusCode);
+                    using var failure = JsonDocument.Parse(await malformed.Content.ReadAsByteArrayAsync());
+                    Assert.Equal("invalidInput", failure.RootElement.GetProperty("outcome").GetString());
+                    Assert.False(failure.RootElement.TryGetProperty("outputs", out _));
                 }
                 var other = crypto.SignClaims(MachineTokenValidationTests.Claims(Guid.NewGuid()).ToJsonString());
                 using var ungranted = await Post(bytesCase.Input.CopyBytes(), bytesCase.Family.MediaType, other);
