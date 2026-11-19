@@ -37,6 +37,8 @@ public sealed class BuildPreflightTests
     }
 
     [Theory]
+    [InlineData("pdf", BuildPreflightReason.UnsupportedPdfBuild)]
+    [InlineData("database", BuildPreflightReason.StatefulDatabaseBuild)]
     [InlineData("flexText", BuildPreflightReason.UnsupportedFlexTextBuild)]
     [InlineData("xlsx", BuildPreflightReason.UnsupportedXlsxBuild)]
     [InlineData("protobuf", BuildPreflightReason.UnsupportedProtobufBuild)]

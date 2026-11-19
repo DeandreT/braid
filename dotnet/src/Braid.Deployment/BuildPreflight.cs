@@ -17,7 +17,7 @@ public sealed class BuildCapabilitySnapshot
         if (!Enum.IsDefined(status)) throw new BuildContractException(BuildContractFailure.InvalidInput);
         if (refusalReason != BuildPreflightReason.None && (status != CapabilityStatus.Unsupported || refusalReason is not
             (BuildPreflightReason.UnsupportedCsvPlan or BuildPreflightReason.UnsupportedXmlBuild or BuildPreflightReason.UnsupportedFlexTextBuild or
-             BuildPreflightReason.UnsupportedXlsxBuild or BuildPreflightReason.UnsupportedProtobufBuild or BuildPreflightReason.UnsupportedXbrlBuild)))
+             BuildPreflightReason.UnsupportedXlsxBuild or BuildPreflightReason.UnsupportedProtobufBuild or BuildPreflightReason.UnsupportedXbrlBuild or BuildPreflightReason.UnsupportedPdfBuild or BuildPreflightReason.StatefulDatabaseBuild)))
             throw new BuildContractException(BuildContractFailure.InvalidInput);
         var count = conditions?.Count ?? 0;
         if (count is < 0 or > 32 || (status == CapabilityStatus.Conditional) != (count > 0))
@@ -46,7 +46,7 @@ public sealed class BuildCapabilitySnapshot
 }
 
 public enum BuildPreflightOutcome { Supported, Unsupported, NotQualified, ConditionsRequired, MismatchedEvidence }
-public enum BuildPreflightReason { None, RevisionMismatch, NativeDigestMismatch, BackendMismatch, ProfileMismatch, BoundaryMismatch, UnsupportedCsvPlan, UnsupportedXmlBuild, UnsupportedFlexTextBuild, UnsupportedXlsxBuild, UnsupportedProtobufBuild, UnsupportedXbrlBuild }
+public enum BuildPreflightReason { None, RevisionMismatch, NativeDigestMismatch, BackendMismatch, ProfileMismatch, BoundaryMismatch, UnsupportedCsvPlan, UnsupportedXmlBuild, UnsupportedFlexTextBuild, UnsupportedXlsxBuild, UnsupportedProtobufBuild, UnsupportedXbrlBuild, UnsupportedPdfBuild, StatefulDatabaseBuild }
 
 public sealed record BuildPreflightResult(BuildPreflightOutcome Outcome, BuildPreflightReason Reason)
 {
@@ -63,6 +63,8 @@ public sealed class BuildPreflightService
             var refusal = boundary.Format switch
             {
                 "xml" when intent.Profile.Id != BuildWorkerProtocol.XmlProfile => BuildPreflightReason.UnsupportedXmlBuild,
+                "pdf" => BuildPreflightReason.UnsupportedPdfBuild,
+                "database" => BuildPreflightReason.StatefulDatabaseBuild,
                 "flexText" => BuildPreflightReason.UnsupportedFlexTextBuild,
                 "xlsx" => BuildPreflightReason.UnsupportedXlsxBuild,
                 "protobuf" => BuildPreflightReason.UnsupportedProtobufBuild,

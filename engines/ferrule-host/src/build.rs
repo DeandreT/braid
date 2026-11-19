@@ -225,6 +225,12 @@ pub fn generate(
         .chain(project.extra_sources.iter().map(|source| &source.options))
         .chain(project.extra_targets.iter().map(|target| &target.options))
     {
+        if options.pdf.is_some() {
+            return Err("unsupportedPdfBuild");
+        }
+        if options.sqlite_read.is_some() {
+            return Err("statefulDatabaseBuild");
+        }
         if options.flextext.is_some() {
             return Err("unsupportedFlexTextBuild");
         }

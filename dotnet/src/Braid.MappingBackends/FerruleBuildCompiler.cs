@@ -135,6 +135,8 @@ public sealed class FerruleBuildCompiler : IBuildCompiler
                 "unsupportedFlexTextBuild" => BuildPreflightReason.UnsupportedFlexTextBuild,
                 "unsupportedXlsxBuild" => BuildPreflightReason.UnsupportedXlsxBuild,
                 "unsupportedProtobufBuild" => BuildPreflightReason.UnsupportedProtobufBuild,
+                "unsupportedPdfBuild" => BuildPreflightReason.UnsupportedPdfBuild,
+                "statefulDatabaseBuild" => BuildPreflightReason.StatefulDatabaseBuild,
                 "unsupportedXbrlBuild" => BuildPreflightReason.UnsupportedXbrlBuild,
                 _ => BuildPreflightReason.None
             });

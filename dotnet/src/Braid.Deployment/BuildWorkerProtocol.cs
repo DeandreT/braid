@@ -73,7 +73,7 @@ public static class BuildWorkerProtocol
         if (header.ProtocolVersion != Protocol || header.RequestId != expected.RequestId || header.Revision != expected.Revision ||
             header.NativeDigest != expected.NativeDigest || header.IntentDigest != expected.IntentDigest || header.EngineRevision != Engine || header.Profile != expected.Profile ||
             header.Status is not ("supported" or "unsupported" or "unsupportedCsvPlan" or "unsupportedXmlBuild" or "unsupportedFlexTextBuild" or
-                "unsupportedXlsxBuild" or "unsupportedProtobufBuild" or "unsupportedXbrlBuild" or "invalidRequest" or "invalidMapping" or "sourceLimit" or "compileFailed") ||
+                "unsupportedXlsxBuild" or "unsupportedProtobufBuild" or "unsupportedXbrlBuild" or "unsupportedPdfBuild" or "statefulDatabaseBuild" or "invalidRequest" or "invalidMapping" or "sourceLimit" or "compileFailed") ||
             header.Files.Length > 128 || header.Boundaries.Length > 128) throw Invalid();
         var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var contents = new List<byte[]>(); var remaining = MaximumSourceBytes;

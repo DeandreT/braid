@@ -227,11 +227,11 @@
                       preview.native()
                         ? '.' + preview.native()!.extension
                         : preview.xmlProfile()
-                          ? null
+                          ? '.xml,application/xml,text/xml'
                           : preview.csvProfile()
                             ? '.csv,.tsv,text/csv,text/tab-separated-values'
                             : preview.documentProfile()
-                              ? null
+                              ? '.json,.edi,.x12,.edifact,.edif,application/json,application/edi-x12,application/edifact'
                               : 'application/json,.json'
                     "
                     (change)="chooseFile(item.id, $event)"
@@ -547,7 +547,7 @@
             }
             @if (canSaveCase() && !casePending()) {
               <fieldset class="preview-group" [disabled]="caseBusy()">
-                <legend>Save this CSV preview as a test case</legend>
+                <legend>Save this preview as a test case</legend>
                 <p class="preview-hint">
                   Review the exact output before accepting it as the baseline.
                   The saved test uses the returned native dialect or XML
