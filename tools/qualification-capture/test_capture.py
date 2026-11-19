@@ -17,6 +17,20 @@ POSIX = unittest.skipUnless(os.name == 'posix', 'the owner runs only on the Linu
 
 
 class DrainTests(unittest.TestCase):
+    def test_oversized_driver_refused_before_capture_creation_or_execution(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            driver = Path(tmp) / 'driver'
+            with driver.open('wb') as stream:
+                stream.truncate((64 << 20) + 1)
+            driver.chmod(0o700)
+            root = Path(tmp) / 'captures'
+            root.mkdir(mode=0o700)
+            with patch.object(capture.subprocess, 'Popen') as launch:
+                with self.assertRaisesRegex(capture.CaptureInvalid, '^memberLimit$'):
+                    capture.run_capture(root, [str(driver)], 1)
+            launch.assert_not_called()
+            self.assertEqual([], list(root.iterdir()))
+
     def test_zero_exit_with_partial_stdout_then_read_error_cannot_pass(self):
         child = Mock(returncode=0)
         child.stdout.read1.side_effect = [b'partial', OSError('private fixture detail')]
