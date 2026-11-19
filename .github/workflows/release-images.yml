@@ -1,0 +1,150 @@
+name: Product release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: product-release-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  admit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    if: github.ref_type == 'tag' && github.ref_protected && github.event.created && !github.event.deleted && !github.event.forced && !github.event.repository.fork
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require an exact version and a commit on the default branch
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          number='(0|[1-9][0-9]*)'
+          [[ "$GITHUB_REF_NAME" =~ ^v$number\.$number\.$number$ ]]
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse "$GITHUB_REF^{commit}")" = "$GITHUB_SHA"
+          git merge-base --is-ancestor "$GITHUB_SHA" "refs/remotes/origin/$DEFAULT_BRANCH"
+      - name: Validate the release contract and build wiring offline
+        run: |
+          python3 -m unittest discover -s deploy/release -p 'test_*.py'
+          python3 -m unittest discover -s tools/release -p 'test_*.py'
+
+  qualify:
+    needs: admit
+    uses: ./.github/workflows/ci.yml
+
+  images:
+    needs: qualify
+    environment: release
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      matrix:
+        role: [server, edge, worker, mappingEndpoint, ferruleService]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3, cosign v3.1.4
+      - name: Start isolated BuildKit
+        run: |
+          docker buildx create --use --driver docker-container --driver-opt \
+            image=moby/buildkit@sha256:aa632b921ef07411d2cb77292cd34213d4f7b384001d6fceef1e1f25bf9752bb
+          docker buildx inspect --bootstrap
+      - name: Authenticate to GitHub Container Registry
+        if: vars.RELEASE_IMAGE_PREFIX == ''
+        env:
+          TOKEN: ${{ github.token }}
+        run: printf '%s' "$TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Authenticate to configured OCI registry
+        if: vars.RELEASE_IMAGE_PREFIX != ''
+        env:
+          PREFIX: ${{ vars.RELEASE_IMAGE_PREFIX }}
+          REGISTRY_USER: ${{ secrets.RELEASE_REGISTRY_USERNAME }}
+          REGISTRY_PASSWORD: ${{ secrets.RELEASE_REGISTRY_PASSWORD }}
+        run: |
+          [[ "$PREFIX" == */* && "$PREFIX" != -* ]]
+          printf '%s' "$REGISTRY_PASSWORD" | docker login "${PREFIX%%/*}" --username "$REGISTRY_USER" --password-stdin
+      - name: Build, push and inspect this role
+        env:
+          ROLE: ${{ matrix.role }}
+          CUSTOM_PREFIX: ${{ vars.RELEASE_IMAGE_PREFIX }}
+        run: |
+          python3 tools/release/build_image.py "$ROLE" \
+            --prefix "${CUSTOM_PREFIX:-ghcr.io/${GITHUB_REPOSITORY,,}}" \
+            --version "$GITHUB_REF_NAME" --commit "$GITHUB_SHA" \
+            --source "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" --evidence evidence
+      - name: Keyless sign and verify the pushed index digest
+        env:
+          ROLE: ${{ matrix.role }}
+        run: |
+          ref="$(cat "evidence/$ROLE.ref")"
+          cosign sign --yes "$ref"
+          cosign verify --certificate-identity="$GITHUB_SERVER_URL/$GITHUB_WORKFLOW_REF" \
+            --certificate-oidc-issuer=https://token.actions.githubusercontent.com "$ref" >/dev/null
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-image-${{ matrix.role }}
+          path: evidence/
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 7
+
+  release:
+    needs: images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: release-image-*
+          path: evidence
+      - name: Bind all five digest references and measured Ferrule pins
+        run: |
+          ferrule=evidence/release-image-ferruleService
+          python3 deploy/release/manifest.py generate \
+            --version "$GITHUB_REF_NAME" --source-commit "$GITHUB_SHA" \
+            --server "$(cat evidence/release-image-server/server.ref)" \
+            --edge "$(cat evidence/release-image-edge/edge.ref)" \
+            --worker "$(cat evidence/release-image-worker/worker.ref)" \
+            --mapping-endpoint "$(cat evidence/release-image-mappingEndpoint/mappingEndpoint.ref)" \
+            --ferrule-service "$(cat "$ferrule/ferruleService.ref")" \
+            --compiler-identity "$ferrule/compiler-identity.json" --runtime-identity "$ferrule/runtime-identity.json" \
+            --output release.json
+          python3 deploy/release/manifest.py validate release.json \
+            --expect-version "$GITHUB_REF_NAME" --expect-source-commit "$GITHUB_SHA"
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3, cosign v3.1.4
+      - name: Sign and verify the exact release asset bytes
+        run: |
+          cosign sign-blob --yes --bundle release.json.bundle release.json
+          cosign verify-blob --bundle release.json.bundle \
+            --certificate-identity="$GITHUB_SERVER_URL/$GITHUB_WORKFLOW_REF" \
+            --certificate-oidc-issuer=https://token.actions.githubusercontent.com release.json
+      - name: Create the release with its verified assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_REF" --jq .sha)" = "$GITHUB_SHA"
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --generate-notes \
+            release.json release.json.bundle

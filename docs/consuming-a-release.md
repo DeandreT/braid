@@ -41,10 +41,15 @@ feature choices belong to the consuming environment.
    `@sha256:…`. For example, to pull the pinned server using `jq`:
 
    ```sh
-   docker pull --platform linux/amd64 "$(jq -er '.images.server' release.json)"
+    SERVER_REF=$(jq -er '.images.server' release.json)
+    cosign verify \
+      --certificate-identity "https://github.com/${REPO}/.github/workflows/release-images.yml@refs/tags/${TAG}" \
+      --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+      "$SERVER_REF" && docker pull --platform linux/amd64 "$SERVER_REF"
    ```
 
-   A version tag, `latest`, a local image ID, or a rebuild from the recorded
+    Repeat image signature verification for each selected role. A version tag,
+    `latest`, a local image ID, or a rebuild from the recorded
    commit is not a substitute for the published registry digest. When mirroring
    images, verify the manifest digest at the destination before promoting it.
 
