@@ -22,7 +22,7 @@ internal static class CatalogBuildMapping
             Backend(intent.Backend), Profile(intent.Profile), intent.Boundaries.Select(boundary => new BuildBoundaryV1(Name(boundary.Kind), boundary.Name, boundary.Format,
                 boundary.CsvDialect is { } dialect ? new(dialect.Schema, dialect.Delimiter, dialect.Quote, dialect.QuoteDisabled,
                     dialect.HasHeaderRow, dialect.Utf8Bom, dialect.PreserveEmptyStrings) : null, boundary.XmlMetadata is { } xml ? new(xml.Schema, xml.SafetyProfile,
-                        xml.SchemaHints is { } hints ? new(hints.NoNamespaceLocation, hints.Locations.Select(pair => new Braid.Contracts.Catalog.XmlSchemaLocationV1(pair.Namespace, pair.Location)).ToArray()) : null) : null)).ToArray(),
+                        xml.SchemaHints is { } hints ? new(hints.NoNamespaceLocation, hints.Locations.Select(pair => new Braid.Contracts.Catalog.XmlSchemaLocationV1(pair.Namespace, pair.Location)).ToArray()) : null) : null, boundary.DocumentSettings is { } settings ? new(settings.Schema, settings.OptionsJson) : null)).ToArray(),
             Reference(intent.Environment), intent.RegressionEvidenceId.ToString("D"), value.Revoked, value.EnvironmentActive,
             value.CreatedAt.ToString("O", CultureInfo.InvariantCulture));
     }

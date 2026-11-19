@@ -15,7 +15,7 @@ using Braid.Storage.Hosting;
 namespace Braid.Server;
 
 internal sealed record BuildHostRuntime(bool Enabled, string? Image = null, PrivateStorageSettings? Storage = null,
-    int DerivedReadLimit = Braid.Domain.RevisionReportPolicy.MaximumStoredObjectByteLimit, CsvBuildHostSettings? Csv = null, CsvBuildHostSettings? Xml = null);
+    int DerivedReadLimit = Braid.Domain.RevisionReportPolicy.MaximumStoredObjectByteLimit, CsvBuildHostSettings? Csv = null, CsvBuildHostSettings? Xml = null, CsvBuildHostSettings? ByteTransport = null, IReadOnlyList<string>? ByteProfiles = null);
 
 /// <summary>Explicit control/query composition, with optional read-only CSV boundary inspection. No compiler execution queue or publication is registered.</summary>
 public static class CatalogBuildHostConfiguration
@@ -44,11 +44,12 @@ public static class CatalogBuildHostConfiguration
             _ => throw new ArgumentException("CSV build enablement must be true or false.")
         };
         var xmlEnabled = BuildWorkerProtocol.XmlBuildEnabled(environment);
-        var selection = csvEnabled || xmlEnabled ? CsvBuildHostSettings.Read(environment, environment("BRAID_CATALOG_AUTH_MODE") == "session", image) : null;
+        var byteProfiles = BuildWorkerProtocol.EnabledByteProfiles(environment);
+        var selection = csvEnabled || xmlEnabled || byteProfiles.Count > 0 ? CsvBuildHostSettings.Read(environment, environment("BRAID_CATALOG_AUTH_MODE") == "session", image) : null;
         PrivateStorageSettings storage;
         try { storage = PrivateStorageSettings.Read(environment); }
         catch (InvalidOperationException) { throw new ArgumentException("Build API requires its private report storage."); }
-        return new(true, image, storage, CatalogRevisionReportHostConfiguration.DerivedReadLimit(environment("BRAID_DERIVED_READ_BYTE_LIMIT")), csvEnabled ? selection : null, xmlEnabled ? selection : null);
+        return new(true, image, storage, CatalogRevisionReportHostConfiguration.DerivedReadLimit(environment("BRAID_DERIVED_READ_BYTE_LIMIT")), csvEnabled ? selection : null, xmlEnabled ? selection : null, byteProfiles.Count > 0 ? selection : null, byteProfiles);
     }
 
     internal static void Configure(IServiceCollection services, IWebHostEnvironment environment, Func<string, string?> read,
@@ -71,12 +72,14 @@ public static class CatalogBuildHostConfiguration
         var documentBackend = new BuildBackendIdentity("ferrule", FerruleInspectionBackend.EngineRevision, runtime.Image!, FerrulePreviewBackend.DocumentAdapterBuild);
         var documentProfile = FerruleBuildCompiler.DocumentProfile;
         var interchangeProfile = FerruleBuildCompiler.X12InterchangesProfile;
+        var byteAdapters = (runtime.ByteProfiles ?? []).ToDictionary(FerruleBuildCompiler.NativeProfile,
+            id => new BuildBackendIdentity("ferrule", BuildWorkerProtocol.Engine, runtime.Image!, BuildWorkerProtocol.NativeFormat(id)!.AdapterBuild));
         var csvBackend = runtime.Csv is null ? null : new BuildBackendIdentity("ferrule", FerruleInspectionBackend.EngineRevision,
             runtime.Image!, FerrulePreviewBackend.CsvAdapterBuild);
         var csvProfile = runtime.Csv is null ? null : FerruleBuildCompiler.CsvProfile;
         var xmlBackend = runtime.Xml is null ? null : new BuildBackendIdentity("ferrule", BuildWorkerProtocol.Engine, runtime.Image!, FerrulePreviewBackend.XmlAdapterBuild);
         var xmlProfile = runtime.Xml is null ? null : FerruleBuildCompiler.XmlProfile;
-        services.AddBraidBuildApi(new(true, backend, profile, documentBackend, documentProfile, interchangeProfile, csvBackend, csvProfile, xmlBackend, xmlProfile));
+        services.AddBraidBuildApi(new(true, backend, profile, documentBackend, documentProfile, interchangeProfile, csvBackend, csvProfile, xmlBackend, xmlProfile, byteAdapters.Keys.ToArray()));
         services.AddKeyedSingleton<PostgresBuildMetadataReader>(Key, (_, _) => new(metadata));
         services.AddSingleton<IBuildMetadataReader>(provider => provider.GetRequiredKeyedService<PostgresBuildMetadataReader>(Key));
         services.AddKeyedSingleton<PostgresBuildStore>(Key, (_, _) => new(controls, writer: true));
@@ -108,7 +111,10 @@ public static class CatalogBuildHostConfiguration
         services.AddKeyedSingleton<LazyPrivateObjectStore>(Key, (_, _) => new(runtime.Storage!.Bind(
             Path.TrimEndingDirectorySeparator(Path.GetFullPath(environment.ContentRootPath))),
             () => throw new InvalidOperationException("Build HTTP does not publish private objects.")));
-        if ((runtime.Csv ?? runtime.Xml) is { } compilerTransport) CsvBuildHostConfiguration.Register(services, compilerTransport);
+        if ((runtime.Csv ?? runtime.Xml ?? runtime.ByteTransport) is { } compilerTransport) CsvBuildHostConfiguration.Register(services, compilerTransport);
+        foreach (var p in byteAdapters.Keys) services.AddKeyedSingleton<ICsvBuildBoundaryReader>(p.Id, (provider, _) => new FerruleCsvBuildBoundaryReader(
+            provider.GetRequiredService<CsvBuildHostRunner>(), provider.GetRequiredKeyedService<IRevisionReportMetadataReader>(Key),
+            provider.GetRequiredKeyedService<IProjectReader>(Key), provider.GetRequiredKeyedService<LazyPrivateObjectStore>(Key), byteProfile: p.Id));
         if (runtime.Xml is not null) services.AddKeyedSingleton<ICsvBuildBoundaryReader>(Key + "-xml", (provider, _) => new FerruleCsvBuildBoundaryReader(
             provider.GetRequiredService<CsvBuildHostRunner>(), provider.GetRequiredKeyedService<IRevisionReportMetadataReader>(Key),
             provider.GetRequiredKeyedService<IProjectReader>(Key), provider.GetRequiredKeyedService<LazyPrivateObjectStore>(Key), xml: true));
@@ -129,7 +135,8 @@ public static class CatalogBuildHostConfiguration
         services.AddKeyedSingleton<PersistedBuildIntentFactory>(Key, (provider, _) => new(provider.GetRequiredService<IBuildMetadataReader>(),
             provider.GetRequiredKeyedService<IRevisionReportMetadataReader>(Key), provider.GetRequiredKeyedService<IRevisionReportReader>(Key),
             provider.GetRequiredKeyedService<RegressionRunReadService>(Key), backend, profile, documentBackend, documentProfile, interchangeProfile,
-            csvBackend, csvProfile, provider.GetService<ICsvBuildBoundaryReader>(), xmlBackend, xmlProfile, provider.GetKeyedService<ICsvBuildBoundaryReader>(Key + "-xml")));
+            csvBackend, csvProfile, provider.GetService<ICsvBuildBoundaryReader>(), xmlBackend, xmlProfile, provider.GetKeyedService<ICsvBuildBoundaryReader>(Key + "-xml"),
+            byteAdapters.ToDictionary(p => p.Key, p => (p.Value, provider.GetRequiredKeyedService<ICsvBuildBoundaryReader>(p.Key.Id)))));
         services.AddSingleton<IBuildIntentFactory>(provider => new LazyIntentFactory(() => provider.GetRequiredKeyedService<PersistedBuildIntentFactory>(Key)));
         services.AddSingleton<IBuildApprovalWriter>(provider => new LazyApprovalWriter(() => provider.GetRequiredKeyedService<BuildControlService>(Key)));
         services.AddSingleton<IBuildAdmissionReader>(provider => new LazyAdmission(() => provider.GetRequiredKeyedService<BuildControlService>(Key)));
@@ -137,13 +144,13 @@ public static class CatalogBuildHostConfiguration
             provider.GetRequiredService<IBuildIntentFactory>(), provider.GetRequiredService<IBuildApprovalWriter>(), provider.GetRequiredKeyedService<IProjectReader>(Key)));
         services.AddSingleton(provider => new BuildSubmissionService(provider.GetRequiredService<IBuildMetadataReader>(),
             provider.GetRequiredService<IBuildRunReader>(), provider.GetRequiredService<IBuildRunCommands>(), provider.GetRequiredService<IBuildAdmissionReader>(),
-            provider.GetRequiredKeyedService<IProjectReader>(Key), backend, profile, documentBackend, documentProfile, interchangeProfile, csvBackend, csvProfile, xmlBackend, xmlProfile));
+            provider.GetRequiredKeyedService<IProjectReader>(Key), backend, profile, documentBackend, documentProfile, interchangeProfile, csvBackend, csvProfile, xmlBackend, xmlProfile, byteAdapters));
         services.AddSingleton(provider => new LazyAdministration(() => provider.GetRequiredKeyedService<PostgresBuildStore>(Key)));
         services.AddSingleton<IBuildEnvironmentCommands>(provider => provider.GetRequiredService<LazyAdministration>());
         services.AddSingleton<IBuildApprovalRevocation>(provider => provider.GetRequiredService<LazyAdministration>());
         services.AddSingleton(provider => new BuildAdministrationService(provider.GetRequiredService<IBuildMetadataReader>(),
             provider.GetRequiredService<IBuildEnvironmentCommands>(), provider.GetRequiredService<IBuildApprovalRevocation>(),
-            provider.GetRequiredKeyedService<IProjectReader>(Key), profile, documentProfile, interchangeProfile, csvProfile, xmlProfile));
+            provider.GetRequiredKeyedService<IProjectReader>(Key), profile, documentProfile, interchangeProfile, csvProfile, xmlProfile, byteAdapters.Keys.ToArray()));
     }
 
     private sealed class LazyCsvBoundaryReader(Func<ICsvBuildBoundaryReader> factory) : ICsvBuildBoundaryReader

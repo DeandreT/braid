@@ -33,7 +33,7 @@ public sealed class MachineInvocationRequest
                     ? value.CsvDialect is not null || !XmlDocumentPolicy.Admits(value.XmlMetadata, XmlDocumentRole.Input, value.MediaType)
                     : CsvDocumentPolicy.AdmitsMediaType(value.MediaType)
                     ? !CsvDocumentPolicy.Admits(value.CsvDialect, value.MediaType)
-                    : value.CsvDialect is not null || !DocumentPreviewPolicy.AdmitsMediaType(value.MediaType))) ||
+                    : value.CsvDialect is not null || (!DocumentPreviewPolicy.AdmitsMediaType(value.MediaType) && !NativeDocumentFormat.CatalogFormats.Any(f => f.MediaType == value.MediaType)))) ||
                 inputMedia.Select(value => value.Name).Distinct(StringComparer.Ordinal).Count() != inputMedia.Count ||
                 inputMedia.Count != NamedInputs.Count + 1 ||
                 !inputMedia.Select(value => value.Name).ToHashSet(StringComparer.Ordinal).SetEquals(NamedInputs.Prepend(primary).Select(value => value.Name)))
@@ -262,7 +262,14 @@ public sealed class MachineInvocationService
                     return new(MachineInvocationOutcome.InvalidInput, provenance);
             }
             RegressionReplay replay;
-            try { replay = new(PreviewTargetSelection.All, clock, limits, request.Primary, request.NamedInputs, request.Parameters, token); }
+            try {
+                var primary = request.Primary;
+                if (BuildWorkerProtocol.NativeFormat(intent.Profile.Id) is not null)
+                {
+                    var settings = intent.Boundaries.Single(b => b.Kind == BuildBoundaryKind.PrimaryInput).DocumentSettings!;
+                    primary = new(null, primary.CopyBytes(), documentSettings: settings);
+                }
+                replay = new(PreviewTargetSelection.All, clock, limits, primary, request.NamedInputs, request.Parameters, token); }
             catch (RegressionCaseException error)
             { return new(error.Failure == RegressionCaseFailure.ResourceLimit ? MachineInvocationOutcome.ResourceLimit : MachineInvocationOutcome.InvalidInput, provenance); }
             var result = await invocations(actor).ExecuteAsync(actor, target, replay, token, pin).ConfigureAwait(false);
@@ -285,7 +292,7 @@ public sealed class MachineInvocationService
                 result.Outputs.Outputs.Any(output => !intent.Boundaries.Any(boundary =>
                     boundary.Kind == (output.Key.IsPrimary ? BuildBoundaryKind.PrimaryOutput : BuildBoundaryKind.NamedOutput) &&
                     boundary.Name == output.Key.Name && BuildWorkerProtocol.AdmitsFormat(intent.Profile.Id, boundary.Format) &&
-                    BuildWorkerProtocol.MediaType(boundary.Format) == output.MediaType && boundary.CsvDialect == output.CsvDialect && boundary.XmlMetadata == output.XmlMetadata))))
+                    BuildWorkerProtocol.MediaType(boundary.Format) == output.MediaType && boundary.CsvDialect == output.CsvDialect && boundary.XmlMetadata == output.XmlMetadata && boundary.DocumentSettings == output.DocumentSettings))))
                 outcome = MachineInvocationOutcome.IntegrityFailure;
             var response = outcome == MachineInvocationOutcome.Completed ? Encode(requestId, provenance, clock, result.Outputs!, documents) : null;
             if (response?.Length > MachineInvocationPolicy.MaximumRetainedBytes) (outcome, response) = (MachineInvocationOutcome.ResourceLimit, null);

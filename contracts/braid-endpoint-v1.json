@@ -777,7 +777,10 @@
               "application/edifact",
               "text/csv",
               "text/tab-separated-values",
-              "application/xml"
+              "application/xml",
+              "text/plain",
+              "application/x-protobuf",
+              "application/xbrl+xml"
             ],
             "type": "string"
           },
@@ -907,7 +910,10 @@
               "application/edifact",
               "text/csv",
               "text/tab-separated-values",
-              "application/xml"
+              "application/xml",
+              "text/plain",
+              "application/x-protobuf",
+              "application/xbrl+xml"
             ],
             "type": "string"
           },
@@ -1043,7 +1049,10 @@
                     "application/edifact",
                     "text/csv",
                     "text/tab-separated-values",
-                    "application/xml"
+                    "application/xml",
+                    "text/plain",
+                    "application/x-protobuf",
+                    "application/xbrl+xml"
                   ],
                   "type": "string"
                 },
@@ -1250,7 +1259,10 @@
                     "application/edifact",
                     "text/csv",
                     "text/tab-separated-values",
-                    "application/xml"
+                    "application/xml",
+                    "text/plain",
+                    "application/x-protobuf",
+                    "application/xbrl+xml"
                   ],
                   "type": "string"
                 },

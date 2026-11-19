@@ -25,6 +25,8 @@ public static class BuildWorkerProtocol
     public const string FlexProfile = "braid.ferrule-csharp-flextext.v1";
     public const string ProtoProfile = "braid.ferrule-csharp-protobuf.v1";
     public const string XbrlProfile = "braid.ferrule-csharp-xbrl.v1";
+    public static IReadOnlyList<string> EnabledByteProfiles(Func<string,string?> read) => new[] { FlexProfile, ProtoProfile, XbrlProfile }.Where(id =>
+        read($"BRAID_BUILDS_{NativeFormat(id)!.Key.ToUpperInvariant()}_ENABLED") switch { null or "false" => false, "true" => true, _ => throw new ArgumentException("Native byte build enablement must be true or false.") }).ToArray();
     public static NativeDocumentFormat? NativeFormat(string profile) => profile switch { FlexProfile => NativeDocumentFormat.FlexText, ProtoProfile => NativeDocumentFormat.Protobuf, XbrlProfile => NativeDocumentFormat.Xbrl, _ => null };
     public static bool IsDocumentProfile(string profile) => NativeFormat(profile) is not null || profile is DocumentProfile or X12InterchangesProfile or CsvProfile or XmlProfile;
     public static string PreviewProfileFor(string profile) => NativeFormat(profile) is { } native ? native.Profile : profile == XmlProfile ? XmlPreviewAdmission.Profile : profile == CsvProfile ? CsvDocumentPolicy.Profile :

@@ -32,17 +32,18 @@ public sealed class FerruleCsvBuildBoundaryReader : ICsvBuildBoundaryReader
 
     private readonly string inspectionProfile;
     public FerruleCsvBuildBoundaryReader(IInspectionWorkerRunner runner, IRevisionReportMetadataReader sources,
-        IProjectReader projects, IPrivateObjectStore storage, bool xml = false)
+        IProjectReader projects, IPrivateObjectStore storage, bool xml = false, string? byteProfile = null)
     {
         if (runner is DockerInspectionWorkerRunner docker && docker.Profile != DockerWorkerProfile.Build)
             throw new ArgumentException("CSV metadata inspection requires the compiler profile.", nameof(runner));
         this.runner = runner ?? throw new ArgumentNullException(nameof(runner));
         this.sources = sources ?? throw new ArgumentNullException(nameof(sources));
-        inspectionProfile = xml ? BuildWorkerProtocol.XmlProfile : BuildWorkerProtocol.CsvProfile;
+        if (byteProfile is not null && (xml || BuildWorkerProtocol.NativeFormat(byteProfile) is null)) throw new ArgumentException("Invalid byte inspection profile.");
+        inspectionProfile = byteProfile ?? (xml ? BuildWorkerProtocol.XmlProfile : BuildWorkerProtocol.CsvProfile);
         this.projects = projects ?? throw new ArgumentNullException(nameof(projects));
         this.storage = storage ?? throw new ArgumentNullException(nameof(storage));
         var identity = runner is ICompilationIdentitySource source ? source.CompilationBuildIdentity : runner.BuildIdentity;
-        backend = new("ferrule", BuildWorkerProtocol.Engine, InspectionTransport.RequireImage(identity!), xml ? FerrulePreviewBackend.XmlAdapterBuild : FerrulePreviewBackend.CsvAdapterBuild);
+        backend = new("ferrule", BuildWorkerProtocol.Engine, InspectionTransport.RequireImage(identity!), BuildWorkerProtocol.NativeFormat(inspectionProfile)?.AdapterBuild ?? (xml ? FerrulePreviewBackend.XmlAdapterBuild : FerrulePreviewBackend.CsvAdapterBuild));
     }
 
     public async Task<CsvBuildBoundaryObservation?> ReadAsync(ActorContext actor, RevisionReportSource source, CancellationToken token = default)

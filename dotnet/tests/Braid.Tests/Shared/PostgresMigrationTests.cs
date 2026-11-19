@@ -49,7 +49,8 @@ public sealed class PostgresMigrationTests(PostgresFixture fixture)
         "b2bd388dd5221a51a0e4bb615212ac6cc79bca35449e6fc9dc83d4abd0438f94", // 0064_order_retention_constraints
         "7bf1013d631501692a858e0c9928b76ac0d373cbba554981ac48912808bcc6c6", // 0065_native_document_profiles
         "ed429f73a7ce9b6accddff123fb018ad1b0cadefe62d8b91b3a9c7ba1d9ca3e6", // 0066_project_creation_retention_hooks
-        "db7873742962710b0eedb0a95dae60ed7bdb8443b10d7acced94e40f50a3244d"]; // 0067_compiled_xml_builds
+        "db7873742962710b0eedb0a95dae60ed7bdb8443b10d7acced94e40f50a3244d",
+        "35e34bc18086d151e9d4bf18ed9175996d6a799427e5b871094ebf183c3f9ed7"]; // 0068_compiled_native_documents
     [PostgresFact]
     public async Task EmptyInstallationAndRepeatedMigrationPreserveOriginalFactsAndJournal()
     {
