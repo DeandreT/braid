@@ -81,6 +81,51 @@ public sealed class XmlRegressionTests
         Assert.Equal(RegressionCaseFailure.StorageIntegrity, Assert.Throws<RegressionCaseException>(() => codec.Decode(reference, tampered)).Failure);
     }
 
+    [ServiceCompileFact]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public async Task Canonical_saved_case_reopens_from_original_frames_using_the_isolated_worker()
+    {
+        var root = FerruleServiceTestSupport.TemporaryRoot();
+        try
+        {
+            var options = FerruleCompiledServiceTests.Options(root);
+            await using var runner = new Braid.MappingBackends.Workers.ProcessCompiledRuntimeRunner(new(options.NativeIdentity,
+                options.RuntimeAssembly, options.LauncherExecutable, root, options.DotnetRoot)
+                { Operation = Braid.MappingBackends.Workers.CompiledRuntimeOperation.XmlCanonicalComparison });
+            var worker = new SavedXmlComparison(new XmlCanonicalComparisonWorker(runner, new(new(8192, 8), new(4096, 4096, 8192))));
+            var baseline = Case(XmlPreviewWorkflowTests.Scope, TwoOutputNative(), Outputs("<r b='2' a='1'/>"u8.ToArray()));
+            var value = new RegressionCaseVersion(baseline.CaseId, baseline.Version, baseline.Owner, baseline.Name, baseline.Revision,
+                baseline.NativeDigest, baseline.Runtime, baseline.Replay, SavedXmlComparison.Policy, baseline.Expected);
+            var cases = new RegressionCaseEnvelopeCodec();
+            var envelope = cases.Encode(value);
+            Assert.NotEqual(cases.Encode(baseline).Reference, envelope.Reference);
+            var saved = cases.Decode(envelope.Reference, envelope.CopyBytes());
+            Assert.Equal(SavedXmlComparison.Policy, saved.ComparisonPolicy);
+            var codec = new RegressionRunResultCodec();
+            foreach (var equal in new[] { true, false, true })
+            {
+                var output = Outputs(Encoding.UTF8.GetBytes(equal ? "<r a=\"1\" b=\"2\"></r>" : "<r a=\"2\" b=\"2\"></r>"));
+                var comparison = await worker.CompareAsync(saved, MappingPreviewStatus.Succeeded, output, default);
+                var run = Guid.NewGuid();
+                var bytes = codec.Encode(run, envelope.Reference, RegressionCaseExecution.Complete(MappingPreviewStatus.Succeeded, output, comparison, saved.Runtime.Profile));
+                Assert.Throws<InvalidOperationException>(() => codec.Decode(run, saved, bytes));
+                await Assert.ThrowsAsync<InvalidOperationException>(() => codec.ReopenAsync(run, saved, bytes, null, default));
+                var reopened = await codec.ReopenAsync(run, saved, bytes, worker, default);
+                Assert.Equal(equal ? RegressionComparisonOutcome.Passed : RegressionComparisonOutcome.Failed, reopened.Comparison!.Outcome);
+                Assert.Equal(output.Outputs[0].CopyBytes(), reopened.Outputs!.Outputs[0].CopyBytes());
+                if (!equal)
+                {
+                    var difference = Assert.Single(reopened.Comparison.Differences);
+                    Assert.Equal(RegressionDifferenceKind.CanonicalBytesDiffer, difference.Kind);
+                    Assert.NotNull(difference.CanonicalByteOffset);
+                    Assert.Null(difference.FirstDifferentByte);
+                }
+                await Assert.ThrowsAsync<InvalidOperationException>(() => codec.ReopenAsync(Guid.NewGuid(), saved, bytes, worker, default));
+            }
+        }
+        finally { Directory.Delete(root); }
+    }
+
     [Fact]
     public void Versions_require_exact_bytes_and_metadata_on_every_boundary()
     {

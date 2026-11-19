@@ -17,8 +17,8 @@ public sealed class RegressionComparisonException : Exception
 }
 
 public enum RegressionComparisonOutcome { Passed, Failed, NotEvaluated }
-public enum RegressionNotEvaluatedReason { None, UnsupportedPolicy, ExecutionUnsuccessful, MissingBaseline, InvalidDocument }
-public enum RegressionDifferenceKind { MissingOutput, UnexpectedOutput, BytesDiffer, MediaTypeDiffer, SeparatorsDiffer, SegmentsDiffer, CsvDialectDiffer, CsvRowsDiffer, XmlMetadataDiffer }
+public enum RegressionNotEvaluatedReason { None, UnsupportedPolicy, ExecutionUnsuccessful, MissingBaseline, InvalidDocument, ResourceLimit, UnsupportedDomain, CanonicalizerFailure }
+public enum RegressionDifferenceKind { MissingOutput, UnexpectedOutput, BytesDiffer, MediaTypeDiffer, SeparatorsDiffer, SegmentsDiffer, CsvDialectDiffer, CsvRowsDiffer, XmlMetadataDiffer, CanonicalBytesDiffer }
 
 /// <summary>Explicit EDI comparison choices. Segment, repetition and component order is always significant.</summary>
 public sealed record EdiComparisonOptions(bool CompareSeparators, bool IgnoreControlNumbers, bool IgnoreDates);
@@ -52,6 +52,7 @@ public sealed record RegressionOutputDifference(RegressionOutputKey Key, Regress
 {
     public RegressionDocumentLocation? Location { get; init; }
     public RegressionCsvLocation? CsvLocation { get; init; }
+    public long? CanonicalByteOffset { get; init; }
     public override string ToString() => nameof(RegressionOutputDifference);
 }
 

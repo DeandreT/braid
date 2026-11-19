@@ -56,6 +56,25 @@ public sealed class RegressionRunResultCodec
 
     public RegressionCaseExecution Decode(Guid runId, RegressionCaseVersion value, ReadOnlyMemory<byte> input, CancellationToken token = default)
     {
+        if (value.ComparisonPolicy == SavedXmlComparison.Policy) throw Invalid();
+        return DecodeOriginal(runId, value, input, token);
+    }
+
+    internal async Task<RegressionCaseExecution> ReopenAsync(Guid runId, RegressionCaseVersion value, ReadOnlyMemory<byte> input,
+        SavedXmlComparison? worker, CancellationToken token)
+    {
+        if (value.ComparisonPolicy != SavedXmlComparison.Policy) return Decode(runId, value, input, token);
+        if (worker is null) throw new InvalidOperationException("Isolated XML comparison unavailable.");
+        var observation = DecodeOriginal(runId, value, input, token);
+        if (observation.Outcome != RegressionCaseExecutionOutcome.Completed) return observation;
+        var status = observation.PreviewStatus!.Value;
+        var outputs = observation.Outputs!;
+        var comparison = await worker.CompareAsync(value, status, outputs, token).ConfigureAwait(false);
+        return RegressionCaseExecution.Complete(status, outputs, comparison, value.Runtime.Profile);
+    }
+
+    private RegressionCaseExecution DecodeOriginal(Guid runId, RegressionCaseVersion value, ReadOnlyMemory<byte> input, CancellationToken token)
+    {
         token.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(value);
         if (runId == Guid.Empty || input.Length is < 1 or > MaximumBytes) throw Invalid();

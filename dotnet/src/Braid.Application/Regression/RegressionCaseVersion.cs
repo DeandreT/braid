@@ -52,7 +52,8 @@ public sealed class RegressionCaseVersion
         var native = NativeDocumentFormat.FromProfile(runtime.Profile);
         if (NativeDocumentFormat.FromExecution(replay.Profile) != native || native is not null && (comparisonPolicy != RegressionComparisonService.ExactBytesPolicy || expected.Outputs.Count != 1 || !expected.Outputs[0].Key.IsPrimary || expected.Outputs[0].DocumentSettings?.Format != native) || native is null && expected.Outputs.Any(o => o.DocumentSettings is not null)) throw new RegressionCaseException(RegressionCaseFailure.InvalidInput);
         if (native is null && runtime.Profile is not (PreviewPolicy.Profile or DocumentPreviewPolicy.Profile or CsvDocumentPolicy.Profile or XmlPreviewAdmission.Profile) ||
-            comparisonPolicy is not (RegressionComparisonService.ExactBytesPolicy or RegressionComparisonService.EdiSegmentsPolicy or RegressionComparisonService.CsvRowsPolicy) ||
+            comparisonPolicy is not (RegressionComparisonService.ExactBytesPolicy or RegressionComparisonService.EdiSegmentsPolicy or RegressionComparisonService.CsvRowsPolicy or XmlCanonicalComparison.Policy) ||
+            comparisonPolicy == XmlCanonicalComparison.Policy && runtime.Profile != XmlPreviewAdmission.Profile ||
             (comparisonPolicy == RegressionComparisonService.EdiSegmentsPolicy) != (ediOptions is not null) ||
             comparisonPolicy == RegressionComparisonService.CsvRowsPolicy && runtime.Profile != CsvDocumentPolicy.Profile ||
             runtime.Profile == CsvDocumentPolicy.Profile && (ediOptions is not null || replay.Profile != PreviewExecutionProfile.CsvDocument ||
@@ -61,9 +62,9 @@ public sealed class RegressionCaseVersion
             runtime.Profile != CsvDocumentPolicy.Profile && (replay.Profile == PreviewExecutionProfile.CsvDocument || expected.Outputs.Any(output => output.CsvDialect is not null)) ||
             runtime.Profile == PreviewPolicy.Profile && (comparisonPolicy != RegressionComparisonService.ExactBytesPolicy || expected.Outputs.Any(output => output.MediaType != PreviewPolicy.MediaType)))
             throw new RegressionCaseException(RegressionCaseFailure.InvalidInput);
-        // XML regression is exact bytes only, with role-valid metadata on every expected output.
+        // Both XML policies retain the same original bytes and output-role metadata.
         if (runtime.Profile == XmlPreviewAdmission.Profile ?
-            replay.Profile != PreviewExecutionProfile.XmlDocument || comparisonPolicy != RegressionComparisonService.ExactBytesPolicy || ediOptions is not null ||
+            replay.Profile != PreviewExecutionProfile.XmlDocument || comparisonPolicy is not (RegressionComparisonService.ExactBytesPolicy or XmlCanonicalComparison.Policy) || ediOptions is not null ||
             expected.Outputs.Any(output => output.XmlMetadata is null) :
             replay.Profile == PreviewExecutionProfile.XmlDocument || expected.Outputs.Any(output => output.XmlMetadata is not null))
             throw new RegressionCaseException(RegressionCaseFailure.InvalidInput);

@@ -133,6 +133,8 @@ public static partial class CatalogEndpoints
         // No body or private store is touched before session/CSRF and current project publication admission.
         var incoming = await CatalogRegressionCaseRequest.ReadAsync(context.Request, context.RequestAborted);
         var selectedRuntime = options.SelectRuntime(incoming.Runtime);
+        if (incoming.Policy == SavedXmlComparison.Policy && context.RequestServices.GetService<SavedXmlComparison>() is null)
+            return Error(CatalogErrorCodeV1.PreconditionFailed, StatusCodes.Status412PreconditionFailed);
         if (selectedRuntime is null || current.Summary.BackendId != options.Runtime!.BackendId)
             return Error(CatalogErrorCodeV1.PreconditionFailed, StatusCodes.Status412PreconditionFailed);
         var revisionScope = new RevisionScope(mapping.OrganizationId, mapping.ProjectId, mapping.MappingId, incoming.RevisionId);

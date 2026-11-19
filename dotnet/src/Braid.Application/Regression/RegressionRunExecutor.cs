@@ -78,7 +78,7 @@ public sealed class RegressionRunExecutor(IRegressionRunStore runs, IRegressionC
 public sealed record RegressionRunView(RegressionRunSnapshot Run, RegressionCaseExecution? Result, RegressionRuntimeIdentity? Runtime = null);
 
 /// <summary>Reopens retained exact outputs against the original baseline, then rechecks current authority.</summary>
-public sealed class RegressionRunReadService(IRegressionRunReader runs, IRegressionCaseReader cases)
+public sealed class RegressionRunReadService(IRegressionRunReader runs, IRegressionCaseReader cases, SavedXmlComparison? xmlComparison = null)
 {
     public async Task<RegressionRunView?> ReadAsync(ActorContext actor, Guid organizationId, Guid runId, CancellationToken token = default)
     {
@@ -93,7 +93,7 @@ public sealed class RegressionRunReadService(IRegressionRunReader runs, IRegress
         if (value is null) return null;
         if (new RegressionCaseEnvelopeCodec().Encode(value, token).Reference != run.Case)
             throw new InvalidOperationException("Regression run case mismatch.");
-        var result = new RegressionRunResultCodec().Decode(runId, value, run.CopyCompletion()!, token);
+        var result = await new RegressionRunResultCodec().ReopenAsync(runId, value, run.CopyCompletion()!, xmlComparison, token).ConfigureAwait(false);
         var fresh = await runs.ReadAsync(actor, organizationId, runId, token).ConfigureAwait(false);
         token.ThrowIfCancellationRequested();
         if (fresh is null) return null;
