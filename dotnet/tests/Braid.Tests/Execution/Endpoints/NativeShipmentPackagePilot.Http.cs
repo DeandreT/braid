@@ -16,7 +16,7 @@ namespace Braid.Tests;
 public sealed partial class NativeShipmentPackagePilot
 {
     private static async Task InvokeHttp(ReleaseTargetReference target, Guid release, MachinePrincipal caller,
-        MachineInvocationService service, Func<bool> available)
+        MachineInvocationService service, Func<bool> available, byte[]? xmlExpected = null)
     {
         using var crypto = new EntraProtocolCrypto();
         await using var issuer = new EntraProtocolHttpsIssuer(crypto);
@@ -46,7 +46,7 @@ public sealed partial class NativeShipmentPackagePilot
                 request.Content = new ByteArrayContent(JsonSerializer.SerializeToUtf8Bytes(new
                 {
                     schema = MappingEndpointContract.DocumentRequestSchema,
-                    inputs = new[] { new { mediaType = "application/json", content = Convert.ToBase64String(Shipment945Fixture.Input) } },
+                    inputs = new object[] { xmlExpected is null ? new { mediaType = "application/json", content = Convert.ToBase64String(Shipment945Fixture.Input) } : XmlInputWire(XmlInput) },
                     parameters = Array.Empty<object>()
                 }));
                 request.Content.Headers.ContentType = new("application/json");
@@ -60,12 +60,34 @@ public sealed partial class NativeShipmentPackagePilot
                 Assert.Equal(id, root.GetProperty("requestId").GetGuid());
                 Assert.Equal(release, root.GetProperty("releaseId").GetGuid());
                 var output = Assert.Single(root.GetProperty("outputs").EnumerateArray());
-                Assert.Equal("application/edi-x12", output.GetProperty("mediaType").GetString());
-                Assert.Equal(Shipment945Fixture.NativeExpected, output.GetProperty("content").GetBytesFromBase64());
+                Assert.Equal(xmlExpected is null ? "application/edi-x12" : XmlDocumentPolicy.MediaType, output.GetProperty("mediaType").GetString());
+                Assert.Equal(xmlExpected ?? Shipment945Fixture.NativeExpected, output.GetProperty("content").GetBytesFromBase64());
                 if (replay) Assert.Equal(original, bytes);
                 original = bytes;
+            }
+            if (xmlExpected is not null)
+            {
+                foreach (var (input, expected) in new[] { ("<Order>", "invalidInput"), ("<Order><code>LONGER</code><quantity>2</quantity></Order>", "resourceLimit") })
+                {
+                    using var request = new HttpRequestMessage(HttpMethod.Post, MappingEndpointRoutes.InvocationsPath);
+                    request.Headers.Authorization = new("Bearer", bearer);
+                    request.Headers.Add(MappingEndpointRoutes.RequestIdHeader, Guid.NewGuid().ToString("D"));
+                    request.Content = new StringContent(JsonSerializer.Serialize(new { schema = MappingEndpointContract.DocumentRequestSchema,
+                        inputs = new[] { XmlInputWire(System.Text.Encoding.UTF8.GetBytes(input)) } }), System.Text.Encoding.UTF8, "application/json");
+                    using var response = await client.SendAsync(request);
+                    Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+                    using var error = JsonDocument.Parse(await response.Content.ReadAsByteArrayAsync());
+                    Assert.Equal(expected, error.RootElement.GetProperty("outcome").GetString());
+                    Assert.False(error.RootElement.TryGetProperty("outputs", out _));
+                }
+                using var denied = await client.PostAsync(MappingEndpointRoutes.InvocationsPath, new StringContent("{}"));
+                Assert.Equal(HttpStatusCode.Unauthorized, denied.StatusCode);
             }
         }
         finally { await host.StopAsync(); }
     }
+
+    private static object XmlInputWire(byte[] bytes) => new { mediaType = XmlDocumentPolicy.MediaType,
+        content = Convert.ToBase64String(bytes), xmlMetadata = new { schema = XmlDocumentPolicy.MetadataSchema,
+            safetyProfile = XmlDocumentPolicy.SafetyProfile, schemaHints = (object?)null } };
 }
