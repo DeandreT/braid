@@ -114,7 +114,7 @@ ARG BRAID_NATIVE_BINARY_SHA256
 LABEL org.opencontainers.image.title="Braid Ferrule service" \
       org.opencontainers.image.source="https://github.com/DeandreT/braid" \
       org.opencontainers.image.revision="$BRAID_REVISION" \
-      io.braid.ferrule.revision="740af0c38ede7d814a17146bab2bffd7301320c9" \
+      io.braid.ferrule.revision="796eb8230561f200ca81c153c946a8fe08884e75" \
       io.braid.ferrule.worker-sha256="$BRAID_NATIVE_BINARY_SHA256" \
       io.braid.ferrule.compile-sdk="10.0.112"
 COPY --from=native / /

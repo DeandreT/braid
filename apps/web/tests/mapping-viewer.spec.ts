@@ -165,7 +165,7 @@ test("actual saved Ferrule fields retain exact revision evidence and lineage", a
   const { projection } = await openNative(page, reportsOwner);
   const document = documentOf(projection);
   expect(document.provenance.backend.revision).toBe(
-    "740af0c38ede7d814a17146bab2bffd7301320c9",
+    "796eb8230561f200ca81c153c946a8fe08884e75",
   );
   for (const operation of ["preview", "build"] as const) {
     const capability = document.capabilities.find(

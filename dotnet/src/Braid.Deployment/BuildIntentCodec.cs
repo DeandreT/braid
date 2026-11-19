@@ -26,7 +26,8 @@ public static class BuildIntentCodec
                 "namedOutput" => BuildBoundaryKind.NamedOutput,
                 _ => throw Invalid()
             }, value.GetProperty("name").ValueKind == JsonValueKind.Null ? null : Text(value, "name"), Text(value, "format"), BuildCsvDialect.ReadOptional(value),
-                value.TryGetProperty("xmlMetadata", out var xml) ? XmlDocumentMetadataJson.Read(xml, Text(value, "kind") is "primaryInput" or "namedInput" ? XmlDocumentRole.Input : XmlDocumentRole.Output) : null)).ToArray();
+                value.TryGetProperty("xmlMetadata", out var xml) ? XmlDocumentMetadataJson.Read(xml, Text(value, "kind") is "primaryInput" or "namedInput" ? XmlDocumentRole.Input : XmlDocumentRole.Output) : null,
+                value.TryGetProperty("documentSettings", out var settings) ? NativeDocumentSettingsJson.Read(settings) : null)).ToArray();
             var intent = new BuildIntent(Id(root, "buildId"), revision, Sha256Digest.Parse(Text(root, "nativeDigest")),
                 new(Text(root, "backendId"), Text(root, "engineRevision"), Text(root, "engineBuild"), Text(root, "adapterVersion")),
                 new(Text(root, "profileId"), root.GetProperty("profileVersion").GetInt32(), Text(root, "runtime"),

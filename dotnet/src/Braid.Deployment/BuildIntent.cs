@@ -29,6 +29,7 @@ public sealed class BuildIntent
         Backend = backend;
         Profile = profile;
         Boundaries = BuildValues.Boundaries(boundaries);
+        if (BuildWorkerProtocol.NativeFormat(profile.Id) is { } nativeFormat ? Boundaries.Count != 2 || Boundaries.Count(b => b.Kind == BuildBoundaryKind.PrimaryInput) != 1 || Boundaries.Count(b => b.Kind == BuildBoundaryKind.PrimaryOutput) != 1 || Boundaries.Any(b => b.DocumentSettings?.Format != nativeFormat) : Boundaries.Any(b => b.DocumentSettings is not null)) throw new BuildContractException(BuildContractFailure.InvalidInput);
         if (profile.Id == BuildWorkerProtocol.CsvProfile ? !BuildWorkerProtocol.AdmitsCsvPlan(Boundaries) : Boundaries.Any(boundary => boundary.CsvDialect is not null))
             throw new BuildContractException(BuildContractFailure.InvalidInput);
         Environment = environment;
@@ -96,6 +97,7 @@ public sealed class BuildIntent
                 });
                 json.WriteString("name", boundary.Name);
                 json.WriteString("format", boundary.Format);
+                if (boundary.DocumentSettings is { } settings) { json.WritePropertyName("documentSettings"); NativeDocumentSettingsJson.Write(json, settings); }
                 if (boundary.XmlMetadata is { } metadata) { json.WritePropertyName("xmlMetadata"); XmlDocumentMetadataJson.Write(json, metadata, boundary.XmlRole); }
                 if (boundary.CsvDialect is { } dialect)
                 {

@@ -65,10 +65,10 @@ public sealed class BuildPreflightService
                 "xml" when intent.Profile.Id != BuildWorkerProtocol.XmlProfile => BuildPreflightReason.UnsupportedXmlBuild,
                 "pdf" => BuildPreflightReason.UnsupportedPdfBuild,
                 "database" => BuildPreflightReason.StatefulDatabaseBuild,
-                "flexText" => BuildPreflightReason.UnsupportedFlexTextBuild,
+                "flexText" when intent.Profile.Id != BuildWorkerProtocol.FlexProfile => BuildPreflightReason.UnsupportedFlexTextBuild,
                 "xlsx" => BuildPreflightReason.UnsupportedXlsxBuild,
-                "protobuf" => BuildPreflightReason.UnsupportedProtobufBuild,
-                "xbrl" => BuildPreflightReason.UnsupportedXbrlBuild,
+                "protobuf" when intent.Profile.Id != BuildWorkerProtocol.ProtoProfile => BuildPreflightReason.UnsupportedProtobufBuild,
+                "xbrl" when intent.Profile.Id != BuildWorkerProtocol.XbrlProfile => BuildPreflightReason.UnsupportedXbrlBuild,
                 _ => BuildPreflightReason.None
             };
             if (refusal != BuildPreflightReason.None) return refusal;

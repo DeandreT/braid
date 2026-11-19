@@ -46,7 +46,14 @@ public sealed partial class NativeShipmentPackagePilot(PostgresFixture fixture, 
     [NativeShipmentPilotFact]
     public Task Qualified_contrl_release_returns_exact_bytes_over_authenticated_loopback() => Rehearse(false, endpoint: true, contrl: true);
 
-    private async Task Rehearse(bool transport, bool boundedFaults = false, bool endpoint = false, bool xml = false, bool contrl = false)
+    [NativeShipmentPilotFact]
+    public Task Qualified_flextext_byte_release() => Rehearse(false, endpoint: true, byteProfile: BuildWorkerProtocol.FlexProfile);
+    [NativeShipmentPilotFact]
+    public Task Qualified_protobuf_byte_release() => Rehearse(false, endpoint: true, byteProfile: BuildWorkerProtocol.ProtoProfile);
+    [NativeShipmentPilotFact]
+    public Task Qualified_xbrl_byte_release() => Rehearse(false, endpoint: true, byteProfile: BuildWorkerProtocol.XbrlProfile);
+
+    private async Task Rehearse(bool transport, bool boundedFaults = false, bool endpoint = false, bool xml = false, bool contrl = false, string? byteProfile = null)
     {
         var root = FerruleServiceTestSupport.TemporaryRoot();
         try
@@ -57,9 +64,20 @@ public sealed partial class NativeShipmentPackagePilot(PostgresFixture fixture, 
             Assert.True(probe.Failure == WorkerProcessFailure.None, $"Compiled-runtime isolation admission: {probe.Failure}/{probe.AdmissionFailure}");
             Assert.True(await generator.ProbeAsync(default), "Compiler isolation admission failed before any mapping input.");
             await using var interpreter = new ProcessWorkerRunner(FerruleServiceTestSupport.Options(root, DockerWorkerProfile.Preview));
-            var native = xml ? File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "FerruleFixtures", "xml-closed.native.json")) : contrl ? DocumentPreviewTestData.Native("edifact", DocumentPreviewTestData.Contrl) : NativeMapping();
+            var family = byteProfile is null ? null : BuildWorkerProtocol.NativeFormat(byteProfile)!;
+            BuildPersistenceTests.ByteCase? bytesCase = null;
+            var native = family is not null ? File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "FerruleFixtures", family.Key == "xbrl" ? "xbrl-instance.native.json" : family.Key + ".native.json")) : xml ? File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "FerruleFixtures", "xml-closed.native.json")) : contrl ? DocumentPreviewTestData.Native("edifact", DocumentPreviewTestData.Contrl) : NativeMapping();
             byte[]? xmlExpected = null;
-            var preview = xml ? new FerrulePreviewBackend(interpreter, PreviewExecutionProfile.XmlDocument, xmlEnabled: true) : new FerrulePreviewBackend(interpreter);
+            var preview = family is not null ? new FerrulePreviewBackend(interpreter, family.Execution, nativeFormats: [family]) : xml ? new FerrulePreviewBackend(interpreter, PreviewExecutionProfile.XmlDocument, xmlEnabled: true) : new FerrulePreviewBackend(interpreter);
+            if (family is not null)
+            {
+                var artifact = NativeArtifact.Admit(FerruleServiceTestSupport.Scope, native, PreviewPolicy.MaximumNativeBytes);
+                var settings = NativeDocumentNativeSettings.Read(artifact, family);
+                var input = new PreviewInputDocument(null, family.Key switch { "flextext" => "hello"u8.ToArray(), "protobuf" => [10,5,104,101,108,108,111], _ => DocumentPreviewTestData.XbrlInstance("5") }, documentSettings: settings.Input);
+                var sample = await preview.PreviewAsync(new(artifact, PreviewTargetSelection.All, input, [], [], "2026-10-24T12:00:00Z", PreviewLimits.Default) { Profile = family.Execution });
+                Assert.Equal(MappingPreviewStatus.Succeeded, sample.Status);
+                bytesCase = new(byteProfile!, family.Key == "flextext" ? "flexText" : family.Key, family, input, settings.Output, Assert.Single(sample.Artifacts).CopyBytes());
+            }
             if (xml)
             {
                 var sample = await preview.PreviewAsync(new(NativeArtifact.Admit(FerruleServiceTestSupport.Scope, native, PreviewPolicy.MaximumNativeBytes), PreviewTargetSelection.All,
@@ -67,18 +85,18 @@ public sealed partial class NativeShipmentPackagePilot(PostgresFixture fixture, 
                 Assert.Equal(MappingPreviewStatus.Succeeded, sample.Status);
                 xmlExpected = Assert.Single(sample.Artifacts).CopyBytes();
             }
-            var expected = xmlExpected ?? (contrl ? DocumentPreviewTestData.ContrlExpected : Shipment945Fixture.NativeExpected);
-            var backend = new BuildBackendIdentity("ferrule", BuildWorkerProtocol.Engine, generator.CompilationBuildIdentity!, xml ? FerrulePreviewBackend.XmlAdapterBuild : FerrulePreviewBackend.DocumentAdapterBuild);
+            var expected = bytesCase?.Expected ?? xmlExpected ?? (contrl ? DocumentPreviewTestData.ContrlExpected : Shipment945Fixture.NativeExpected);
+            var backend = new BuildBackendIdentity("ferrule", BuildWorkerProtocol.Engine, generator.CompilationBuildIdentity!, family?.AdapterBuild ?? (xml ? FerrulePreviewBackend.XmlAdapterBuild : FerrulePreviewBackend.DocumentAdapterBuild));
             var runtime = new FerruleCompiledBuildRuntime(child, backend);
-            await using var test = await LocalReleasePersistenceTests.Context.CreateAsync(fixture, shipment: !xml && !contrl, xmlExpected: xmlExpected, nativeBytes: native, actualBackend: backend, runtimeImage: runtime.RuntimeImage, contrl: contrl);
+            await using var test = await LocalReleasePersistenceTests.Context.CreateAsync(fixture, shipment: family is null && !xml && !contrl, xmlExpected: xmlExpected, nativeBytes: native, actualBackend: backend, runtimeImage: runtime.RuntimeImage, contrl: contrl, bytesCase: bytesCase);
             Assert.True(await test.Case.ScalarAsync<bool>("SELECT EXISTS(SELECT 1 FROM braid.schema_migrations WHERE version=66)"));
             var actor = test.Actor; var target = test.Target.Reference; var original = test.Control.Intent; var replay = test.Control.Runs.Value.Replay;
             var interpreted = await preview.PreviewAsync(new(NativeArtifact.Admit(original.Revision, native, PreviewPolicy.MaximumNativeBytes), replay.Target,
-                replay.Primary, [], [], replay.CurrentDateTime, replay.Limits) { Profile = xml ? PreviewExecutionProfile.XmlDocument : PreviewExecutionProfile.Document });
+                replay.Primary, [], [], replay.CurrentDateTime, replay.Limits) { Profile = family?.Execution ?? (xml ? PreviewExecutionProfile.XmlDocument : PreviewExecutionProfile.Document) });
             Assert.Equal(MappingPreviewStatus.Succeeded, interpreted.Status);
             Assert.Equal(expected, Assert.Single(interpreted.Artifacts).CopyBytes());
             var source = new FerruleServiceCompileTests.NativeSource(actor, test.Control.Native, native);
-            var compiler = new FerruleBuildCompiler(generator, new(actor, source, source), xmlEnabled: xml);
+            var compiler = new FerruleBuildCompiler(generator, new(actor, source, source), xmlEnabled: xml, nativeFormats: family is null ? [] : [family]);
             await using var runs = new PostgresBuildRunStore(test.Case.RegressionConnectionString("braid_build_run_reader"), BuildRunDatabaseProfile.Reader);
             await using var builds = new PostgresBuildStore(test.Case.RegressionConnectionString("braid_build_reader"), false);
             await using var access = new PostgresDatabase(test.Case.RuntimeConnectionString);
@@ -132,8 +150,8 @@ public sealed partial class NativeShipmentPackagePilot(PostgresFixture fixture, 
                 var service = new MachineInvocationService(ledger, test.Store, principal => new(test.Store,
                     new(runs, new BuildControlService(builds, projects, new PostgresRevisionReportMetadataReader(reports), new RegressionRunReadService(evidence, cases)),
                         builds, new PostgresBuildObjectStore(builds, new LocalReleasePersistenceTests.NoNative(), principal), runtime)),
-                    TimeProvider.System, xml || contrl ? PreviewLimits.Default with { MaximumOutputBytes = expected.Length } : Braid.MachineEndpoint.MappingEndpointResources.Limits);
-                await InvokeHttp(target, a.ReleaseId, caller, service, () => child.Available, xmlExpected, contrl);
+                    TimeProvider.System, family is not null || xml || contrl ? PreviewLimits.Default with { MaximumOutputBytes = expected.Length } : Braid.MachineEndpoint.MappingEndpointResources.Limits);
+                await InvokeHttp(target, a.ReleaseId, caller, service, () => child.Available, xmlExpected, contrl, bytesCase);
                 return;
             }
             var b = a;

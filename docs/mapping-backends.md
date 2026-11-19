@@ -47,7 +47,7 @@ can read a document is not evidence that the generated mapping can read it.
   comparison in a regression case does not qualify an artifact for release.
 - **FlexText, Protobuf and XBRL:** use native previews and saved exact-byte
   cases. A layout, message descriptor or instance declaration belongs to the
-  revision, not the upload. These are not generated C# endpoint formats.
+  revision, not the upload. Opt-in builds admit primary string Store layouts, scalar Protobuf messages, and instant-period XBRL tables respectively. The compiled endpoint takes the media type and bytes; it reads settings from the activated release, never from caller overrides.
 - **XLSX:** flat workbook read to JSON is a worker protocol, not a catalog
   preview. New workbook output needs a worksheet thread and is direct-worker
   only. There is no catalog workbook-output table or compiled endpoint.
@@ -132,7 +132,7 @@ external side effects in v1.
 ## Ferrule integration
 
 The restricted worker pins:
-[`740af0c38ede7d814a17146bab2bffd7301320c9`](https://github.com/DeandreT/ferrule/commit/740af0c38ede7d814a17146bab2bffd7301320c9).
+[`796eb8230561f200ca81c153c946a8fe08884e75`](https://github.com/DeandreT/ferrule/commit/796eb8230561f200ca81c153c946a8fe08884e75).
 It consumes `mapping`, `ir`, and `engine` for inspection, validation and
 projection, the `cli` library's in-memory payload API for bounded JSON preview,
 and `codegen` and `codegen-csharp` for in-memory C# source generation in the
@@ -201,10 +201,7 @@ regression worker, with `FORMAT` set to `FLEXTEXT`, `PROTOBUF` or `XBRL`.
 The parent workflow must also be enabled. Each flag defaults to false.
 Run recovery binds the stored input length, digest and canonical boundary
 settings to the original revision. Regression cases retain the original bytes,
-clock, limits and runtime identity. Generated C# builds
-refuse these boundary formats with `unsupportedFlexTextBuild`,
-`unsupportedXlsxBuild`, `unsupportedProtobufBuild` or `unsupportedXbrlBuild`;
-there is no new mapping endpoint format. PDF rendering and database connections
+clock, limits and runtime identity. To enable bounded byte builds, set `BRAID_BUILDS_<FORMAT>_ENABLED=true` on the build API and build worker, with the same compiler identity and transport used for boundary inspection. Each flag defaults to false. Unsupported layouts remain refusals. XLSX is not included. PDF rendering and database connections
 are not admitted by these profiles.
 
 The [flat CSV document core](csv-documents.md) has a separate direct-preview and
@@ -239,7 +236,7 @@ pin its resulting commit in the dependent braid PR.
 
 ## Source references
 
-- [Ferrule project codec at the selected revision](https://github.com/DeandreT/ferrule/blob/740af0c38ede7d814a17146bab2bffd7301320c9/crates/mapping/src/project_file.rs).
-- [Ferrule public host exports](https://github.com/DeandreT/ferrule/blob/740af0c38ede7d814a17146bab2bffd7301320c9/crates/cli/src/lib.rs).
-- [Ferrule in-memory execution](https://github.com/DeandreT/ferrule/blob/740af0c38ede7d814a17146bab2bffd7301320c9/crates/cli/src/payload.rs).
-- [Ferrule architecture and capability boundaries](https://github.com/DeandreT/ferrule/blob/740af0c38ede7d814a17146bab2bffd7301320c9/docs/architecture.md).
+- [Ferrule project codec at the selected revision](https://github.com/DeandreT/ferrule/blob/796eb8230561f200ca81c153c946a8fe08884e75/crates/mapping/src/project_file.rs).
+- [Ferrule public host exports](https://github.com/DeandreT/ferrule/blob/796eb8230561f200ca81c153c946a8fe08884e75/crates/cli/src/lib.rs).
+- [Ferrule in-memory execution](https://github.com/DeandreT/ferrule/blob/796eb8230561f200ca81c153c946a8fe08884e75/crates/cli/src/payload.rs).
+- [Ferrule architecture and capability boundaries](https://github.com/DeandreT/ferrule/blob/796eb8230561f200ca81c153c946a8fe08884e75/docs/architecture.md).

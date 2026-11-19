@@ -105,7 +105,7 @@ public static class CompiledRuntimeProtocol
             if (input.ByteCount > remaining) throw Invalid();
             var value = Read(bytes, ref offset, input.ByteCount, header.ProtocolVersion == CsvProtocol);
             if (value.Length != input.ByteCount || Sha256Digest.FromBytes(value).Value != input.Sha256) throw Invalid();
-            inputs.Add(new(input.Name, value, input.CsvDialect, input.XmlMetadata));
+            inputs.Add(new(input.Name, value, input.CsvDialect, input.XmlMetadata, DeclaredSettings(intent, input.Name, true)));
             remaining -= value.Length;
         }
         if (offset != bytes.Length) throw Invalid();
@@ -163,7 +163,7 @@ public static class CompiledRuntimeProtocol
             if (value.Length != document.ByteCount || Sha256Digest.FromBytes(value).Value != document.Sha256) throw Invalid();
             remaining -= value.Length;
             values.Add(RegressionOutput.Capture(document.Name is null ? RegressionOutputKey.Primary : RegressionOutputKey.Named(document.Name), value,
-                mediaType: document.MediaType ?? PreviewPolicy.MediaType, csvDialect: document.CsvDialect, xmlMetadata: document.XmlMetadata));
+                mediaType: document.MediaType ?? PreviewPolicy.MediaType, csvDialect: document.CsvDialect, xmlMetadata: document.XmlMetadata, documentSettings: DeclaredSettings(intent, document.Name, false)));
         }
         if (offset != bytes.Length) throw Invalid();
         return new(header, header.Status == "succeeded" ? RegressionOutputSet.Capture(values) : null);
@@ -232,11 +232,14 @@ public static class CompiledRuntimeProtocol
     {
         BuildWorkerProtocol.CsvProfile => CsvProtocol,
         BuildWorkerProtocol.XmlProfile => XmlProtocol,
+        BuildWorkerProtocol.FlexProfile or BuildWorkerProtocol.ProtoProfile or BuildWorkerProtocol.XbrlProfile => DocumentProtocol,
         BuildWorkerProtocol.DocumentProfile or BuildWorkerProtocol.X12InterchangesProfile => DocumentProtocol,
         // Legacy qualification also uses this grammar to bind replay digests for
         // other backends. Execution admission independently checks runtime support.
         _ => Protocol
     };
+    private static NativeDocumentSettings? DeclaredSettings(BuildIntent intent, string? name, bool input) =>
+        BuildWorkerProtocol.NativeFormat(intent.Profile.Id) is null ? null : DeclaredBoundary(intent, name, input).DocumentSettings;
     private static CsvDocumentDialect? DeclaredDialect(BuildIntent intent, string? name, bool input) =>
         intent.Profile.Id == BuildWorkerProtocol.CsvProfile ? DeclaredBoundary(intent, name, input).CsvDialect : null;
     private static XmlDocumentMetadata? DeclaredXml(BuildIntent intent, string? name, bool input) =>
@@ -261,7 +264,7 @@ public static class CompiledRuntimeProtocol
     private static Replay Describe(RegressionReplay replay, BuildIntent intent)
     {
         foreach (var input in replay.NamedInputs.Prepend(replay.Primary))
-            if (input.CsvDialect != DeclaredDialect(intent, input.Name, input: true) || input.XmlMetadata != DeclaredXml(intent, input.Name, true)) throw Invalid();
+            if (input.CsvDialect != DeclaredDialect(intent, input.Name, input: true) || input.XmlMetadata != DeclaredXml(intent, input.Name, true) || input.DocumentSettings != DeclaredSettings(intent, input.Name, true)) throw Invalid();
         return new(replay.Target.Kind switch
         {
             PreviewTargetKind.All => "all",
