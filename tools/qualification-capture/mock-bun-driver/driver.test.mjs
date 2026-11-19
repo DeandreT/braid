@@ -8,7 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { admit, fits, query } from "./driver.mjs";
+import { admit, fits, createSupervisor } from "./driver.mjs";
 
 test("regular-file descriptor, exact pin and narrow-field boundaries", () => {
   const fd = openSync(new URL("./mock.abi", import.meta.url), "r");
@@ -36,13 +36,18 @@ test("regular-file descriptor, exact pin and narrow-field boundaries", () => {
 });
 
 test("worker roundtrip uses a fixed four-byte representation", async () => {
-  expect(await query()).toBe(42);
+  expect(await createSupervisor()()).toBe(42);
 });
 
 test("main owns cancellation and deadline while the worker withholds its reply", async () => {
   const controller = new AbortController();
+  const query = createSupervisor();
   const pending = query({ signal: controller.signal, hold: true });
+  await expect(query()).rejects.toThrow("slotUsed");
   setTimeout(() => controller.abort(), 10);
   await expect(pending).rejects.toThrow("cancelled");
-  await expect(query({ hold: true, timeout: 20 })).rejects.toThrow("deadline");
+  await expect(query()).rejects.toThrow("slotUsed");
+  const timed = createSupervisor();
+  await expect(timed({ hold: true, timeout: 20 })).rejects.toThrow("deadline");
+  await expect(timed()).rejects.toThrow("slotUsed");
 });

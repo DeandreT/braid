@@ -276,6 +276,42 @@ class OwnerTests(unittest.TestCase):
         with patch.object(capture, 'close_layout', side_effect=OSError('fsync failed')):
             self.assertRevoked('', 'layoutCloseFailure')
 
+    def test_partial_handler_install_and_failed_restore_revoke(self):
+        numbers = list(self.handlers)
+        argv = self.driver('')
+        for failed_call, expected in [(2, numbers + numbers[:1]), (3, numbers * 2)]:
+            calls = []
+
+            def change(number, handler):
+                calls.append(number)
+                if len(calls) == failed_call:
+                    raise OSError('fixture')
+                return self.handlers[number]
+
+            with self.subTest(failed_call=failed_call), patch.object(signal, 'signal', change):
+                code, path = capture.run_capture(self.root, argv, 30, trusted=[argv[1]])
+                self.assertEqual((1, {'outcome': 'revoked', 'category': 'ownerFailure'}),
+                                 (code, capture.read_capture(path)['notice']))
+                self.assertEqual(expected, calls)
+
+    def test_directory_close_failure_after_linking_success_is_revoked(self):
+        close = os.close
+        injected = []
+
+        def fail_once(fd):
+            facts = os.fstat(fd)
+            close(fd)
+            for marker in self.root.glob(f'*/{capture.EXIT}'):
+                if not injected and os.path.samestat(facts, marker.parent.stat()):
+                    injected.append(marker.parent)
+                    raise OSError('directory close failed')
+
+        with patch.object(os, 'close', fail_once):
+            code, report, path = self.run_owner('')
+        self.assertEqual([path], injected)
+        self.assertEqual(0, json.loads((path / capture.EXIT).read_bytes())['exit'])
+        self.assertEqual((1, {'outcome': 'revoked', 'category': 'terminalWriteFailure'}), (code, report['notice']))
+
     def test_lost_success_race_never_replaces_the_earlier_marker_and_revokes(self):
         real, competing = capture.close_layout, b'{"exit":0,"headerSha256":"","manifestSha256":""}\n'
 
