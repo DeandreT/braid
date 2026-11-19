@@ -118,7 +118,7 @@ if [[ $runtime == service ]]; then
     --label "com.docker.compose.project=$project" --tmpfs /tmp:size=256m,mode=1777 \
     --memory 3g --pids-limit 256 "$BRAID_FERRULE_SERVICE_IMAGE" runtime-identity >"$work/runtime-identity.json" ||
     fail 'service runtime identity'
-  BRAID_COMPILED_RUNTIME_IMAGE=$(node -e '
+  BRAID_COMPILED_RUNTIME_IMAGE=$(bun -e '
     const value = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
     const pin = /^sha256:[0-9a-f]{64}$/;
     if (value.schema !== "braid.compiled-runtime-image-identity.v1" || value.native !== process.argv[2] || !pin.test(value.runtime))
@@ -178,7 +178,7 @@ read -r project_id mapping_id build_id environment_id environment_version artifa
 # also measured from the service image before the stack started.
 BRAID_ENDPOINT_COMPILER_IDENTITY=sha256:$(printf 'braid.compiler-identity.v1\nnative=%s\ntoolchain=%s\n' \
   "$BRAID_FERRULE_SERVICE_IDENTITY" "$BRAID_FERRULE_COMPILE_TOOLCHAIN" | sha256sum | cut -d' ' -f1)
-[[ $(node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).build))' \
+[[ $(bun -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).build))' \
   "$BRAID_ACCEPTANCE_WORK/compiler-identity.json") == "$BRAID_ENDPOINT_COMPILER_IDENTITY" ]] ||
   fail 'the measured compiler identity differs from the combined service identity'
 [[ $(sql "SELECT count(*) FROM braid.build_approvals WHERE organization_id='$BRAID_SESSION_ORGANIZATION_ID' AND build_id='$build_id'
@@ -210,7 +210,7 @@ operator() {
     { cat "$work/$output.json" "$work/$output.err" >&2; fail "$service $1"; }
 }
 field() {
-  node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))[process.argv[2]]))' \
+  bun -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))[process.argv[2]]))' \
     "$work/$1.json" "$2"
 }
 expect() {
@@ -282,7 +282,7 @@ token() {
     --data-urlencode "client_secret@$work/$name.secret" --data-urlencode "scope=api://$resource/.default" \
     --output "$work/$name.token" "https://login.microsoftonline.com/$BRAID_ENTRA_TENANT_ID/oauth2/v2.0/token" ||
     fail "token for $name"
-  node -e '
+  bun -e '
     const fs = require("fs");
     const token = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
     if (token.token_type !== "Bearer" || typeof token.access_token !== "string") process.exit(1);
@@ -295,7 +295,7 @@ token caller "$BRAID_ENDPOINT_ACCEPTANCE_CALLER_CLIENT" "$BRAID_ENDPOINT_ACCEPTA
 token foreign "$BRAID_ENDPOINT_ACCEPTANCE_CALLER_CLIENT" "$BRAID_ENDPOINT_ACCEPTANCE_CALLER_SECRET" "$BRAID_ENTRA_CLIENT_ID"
 
 # The browser run's regression inputs: the primary order, the named rates document and both parameters.
-node -e '
+bun -e '
   const b64 = (text) => Buffer.from(text, "utf8").toString("base64");
   process.stdout.write(JSON.stringify({
     inputs: [
@@ -327,7 +327,7 @@ call() {
 completed() {
   local name=$1 release=$2 replayed=$3
   [[ $status == 200 ]] || fail "$name answered $status"
-  node -e '
+  bun -e '
     const fs = require("fs");
     const { createHash } = require("crypto");
     const [body, headers, release, build, artifact, replayed] = process.argv.slice(1);
@@ -354,7 +354,7 @@ completed() {
 refused() {
   local name=$1 expected=$2 outcome=$3
   [[ $status == "$expected" ]] || fail "$name answered $status"
-  [[ $(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).outcome)' "$work/$name.body") == "$outcome" ]] ||
+  [[ $(bun -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).outcome)' "$work/$name.body") == "$outcome" ]] ||
     fail "$name outcome"
 }
 audit() {

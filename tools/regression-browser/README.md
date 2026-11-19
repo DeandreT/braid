@@ -6,11 +6,11 @@ Angular screen.
 
 ## Prerequisites
 
-- Native Windows Python 3.12, Node 22.23.3 and npm 12.1.0.
+- Native Windows Python 3.12 and Bun 1.4.5.
 - Headless Chrome for Testing matching the repository browser tooling.
 - Example-Build-Linux Docker Engine, with its data on the verified Btrfs volume.
-- Linux SDK 10.0.112 at `/srv/example-build/cache/braid-tooling/dotnet` and Linux Node
-  22.23.3 at `/srv/example-build/cache/braid-tooling/node-v22.23.3-linux-x64`.
+- Linux SDK 10.0.112 at `/srv/example-build/cache/braid-tooling/dotnet` and Bun 1.4.5
+  at `/srv/example-build/cache/braid-tooling/bun-1.4.5/bun-linux-x64/bun`.
 - A pinned immutable Ferrule native image ID. Use a fixture-owned
   image distinct from an interactive viewer's image to isolate lifecycle events.
 - At least 25 GiB free on the actual Windows host before Linux writers start.
@@ -30,7 +30,7 @@ the build scenario. Use different free read/mutation ports for independent fixtu
 The shared browser fixture pins the complete migration inventory in
 `tools/browser-fixture/schema.mjs` and conserves qualification/release tables.
 After adding a migration, review that inventory and run
-`node --test tools/browser-fixture/schema.test.mjs`; do not remove the admission
+`bun test ./tools/browser-fixture/schema.test.mjs`; do not remove the admission
 check to make an old fixture start.
 
 ## Prepare and run
@@ -40,13 +40,14 @@ tree, rebuilds Angular, exports that exact commit, verifies ordinary source hash
 and creates normal locked .NET publications on Btrfs. Configuration and journals
 are private files outside the repository.
 
-From the repository root, substitute the actual pinned tool paths and image ID:
+From the repository root, install the locked workspace dependencies and substitute
+the actual pinned tool path and image ID:
 
 ```powershell
+bun install --frozen-lockfile
 py -3.12 -B tools/regression-browser/prepare.py `
   --work-root "$env:LOCALAPPDATA/Temp/opencode" `
-  --node "<node-22.23.3>/node.exe" `
-  --npm-cli "<npm-12.1.0>/bin/npm-cli.js" `
+  --bun "<bun-1.4.5>/bun.exe" `
   --worker-image sha256:<qualified-native-image-id>
 ```
 
@@ -60,9 +61,8 @@ file. Every browser/worker scenario runs again with a new isolated owner.
 ```powershell
 $env:BRAID_REGRESSION_BINDINGS = '<printed-bindings-path>'
 $env:BRAID_CHROMIUM_EXECUTABLE = '<chrome-for-testing>/chrome.exe'
-# From apps/web:
-& '<node-22.23.3>/node.exe' ../../node_modules/@playwright/test/cli.js `
-  test --config=playwright.regression-live.config.ts
+# From the repository root:
+bun run --cwd apps/web test:e2e --config=playwright.regression-live.config.ts
 ```
 
 The native browser adapter starts the Linux operator through a private WSL pipe.

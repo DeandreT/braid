@@ -12,7 +12,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=['start', 'stop'])
     parser.add_argument('--bindings', type=Path, required=True)
-    parser.add_argument('--node', type=Path)
+    parser.add_argument('--bun', type=Path, default='bun')
     args = parser.parse_args()
     if os.name != 'nt' or not args.bindings.is_absolute():
         parser.error('Use native Windows and an absolute prepared bindings path.')
@@ -27,9 +27,8 @@ def main():
         return 0
     if ready.exists() or stop.exists():
         parser.error('Use fresh bindings for a new viewer; existing evidence is preserved.')
-    node = args.node or Path(os.environ['LOCALAPPDATA']) / 'ITS/Tooling/braid-node-22.23.3/node-v22.23.3-win-x64/node.exe'
-    if subprocess.check_output([str(node), '--version'], text=True).strip() != 'v22.23.3':
-        parser.error('The local viewer requires the pinned Node 22.23.3.')
+    if subprocess.check_output([str(args.bun), '--version'], text=True).strip() != '1.4.5':
+        parser.error('The local viewer requires the pinned Bun 1.4.5.')
     root = Path(__file__).resolve().parents[2]
     client = (root / 'apps/web/tests/browser-execution-owner.ts').as_uri()
     source = '''
@@ -58,7 +57,7 @@ try {
     settings = {'clientModule': client, 'stopFile': str(stop), 'readyFile': str(ready)}
     env = {**os.environ, 'BRAID_BUILD_BINDINGS': str(args.bindings), 'BRAID_LOCAL_VIEWER_OPTIONS': json.dumps(settings)}
     print('Starting a disposable local workbench. Do not use it for data you need to retain.', flush=True)
-    child = subprocess.Popen([str(node), '--experimental-transform-types', '--input-type=module', '-e', source], cwd=root, env=env)
+    child = subprocess.Popen([str(args.bun), '-e', source], cwd=root, env=env)
     try:
         return child.wait()
     except KeyboardInterrupt:

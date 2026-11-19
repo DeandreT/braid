@@ -1,4 +1,4 @@
-"""Launch tests use mocks or a Python executable fixture, never Xvfb or npm."""
+"""Launch tests use mocks or a Python executable fixture, never Xvfb or Bun."""
 
 import contextlib
 import io
@@ -26,8 +26,8 @@ class LaunchTests(unittest.TestCase):
     def test_default_arguments_and_literal_forwarding(self):
         arguments = ["--config", "tests/example config.ts", "--grep", "$(touch nope); *"]
         self.assertEqual(launch.launch_arguments(arguments, {}), [
-            "xvfb-run", "-a", "-w", "10", "npm", "--workspace", "@braid/web",
-            "run", "test:e2e", "--", *arguments,
+            "xvfb-run", "-a", "-w", "10", "bun", "run", "--cwd", "apps/web",
+            "test:e2e", *arguments,
         ])
         self.assertEqual(launch.launch_arguments([], {})[-1], "test:e2e")
 

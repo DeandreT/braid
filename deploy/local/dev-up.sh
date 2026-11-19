@@ -20,9 +20,10 @@ build_log=$dev_logs/build.log
 step() { printf '==> %s\n' "$*"; }
 fail() { printf 'dev-up: %s\n' "$*" >&2; exit 1; }
 
-for tool in docker git node npm python3 curl systemd-run systemctl busctl ss sha256sum; do
+for tool in docker git bun python3 curl systemd-run systemctl busctl ss sha256sum; do
   command -v "$tool" >/dev/null || fail "$tool is required."
 done
+[[ $(bun --version) == "$(<"$source_root/.bun-version")" ]] || fail 'Install the Bun version pinned in .bun-version.'
 dotnet=$(command -v dotnet) || fail 'The pinned .NET SDK (global.json) must be on PATH.'
 dotnet_root=${DOTNET_ROOT:-$(dirname "$(readlink -f "$dotnet")")}
 dotnet=$dotnet_root/dotnet
@@ -81,8 +82,8 @@ if [[ ! -f $app/.complete || $build_key == *-dirty ]]; then
   (
     cd "$source_root"
     export DOTNET_ROOT=$dotnet_root DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=false
-    [[ -d node_modules ]] || npm ci --no-audit --no-fund
-    npm run build
+    bun install --frozen-lockfile
+    bun run build
     "$dotnet" restore dotnet/Braid.slnx --locked-mode
     for project in apps/Braid.Server apps/Braid.Worker tools/Braid.DatabaseTool tools/Braid.StorageTool; do
       "$dotnet" publish "dotnet/$project/${project#*/}.csproj" --configuration Release --no-restore -m:2 \
@@ -200,7 +201,7 @@ for attempt in $(seq 1 60); do
   sleep 1
 done
 for model in "${chat_models[@]}"; do
-  if ! MODEL=$model node -e 'const t=require(process.argv[1]); process.exit(t.models.some(m=>m.name===process.env.MODEL)?0:1)' \
+  if ! MODEL=$model bun -e 'const t=require(process.argv[1]); process.exit(t.models.some(m=>m.name===process.env.MODEL)?0:1)' \
       "$dev_home/tmp/ollama-tags.json"; then
     [[ -n $dev_ollama_container ]] || fail "Model $model is not available at $dev_ollama_url."
     step "Pulling $model into $dev_ollama_container"
@@ -210,7 +211,7 @@ done
 
 # The first model is the default; each profile admits only this loopback endpoint.
 chat_profiles=$dev_config/chat-profiles.json
-MODELS=${chat_models[*]} ENDPOINT=$dev_ollama_url/api/chat node -e '
+MODELS=${chat_models[*]} ENDPOINT=$dev_ollama_url/api/chat bun -e '
   const profiles = process.env.MODELS.split(" ").map((model) => ({
     id: "ollama-" + model.toLowerCase().replace(/[^a-z0-9.]+/g, "-"),
     version: 1,
@@ -345,13 +346,13 @@ if [[ -z ${BRAID_DEV_PROJECT_ID:-} ]]; then
   step 'Creating the default project'
   jar=$(mktemp "$dev_home/tmp/cookies.XXXXXX")
   context=$(curl -fsS --max-time 30 -c "$jar" -b "$jar" "$dev_origin/api/v1/catalog/context")
-  token=$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).requestToken)' "$context")
+  token=$(bun -e 'process.stdout.write(JSON.parse(process.argv[1]).requestToken)' "$context")
   reply=$(curl -fsS --max-time 60 -c "$jar" -b "$jar" -X POST -H "Origin: $dev_origin" -H "X-XSRF-TOKEN: $token" \
     -H "Idempotency-Key: $BRAID_DEV_PROJECT_KEY" -H 'Content-Type: application/vnd.braid.project-create.v1+json' \
     --data '{"name":"Local project","description":"Created by deploy/local/dev-up.sh."}' \
     "$dev_origin/api/v1/organizations/$BRAID_DEV_ORGANIZATION_ID/projects") || { rm -f "$jar"; fail 'Project creation failed.'; }
   rm -f "$jar"
-  BRAID_DEV_PROJECT_ID=$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).receipt.project.projectId)' "$reply")
+  BRAID_DEV_PROJECT_ID=$(bun -e 'process.stdout.write(JSON.parse(process.argv[1]).receipt.project.projectId)' "$reply")
   [[ $BRAID_DEV_PROJECT_ID =~ ^[0-9a-f-]{36}$ ]] || fail 'The project creation receipt is invalid.'
   printf 'BRAID_DEV_PROJECT_ID=%s\n' "$BRAID_DEV_PROJECT_ID" >>"$instance"
 fi

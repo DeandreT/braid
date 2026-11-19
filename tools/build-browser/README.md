@@ -8,8 +8,8 @@ approves and queues exact builds through the normal API and ordinary worker.
 
 ## Prepare and run
 
-Use the pinned native Windows Node/npm, Python and Chrome tooling, the Linux SDK
-and Node described in `tools/regression-browser/README.md`, and a pinned
+Use the pinned native Windows Bun, Python and Chrome tooling, the Linux SDK
+and Bun described in [the regression fixture](../regression-browser/README.md), and a pinned
 combined native/compiler image. The image must have its own fixture identity so
 the Docker event observer cannot confuse it with an interactive viewer. Changing
 only an ownership label over identical compiler layers is sufficient.
@@ -17,20 +17,19 @@ only an ownership label over identical compiler layers is sufficient.
 Commit the source, then from the repository root:
 
 ```powershell
+bun install --frozen-lockfile
 py -3.12 -B tools/regression-browser/prepare.py `
   --scenario build `
   --work-root "$env:LOCALAPPDATA/Temp/opencode" `
-  --node "<node-22.23.3>/node.exe" `
-  --npm-cli "<npm-12.1.0>/bin/npm-cli.js" `
+  --bun "<bun-1.4.5>/bun.exe" `
   --worker-image sha256:<fixture-owned-qualified-compiler-image>
 ```
 
 Set `BRAID_BUILD_BINDINGS` to the printed native `bindings.json` path and
-`BRAID_CHROMIUM_EXECUTABLE` to the pinned Chrome executable. From `apps/web`:
+`BRAID_CHROMIUM_EXECUTABLE` to the pinned Chrome executable. From the repository root:
 
 ```powershell
-& '<node-22.23.3>/node.exe' ../../node_modules/@playwright/test/cli.js `
-  test --config=playwright.builds-live.config.ts
+bun run --cwd apps/web test:e2e --config=playwright.builds-live.config.ts
 ```
 
 The shared preparation launcher exports and verifies exact source bytes, builds

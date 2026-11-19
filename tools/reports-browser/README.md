@@ -1,7 +1,7 @@
 # Saved-report browser fixture
 
 `operator.mjs` provides the actual persisted-report scenario used by the report
-browser tests. It uses the shared Node-core runtime in
+browser tests. It uses the shared fixture runtime in
 `../browser-fixture/runtime.mjs`.
 
 Build Angular and publish the ordinary Server, DatabaseTool and StorageTool from
@@ -32,11 +32,11 @@ fixture's existing values. Credentials and request tokens stay in private memory
 and child pipes/environment; no credential, private object identifier or lease
 record is included in the public manifest or control acknowledgements.
 
-The browser's Node fixture spawns the absolute operator path using
-`node [operator, '--config', configuration]`. Its environment uses
+The browser fixture spawns the absolute operator path using
+`bun <operator> --config <configuration>`. Its environment uses
 `BRAID_REPORTS_BROWSER_OPERATOR`, `BRAID_REPORTS_BROWSER_OPERATOR_CONFIG`,
 `BRAID_REPORTS_BROWSER_MANIFEST` and `BRAID_REPORTS_BASE_URL`. The last two must match
-the private configuration exactly. These are Node-only values; no product control
+the private configuration exactly. These are host-side values; no product control
 endpoint or browser-accessible private configuration is added.
 
 Setup provisions four real principals and project roles, initializes strict v2
@@ -54,7 +54,7 @@ manifest digest and initial viewer profile. The bounded public manifest contains
 only source identity, origin, four role identities, project scope and twelve
 actual revision metadata records nested under `samples.*.revision`.
 
-`npm run test:mapping-viewer-browser` uses the same source-admitted owner with a
+`bun run test:mapping-viewer-browser` uses the same source-admitted owner with a
 dedicated workbench rendering suite. It checks real retained report semantics and
 controlled presentation states separately. Supply the same private operator
 configuration and manifest environment as the report suite, and run on an isolated
@@ -102,7 +102,7 @@ without creating a claim. These are configuration effects, not mocked responses.
 The dedicated `pending-start` control begins one actual private HTTP Ensure,
 observes its committed pending attempt, pauses only its original API PID/start
 identity, checks Linux stateT and rechecks the actual pending row. A separately
-owned Node-core watchdog is armed first with a2.5-second resume timer. The browser
+owned watchdog is armed first with a 2.5-second resume timer. The browser
 must immediately observe its own genuine POST202 and call `pending-release`;
 that resumes the same process and returns the first operation's actual result.
 Actual elapsed resume evidence must be within3 seconds; scheduler timing is not

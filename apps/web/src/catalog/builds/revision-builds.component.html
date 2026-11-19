@@ -242,20 +242,20 @@
                 Register next version
               </button>
             </div>
-          @if (selectedEnvironment(); as value) {
-            <braid-delete-item
-              [context]="context()"
-              [target]="{
-                kind: 'buildEnvironment',
-                organizationId: value.reference.organizationId,
-                projectId: value.reference.projectId,
-                environmentId: value.reference.environmentId,
-                version: value.reference.version,
-              }"
-              label="every version of this environment"
-              (deleted)="loadEnvironments()"
-            />
-          }
+            @if (selectedEnvironment(); as value) {
+              <braid-delete-item
+                [context]="context()"
+                [target]="{
+                  kind: 'buildEnvironment',
+                  organizationId: value.reference.organizationId,
+                  projectId: value.reference.projectId,
+                  environmentId: value.reference.environmentId,
+                  version: value.reference.version,
+                }"
+                label="every version of this environment"
+                (deleted)="loadEnvironments()"
+              />
+            }
           } @else {
             <p>Your current access cannot create environment versions.</p>
           }

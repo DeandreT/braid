@@ -1,4 +1,4 @@
-// Qualification-only machine caller for deploy/azure/qualify.sh, run as `node -e` by the caller job inside the
+// Qualification-only machine caller for deploy/azure/qualify.sh, run as `bun -e` by the caller job inside the
 // Container Apps environment, where the internal mapping endpoint is reachable. One execution sends one request:
 // `invoke CALL ORIGIN REQUEST CREDENTIAL` posts the preview-orders regression inputs to /v1/invocations with the
 // named token from the job's secrets (caller, foreign or expiring), and `ready CALL ORIGIN` reads readiness. It

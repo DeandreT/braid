@@ -59,8 +59,8 @@ Local display unions use the Domain values `Unsupported`, `Text`, `Json`,
 
 ## Verification
 
-Use pinned Node 22.23.3 / npm 12.1.0 and locked dependencies. Run `npm run check`,
-`npm run build`, and `npm run test:spec-intake-browser` with
+Use Bun 1.4.5 and the [frozen install commands](development.md#manual-hosting-and-frontend-development). Run `bun run check`,
+`bun run build`, and `bun run test:spec-intake-browser` with
 `BRAID_CHROMIUM_EXECUTABLE` pointing to the installed Chromium when needed.
 The focused lane includes parser tests and actual Chromium tests with synthetic
 API responses: both evidence versions, hostile locators/fields, integer overflow,

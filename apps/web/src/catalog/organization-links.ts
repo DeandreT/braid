@@ -1,4 +1,5 @@
-const standalone = /^\/(?:chat|notifications|administration|audit|usage|quotas|retention)(?=[/?#]|$)/;
+const standalone =
+  /^\/(?:chat|notifications|administration|audit|usage|quotas|retention)(?=[/?#]|$)/;
 const search = /^\/catalog\/search(?=[?#]|$)/;
 
 /**

@@ -9,7 +9,7 @@ python3 tools/ci/run_tests.py --group integration
 python3 tools/ci/run_tests.py --group fast --group live-provider
 ```
 
-`npm test` is a convenience alias for `--group fast`, not the full solution.
+`bun run test` is a convenience alias for `--group fast`, not the full solution.
 
 With no selection flags, the command runs the full solution. CI's
 `--shard-index` and `--shard-count` partition every discovered method by
@@ -75,7 +75,7 @@ For `packaged-browser`, provide Linux, the pinned Docker PostgreSQL fixture,
 `BRAID_AUTH_BROWSER_ADMISSION_ROOT`, `BRAID_AUTH_BROWSER_ADMISSION_FILE`,
 `BRAID_WORKSPACE_CHAT_BROWSER=true` and the display assigned by the existing
 isolated browser owner. The tests validate the admission record's exact
-node/npm/browser/server bytes, assets and custody. Prepare the admission record
+Bun/browser/server bytes, assets and custody. Prepare the admission record
 with `admit.mjs` and use the assigned isolated display.
 
 `host-replica-pilot` and `sftp-loopback` each require Linux and the pinned

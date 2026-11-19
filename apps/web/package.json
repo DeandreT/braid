@@ -5,15 +5,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "ng serve --host 127.0.0.1 --port 5173 --proxy-config proxy.conf.json",
-    "check": "ng build --configuration development",
-    "check:contracts": "tsc -p tsconfig.contracts.json",
-    "check:browser": "tsc -p tsconfig.browser.json",
-    "check:chat-types": "playwright test --config playwright.workspace-chat-node.config.ts",
-    "check:browser-session-probe": "ng run braid:browser-session-probe:development",
-    "build": "ng build",
-    "build:browser-session-probe": "ng run braid:browser-session-probe:production",
-    "test:e2e": "playwright test"
+    "dev": "bun run --bun ng serve --host 127.0.0.1 --port 5173 --proxy-config proxy.conf.json",
+    "check": "bun run --bun ng build --configuration development",
+    "check:contracts": "bun run --bun tsc -p tsconfig.contracts.json",
+    "check:browser": "bun run --bun tsc -p tsconfig.browser.json",
+    "check:chat-types": "bun run --bun playwright test --config playwright.workspace-chat-node.config.ts",
+    "check:browser-session-probe": "bun run --bun ng run braid:browser-session-probe:development",
+    "build": "bun run --bun ng build",
+    "build:browser-session-probe": "bun run --bun ng run braid:browser-session-probe:production",
+    "test:e2e": "bun run --bun playwright test"
   },
   "dependencies": {
     "@angular/common": "22.2.2",

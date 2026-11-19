@@ -60,7 +60,7 @@ def main():
         os.execv('/usr/bin/unshare', ['unshare', '--mount', '--propagation', 'private',
                                     '/usr/bin/python3', '-I', '-B', __file__, '--isolated', *sys.argv[1:]])
     assert len(sys.argv) == 5 and sys.argv[1] == '--isolated' and os.geteuid() == 0
-    config, node, operator = sys.argv[2:]
+    config, bun, operator = sys.argv[2:]
     data = json.loads(Path(config).read_text())
     identity = data['fixtureId']
     assert re.fullmatch(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}', identity)
@@ -85,7 +85,7 @@ def main():
         assert alias.stat().st_ino == private.stat().st_ino and alias.stat().st_dev == private.stat().st_dev
         ensure_docker()
         try:
-            code = wait_for_operator([node, operator, '--config', config],
+            code = wait_for_operator([bun, operator, '--config', config],
                                      shutdown_seconds=360 if data['schemaVersion'] == 'braid.build-browser-operator-config.v1' else 180)
         except OperatorUnsettled:
             settled = False

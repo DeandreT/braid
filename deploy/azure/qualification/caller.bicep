@@ -1,12 +1,12 @@
 // Qualification-only caller job for deploy/azure/qualify.sh; never part of a deployment. The mapping endpoints
 // are internal to the Container Apps environment, so the harness reaches them from a manual job inside it. Each
-// execution runs caller.js once in the Node image that deploy/container/Dockerfile pins, without an identity,
+// execution runs caller.js once in the Bun image that deploy/container/Dockerfile pins, without an identity,
 // registry credential or volume. The harness obtains app-only tokens on the operator's machine and redeploys this
 // job with them as secure parameters when they change; they never appear in the job's arguments or output.
 param location string = resourceGroup().location
 param name string
 param environmentName string
-@description('Node image by digest, the NODE_IMAGE of deploy/container/Dockerfile.')
+@description('Bun image by digest, the BUN_IMAGE of deploy/container/Dockerfile.')
 param image string
 @secure()
 @description('Token for the endpoint audience.')
@@ -49,7 +49,7 @@ resource caller 'Microsoft.App/jobs@2024-03-01' = {
         {
           name: 'caller'
           image: image
-          command: ['node', '-e', loadTextContent('caller.js')]
+          command: ['bun', '-e', loadTextContent('caller.js')]
           // Each execution supplies its own arguments: invoke CALL ORIGIN REQUEST CREDENTIAL, or ready CALL ORIGIN.
           args: ['ready', 'none', 'https://localhost']
           env: [

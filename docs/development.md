@@ -18,7 +18,7 @@ see [Manual hosting and frontend development](#manual-hosting-and-frontend-devel
   Docker or repair its daemon. `BRAID_DEV_BUILD_DOCKER_CONFIG` can select a private
   Docker configuration containing buildx.
 - .NET SDK 10.0.112 (`global.json`), including ASP.NET Core 10, on `PATH` or selected
-  by `DOTNET_ROOT`; Node 22.23.3 and npm 12.1.0 (`.node-version`, `package.json`).
+  by `DOTNET_ROOT`; Bun 1.4.5 (`.bun-version`) on `PATH`. Verify with `bun --version`.
 - Git, curl, Python 3.11 or later and standard Linux tools, including `ss`,
   `findmnt` and `sha256sum`. The compiler helper uses `hashlib.file_digest`.
 - Free loopback ports 4100, 55432 and 11434 by default, writable build/state
@@ -198,12 +198,13 @@ host profiles; a bare server start does not provision a catalog, identity,
 credentials, storage or workers. See [Catalog reads](catalog-reads.md) and
 [Session host operations](session-host.md) for those settings.
 
-To build the shell and hosts from the repository root:
+From the repository root, install the locked JavaScript dependencies, then build
+the Angular shell before building the host that serves it:
 
 ```sh
-npm ci
-npm ci --prefix tools/contracts-generator
-npm run build
+bun install --frozen-lockfile
+bun install --cwd tools/contracts-generator --frozen-lockfile
+bun run build
 dotnet restore dotnet/Braid.slnx --locked-mode
 dotnet build dotnet/Braid.slnx --configuration Release --no-restore
 dotnet run --no-build --configuration Release --project dotnet/apps/Braid.Server
@@ -213,7 +214,14 @@ The built application opens on `http://127.0.0.1:4100`, starting at `/catalog`.
 `BRAID_DEV_LISTEN_ADDR` changes the API's loopback address. The unauthenticated
 shell rejects public interfaces.
 
-For frontend-only development, run `npm run dev` and open
+The root install uses `bun.lock` for the frontend workspace; the generator uses
+`tools/contracts-generator/bun.lock`. A frozen install fails on a manifest/lockfile
+mismatch rather than rewriting the lockfile.
+
+The root scripts run Angular in its workspace, `apps/web`, where `angular.json`
+lives. Use the scripts rather than running `ng` at the repository root.
+
+For frontend-only development, run `bun run dev` from the repository root and open
 `http://127.0.0.1:5173`. This starts Angular, not the API, database or workers.
 Angular forwards `/api` requests to the local service; it does not relax that
 service's origin or permission checks. Use the packaged API origin for configured
@@ -258,8 +266,8 @@ Edit the C# contract or route, then build and regenerate:
 
 ```sh
 dotnet build dotnet/Braid.slnx --configuration Release --no-restore
-npm run contracts:generate
-npm run contracts:check
+bun run contracts:generate
+bun run contracts:check
 ```
 
 Commit the rewritten documents and `apps/web/src/api/generated.ts`. Each build
@@ -310,24 +318,24 @@ this build-heavy check on hosts with RAM-backed `/tmp`.
 
 ## Verification
 
-Run commands from the repository root. Install the locked root and
-`tools/contracts-generator` npm dependencies first. Web checks also need the
+Run commands from the repository root after the frozen installs
+[above](#manual-hosting-and-frontend-development). Web checks also need the
 pinned edit-WASM assets described in [Mapping editing](mapping-editing.md).
 Backend tests need a restored Release build; the runner does not build it.
 
 | Task | Command | Scope |
 | --- | --- | --- |
-| Web and static checks | `npm run check` | Formatting, dependency/security and pure fixture checks, generated contracts and frontend/type builds. |
-| Web build | `npm run build` | Build Angular assets before publishing the server. |
-| Linux tooling checks | `npm run check:tooling` | Python 3.11+ mock suites for the backend test selector, browser launcher and compiler-image helper; no application startup, Docker access or browser execution. |
-| Small managed backend selection | `npm test` | The explicit `fast` group after a current full Release build; prints omitted groups. |
+| Web and static checks | `bun run check` | Formatting, dependency/security and pure fixture checks, generated contracts and frontend/type builds. |
+| Web build | `bun run build` | Build Angular assets before publishing the server. |
+| Linux tooling checks | `bun run check:tooling` | Python 3.11+ mock suites for the backend test selector, browser launcher and compiler-image helper; no application startup, Docker access or browser execution. |
+| Small managed backend selection | `bun run test` | The explicit `fast` group after a current full Release build; prints omitted groups. `bun test` invokes Bun's own test runner instead. |
 | Backend suite | `python3 tools/ci/run_tests.py` | Run the built solution tests; external prerequisites and opt-in lanes still apply. |
 | .NET formatting | `dotnet format dotnet/Braid.slnx --verify-no-changes --no-restore` | Check source formatting after restore. |
-| Generated contracts | `npm run contracts:check` | Check committed contract/type consistency; also compare generated files after host builds. |
+| Generated contracts | `bun run contracts:check` | Check committed contract/type consistency; also compare generated files after host builds. |
 | Targeted backend troubleshooting | `dotnet test dotnet/tests/Braid.Tests/Braid.Tests.csproj --configuration Release --no-build --no-restore --filter FullyQualifiedName~UserGuideTests` | Select an existing class explicitly. |
-| Browser scenarios | `npm run test:browser` | Use the isolated browser and prerequisite setup below. |
+| Browser scenarios | `bun run test:browser` | Use the isolated browser and prerequisite setup below. |
 
-`check:tooling` is a separate Linux/Python route. It is not part of `npm run check`,
+`check:tooling` is a separate Linux/Python route. It is not part of `bun run check`,
 which remains the web/static route for other platforms too.
 
 For an explicit backend selection, use `python3 tools/ci/run_tests.py --group NAME`;
@@ -371,9 +379,9 @@ Use the focused prerequisite owners: [Ferrule worker](ferrule-worker.md),
 [authored creation qualification](creation-sandbox-qualification.md),
 [regression browser](regression-browser.md) and [hosted acceptance](hosted-acceptance.md).
 
-The existing `npm run test:project-creation-browser`,
-`npm run test:mapping-metadata-browser`, `npm run test:native-mapping-upload-browser`
-and `npm run test:native-revision-append-browser` aliases keep their specific
+The existing `bun run test:project-creation-browser`,
+`bun run test:mapping-metadata-browser`, `bun run test:native-mapping-upload-browser`
+and `bun run test:native-revision-append-browser` aliases keep their specific
 permission and recovery scopes. Their fixture READMEs under `tools/` describe
 the required private bindings.
 
@@ -436,14 +444,14 @@ The owned HTTPS sign-in qualification drives the pinned Chrome for Testing throu
 real TLS, a mock OIDC issuer and the actual session modules hosted by the probe
 (see [transport admission](browser-https-network-admission.md)). It also needs
 `certutil`, `xvfb-run`, `Xvfb`, `xauth` and an explicit admission record that hashes
-the publications, Node, npm, Chromium and `certutil`. Prepare a fresh record after
+the publications, Bun, Chromium and `certutil`. Prepare a fresh record after
 every publication, in a private directory short enough for its Unix sockets:
 
 ```sh
 braid_admission="$(mktemp -d "${TMPDIR:-/tmp}/braid-ah.XXXXXXXX")"
 export BRAID_AUTH_BROWSER_ADMISSION_ROOT="$braid_admission"
 export BRAID_AUTH_BROWSER_ADMISSION_FILE="$braid_admission/admission.json"
-node tools/auth-browser-https/admit.mjs --approved
+bun tools/auth-browser-https/admit.mjs --approved
 ```
 
 Without a record the real-browser cases are skipped locally. CI always prepares
@@ -463,7 +471,7 @@ variables, preserves the scenario arguments and returns the child's exit status.
 Scenario-specific limits, display selection and authentication core-dump policy
 remain with their existing aliases and fixtures.
 
-After `npm ci`, use Chrome for Testing **157.0.8090.0** for Linux browser checks.
+After the frozen install, use Chrome for Testing **157.0.8090.0** for Linux browser checks.
 The Chromium bundled with the locked Playwright package lacks the
 [streaming-response fix](https://chromium.googlesource.com/chromium/src/+/62473ad0f747e245e514c93e741bb8e168a2a207)
 reported in [Playwright #42742](https://github.com/microsoft/playwright/issues/42742).
@@ -472,7 +480,7 @@ read it to EOF. Keep the application headers and strict failure assertions.
 Verify the archive checksum before extracting it:
 
 ```sh
-npx playwright install-deps chromium
+bun node_modules/@playwright/test/cli.js install-deps chromium
 braid_browser_directory="$(mktemp -d "${TMPDIR:-/tmp}/braid-chromium.XXXXXXXX")"
 curl --fail --location --retry 3 --output "$braid_browser_directory/chrome.zip" \
   https://storage.googleapis.com/chrome-for-testing-public/157.0.8090.0/linux64/chrome-linux64.zip
@@ -480,7 +488,7 @@ printf '%s  %s\n' 3ec877f440c1ea393c4f164ce5339dc0fd6b5384184a84b38550a78721c208
   unzip -q "$braid_browser_directory/chrome.zip" -d "$braid_browser_directory"
 BRAID_CHROMIUM_EXECUTABLE="$braid_browser_directory/chrome-linux64/chrome"
 export BRAID_CHROMIUM_EXECUTABLE
-npm run test:browser
+bun run test:browser
 ```
 
 CI uses this same version, checksum and executable override. Playwright does not
@@ -492,7 +500,7 @@ Linux system libraries are still required; see
 
 The harness runs the API in Development. Supply the configured immutable worker
 image for native viewer flows. Display-only fixtures exercise generic contract states.
-NuGet and npm lockfiles are committed. Domain/application assemblies remain
+NuGet and Bun lockfiles are committed. Domain/application assemblies remain
 independent of ASP.NET Core and provider SDK types, following the Wareboxes-style
 modular layout. Wolverine carries durable execution commands; its persistence and
 worker settings are separate from the browser-facing API.

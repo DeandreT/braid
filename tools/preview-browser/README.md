@@ -25,10 +25,10 @@ credentials.
 
 ## Run
 
-Build the Angular application, then publish the four products from the same build:
+From the repository root, build the Angular application, then publish the four products from the same build:
 
 ```sh
-npm ci && npm run build
+bun install --frozen-lockfile && bun run build
 dotnet build dotnet/Braid.slnx -c Release
 for item in server:apps/Braid.Server worker:apps/Braid.Worker \
     database:tools/Braid.DatabaseTool storage:tools/Braid.StorageTool; do
@@ -42,7 +42,7 @@ available locally, and Chrome for Testing in `BRAID_CHROMIUM_EXECUTABLE`:
 
 ```sh
 env -u WAYLAND_DISPLAY -u XDG_RUNTIME_DIR -u XDG_SESSION_TYPE xvfb-run -a -w 10 \
-  node tools/preview-browser/run.mjs --publications "$PUBLISH" \
+  bun tools/preview-browser/run.mjs --publications "$PUBLISH" \
   --worker-image "$BRAID_FERRULE_WORKER_IMAGE"
 ```
 

@@ -152,10 +152,8 @@ internal sealed record QualificationAdmission
     public required string ServerAssembly { get; init; }
     public required string ServerSha256 { get; init; }
     public required Dictionary<string, string> Assets { get; init; }
-    public required string Node { get; init; }
-    public required string NodeSha256 { get; init; }
-    public required string Npm { get; init; }
-    public required string NpmSha256 { get; init; }
+    public required string Bun { get; init; }
+    public required string BunSha256 { get; init; }
     public required string Chromium { get; init; }
     public required string ChromiumSha256 { get; init; }
     public required string Certutil { get; init; }

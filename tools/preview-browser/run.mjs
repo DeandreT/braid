@@ -1,9 +1,9 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 // Actual-API preview browser qualification. This operator owns one labeled PostgreSQL
 // container migrated to the current schema, a private storage root, the published
 // Braid.Server and Braid.Worker processes and the pinned Ferrule worker image, then runs the
 // live Playwright spec against them. No API reply or worker result is scripted.
-// Node core only. Passwords, cookies and tokens never leave this process and its children.
+// Standard library only. Passwords, cookies and tokens never leave this process and its children.
 import { execFileSync, spawn } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
 import {

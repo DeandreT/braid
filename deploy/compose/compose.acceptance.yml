@@ -10,13 +10,13 @@
 # - A local Ollama model for chat on an internal network, reached through the server's relay.
 # Use with: compose.yml, compose.ferrule-service.yml and compose.features.yml. See docs/hosted-acceptance.md.
 x-relay: &relay
-  image: ${BRAID_ACCEPTANCE_NODE_IMAGE:?Set the Node image}
+  image: ${BRAID_ACCEPTANCE_BUN_IMAGE:?Set the Bun image}
   restart: unless-stopped
   read_only: true
   cap_drop: [ALL]
   security_opt: [no-new-privileges:true]
   user: "65532:65532"
-  entrypoint: ["node"]
+  entrypoint: ["bun"]
   volumes:
     - ../../tools/hosted-acceptance:/opt/acceptance:ro
 
@@ -34,11 +34,6 @@ services:
     volumes:
       - blob-data:/data
     networks: [storage]
-    healthcheck:
-      test: ["CMD", "node", "-e", "require('net').connect(10000,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"]
-      interval: 2s
-      timeout: 2s
-      retries: 30
 
   blob-container:
     <<: *relay
@@ -46,7 +41,8 @@ services:
     command: ["/opt/acceptance/blob-container.mjs", "http://azurite:10000/devstoreaccount1", "braid-private"]
     networks: [storage]
     depends_on:
-      azurite: {condition: service_healthy}
+      # blob-container retries the signed request until the emulator is ready.
+      azurite: {condition: service_started}
 
   # Namespace for the one-shot storage tools: database access plus the loopback emulator relay.
   tools-relay:
@@ -54,7 +50,7 @@ services:
     command: ["/opt/acceptance/relay.mjs", "tcp", "127.0.0.1:10000=azurite:10000"]
     networks: [database, storage]
     healthcheck: &relay-health
-      test: ["CMD", "node", "-e", "require('net').connect(10000,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"]
+      test: ["CMD", "bun", "-e", "require('net').connect(10000,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"]
       interval: 2s
       timeout: 2s
       retries: 30

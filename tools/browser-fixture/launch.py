@@ -29,12 +29,12 @@ def launch_arguments(arguments, environment, display_from_env=False):
         "--server-num=" + display if display else "-a",
         "-w",
         "10",
-        "npm",
-        "--workspace",
-        "@braid/web",
+        "bun",
         "run",
+        "--cwd",
+        "apps/web",
         "test:e2e",
-        *(["--", *arguments] if arguments else []),
+        *arguments,
     ]
 
 

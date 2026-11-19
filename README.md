@@ -9,7 +9,7 @@ questions or work through changes. Ferrule powers the mapping engine.
 ## Start here
 
 - [User guide](docs/user-guide/overview.md): use the catalog, workbench and chat; also available in the app at `/help`.
-- [Local development](docs/development.md): prerequisites, full Linux setup and checks. `npm run dev` starts only the frontend.
+- [Local development](docs/development.md): prerequisites, full Linux setup and checks. `bun run dev` starts only the frontend.
 - [Consume a release](docs/consuming-a-release.md): verify the release manifest and select immutable container images.
 - [Documentation index](docs/README.md): developer contracts, operator procedures and design records.
 - [Architecture](docs/architecture.md): source boundaries, storage, identity and execution.

@@ -168,7 +168,7 @@ await runBrowserFixture({
     }
     function fullSqlRows(exclusions = {}) {
       // Fixed source table set, fixed scoped predicates only; PostgreSQL hashes full
-      // precision JSONB before Node sees it (including unsigned inode/time values).
+      // precision JSONB before Bun sees it (including unsigned inode/time values).
       const query =
         "SELECT to_json(encode(sha256(convert_to(jsonb_build_object(" +
         tables

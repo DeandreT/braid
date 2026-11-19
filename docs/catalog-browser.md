@@ -64,7 +64,7 @@ its existing Host behavior; catalog security settings are not relaxed for it.
 ## Verification
 
 The shell browser configuration covers entry and account navigation. The
-separate `npm run test:catalog-browser` command uses the packaged API origin and
+separate `bun run test:catalog-browser` command uses the packaged API origin and
 a disposable actual PostgreSQL/native-ingestion fixture. Both commands allocate
 an alternate virtual display. Catalog traces are disabled so framework request
 tokens are not retained in network recordings.

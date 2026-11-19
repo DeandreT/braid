@@ -83,7 +83,12 @@
   </header>
   @if (data(); as view) {
     @if (context(); as owner) {
-      <braid-lifecycle-panel [context]="owner" [scope]="view.project.scope" [name]="view.project.name" (changed)="retry()" />
+      <braid-lifecycle-panel
+        [context]="owner"
+        [scope]="view.project.scope"
+        [name]="view.project.name"
+        (changed)="retry()"
+      />
     }
     <p class="catalog-live" role="status">
       {{ view.page.mappings.length }} mappings shown.

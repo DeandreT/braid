@@ -1,4 +1,4 @@
-// Runs actual wasm in Node and the native worker on the same immutable fixtures.
+// Runs actual wasm in Bun and the native worker on the same immutable fixtures.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";

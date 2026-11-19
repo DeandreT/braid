@@ -67,11 +67,11 @@ fields `released`, `configurationSha256`, `operatorSha256`,
 and operator hashes and set the booleans after the corresponding checks succeed.
 The complete source manifest also binds the shared runtime.
 
-Node-only browser settings are `BRAID_PROJECT_CREATION_BROWSER_OPERATOR`,
+Host-side browser settings are `BRAID_PROJECT_CREATION_BROWSER_OPERATOR`,
 `BRAID_PROJECT_CREATION_BROWSER_OPERATOR_CONFIG`,
 `BRAID_PROJECT_CREATION_BROWSER_MANIFEST`, `BRAID_PROJECT_CREATION_BASE_URL`.
 The manifest/base values must equal the private configuration. The worker fixture
-spawns `node [absoluteOperator, '--config', privateConfig]`. No configuration,
+spawns `bun <absoluteOperator> --config <privateConfig>`. No configuration,
 password, token, key, fingerprint or raw body belongs in browser storage, tracing,
 attachments or the public manifest. Product host output is drained categorically.
 
@@ -144,7 +144,7 @@ Setup has300s; API stop/start/restart15/45/60s; checkpoint/capture15s;
 capability/membership10s; PG restart90s; shutdown120s. Existing backend deadlines
 and pool/SQL guards are unchanged. No unbounded or hidden retry is added.
 
-For response loss, the browser's Node route forwards the original real POST,
+For response loss, the host-side browser route forwards the original real POST,
 validates its actual201 and receipt privately, then aborts delivery to the page.
 The UI becomes uncertain. Deliberate Recover refreshes admission/token and sends
 the same original body/key; actual200 must return the identical historical receipt

@@ -156,7 +156,10 @@ function pageLeave(
   }
   if (
     route.routeConfig?.canActivate?.some(
-      (guard) => guard === leaveWorkspaceEntry || guard === enterSignIn || guard === enterPrivateWorkspace,
+      (guard) =>
+        guard === leaveWorkspaceEntry ||
+        guard === enterSignIn ||
+        guard === enterPrivateWorkspace,
     )
   )
     return true;
@@ -210,10 +213,21 @@ const enterOrganization: CanActivateFn = (route, state) =>
   afterGuard(requireSignIn(route, state), () => selectOrganization(route));
 
 function withOrganizationAdmission(route: Route): Route {
-  return { ...route, canActivate: [route.canActivate?.includes(leaveWorkspaceEntry) ? enterPrivateWorkspace : enterOrganization] };
+  return {
+    ...route,
+    canActivate: [
+      route.canActivate?.includes(leaveWorkspaceEntry)
+        ? enterPrivateWorkspace
+        : enterOrganization,
+    ],
+  };
 }
 
-const enterPrivateWorkspace: CanActivateFn = (route, state) => afterGuard(requireSignIn(route, state), () => requestAggregateLeave() && selectOrganization(route, true));
+const enterPrivateWorkspace: CanActivateFn = (route, state) =>
+  afterGuard(
+    requireSignIn(route, state),
+    () => requestAggregateLeave() && selectOrganization(route, true),
+  );
 
 function selectOrganization(
   route: ActivatedRouteSnapshot,
@@ -227,7 +241,8 @@ function selectOrganization(
   )
     return inject(Router).parseUrl("/catalog");
   const destination = valid ? organizationId : null;
-  if (!confirmed && organizationChange(destination) && !requestAggregateLeave()) return false;
+  if (!confirmed && organizationChange(destination) && !requestAggregateLeave())
+    return false;
   inject(CatalogContextStore).select(destination);
   return true;
 }
@@ -250,7 +265,10 @@ const standalone: Route[] = [
   {
     path: "retention",
     canActivate: [requireSignIn],
-    loadComponent: () => import("./administration/retention-page.component").then(m => m.RetentionPageComponent),
+    loadComponent: () =>
+      import("./administration/retention-page.component").then(
+        (m) => m.RetentionPageComponent,
+      ),
     title: "Data retention · Braid",
   },
   {
@@ -351,53 +369,58 @@ export const routes: Routes = [
     component: CatalogShellComponent,
     children: (
       [
-      {
-        path: "organizations/:organizationId/projects/:projectId/creation",
-        loadComponent: () =>
-          import("./catalog/creation/creation-library.component").then(
-            (m) => m.CreationLibraryComponent,
-          ),
-        title: "Your new mapping proposals · braid",
-      },
-      {
-        path: "organizations/:organizationId/projects/:projectId/creation/:proposalId",
-        loadComponent: () =>
-          import("./catalog/creation/creation-page.component").then(
-            (m) => m.CreationPageComponent,
-          ),
-        canDeactivate: [
-          (component: CreationPageComponent, _route, _state, next) =>
-            pageLeave(next, () => requestWorkspaceLeave(component)),
-        ],
-        canActivate: [leaveWorkspaceEntry],
-        runGuardsAndResolvers: "paramsOrQueryParamsChange",
-        title: "Review new mapping · braid",
-      },
-      ...[
-        "organizations/:organizationId/projects/:projectId/specs",
-        "organizations/:organizationId/projects/:projectId/specs/:bundleId",
-      ].map((path) => ({
-        path,
-        loadComponent: () =>
-          import("./catalog/specs/spec-page.component").then(
-            (m) => m.SpecPageComponent,
-          ),
-        canDeactivate: [
-          (component: SpecPageComponent, _route: ActivatedRouteSnapshot, _state: RouterStateSnapshot, next: RouterStateSnapshot) => pageLeave(next, () => requestWorkspaceLeave(component)),
-        ],
-        canActivate: [leaveWorkspaceEntry],
-        runGuardsAndResolvers: "paramsOrQueryParamsChange" as const,
-        title: "Specification intake · braid",
-      })),
-      {
-        path: "organizations/:organizationId/projects/:projectId/mappings/:mappingId/sandbox",
-        loadComponent: () =>
-          import("./catalog/sandbox/sandbox-page.component").then(
-            (module) => module.SandboxPageComponent,
-          ),
-        canDeactivate: [leaveSandbox],
-        title: "Local sandbox · braid",
-      },
+        {
+          path: "organizations/:organizationId/projects/:projectId/creation",
+          loadComponent: () =>
+            import("./catalog/creation/creation-library.component").then(
+              (m) => m.CreationLibraryComponent,
+            ),
+          title: "Your new mapping proposals · braid",
+        },
+        {
+          path: "organizations/:organizationId/projects/:projectId/creation/:proposalId",
+          loadComponent: () =>
+            import("./catalog/creation/creation-page.component").then(
+              (m) => m.CreationPageComponent,
+            ),
+          canDeactivate: [
+            (component: CreationPageComponent, _route, _state, next) =>
+              pageLeave(next, () => requestWorkspaceLeave(component)),
+          ],
+          canActivate: [leaveWorkspaceEntry],
+          runGuardsAndResolvers: "paramsOrQueryParamsChange",
+          title: "Review new mapping · braid",
+        },
+        ...[
+          "organizations/:organizationId/projects/:projectId/specs",
+          "organizations/:organizationId/projects/:projectId/specs/:bundleId",
+        ].map((path) => ({
+          path,
+          loadComponent: () =>
+            import("./catalog/specs/spec-page.component").then(
+              (m) => m.SpecPageComponent,
+            ),
+          canDeactivate: [
+            (
+              component: SpecPageComponent,
+              _route: ActivatedRouteSnapshot,
+              _state: RouterStateSnapshot,
+              next: RouterStateSnapshot,
+            ) => pageLeave(next, () => requestWorkspaceLeave(component)),
+          ],
+          canActivate: [leaveWorkspaceEntry],
+          runGuardsAndResolvers: "paramsOrQueryParamsChange" as const,
+          title: "Specification intake · braid",
+        })),
+        {
+          path: "organizations/:organizationId/projects/:projectId/mappings/:mappingId/sandbox",
+          loadComponent: () =>
+            import("./catalog/sandbox/sandbox-page.component").then(
+              (module) => module.SandboxPageComponent,
+            ),
+          canDeactivate: [leaveSandbox],
+          title: "Local sandbox · braid",
+        },
         { path: "", pathMatch: "full" as const, children: [] },
         {
           path: "organizations/:organizationId/projects/:projectId/mappings/:mappingId/operations",

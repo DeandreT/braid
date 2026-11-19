@@ -31,21 +31,20 @@ jobs:
       BRAID_AZURITE_IMAGE: mcr.microsoft.com/azure-storage/azurite@sha256:830430c1da1a2d537e08f3e6764dd1f5ae00cf0346bcaf625b968ec3f0971fd5
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          node-version-file: .node-version
+          bun-version-file: .bun-version
       - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
           global-json-file: global.json
-      - run: npm install --global npm@12.1.0
-      - run: npm ci
-      - run: npm ci --prefix tools/contracts-generator
+      - run: bun install --frozen-lockfile
+      - run: bun install --cwd tools/contracts-generator --frozen-lockfile
       - name: Build the pinned edit module
         run: python3 tools/edit-core/build.py --install
-      - run: npm run check
-      - run: npm run build
-      - run: npm run build:browser-session-probe
-      - run: node --check tools/browser-session-controlled/owner.mjs
+      - run: bun run check
+      - run: bun run build
+      - run: bun run build:browser-session-probe
+      - run: bun build --target=bun tools/browser-session-controlled/owner.mjs --outdir "$RUNNER_TEMP/browser-session-check"
       - name: Install pinned worker toolchain
         run: rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy
       - name: Verify the native worker
@@ -63,7 +62,7 @@ jobs:
         run: |
           CARGO_TARGET_DIR=target/edit-qualification cargo +1.98.1 build --manifest-path engines/ferrule-edit-wasm/Cargo.toml --release --target wasm32-unknown-unknown --features qualification --locked
           wasm-bindgen --target web --out-dir artifacts/edit-qualification target/edit-qualification/wasm32-unknown-unknown/release/braid_ferrule_edit_wasm.wasm
-          node tools/edit-core/cross-target.mjs artifacts/edit-qualification/braid_ferrule_edit_wasm.js artifacts/edit-qualification/braid_ferrule_edit_wasm_bg.wasm target/ferrule-host/debug/braid-ferrule-host engines/ferrule-host/tests/fixtures
+          bun tools/edit-core/cross-target.mjs artifacts/edit-qualification/braid_ferrule_edit_wasm.js artifacts/edit-qualification/braid_ferrule_edit_wasm_bg.wasm target/ferrule-host/debug/braid-ferrule-host engines/ferrule-host/tests/fixtures
           # The browser edit qualification reuses this native host; later steps use the image build, so free the runner disk.
           install -m 0555 target/ferrule-host/debug/braid-ferrule-host "$RUNNER_TEMP/braid-edit-native-host"
           rm -rf "$CARGO_TARGET_DIR" target/edit-qualification
@@ -108,7 +107,7 @@ jobs:
       - run: dotnet build dotnet/Braid.slnx --configuration Release --no-restore
       - name: Verify generated mapping contracts
         run: |
-          npm run contracts:check
+          bun run contracts:check
           git diff --exit-code -- contracts apps/web/src/api/generated.ts
       - name: Publish exact host qualification artifacts
         run: |
@@ -120,7 +119,7 @@ jobs:
           printf 'BRAID_HOST_PRIVACY_PROBE_PATH=%s\n' "$braid_host_qualification/probe/Braid.HostPrivacyProbe.dll" >> "$GITHUB_ENV"
       - name: Install isolated browser dependencies
         run: |
-          npx playwright install-deps chromium
+          bun node_modules/@playwright/test/cli.js install-deps chromium
           sudo apt-get install --yes --no-install-recommends libnss3-tools
       - name: Install the pinned Chrome for Testing build
         run: |
@@ -132,13 +131,13 @@ jobs:
           mkdir "$braid_browser_directory"
           unzip -q "$braid_browser_archive" -d "$braid_browser_directory"
           printf 'BRAID_CHROMIUM_EXECUTABLE=%s\n' "$braid_browser_directory/chrome-linux64/chrome" >> "$GITHUB_ENV"
-      - run: npm run test:auth-https-source
+      - run: bun run test:auth-https-source
       - name: Verify the isolated browser edit core
-        run: env -u WAYLAND_DISPLAY -u XDG_RUNTIME_DIR -u XDG_SESSION_TYPE -u DBUS_SESSION_BUS_ADDRESS xvfb-run -a node tools/edit-core/browser-qualification.mjs artifacts/edit-qualification "$RUNNER_TEMP/braid-edit-native-host" artifacts/edit-browser.json engines/ferrule-host/tests/fixtures
+        run: env -u WAYLAND_DISPLAY -u XDG_RUNTIME_DIR -u XDG_SESSION_TYPE -u DBUS_SESSION_BUS_ADDRESS xvfb-run -a bun tools/edit-core/browser-qualification.mjs artifacts/edit-qualification "$RUNNER_TEMP/braid-edit-native-host" artifacts/edit-browser.json engines/ferrule-host/tests/fixtures
       - name: Prepare owned HTTPS browser admission
-        run: node tools/auth-browser-https/admit.mjs --approved
+        run: bun tools/auth-browser-https/admit.mjs --approved
       - name: Verify the CI test launcher
-        run: npm run check:tooling
+        run: bun run check:tooling
       - name: Verify the qualification capture owner
         run: python3 -m unittest discover -s tools/qualification-capture -p 'test_*.py'
       - name: Verify the .NET solution shard
@@ -148,10 +147,10 @@ jobs:
           BRAID_OPENAPI_INCREMENTAL_TESTS: "1"
       - name: Browser verification on a virtual display
         if: matrix.partition == 'browser'
-        run: npm run test:browser
+        run: bun run test:browser
       - name: Browser verification through the actual CSP shell
         if: matrix.partition == 'browser'
-        run: BRAID_EDIT_SHELL_DLL="$BRAID_HOST_TEST_SERVER_PATH" BRAID_EDIT_SHELL_ALL=1 env -u WAYLAND_DISPLAY -u XDG_RUNTIME_DIR -u XDG_SESSION_TYPE -u DBUS_SESSION_BUS_ADDRESS xvfb-run -a npm --workspace @braid/web run test:e2e -- --config playwright.edit-shell.config.ts
+        run: BRAID_EDIT_SHELL_DLL="$BRAID_HOST_TEST_SERVER_PATH" BRAID_EDIT_SHELL_ALL=1 env -u WAYLAND_DISPLAY -u XDG_RUNTIME_DIR -u XDG_SESSION_TYPE -u DBUS_SESSION_BUS_ADDRESS xvfb-run -a bun run --cwd apps/web test:e2e --config playwright.edit-shell.config.ts
 
   # Keep the existing required check name and reject a failed or cancelled shard.
   verify:

@@ -78,7 +78,7 @@ internal sealed class AuthBrowserHttpsCase
         admission = PrivateQualificationFiles.Input<QualificationAdmission>(parent, admissionFile);
         QualificationWire.Require(admission.Version == 1 && admission.Approved && admission.Root == parent);
         CheckFile(admission.ProbeAssembly, admission.ProbeSha256); CheckFile(admission.ServerAssembly, admission.ServerSha256);
-        CheckFile(admission.Node, admission.NodeSha256); CheckFile(admission.Npm, admission.NpmSha256);
+        CheckFile(admission.Bun, admission.BunSha256);
         CheckFile(admission.Chromium, admission.ChromiumSha256); CheckFile(admission.Certutil, admission.CertutilSha256);
         QualificationWire.Require(Path.IsPathFullyQualified(admission.SourceRoot) && new DirectoryInfo(admission.SourceRoot).LinkTarget is null);
         root = Path.Combine(parent, "c-" + Guid.NewGuid().ToString("N")[..8]);
@@ -143,8 +143,8 @@ internal sealed class AuthBrowserHttpsCase
             organization = data.Project.OrganizationId.ToString("D"),
             assets = assets.Keys.ToArray(),
             home,
-            node = admission.Node,
-            nodeSha256 = admission.NodeSha256,
+            bun = admission.Bun,
+            bunSha256 = admission.BunSha256,
             chromium = admission.Chromium,
             chromiumSha256 = admission.ChromiumSha256
         }, QualificationWire.Json));
@@ -152,7 +152,7 @@ internal sealed class AuthBrowserHttpsCase
         environment["BRAID_AUTH_BROWSER_INPUT"] = browserInput;
         environment["BRAID_AUTH_BROWSER_ROOT"] = root;
         environment["BRAID_CHROMIUM_EXECUTABLE"] = admission.Chromium;
-        browser = QualificationChild.Start(admission.Npm, ["run", "test:auth-https-browser"], admission.SourceRoot, environment);
+        browser = QualificationChild.Start(admission.Bun, ["run", "test:auth-https-browser"], admission.SourceRoot, environment);
         await browser.RequireSuccessAsync(TimeSpan.FromMinutes(5));
     }
     private async Task StartProbeAsync()
@@ -235,7 +235,7 @@ internal sealed class AuthBrowserHttpsCase
         var environment = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (string name in new[] { "PATH", "DOTNET_ROOT", "DOTNET_ROOT_X64", "LANG", "LC_ALL", "TZ" })
             if (Environment.GetEnvironmentVariable(name) is { } value) environment[name] = value;
-        environment["PATH"] = Path.GetDirectoryName(admission.Node) + ":" + (environment.GetValueOrDefault("PATH") ?? "/usr/bin:/bin");
+        environment["PATH"] = Path.GetDirectoryName(admission.Bun) + ":" + (environment.GetValueOrDefault("PATH") ?? "/usr/bin:/bin");
         environment["HOME"] = home; environment["TMPDIR"] = root; environment["XDG_DATA_HOME"] = Path.Combine(home, ".local/share");
         environment["DOTNET_CLI_HOME"] = home; environment["DOTNET_ADD_GLOBAL_TOOLS_TO_PATH"] = "false";
         environment["DOTNET_ENVIRONMENT"] = "Production"; environment["ASPNETCORE_ENVIRONMENT"] = "Production";

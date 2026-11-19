@@ -19,7 +19,7 @@ const methods = ["get", "put", "post", "delete", "options", "head", "patch"];
 
 if (process.argv.length > 2) {
   console.error(
-    "Usage: node tools/contracts-generator/check-specifications.mjs",
+    "Usage: bun tools/contracts-generator/check-specifications.mjs",
   );
   process.exit(1);
 }

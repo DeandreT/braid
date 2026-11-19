@@ -486,7 +486,7 @@ Database evidence comes from the `database-roles` job started with a replacement
 PostgreSQL client signs in as the migration login in read-only transactions
 (`default_transaction_read_only`) and prints only counts, IDs and digests. The endpoints are internal,
 so calls run as executions of `<name>-qualify-caller`, a manual job from
-`deploy/azure/qualification/caller.bicep` that runs `caller.js` in the Node image pinned by
+`deploy/azure/qualification/caller.bicep` that runs `caller.js` in the Bun image pinned by
 `deploy/container/Dockerfile`, with no identity, registry credential or volume. The harness obtains the
 caller's app-only tokens on the operator's machine through the client-credentials grant and gives them
 to the job only as secure deployment parameters, from a private file. Each call prints its status,

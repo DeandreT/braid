@@ -20,7 +20,7 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   webServer: {
-    command: `npm run dev -- --port ${port} --no-hmr`,
+    command: `bun run dev --port ${port} --no-hmr`,
     cwd: baseline ? `${baseline}/apps/web` : undefined,
     url: `http://127.0.0.1:${port}`,
     reuseExistingServer: false,

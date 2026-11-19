@@ -24,8 +24,7 @@ def linux(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--work-root', type=Path, required=True)
-    parser.add_argument('--node', type=Path, required=True)
-    parser.add_argument('--npm-cli', type=Path, required=True)
+    parser.add_argument('--bun', type=Path, required=True)
     parser.add_argument('--worker-image', required=True)
     parser.add_argument('--scenario', choices=['regression', 'build'], default='regression')
     parser.add_argument('--read-port', type=int, default=4114)
@@ -38,11 +37,10 @@ def main():
     root = Path(__file__).resolve().parents[2]
     status = subprocess.check_output(['git', 'status', '--porcelain'], cwd=root, text=True)
     assert not status.strip(), 'Commit the reviewed fixture source before creating an immutable export.'
-    assert subprocess.check_output([str(args.node), '--version'], text=True).strip() == 'v22.23.3'
-    environment = {**os.environ, 'PATH': str(args.node.parent) + os.pathsep + str(args.npm_cli.parent.parent.parent / '.bin') + os.pathsep + os.environ['PATH'],
+    assert subprocess.check_output([str(args.bun), '--version'], text=True).strip() == '1.4.5'
+    environment = {**os.environ, 'PATH': str(args.bun.parent) + os.pathsep + os.environ['PATH'],
                    'PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD': '1'}
-    assert subprocess.check_output([str(args.node), str(args.npm_cli), '--version'], env=environment, text=True).strip() == '12.1.0'
-    subprocess.run([str(args.node), str(args.npm_cli), 'run', 'build'], cwd=root, env=environment, check=True)
+    subprocess.run([str(args.bun), 'run', 'build'], cwd=root, env=environment, check=True)
     identity = str(uuid.uuid4())
     output = args.work_root / ('braid-' + args.scenario + '-browser-' + identity); output.mkdir(mode=0o700)
     archive = output / 'source.tar'

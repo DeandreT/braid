@@ -10,7 +10,7 @@ export default defineConfig({
     launchOptions: { executablePath: process.env.BRAID_CHROMIUM_EXECUTABLE },
   },
   webServer: {
-    command: "npm run dev -- --port 5194 --no-hmr",
+    command: "bun run dev --port 5194 --no-hmr",
     url: "http://127.0.0.1:5194",
     reuseExistingServer: false,
     timeout: 120000,

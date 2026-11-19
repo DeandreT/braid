@@ -54,7 +54,7 @@ type PrivatePost = {
 type Delivery = "normal" | "lose" | "hold-delivery" | "hold-forward";
 type Gate = { readonly entered: () => boolean; readonly release: () => void };
 
-/** Every product request remains real. Original envelopes and receipts stay only in Node memory. */
+/** Every product request remains real. Original envelopes and receipts stay only in fixture memory. */
 class ActualCreationWire {
   private readonly posts: PrivatePost[] = [];
   private readonly readTasks: Promise<void>[] = [];

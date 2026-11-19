@@ -21,7 +21,22 @@ test("only shipped editor assets receive wasm permission and missing paths never
   mkdirSync(join(root, "edit"));
   writeFileSync(join(root, "edit/worker.js"), "/* worker */");
   writeFileSync(join(root, "edit/core.wasm"), "wasm");
-  symlinkSync(join(root, "edit/worker.js"), join(root, "edit/core.js"));
+  // A directory junction exercises the same link boundary on Windows without
+  // requiring elevated file-symlink privileges on contributors' machines.
+  let linkedAsset;
+  if (process.platform === "win32") {
+    mkdirSync(join(root, "unshipped"));
+    writeFileSync(join(root, "unshipped/README.md"), "private");
+    symlinkSync(
+      join(root, "unshipped"),
+      join(root, "edit/third-party"),
+      "junction",
+    );
+    linkedAsset = "/third-party/README.md";
+  } else {
+    symlinkSync(join(root, "edit/worker.js"), join(root, "edit/core.js"));
+    linkedAsset = "/core.js";
+  }
   const middleware = editorMiddleware(root);
   const server = createServer((request, response) => {
     response.setHeader("Content-Security-Policy", "default-src 'none'");
@@ -44,7 +59,13 @@ test("only shipped editor assets receive wasm permission and missing paths never
       );
       await response.arrayBuffer();
     }
-    for (const suffix of ["", "/", "/missing.js", "/core.js", "/private.txt"]) {
+    for (const suffix of [
+      "",
+      "/",
+      "/missing.js",
+      linkedAsset,
+      "/private.txt",
+    ]) {
       const response = await fetch(`${origin}/edit${suffix}`);
       assert.equal(response.status, 404);
       assert.doesNotMatch(
