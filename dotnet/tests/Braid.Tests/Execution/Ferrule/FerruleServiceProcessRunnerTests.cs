@@ -20,7 +20,7 @@ namespace Braid.Tests;
 public sealed class FerruleServiceProcessRunnerTests
 {
     [ServiceEquivalenceFact]
-    public async Task Protobuf_and_Xbrl_preserve_native_artifacts_across_runners_and_failed_requests()
+    public async Task Native_byte_formats_preserve_artifacts_across_runners_and_failed_requests()
     {
         var root = TemporaryRoot();
         var workers = new List<IAsyncDisposable>();
@@ -30,10 +30,12 @@ public sealed class FerruleServiceProcessRunnerTests
             var docker = Own(workers, new DockerInspectionWorkerRunner(new DockerInspectionWorkerOptions("/usr/bin/docker",
                 Environment.GetEnvironmentVariable("BRAID_FERRULE_WORKER_IMAGE")!, profile: DockerWorkerProfile.Preview)));
             var comparing = new ComparingRunner(docker, Own(workers, new ProcessWorkerRunner(Options(root, DockerWorkerProfile.Preview))));
+            var workbook = Convert.FromBase64String(System.Text.Json.JsonSerializer.Deserialize<string>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "FerruleFixtures", "xlsx-portable-bytes.json")))!);
             foreach (var (format, fixture, valid, invalid) in new[]
             {
                 (NativeDocumentFormat.Protobuf, "protobuf", new byte[] {10, 3, 65, 0, 66}, new byte[] {10, 3, 65}),
-                (NativeDocumentFormat.Xbrl, "xbrl-instance", DocumentPreviewTestData.XbrlInstance("5"), DocumentPreviewTestData.XbrlInstance("not-a-number"))
+                (NativeDocumentFormat.Xbrl, "xbrl-instance", DocumentPreviewTestData.XbrlInstance("5"), DocumentPreviewTestData.XbrlInstance("not-a-number")),
+                (NativeDocumentFormat.Xlsx, "xlsx-portable", workbook, workbook.Concat(new byte[] { 0 }).ToArray())
             })
             {
                 var native = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "FerruleFixtures", fixture + ".native.json"));
@@ -56,13 +58,13 @@ public sealed class FerruleServiceProcessRunnerTests
                     Assert.Equal(format.MediaType, output.MediaType);
                     Assert.Equal(settings.Output, output.DocumentSettings);
                     var bytes = output.CopyBytes();
-                    if (format == NativeDocumentFormat.Protobuf) Assert.Equal(valid, bytes);
+                    if (format != NativeDocumentFormat.Xbrl) Assert.Equal(valid, bytes);
                     else Assert.Equal("5", System.Xml.Linq.XDocument.Parse(Encoding.UTF8.GetString(bytes)).Descendants(System.Xml.Linq.XName.Get("Amount", "urn:a")).Single().Value);
                     if (original is not null) Assert.Equal(original, bytes);
                     original = bytes;
                 }
             }
-            Assert.Equal(6, comparing.Compared);
+            Assert.Equal(9, comparing.Compared);
         }
         catch (Exception error) { primary = error; }
         finally { await CompleteCleanupAsync(workers, root, primary); }

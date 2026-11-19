@@ -223,6 +223,8 @@ internal static class CompiledInvocation
             // This refusal belongs specifically to the pinned reader's canonical-package check.
             // Other codec/mapping errors may describe output, not malformed input.
             if (native == NativeDocumentFormat.Xlsx && cause is InvalidDataException { Message: "Unsupported flat workbook package" }) return new("invalidInput");
+            if (native == NativeDocumentFormat.Protobuf && cause is InvalidDataException { Message: "Truncated protobuf field" }) return new("invalidInput");
+            if (native == NativeDocumentFormat.Xbrl && cause is System.Xml.XmlException) return new("invalidInput");
             if (cause is OutputLimitException) return new("resourceLimit");
             if (xml && cause is CompiledXmlBytes.InputFailure failure) return new(failure.ResourceLimit ? "resourceLimit" : "invalidInput");
             if (xml && cause is XmlDocumentException document) return new(document.IsResourceLimit ? "resourceLimit" : "invalidInput");
