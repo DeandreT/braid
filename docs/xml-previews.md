@@ -124,3 +124,11 @@ compares the original stored bytes again. Canonical equivalence is not build evi
 
 Compiled XML execution remains unavailable. `unsupportedXmlBuild` is the fixed
 preflight refusal, even if a supplied capability snapshot claims support.
+
+`python tools/compiled-xml/check_interfaces.py` exercises the pinned generated
+byte APIs on a small authored mapping, using the locked Cargo dependencies and
+pinned .NET SDK/reference pack. It compares all outputs, selected primary and
+selected named output against the original native output bytes and checks the
+aggregate output budget at its boundary. The driver accepts no external mapping
+or assembly. This interface check does not qualify production projection limits,
+the isolated runtime protocol or an HTTP endpoint.
