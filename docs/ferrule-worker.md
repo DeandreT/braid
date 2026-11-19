@@ -13,7 +13,7 @@ See [Ferrule projection](ferrule-projection.md) for explanation semantics.
 
 ## Native authority and results
 
-Ferrule libraries are pinned to `740af0c38ede7d814a17146bab2bffd7301320c9`.
+Ferrule libraries are pinned to `796eb8230561f200ca81c153c946a8fe08884e75`.
 `mapping::project_file::decode_bytes` admits the file;
 `engine::validate` supplies validation issues and typed owners. The worker never
 evaluates mappings or resolves design-time resources. Inspection returns boundary
