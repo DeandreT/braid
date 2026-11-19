@@ -35,7 +35,10 @@ public sealed partial class NativeShipmentPackagePilot(PostgresFixture fixture, 
     [NativeShipmentPilotFact]
     public Task Timeout_and_child_memory_limit_leave_sibling_orders_within_local_budget() => Rehearse(false, boundedFaults: true);
 
-    private async Task Rehearse(bool transport, bool boundedFaults = false)
+    [NativeShipmentPilotFact]
+    public Task Live_document_endpoint_returns_the_released_945_and_replays_its_original_bytes() => Rehearse(false, endpoint: true);
+
+    private async Task Rehearse(bool transport, bool boundedFaults = false, bool endpoint = false)
     {
         var root = FerruleServiceTestSupport.TemporaryRoot();
         try
@@ -102,6 +105,19 @@ public sealed partial class NativeShipmentPackagePilot(PostgresFixture fixture, 
             }
             var qa = await Stage(original, false); Assert.Equal(BuildQualificationRequestOutcome.Created, qa.Outcome);
             var a = await test.Request(qa.Qualification!, null); Assert.Equal(ReleaseTransitionOutcome.Activated, await test.Apply(a)); await Invoke(a);
+            if (endpoint)
+            {
+                var caller = new MachinePrincipal(MachinePrincipal.Entra, EntraProtocolFixturePolicy.Tenant, Guid.NewGuid());
+                await using var grants = new PostgresInvocationGrantStore(test.Case.RegressionConnectionString("braid_invocation_grant_writer"));
+                Assert.Equal(InvocationGrantOutcome.Applied, await grants.GrantAsync(actor, new(Guid.NewGuid(), target, caller)));
+                await using var ledger = new PostgresInvocationLedger(test.Case.RegressionConnectionString("braid_invocation_writer"));
+                var service = new MachineInvocationService(ledger, test.Store, principal => new(test.Store,
+                    new(runs, new BuildControlService(builds, projects, new PostgresRevisionReportMetadataReader(reports), new RegressionRunReadService(evidence, cases)),
+                        builds, new PostgresBuildObjectStore(builds, new LocalReleasePersistenceTests.NoNative(), principal), runtime)),
+                    TimeProvider.System, Braid.MachineEndpoint.MappingEndpointResources.Limits);
+                await InvokeHttp(target, a.ReleaseId, caller, service, () => child.Available);
+                return;
+            }
             var b = a;
             if (!boundedFaults)
             {
