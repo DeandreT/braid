@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Braid product release manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "version", "sourceCommit", "platform", "images"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "version": { "type": "string", "pattern": "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?![\\s\\S])" },
+    "sourceCommit": { "type": "string", "pattern": "^[0-9a-f]{40}(?![\\s\\S])" },
+    "platform": { "type": "string", "const": "linux/amd64" },
+    "images": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["server", "edge", "worker", "mappingEndpoint", "ferruleService"],
+      "properties": {
+        "server": { "$ref": "#/$defs/image" },
+        "edge": { "$ref": "#/$defs/image" },
+        "worker": { "$ref": "#/$defs/image" },
+        "mappingEndpoint": { "$ref": "#/$defs/image" },
+        "ferruleService": { "$ref": "#/$defs/image" }
+      }
+    },
+    "ferrule": {
+      "description": "Optional pins measured from images.ferruleService; build binds native and toolchain.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["native", "toolchain", "build", "runtime"],
+      "properties": {
+        "native": { "$ref": "#/$defs/sha256" },
+        "toolchain": { "$ref": "#/$defs/sha256" },
+        "build": { "$ref": "#/$defs/sha256" },
+        "runtime": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  },
+  "$defs": {
+    "image": {
+      "description": "A fully qualified, untagged OCI repository reference at a registry SHA-256 manifest digest.",
+      "type": "string",
+      "pattern": "^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?::[1-9][0-9]{0,4})?(?:/[a-z0-9]+(?:(?:[.]|__?|-+)[a-z0-9]+)*)+@sha256:[0-9a-f]{64}(?![\\s\\S])"
+    },
+    "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}(?![\\s\\S])" }
+  }
+}
