@@ -155,7 +155,7 @@ public sealed class ProcessCompiledRuntimeRunner : IInspectionWorkerRunner, IAsy
                 _ => ProcessCompiledRuntimeOptions.Profile.MaximumOutputBytes
             };
             var output = operation.CreateOriginal<byte[]>(CompiledRuntimeIoKind.StandardOutput,
-                () => DrainAsync(child.StandardOutput.BaseStream, maximumOutput, io.Token));
+                () => DrainAsync(child.StandardOutput.BaseStream, maximumOutput, io.Token, options.ObserveProbeMarker));
             _ = operation.Track(CompiledRuntimeIoKind.StandardOutput, output);
             // The writer's synchronous close is owned too; it cannot hold this method before its task is tracked.
             var write = operation.CreateOriginal(CompiledRuntimeIoKind.Writer, async () =>
@@ -239,13 +239,14 @@ public sealed class ProcessCompiledRuntimeRunner : IInspectionWorkerRunner, IAsy
         finally { if (!options.WithholdEndOfInput) child.StandardInput.Close(); }
     }
 
-    private static async Task<byte[]> DrainAsync(Stream stream, int maximum, CancellationToken token)
+    private static async Task<byte[]> DrainAsync(Stream stream, int maximum, CancellationToken token, Action<byte>? firstByte = null)
     {
         using var result = new MemoryStream();
         var buffer = new byte[8192]; int count;
         while ((count = await stream.ReadAsync(buffer, token).ConfigureAwait(false)) != 0)
         {
             if (count > maximum - result.Length) throw new OutputLimitException();
+            if (result.Length == 0) firstByte?.Invoke(buffer[0]);
             result.Write(buffer, 0, count);
         }
         return result.ToArray();

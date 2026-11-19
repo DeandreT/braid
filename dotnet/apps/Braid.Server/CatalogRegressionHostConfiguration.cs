@@ -31,6 +31,7 @@ public static class CatalogRegressionHostConfiguration
             _ => throw new ArgumentException("Notification enablement must be true or false.")
         };
         var xmlEnabled = XmlPreviewAdmission.Enabled(environment, XmlPreviewAdmission.RegressionEnabledSetting, enabled);
+        Braid.Jobs.SavedXmlComparisonRegistration.Register(services, environment, xmlEnabled);
         if (xmlEnabled) CatalogPreviewSourceAdmission.RequireNativeSources(services);
         if (!enabled && !notifications) return;
         if (!catalogEnabled) throw new ArgumentException("Regression and notification APIs require an enabled catalog.");
@@ -87,6 +88,6 @@ public static class CatalogRegressionHostConfiguration
         services.AddSingleton<IRegressionRunMetadataReader>(provider =>
             (IRegressionRunMetadataReader)provider.GetRequiredService<IRegressionRunReader>());
         services.AddSingleton<IRegressionRunStore>(_ => new PostgresRegressionRunStore(runWriter, writer: true));
-        services.AddSingleton(provider => new RegressionRunReadService(provider.GetRequiredService<IRegressionRunReader>(), provider.GetRequiredService<IRegressionCaseReader>()));
+        services.AddSingleton(provider => new RegressionRunReadService(provider.GetRequiredService<IRegressionRunReader>(), provider.GetRequiredService<IRegressionCaseReader>(), provider.GetService<SavedXmlComparison>()));
     }
 }

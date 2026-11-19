@@ -8,6 +8,7 @@ Native.RequirePrivacy();
 await Task.Yield(); // The real host must support the asynchronous managed entrypoint as well.
 var outside = (await Console.In.ReadToEndAsync()).Trim();
 if (outside.Length is < 1 or > 4096) return 1;
+if (outside is "canonical-load" or "canonical-output") return CanonicalCallProbe.Run(outside);
 if (outside == "bounded-address-space") Environment.Exit(Native.RefuseReservation());
 // Qualification of post-ready exits: managed code can end the hosted process with any status.
 if (outside.StartsWith("exit=", StringComparison.Ordinal) && int.TryParse(outside.AsSpan(5), out var status))

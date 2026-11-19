@@ -1,5 +1,6 @@
 using System.Text;
 using Npgsql;
+using Microsoft.Extensions.DependencyInjection;
 using Braid.Application;
 using Braid.Application.Regression;
 using Braid.Contracts.Operations;
@@ -23,7 +24,15 @@ public sealed class PostgresRegressionRunTests(PostgresFixture fixture)
             await using var runner = new Braid.MappingBackends.Workers.ProcessCompiledRuntimeRunner(new(options.NativeIdentity,
                 options.RuntimeAssembly, options.LauncherExecutable, root, options.DotnetRoot)
                 { Operation = Braid.MappingBackends.Workers.CompiledRuntimeOperation.XmlCanonicalComparison });
-            var worker = new SavedXmlComparison(new Braid.MappingBackends.XmlCanonicalComparisonWorker(runner, new(new(8192, 8), new(4096, 4096, 8192))));
+            var settings = new Dictionary<string, string?>
+            {
+                ["ENABLED"] = "true", ["ASSEMBLY"] = options.RuntimeAssembly, ["LAUNCHER"] = options.LauncherExecutable,
+                ["TEMP_ROOT"] = root, ["DOTNET_ROOT"] = options.DotnetRoot, ["IDENTITY"] = runner.RuntimeIdentity
+            };
+            var services = new ServiceCollection();
+            Braid.Jobs.SavedXmlComparisonRegistration.Register(services, name => settings.GetValueOrDefault(name["BRAID_REGRESSIONS_XML_C14N_".Length..]), true);
+            await using var provider = services.BuildServiceProvider();
+            var worker = provider.GetRequiredService<SavedXmlComparison>();
             var metadata = XmlDocumentMetadata.WithoutHints;
             RegressionOutputSet Output(string xml) => RegressionOutputSet.Capture([RegressionOutput.Capture(RegressionOutputKey.Primary,
                 Encoding.UTF8.GetBytes(xml), mediaType: XmlDocumentPolicy.MediaType, xmlMetadata: metadata)]);
@@ -34,6 +43,10 @@ public sealed class PostgresRegressionRunTests(PostgresFixture fixture)
                 new(PreviewTargetSelection.Primary, old.Replay.CurrentDateTime, PreviewLimits.Default,
                     new(null, XmlPreviewWorkflowTests.Input, xmlMetadata: metadata), [], []), SavedXmlComparison.Policy, Output("<Order code='A'/>")));
             Assert.Equal(RegressionRunSubmitOutcome.Created, await test.SubmitAsync());
+            var oversized = Output("<Order>" + new string('a', 256 * 1024) + "</Order>");
+            var limited = await worker.CompareAsync(test.Value, MappingPreviewStatus.Succeeded, oversized, default);
+            Assert.Equal(RegressionComparisonOutcome.NotEvaluated, limited.Outcome);
+            Assert.Equal(RegressionNotEvaluatedReason.ResourceLimit, limited.NotEvaluatedReason);
             var comparison = await worker.CompareAsync(test.Value, MappingPreviewStatus.Succeeded, observed, default);
             Assert.True(await test.CompleteAsync(await test.ClaimAsync(), RegressionCaseExecution.Complete(MappingPreviewStatus.Succeeded, observed, comparison, XmlPreviewAdmission.Profile)));
             var reader = new RegressionRunReadService(test.Reader, test.Cases.Reader, worker);

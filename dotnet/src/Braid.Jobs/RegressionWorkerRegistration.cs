@@ -30,6 +30,7 @@ public static class RegressionWorkerRegistration
             _ => throw new ArgumentException("Regression worker enablement must be true or false.")
         };
         var xmlEnabled = XmlPreviewAdmission.Enabled(environment, XmlPreviewAdmission.RegressionEnabledSetting, enabled);
+        SavedXmlComparisonRegistration.Register(services, environment, xmlEnabled);
         if (!enabled) return services;
         var csvEnabled = environment(CsvDocumentPolicy.RegressionEnabledSetting) switch
         {
@@ -74,7 +75,7 @@ public static class RegressionWorkerRegistration
             new PostgresRevisionReportMetadataReader(provider.GetRequiredKeyedService<PostgresRevisionReportDatabase>(Key)),
             provider.GetRequiredService<IPrivateObjectStore>(),
             provider.GetKeyedService<IMappingPreviewBackend>(PreviewBackendKey) ?? provider.GetRequiredService<IMappingPreviewBackend>(),
-            identity, documentIdentity, csvIdentity, xmlIdentity, NativeDocumentFormat.EnabledFormats(environment, true).Select(f => new RegressionRuntimeIdentity(identity.BackendId, identity.EngineRevision, identity.BackendBuild, f.AdapterBuild, f.Profile)).ToArray()));
+            identity, documentIdentity, csvIdentity, xmlIdentity, NativeDocumentFormat.EnabledFormats(environment, true).Select(f => new RegressionRuntimeIdentity(identity.BackendId, identity.EngineRevision, identity.BackendBuild, f.AdapterBuild, f.Profile)).ToArray(), provider.GetService<SavedXmlComparison>()));
         services.AddSingleton<IRegressionCaseExecutor>(provider => provider.GetRequiredService<RegressionCaseExecutionService>());
         services.AddSingleton<IRegressionEvaluationExecutor>(provider => provider.GetRequiredService<RegressionCaseExecutionService>());
         services.AddSingleton<IAutomationQueue>(_ => new PostgresAutomationStore(run, writer: true));

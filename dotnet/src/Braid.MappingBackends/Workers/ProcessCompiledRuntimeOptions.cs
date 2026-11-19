@@ -30,6 +30,7 @@ public sealed class ProcessCompiledRuntimeOptions
     // Trusted composition only. No request field can select a process operation.
     internal CompiledRuntimeOperation Operation { get; init; }
     internal bool WithholdEndOfInput { get; init; }
+    internal Action<byte>? ObserveProbeMarker { get; init; }
     // Parent-side qualification seams only. None is populated from service/request configuration.
     internal Action<ProcessCompiledRuntimeRunner.OwnedOperation>? ObserveOperation { get; init; }
     internal Action<CancellationToken>? ObserveShutdown { get; init; }
