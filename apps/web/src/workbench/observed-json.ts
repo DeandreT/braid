@@ -41,6 +41,38 @@ export class ObservedJson {
     this.root = new JsonIndex(this.text).parse();
   }
 
+  /** Display only: preserve scalar spelling, reject duplicate keys and never draw a partial tree. */
+  static outline(
+    bytes: Uint8Array,
+  ): readonly { depth: number; text: string }[] | null {
+    if (bytes.length > 65536) return null;
+    try {
+      const json = new ObservedJson(bytes);
+      const lines: { depth: number; text: string }[] = [];
+      const visit = (node: JsonNode, label: string, depth: number) => {
+        if (lines.length >= 1000) throw new JsonRefusal("tooLarge");
+        const value =
+          node.kind === "scalar"
+            ? json.text.slice(node.start, node.end)
+            : node.kind === "object"
+              ? `{${node.fields!.size} fields}`
+              : `[${node.items!.length} items]`;
+        lines.push({ depth, text: `${label}: ${value}` });
+        if (node.fields)
+          for (const [key, child] of node.fields)
+            visit(child, JSON.stringify(key), depth + 1);
+        node.items?.forEach((child, index) =>
+          visit(child, `[${index}]`, depth + 1),
+        );
+      };
+      visit(json.root, "$", 0);
+      return lines;
+    } catch (error) {
+      if (error instanceof JsonRefusal) return null;
+      throw error;
+    }
+  }
+
   static read(bytes: Uint8Array, path: readonly Segment[]): ObservedValue {
     try {
       return new ObservedJson(bytes).at(path);

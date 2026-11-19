@@ -18,8 +18,8 @@ import { csvDocumentLimits } from "./csv-document";
           <summary>Saved XML metadata (read only)</summary>
           <p>
             Schema locations are lexical hints only. No schema or network
-            resource is fetched. XML regression compares exact bytes; compiled
-            execution is unavailable.
+            resource is fetched. Compiled XML release qualification requires
+            exact bytes.
           </p>
           <pre tabindex="0">{{ metadata }}</pre>
         </details>
@@ -29,13 +29,13 @@ import { csvDocumentLimits } from "./csv-document";
           >{{ data().byteCount }} bytes ·
           {{ data().mediaType ?? "No declared media type" }}</span
         >
-        @if (data().xmlOutline) {
+        @if (data().xmlOutline || data().jsonOutline) {
           <button
             type="button"
             [attr.aria-pressed]="mode() === 'formatted'"
             (click)="mode.set('formatted')"
           >
-            XML outline
+            {{ data().jsonOutline ? "JSON tree" : "XML outline" }}
           </button>
           <button
             type="button"
@@ -78,7 +78,15 @@ import { csvDocumentLimits } from "./csv-document";
           <span>{{ data().format === "hex" ? "Hex bytes" : "Raw text" }}</span>
         }
       </div>
-      @if (mode() === "formatted" && data().xmlOutline) {
+      @if (mode() === "formatted" && data().jsonOutline; as lines) {
+        <ol aria-label="Read-only JSON tree">
+          @for (line of lines; track $index) {
+            <li [style.margin-inline-start.em]="line.depth">
+              <code>{{ line.text }}</code>
+            </li>
+          }
+        </ol>
+      } @else if (mode() === "formatted" && data().xmlOutline) {
         <ol aria-label="Read-only XML lexical outline">
           @for (line of data().xmlOutline; track $index) {
             <li [style.margin-inline-start.em]="line.depth">

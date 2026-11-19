@@ -110,3 +110,22 @@ test("display remains bounded and invalid UTF-8 stays lossless hexadecimal", () 
     ).segments,
   ).toEqual(["BGM+220+ONE?'TWO'", "UNT+2+1'"]);
 });
+
+test("JSON tree keeps lexical numbers and never guesses or presents an incomplete tree", () => {
+  const bytes = Buffer.from('{"order":[9007199254740993]}');
+  expect(displayBytes(bytes, null, "application/json").jsonOutline).toEqual([
+    { depth: 0, text: "$: {1 fields}" },
+    { depth: 1, text: '"order": [1 items]' },
+    { depth: 2, text: "[0]: 9007199254740993" },
+  ]);
+  expect(displayBytes(bytes, "test.json").jsonOutline).toBeNull();
+  for (const sample of [
+    '{"v":1,"v":2}',
+    "[1,",
+    JSON.stringify(Array(1001).fill(0)),
+  ]) {
+    const view = displayBytes(Buffer.from(sample), null, "application/json");
+    expect(view.jsonOutline).toBeNull();
+    expect(view.text).toBe(sample);
+  }
+});

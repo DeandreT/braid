@@ -30,7 +30,7 @@ not a single global boolean such as "Ferrule supports deployment."
 
 The machine endpoint's document request carries base64 bytes and a declared
 media type for each input. It is not a generic upload endpoint. Its OpenAPI
-document admits JSON, X12, EDIFACT, CSV and TSV; the released build must also
+document admits JSON, X12, EDIFACT, XML, CSV and TSV; the released build must also
 admit the exact boundaries (including the saved CSV dialect). A preview that
 can read a document is not evidence that the generated mapping can read it.
 
@@ -41,8 +41,10 @@ can read a document is not evidence that the generated mapping can read it.
 - **CSV and TSV:** the saved delimiter selects the dialect, not the extension.
   Preview tables and row comparison do not rewrite downloaded bytes.
 - **XML:** [structured XML previews](xml-previews.md) and saved exact-byte
-  cases are separate from compiled execution. Neither an internal canonicalizer
-  nor the XML design's proposed build ID enables a public endpoint.
+  cases are separate from compiled execution. The opt-in `braid.ferrule-csharp-xml.v1`
+  build requires qualified exact-byte evidence. The document endpoint requires
+  `application/xml` and matching saved boundary metadata. Canonical XML
+  comparison in a regression case does not qualify an artifact for release.
 - **FlexText, Protobuf and XBRL:** use native previews and saved exact-byte
   cases. A layout, message descriptor or instance declaration belongs to the
   revision, not the upload. These are not generated C# endpoint formats.

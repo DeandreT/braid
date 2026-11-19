@@ -24,6 +24,7 @@ export interface DocumentRepresentation {
   mediaType: string | null;
   segments: readonly string[] | null;
   csvDocument?: CsvDocumentResult | null;
+  jsonOutline?: readonly XmlOutlineLine[] | null;
   xmlOutline?: readonly XmlOutlineLine[] | null;
   xmlMetadataText?: string | null;
   flexLayout?: string | null;
@@ -108,11 +109,15 @@ export function displayBytes(
         ? documentSettings.optionsJson
         : null,
     csvDocument,
+    jsonOutline:
+      mediaType === "application/json" ? ObservedJson.outline(bytes) : null,
     xmlOutline:
-      mediaType === "application/xml" &&
+      ((mediaType === "application/xml" &&
+        xmlMetadata(authoritativeXmlMetadata)) ||
+        (mediaType === "application/xbrl+xml" &&
+          nativeSettings(mediaType, documentSettings))) &&
       bytes.length <= 65536 &&
-      format === "utf8" &&
-      xmlMetadata(authoritativeXmlMetadata)
+      format === "utf8"
         ? xmlOutline(text)
         : null,
     xmlMetadataText:

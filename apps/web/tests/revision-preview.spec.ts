@@ -668,6 +668,14 @@ test("a preview runs, shows its outputs and downloads their exact bytes", async 
   await expect(outputs).toContainText(String(Buffer.byteLength(output)));
 
   await region.getByRole("button", { name: "Show Primary output" }).click();
+  await expect(
+    documentView(page).getByRole("list", { name: "Read-only JSON tree" }),
+  ).toContainText("9007199254740993");
+  if (process.env.BRAID_DOCUMENT_VIEW_SCREENSHOT)
+    await documentView(page).screenshot({
+      path: process.env.BRAID_DOCUMENT_VIEW_SCREENSHOT,
+    });
+  await documentView(page).getByRole("button", { name: "Raw text" }).click();
   await expect(documentView(page).locator("pre")).toHaveText(output);
   const download = page.waitForEvent("download");
   await region.getByRole("button", { name: "Download Primary output" }).click();

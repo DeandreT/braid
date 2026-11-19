@@ -536,7 +536,9 @@
                     [attr.accept]="
                       csvMode
                         ? '.csv,.tsv,text/csv,text/tab-separated-values'
-                        : null
+                        : documentMode
+                          ? '.edi,.x12,.edifact,.edif,.json,application/json,application/edi-x12,application/edifact'
+                          : '.json,application/json'
                     "
                     (change)="chooseFile(isOutput, item.id, $event)"
                 /></label>
