@@ -46,6 +46,7 @@ impl PreviewRequestHeader {
                 | CSV_PREVIEW_PROTOCOL_VERSION
                 | XML_PREVIEW_PROTOCOL_VERSION
                 | crate::flextext_document::PROFILE
+                | crate::xlsx_document::PORTABLE_PROFILE
                 | crate::xlsx_document::PROFILE
                 | crate::xlsx_document::READ_JSON_PROFILE
                 | crate::native_document::PROTOBUF_PROFILE
@@ -69,6 +70,7 @@ impl PreviewRequestHeader {
     }
     pub fn is_xlsx_preview(&self) -> bool {
         self.protocol_version == XLSX_PREVIEW_PROTOCOL_VERSION
+            || self.protocol_version == crate::xlsx_document::PORTABLE_PROFILE
     }
     pub fn is_xml_preview(&self) -> bool {
         self.protocol_version == XML_PREVIEW_PROTOCOL_VERSION

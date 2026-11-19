@@ -53,7 +53,17 @@ pub fn admit<'a>(
         }
     }
     if header.reads_xlsx() {
-        let plan = if header.is_xlsx_preview() {
+        let plan = if header.protocol_version == crate::xlsx_document::PORTABLE_PROFILE {
+            if project.source_options.tabular_kind
+                != Some(ferrule_mapping::TabularBoundaryKind::Xlsx)
+            {
+                Err("Expected a saved input worksheet.")
+            } else {
+                ferrule_codegen_csharp::emit_with_flat_xlsx_output(project)
+                    .map(|_| ())
+                    .map_err(|_| "Unsupported portable workbook mapping.")
+            }
+        } else if header.is_xlsx_preview() {
             crate::xlsx_document::admit(project)
         } else if project.extra_sources.is_empty()
             && project.extra_targets.is_empty()

@@ -109,6 +109,7 @@ pub fn handle_worker_stream(
                     | crate::flextext_document::PROFILE
                     | crate::xlsx_document::PROFILE
                     | crate::xlsx_document::READ_JSON_PROFILE
+                    | crate::xlsx_document::PORTABLE_PROFILE
                     | crate::native_document::PROTOBUF_PROFILE
                     | crate::native_document::XBRL_PROFILE
             )
