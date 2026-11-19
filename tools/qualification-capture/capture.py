@@ -333,9 +333,11 @@ def run_capture(root, argv: list[str], deadline: float, trusted=()) -> tuple[int
         'trustedCode': inventory, 'runtime': {'implementation': platform.python_implementation(),
                                              'version': platform.python_version(), 'platform': sys.platform}}))
     cancelled = threading.Event()
-    previous = {number: signal.signal(number, lambda *_: cancelled.set()) for number in (signal.SIGINT, signal.SIGTERM)}
+    previous = {}
     failure = None
     try:
+        for number in (signal.SIGINT, signal.SIGTERM):
+            previous[number] = signal.signal(number, lambda *_: cancelled.set())
         failure, output = drive(capture, argv, deadline, cancelled)
         failure = failure or ('cancelled' if cancelled.is_set() else None)  # after the managed child close
         try:
@@ -347,7 +349,10 @@ def run_capture(root, argv: list[str], deadline: float, trusted=()) -> tuple[int
         failure = failure or 'ownerFailure'
     finally:
         for number, handler in previous.items():
-            signal.signal(number, handler)
+            try:
+                signal.signal(number, handler)
+            except Exception:
+                failure = failure or 'ownerFailure'
     failure = failure or ('cancelled' if cancelled.is_set() else None)  # after handler restoration
     return finish(capture, failure), capture
 

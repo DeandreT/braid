@@ -32,7 +32,16 @@ export function admit(fd) {
 }
 
 // Each invocation is a single-use driver. One query, one slot; never schedule a replacement.
-export async function query({ signal, timeout = 2000, hold = false } = {}) {
+export function createSupervisor() {
+  let used = false;
+  return async (options) => {
+    if (used) throw Error("slotUsed");
+    used = true;
+    return query(options);
+  };
+}
+
+async function query({ signal, timeout = 2000, hold = false } = {}) {
   if (
     signal?.aborted ||
     !Number.isInteger(timeout) ||
@@ -98,7 +107,8 @@ if (import.meta.main) {
   } finally {
     closeSync(fd);
   }
-  const result = await query();
+  const queryOnce = createSupervisor();
+  const result = await queryOnce();
   writeFileSync(
     join(output, "bun-mock.json"),
     JSON.stringify({
