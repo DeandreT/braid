@@ -56,6 +56,8 @@ public sealed class BuildQualification
             !artifact.Intent.Boundaries.Any(boundary => boundary.Kind == BuildBoundaryKind.PrimaryOutput && output.Key.IsPrimary &&
                 boundary.CsvDialect == output.CsvDialect && BuildWorkerProtocol.MediaType(boundary.Format) == output.MediaType)))
             throw Invalid(BuildQualificationFailure.OutputMismatch);
+        if (artifact.Intent.Profile.Id == BuildWorkerProtocol.XmlProfile && !XmlOutputsMatch(artifact.Intent, execution.Outputs))
+            throw Invalid(BuildQualificationFailure.OutputMismatch);
         var comparison = new RegressionComparisonService().Compare(sourceCase.Expected, new(OperationStatusV1.Succeeded, execution.Outputs), cancellationToken: token);
         if (comparison.Outcome != RegressionComparisonOutcome.Passed) throw Invalid(BuildQualificationFailure.OutputMismatch);
         var bytes = new RegressionRunResultCodec().EncodeObservation(id, sourceCase, MappingPreviewStatus.Succeeded, execution.Outputs, token);
@@ -113,12 +115,24 @@ public sealed class BuildQualification
         if (intent.Profile.Id == BuildWorkerProtocol.CsvProfile && (!BuildWorkerProtocol.AdmitsCsvPlan(intent.Boundaries) ||
             sourceCase.Replay.Primary.CsvDialect != intent.Boundaries.Single(boundary => boundary.Kind == BuildBoundaryKind.PrimaryInput).CsvDialect))
             throw Invalid(BuildQualificationFailure.IncompleteEvidence);
+        if (intent.Profile.Id == BuildWorkerProtocol.XmlProfile && (!XmlOutputsMatch(intent, sourceCase.Expected) ||
+            sourceCase.Replay.NamedInputs.Prepend(sourceCase.Replay.Primary).Any(input => !intent.Boundaries.Any(boundary =>
+                boundary.Kind == (input.Name is null ? BuildBoundaryKind.PrimaryInput : BuildBoundaryKind.NamedInput) &&
+                boundary.Name == input.Name && boundary.XmlMetadata == input.XmlMetadata))))
+            throw Invalid(BuildQualificationFailure.IncompleteEvidence);
         var inputs = intent.Boundaries.Where(value => value.Kind == BuildBoundaryKind.NamedInput).Select(value => value.Name).ToHashSet(StringComparer.Ordinal);
         if (!inputs.SetEquals(sourceCase.Replay.NamedInputs.Select(value => value.Name))) throw Invalid(BuildQualificationFailure.IncompleteEvidence);
         var interpreted = new RegressionRunResultCodec().Decode(evidence.RunId, sourceCase, evidence.CopyCompletion()!, token);
         if (interpreted.Comparison?.Outcome != RegressionComparisonOutcome.Passed) throw Invalid(BuildQualificationFailure.NotSuccessful);
+        if (intent.Profile.Id == BuildWorkerProtocol.XmlProfile && (interpreted.Outputs is null || !XmlOutputsMatch(intent, interpreted.Outputs)))
+            throw Invalid(BuildQualificationFailure.IncompleteEvidence);
         return (artifact, reference);
     }
+
+    private static bool XmlOutputsMatch(BuildIntent intent, RegressionOutputSet outputs) => outputs.Outputs.All(output =>
+        output.MediaType == XmlDocumentPolicy.MediaType && intent.Boundaries.Any(boundary =>
+            boundary.Kind == (output.Key.IsPrimary ? BuildBoundaryKind.PrimaryOutput : BuildBoundaryKind.NamedOutput) &&
+            boundary.Name == output.Key.Name && boundary.XmlMetadata == output.XmlMetadata));
 
     public byte[] CopyCanonicalBytes()
     {

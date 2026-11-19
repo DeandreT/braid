@@ -11,6 +11,7 @@ public sealed class BuildQualificationTests
     [InlineData("json")]
     [InlineData("x12")]
     [InlineData("edifact")]
+    [InlineData("xml")]
     public void Document_qualification_keeps_exact_bytes_media_and_the_declared_replay_identity(string format)
     {
         var value = new Fixture(format); var id = Guid.NewGuid();
@@ -133,19 +134,20 @@ public sealed class BuildQualificationTests
             var scope = new RevisionScope(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
             var native = Sha256Digest.FromBytes([1]);
             var backend = new BuildBackendIdentity("ferrule", BuildWorkerProtocol.Engine, "sha256:" + new string('a', 64), "adapter");
-            var payload = format is "x12" or "edifact" ? System.Text.Encoding.UTF8.GetBytes(format == "x12" ? DocumentPreviewTestData.X12 : DocumentPreviewTestData.Edifact) : "{\"ok\":true}\n"u8.ToArray();
-            var outputs = RegressionOutputSet.Capture([RegressionOutput.Capture(RegressionOutputKey.Primary, payload, mediaType: BuildWorkerProtocol.MediaType(format ?? "json"))]);
+            var xml = format == "xml" ? XmlDocumentMetadata.WithoutHints : null;
+            var payload = xml is not null ? "<order/>"u8.ToArray() : format is "x12" or "edifact" ? System.Text.Encoding.UTF8.GetBytes(format == "x12" ? DocumentPreviewTestData.X12 : DocumentPreviewTestData.Edifact) : "{\"ok\":true}\n"u8.ToArray();
+            var outputs = RegressionOutputSet.Capture([RegressionOutput.Capture(RegressionOutputKey.Primary, payload, mediaType: BuildWorkerProtocol.MediaType(format ?? "json"), xmlMetadata: xml)]);
             Case = new(Guid.NewGuid(), 1, Actor, "qualification fixture", scope, native,
-                new(backend.BackendId, backend.EngineRevision, backend.EngineBuild, backend.AdapterVersion, format is null ? PreviewPolicy.Profile : DocumentPreviewPolicy.Profile),
-                new(PreviewTargetSelection.All, "2026-10-21T00:00:00Z", PreviewLimits.Default, new(null, "{}"u8), [], []),
+                new(backend.BackendId, backend.EngineRevision, backend.EngineBuild, backend.AdapterVersion, xml is not null ? XmlPreviewAdmission.Profile : format is null ? PreviewPolicy.Profile : DocumentPreviewPolicy.Profile),
+                new(PreviewTargetSelection.All, "2026-10-21T00:00:00Z", PreviewLimits.Default, new(null, xml is null ? "{}"u8 : "<order/>"u8, xmlMetadata: xml), [], []),
                 RegressionComparisonService.ExactBytesPolicy, outputs);
             var evidenceId = Guid.NewGuid();
             var reference = new RegressionCaseEnvelopeCodec().Encode(Case).Reference;
             var bytes = new RegressionRunResultCodec().EncodeObservation(evidenceId, Case, MappingPreviewStatus.Succeeded, outputs);
             Evidence = new(evidenceId, Actor, reference, RegressionRunState.Completed, 1, DateTimeOffset.UtcNow, bytes, Sha256Digest.FromBytes(bytes));
             var intent = new BuildIntent(Guid.NewGuid(), scope, native, backend,
-                new(customProfile ? "braid.fixture-compiler.v1" : format is null ? BuildWorkerProtocol.Profile : BuildWorkerProtocol.DocumentProfile, 1, "dotnet", BuildWorkerProtocol.RuntimeVersion, "braid.dotnet-assembly.v1", BuildWorkerProtocol.MaximumSourceBytes),
-                [new(BuildBoundaryKind.PrimaryInput, null, "json"), new(BuildBoundaryKind.PrimaryOutput, null, customProfile ? "fixture-bytes" : format ?? "json")],
+                new(customProfile ? "braid.fixture-compiler.v1" : xml is not null ? BuildWorkerProtocol.XmlProfile : format is null ? BuildWorkerProtocol.Profile : BuildWorkerProtocol.DocumentProfile, 1, "dotnet", BuildWorkerProtocol.RuntimeVersion, "braid.dotnet-assembly.v1", BuildWorkerProtocol.MaximumSourceBytes),
+                [new(BuildBoundaryKind.PrimaryInput, null, xml is null ? "json" : "xml", xmlMetadata: xml), new(BuildBoundaryKind.PrimaryOutput, null, customProfile ? "fixture-bytes" : format ?? "json", xmlMetadata: xml)],
                 new(new(scope.OrganizationId, scope.ProjectId), Guid.NewGuid(), 1), Guid.NewGuid(), evidenceId);
             Build = new(Actor, intent, BuildRunState.Succeeded, 1, DateTimeOffset.UtcNow, BuildExecutionOutcome.Created,
                 BuildArtifactReference.Restore(intent, Sha256Digest.FromBytes([2, 3]), 2));
