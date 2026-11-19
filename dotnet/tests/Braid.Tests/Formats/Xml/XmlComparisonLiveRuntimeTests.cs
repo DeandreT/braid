@@ -17,6 +17,41 @@ namespace Braid.Tests;
 [System.Runtime.Versioning.SupportedOSPlatform("linux")]
 public sealed class XmlComparisonLiveRuntimeTests
 {
+    [ServiceCompileTheory]
+    [InlineData("canonical-load", true)]
+    [InlineData("canonical-load", false)]
+    [InlineData("canonical-output", true)]
+    [InlineData("canonical-output", false)]
+    public async Task Synchronous_transform_is_reaped_before_reuse(string phase, bool cancel)
+    {
+        var root = TemporaryRoot();
+        try
+        {
+            var marker = new TaskCompletionSource<byte>(TaskCreationOptions.RunContinuationsAsynchronously);
+            ProcessCompiledRuntimeRunner.OwnedOperation? owned = null;
+            var assembly = Path.Combine(AppContext.BaseDirectory, "CompiledSandboxProbe", "Braid.CompiledSandboxProbe.dll");
+            await using var runner = new ProcessCompiledRuntimeRunner(new(PackagedFerruleService.Identity, assembly, Launcher!, root, Toolchain,
+                TimeSpan.FromSeconds(cancel ? 25 : 8)) { Operation = CompiledRuntimeOperation.XmlCanonicalComparison,
+                ObserveOperation = op => owned = op, ObserveProbeMarker = b => marker.TrySetResult(b) });
+            using var stop = new CancellationTokenSource();
+            var call = runner.RunAsync(Encoding.UTF8.GetBytes(phase), stop.Token);
+            try
+            {
+                Assert.Equal(phase == "canonical-load" ? (byte)'L' : (byte)'O', await marker.Task.WaitAsync(TimeSpan.FromSeconds(7)));
+                Assert.False(call.IsCompleted);
+                if (cancel) stop.Cancel();
+                var result = await call.WaitAsync(TimeSpan.FromSeconds(15));
+                Assert.Equal(cancel ? WorkerProcessFailure.Canceled : WorkerProcessFailure.TimedOut, result.Failure);
+                Assert.Empty(result.Output);
+                Assert.True(owned!.Reaped!.IsCompletedSuccessfully && owned.HandlesDisposed && owned.DirectoryRemoved);
+                Assert.False(Directory.Exists("/proc/" + owned.ChildPid));
+                Assert.True(runner.Available);
+                Assert.Empty(Directory.EnumerateFileSystemEntries(root));
+            }
+            finally { stop.Cancel(); await call; }
+        }
+        finally { RemoveSettledEmptyRoot(root); }
+    }
     [ServiceCompileFact]
     public async Task Installed_XML_runtime_loads_its_canonicalizer_inside_the_existing_sandbox()
     {

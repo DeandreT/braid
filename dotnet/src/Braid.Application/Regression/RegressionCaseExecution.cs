@@ -60,6 +60,7 @@ public sealed class RegressionCaseExecutionService : IRegressionCaseExecutor, IR
     private readonly RegressionRuntimeIdentity? documentRuntime;
     private readonly RegressionRuntimeIdentity? csvRuntime;
     private readonly RegressionRuntimeIdentity? xmlRuntime;
+    private readonly SavedXmlComparison? xmlComparison;
 
     private readonly IReadOnlyList<RegressionRuntimeIdentity> nativeRuntimes;
     public bool CanExecute => backend is not IExecutionAdmission { CanExecute: false };
@@ -67,7 +68,7 @@ public sealed class RegressionCaseExecutionService : IRegressionCaseExecutor, IR
     public RegressionCaseExecutionService(IRegressionCaseReader cases, IProjectReader projects,
         IRevisionReportMetadataReader sources, IPrivateObjectStore objects, IMappingPreviewBackend backend,
         RegressionRuntimeIdentity runtime, RegressionRuntimeIdentity? documentRuntime = null, RegressionRuntimeIdentity? csvRuntime = null,
-        RegressionRuntimeIdentity? xmlRuntime = null, IReadOnlyList<RegressionRuntimeIdentity>? nativeRuntimes = null)
+        RegressionRuntimeIdentity? xmlRuntime = null, IReadOnlyList<RegressionRuntimeIdentity>? nativeRuntimes = null, SavedXmlComparison? xmlComparison = null)
     {
         this.cases = cases ?? throw new ArgumentNullException(nameof(cases));
         this.projects = projects ?? throw new ArgumentNullException(nameof(projects));
@@ -90,6 +91,7 @@ public sealed class RegressionCaseExecutionService : IRegressionCaseExecutor, IR
         this.nativeRuntimes = nativeRuntimes?.ToArray() ?? [];
         if (this.nativeRuntimes.Any(r => NativeDocumentFormat.FromProfile(r.Profile)?.AdapterBuild != r.AdapterBuild || r.BackendBuild != runtime.BackendBuild || r.BackendId != runtime.BackendId || r.EngineRevision != runtime.EngineRevision)) throw new ArgumentException("Invalid native runtime.");
         this.xmlRuntime = xmlRuntime;
+        this.xmlComparison = xmlComparison;
     }
 
     public async Task<RegressionCaseExecution> ExecuteAsync(ActorContext actor, RegressionCaseReference expected,
@@ -118,7 +120,8 @@ public sealed class RegressionCaseExecutionService : IRegressionCaseExecutor, IR
                 return Refused(RegressionCaseExecutionOutcome.CaseChanged);
             var selectedRuntime = value.Runtime == runtime ? runtime : value.Runtime == documentRuntime ? documentRuntime :
                 value.Runtime == csvRuntime ? csvRuntime : value.Runtime == xmlRuntime ? xmlRuntime : nativeRuntimes.FirstOrDefault(r => r == value.Runtime);
-            if (selectedRuntime is null) return Refused(RegressionCaseExecutionOutcome.RuntimeMismatch);
+            if (selectedRuntime is null || value.ComparisonPolicy == SavedXmlComparison.Policy && xmlComparison is null)
+                return Refused(RegressionCaseExecutionOutcome.RuntimeMismatch);
 
             var source = await AdmitAsync(actor, target, cancellationToken).ConfigureAwait(false);
             var bytes = await objects.ReadVerifiedAsync(target.Revision, source.NativeObject, cancellationToken).ConfigureAwait(false);
@@ -168,7 +171,9 @@ public sealed class RegressionCaseExecutionService : IRegressionCaseExecutor, IR
 
             var status = result.Status == MappingPreviewStatus.Succeeded
                 ? Braid.Contracts.Operations.OperationStatusV1.Succeeded : Braid.Contracts.Operations.OperationStatusV1.BackendFailure;
-            var comparison = new RegressionComparisonService().Compare(value.Expected, new(status, outputs),
+            var comparison = value.ComparisonPolicy == SavedXmlComparison.Policy ?
+                await xmlComparison!.CompareAsync(value, result.Status, outputs, cancellationToken).ConfigureAwait(false) :
+                new RegressionComparisonService().Compare(value.Expected, new(status, outputs),
                 value.ComparisonPolicy, cancellationToken: cancellationToken, ediOptions: value.EdiOptions);
 
             // Neither output bytes nor comparison facts escape after authority/source has changed.

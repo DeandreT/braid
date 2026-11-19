@@ -105,9 +105,20 @@ The completed preview offers baseline controls only when `xmlRuntime` is
 available. Enter a test name and explicitly accept the expected output to save
 the case. CSV runtime availability does not affect those XML controls.
 
-There is no canonical comparison enablement setting. The internal canonicalizer
-remains unused by regression and does not establish in-call cancellation or
-allocation containment.
+To compare saved XML with inclusive Canonical XML 1.0 with comments, select
+`braid.regression.xml-c14n10-comments.v1`. On both the local catalog server
+and regression worker, enable XML regression and set `BRAID_REGRESSIONS_XML_C14N_ENABLED=true`.
+Under the same `BRAID_REGRESSIONS_XML_C14N_` prefix, set `ASSEMBLY`, `LAUNCHER`,
+`TEMP_ROOT` and `DOTNET_ROOT` to the absolute installed runtime assembly,
+sandbox launcher, private temporary directory and pinned toolchain. Set
+`IDENTITY` to the approved XML-operation runtime identity for that installation.
+A missing or mismatched pin does not fall back to in-process comparison.
+
+Each comparison allows 256 KiB of original XML per side, 1 MiB of canonical
+bytes per document, 2 MiB of canonical bytes overall and 32 retained differences.
+These are acceptance limits, not allocation estimates. A fresh restricted child
+enforces the memory and CPU limits and a 15-second wall deadline. Reopening a run
+compares the original stored bytes again. Canonical equivalence is not build evidence.
 
 ## Compiled execution
 
