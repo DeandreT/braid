@@ -76,6 +76,7 @@ internal static class AutomationSchemaAdmission
     internal static async Task ValidateAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken token)
     {
         if (!await InstalledAsync(connection, transaction, token)) throw new InvalidOperationException("Automation schema unavailable.");
+        if (await LifecycleCatalogAdmission.ValidateIfInstalledAsync(connection, transaction, token)) return;
         await ValidateTriggersAsync(connection, transaction, token);
     }
 

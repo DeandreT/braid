@@ -460,7 +460,31 @@ async function generate(
   const reports = target.getByRole("region", { name: "Saved reports" });
   await settleReports(reports);
   if (await done.isVisible()) return;
-  await reportAction(reports, `Generate ${name}`);
+  const disclosure = reports
+    .locator("details")
+    .filter({
+      has: reports
+        .page()
+        .getByText("Report controls and evidence", { exact: true }),
+    });
+  if (
+    !(await disclosure.evaluate(
+      (element) => (element as HTMLDetailsElement).open,
+    ))
+  )
+    await disclosure.locator("summary").click();
+  const generateButton = reports
+    .getByRole("button", { name: `Generate ${name}`, exact: true })
+    .first();
+  await expect(done.or(generateButton).first()).toBeVisible({
+    timeout: 180_000,
+  });
+  if (await done.isVisible()) return;
+  try {
+    await generateButton.click({ timeout: 10_000 });
+  } catch (error) {
+    if (!(await done.isVisible())) throw error;
+  }
   const failed = reports.getByRole("heading", {
     name: `${name === "explanation" ? "Explanation" : "Validation"}: Attempt failed`,
   });
@@ -525,8 +549,8 @@ test("answers a workspace chat question with a catalog tool and verified mapping
     await page.locator("#workspace-chat-toggle").click();
   const question = chat.getByRole("textbox", { name: "Question" });
   const questions = chat
-    .getByRole("list", { name: "Questions" })
-    .getByRole("listitem");
+    .getByRole("list", { name: "Conversation transcript" })
+    .locator(":scope > li");
   // A small local model does not always call the tool, or calls it invalidly (the server then
   // stops the turn without running it), and a tool read can exceed its deadline on a loaded
   // host. Each attempt is a new conversation, so an earlier answer never shapes the next one.
@@ -540,12 +564,14 @@ test("answers a workspace chat question with a catalog tool and verified mapping
     await expect(questions).toHaveCount(1);
     const selected = chat.getByRole("region", { name: "Selected answer" });
     await expect(selected.getByRole("status")).toHaveText(
-      /^Answer (complete|failed|interrupted|cancelled)/,
+      /^\s*Answer (complete|failed|interrupted|cancelled)/,
       { timeout: 300_000 },
     );
-    const citations = chat.getByRole("list", { name: "Answer citations" });
+    const citations = selected.getByRole("list", {
+      name: "Workspace answer citations",
+    });
     if (
-      (await selected.getByRole("status").textContent()) ===
+      (await selected.getByRole("status").textContent())?.trim() ===
         "Answer complete." &&
       (await citations.getByRole("listitem").count()) > 0
     ) {
@@ -1433,7 +1459,7 @@ test("recovers retained work across a server restart and Ferrule service scaling
             .click(),
         ]);
         await expect(interrupted).toHaveText(
-          /^Answer (interrupted|failed|cancelled)\b/,
+          /^\s*Answer (interrupted|failed|cancelled)\b/,
           { timeout: 120_000 },
         );
       },

@@ -55,6 +55,7 @@ internal static class BuildMetadataRoleGuard
             """, connection, transaction))
             if (await command.ExecuteScalarAsync(token) is not true) throw Invalid();
         if (!await IsInstalledAsync(connection, transaction, token)) throw Invalid();
+        if (await LifecycleCatalogAdmission.ValidateIfInstalledAsync(connection, transaction, token)) return;
         await BuildRoleGuard.ValidateContractAsync(connection, transaction, token);
         // Metadata reads never fall back to a legacy contract after a partial schema rollback.
         await ValidateContractAsync(connection, transaction, token);

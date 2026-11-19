@@ -22,12 +22,21 @@ internal static class LifecycleCatalogAdmission
     internal static async Task ValidateAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken token)
     {
         await using var command = new NpgsqlCommand(CaptureSql, connection, transaction);
-        if (await command.ExecuteScalarAsync(token) as string is not (Fingerprint or NativeProfileFingerprint or RetentionHookFingerprint))
-            throw new InvalidOperationException("Lifecycle database contract unavailable.");
+        var fingerprint = await command.ExecuteScalarAsync(token) as string;
+        if (fingerprint is Fingerprint or NativeProfileFingerprint or RetentionHookFingerprint) return;
+        // Migration 0026 omits presentation-only column grants when its optional login is absent.
+        // A missing grant on a provisioned login is still drift, not an optional installation.
+        if (fingerprint is WithoutDisplayRetentionHookFingerprint)
+        {
+            await using var role = new NpgsqlCommand("SELECT pg_catalog.to_regrole('braid_account_display') IS NULL", connection, transaction);
+            if (await role.ExecuteScalarAsync(token) is true) return;
+        }
+        throw new InvalidOperationException("Lifecycle database contract unavailable.");
     }
     internal const string Fingerprint = "ee9c0db73af786f871e3360f24a99a88330c8274e5fdc550429bcb81b513f022:f5f76616e49cb92f20bcbfe76352fb1f6caa0a737238188fe1471fdf70953d8d";
     internal const string NativeProfileFingerprint = "30d4a7118a07043cf68a7957ed813edf32bfe0e6a3609ca1d5d44aaac45acc13:5d151cd13813fdbe63905e329c8beea5bb46c686beba6183761540b9a2f6900d";
     internal const string RetentionHookFingerprint = "30d4a7118a07043cf68a7957ed813edf32bfe0e6a3609ca1d5d44aaac45acc13:2fa9afd22e15bc2f6010227c1fff393ec49eb9770a974f16bc6a89e371244e16";
+    private const string WithoutDisplayRetentionHookFingerprint = "08531c89c1d3c90505769ad9b8b71420ff217f7321d5e288f4a6402ad4f5ef8d:2fa9afd22e15bc2f6010227c1fff393ec49eb9770a974f16bc6a89e371244e16";
     internal const string CaptureSql = """
         SELECT (SELECT pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(
         coalesce(jsonb_agg(jsonb_build_object(
