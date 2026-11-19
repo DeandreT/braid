@@ -30,8 +30,9 @@ not a single global boolean such as "Ferrule supports deployment."
 
 The machine endpoint's document request carries base64 bytes and a declared
 media type for each input. It is not a generic upload endpoint. Its OpenAPI
-document admits JSON, X12, EDIFACT, XML, CSV and TSV; the released build must also
-admit the exact boundaries (including the saved CSV dialect). A preview that
+document admits JSON, X12, EDIFACT, XML, CSV, TSV, FlexText, Protobuf, XBRL and
+portable XLSX. The released build must also admit the exact input and output
+boundaries (including the saved CSV or TSV dialect). A preview that
 can read a document is not evidence that the generated mapping can read it.
 
 - **X12 and EDIFACT:** use the document preview and segment comparison. The

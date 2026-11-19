@@ -407,9 +407,9 @@ public sealed class BuildPersistenceTests(PostgresFixture fixture)
         internal ActorContext Actor => Runs.Actor;
 
         internal static async Task<Context> CreateAsync(PostgresFixture fixture, bool pass = true, bool nullContent = false, int? migrations = null, bool documents = false, bool interchanges = false,
-            CsvDocumentDialect? csvDialect = null, bool shipment = false, byte[]? nativeBytes = null, BuildBackendIdentity? actualBackend = null, byte[]? xmlExpected = null, bool contrl = false, ByteCase? bytesCase = null)
+            CsvDocumentDialect? csvDialect = null, bool shipment = false, byte[]? nativeBytes = null, BuildBackendIdentity? actualBackend = null, byte[]? xmlExpected = null, bool contrl = false, ByteCase? bytesCase = null, ReleasedDocumentSample? document = null)
         {
-            documents |= interchanges || shipment || contrl;
+            documents |= document is not null || interchanges || shipment || contrl;
             var runs = await RegressionRunPostgresTestSupport.CreateAsync(fixture, migrations, bytesCase is not null ? value => new(
                 value.CaseId, value.Version, value.Owner, value.Name, value.Revision, value.NativeDigest,
                 new(actualBackend!.BackendId, actualBackend.EngineRevision, actualBackend.EngineBuild, actualBackend.AdapterVersion, bytesCase.Family.Profile),
@@ -423,18 +423,18 @@ public sealed class BuildPersistenceTests(PostgresFixture fixture)
                 Braid.Application.Regression.RegressionOutputSet.Capture([Braid.Application.Regression.RegressionOutput.Capture(Braid.Application.Regression.RegressionOutputKey.Primary,
                     xmlExpected, mediaType: XmlDocumentPolicy.MediaType, xmlMetadata: XmlDocumentMetadata.WithoutHints)])) : csvDialect is not null ? value => new(
                 value.CaseId, value.Version, value.Owner, value.Name, value.Revision, value.NativeDigest,
-                new(value.Runtime.BackendId, value.Runtime.EngineRevision, value.Runtime.BackendBuild, value.Runtime.AdapterBuild, CsvDocumentPolicy.Profile),
-                new(PreviewTargetSelection.All, value.Replay.CurrentDateTime, value.Replay.Limits, new(null, [], csvDialect), [], []),
+                new(actualBackend?.BackendId ?? value.Runtime.BackendId, actualBackend?.EngineRevision ?? value.Runtime.EngineRevision, actualBackend?.EngineBuild ?? value.Runtime.BackendBuild, actualBackend?.AdapterVersion ?? value.Runtime.AdapterBuild, CsvDocumentPolicy.Profile),
+                new(PreviewTargetSelection.All, value.Replay.CurrentDateTime, value.Replay.Limits, new(null, document?.Input ?? [], csvDialect), [], []),
                 Braid.Application.Regression.RegressionComparisonService.ExactBytesPolicy,
                 Braid.Application.Regression.RegressionOutputSet.Capture([Braid.Application.Regression.RegressionOutput.Capture(
-                    Braid.Application.Regression.RegressionOutputKey.Primary, "value\n"u8, mediaType: CsvDialectJson.MediaType(csvDialect), csvDialect: csvDialect)])) : documents ? value => new(
+                    Braid.Application.Regression.RegressionOutputKey.Primary, document is not null ? document.Expected : "value\n"u8, mediaType: CsvDialectJson.MediaType(csvDialect), csvDialect: csvDialect)])) : documents ? value => new(
                 value.CaseId, value.Version, value.Owner, value.Name, value.Revision, value.NativeDigest,
                 new(actualBackend?.BackendId ?? value.Runtime.BackendId, actualBackend?.EngineRevision ?? value.Runtime.EngineRevision,
                     actualBackend?.EngineBuild ?? value.Runtime.BackendBuild, actualBackend?.AdapterVersion ?? value.Runtime.AdapterBuild, DocumentPreviewPolicy.Profile),
-                new(PreviewTargetSelection.All, value.Replay.CurrentDateTime, value.Replay.Limits, new(null, contrl ? Encoding.ASCII.GetBytes(DocumentPreviewTestData.Contrl) : shipment ? Shipment945Fixture.Input : DocumentPreviewTestData.Input("x12")), [], []),
+                new(PreviewTargetSelection.All, value.Replay.CurrentDateTime, value.Replay.Limits, new(null, document is not null ? document.Input : contrl ? Encoding.ASCII.GetBytes(DocumentPreviewTestData.Contrl) : shipment ? Shipment945Fixture.Input : DocumentPreviewTestData.Input("x12")), [], []),
                 Braid.Application.Regression.RegressionComparisonService.ExactBytesPolicy,
                 Braid.Application.Regression.RegressionOutputSet.Capture([Braid.Application.Regression.RegressionOutput.Capture(
-                    Braid.Application.Regression.RegressionOutputKey.Primary, contrl ? DocumentPreviewTestData.ContrlExpected : shipment ? (nativeBytes is null ? Shipment945Fixture.Expected : Shipment945Fixture.NativeExpected) : DocumentPreviewTestData.Input("x12"), mediaType: contrl ? "application/edifact" : "application/edi-x12")])) : null, nativeBytes);
+                    Braid.Application.Regression.RegressionOutputKey.Primary, document is not null ? document.Expected : contrl ? DocumentPreviewTestData.ContrlExpected : shipment ? (nativeBytes is null ? Shipment945Fixture.Expected : Shipment945Fixture.NativeExpected) : DocumentPreviewTestData.Input("x12"), mediaType: contrl ? "application/edifact" : "application/edi-x12")])) : null, nativeBytes);
             PostgresBuildStore? store = null;
             try
             {
@@ -456,9 +456,9 @@ public sealed class BuildPersistenceTests(PostgresFixture fixture)
                 if (!nullContent) await runs.CompleteAsync(claim, result);
                 else
                 {
-                    var document = JsonNode.Parse(new Braid.Application.Regression.RegressionRunResultCodec().Encode(runs.RunId, runs.Reference, result))!;
-                    document["outputs"]![0]!["content"] = null;
-                    var bytes = Encoding.UTF8.GetBytes(document.ToJsonString());
+                    var resultDocument = JsonNode.Parse(new Braid.Application.Regression.RegressionRunResultCodec().Encode(runs.RunId, runs.Reference, result))!;
+                    resultDocument["outputs"]![0]!["content"] = null;
+                    var bytes = Encoding.UTF8.GetBytes(resultDocument.ToJsonString());
                     await using var runConnection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(runs.WriterConnection) { Pooling = false }.ConnectionString);
                     await runConnection.OpenAsync();
                     await using var transaction = await runConnection.BeginTransactionAsync();

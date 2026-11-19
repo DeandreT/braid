@@ -16,7 +16,7 @@ namespace Braid.Tests;
 public sealed partial class NativeShipmentPackagePilot
 {
     private static async Task InvokeHttp(ReleaseTargetReference target, Guid release, MachinePrincipal caller,
-        MachineInvocationService service, Func<bool> available, byte[]? xmlExpected = null, bool contrl = false, BuildPersistenceTests.ByteCase? bytesCase = null)
+        MachineInvocationService service, Func<bool> available, byte[]? xmlExpected = null, bool contrl = false, BuildPersistenceTests.ByteCase? bytesCase = null, ReleasedDocumentSample? sample = null)
     {
         using var crypto = new EntraProtocolCrypto();
         await using var issuer = new EntraProtocolHttpsIssuer(crypto);
@@ -37,7 +37,7 @@ public sealed partial class NativeShipmentPackagePilot
             using var client = new HttpClient { BaseAddress = new(address), Timeout = MappingEndpointRoutes.Deadline };
             var id = Guid.NewGuid();
             var bearer = crypto.SignClaims(MachineTokenValidationTests.Claims(caller.ObjectId).ToJsonString());
-            object InputWire(byte[] input) => xmlExpected is not null ? XmlInputWire(input) : new { mediaType = bytesCase?.Family.MediaType ?? (contrl ? "application/edifact" : "application/json"), content = Convert.ToBase64String(input) };
+            object InputWire(byte[] input) => sample?.Dialect is { } dialect ? new { mediaType = sample.Media, csvDialect = JsonSerializer.Deserialize<JsonElement>(CsvDialectJson.Encode(dialect)), content = Convert.ToBase64String(input) } : xmlExpected is not null ? XmlInputWire(input) : new { mediaType = sample?.Media ?? bytesCase?.Family.MediaType ?? (contrl ? "application/edifact" : "application/json"), content = Convert.ToBase64String(input) };
             byte[]? original = null;
             foreach (var replay in new[] { false, true })
             {
@@ -47,7 +47,7 @@ public sealed partial class NativeShipmentPackagePilot
                 request.Content = new ByteArrayContent(JsonSerializer.SerializeToUtf8Bytes(new
                 {
                     schema = MappingEndpointContract.DocumentRequestSchema,
-                    inputs = new[] { InputWire(bytesCase is not null ? bytesCase.Input.CopyBytes() : contrl ? System.Text.Encoding.ASCII.GetBytes(DocumentPreviewTestData.Contrl) : xmlExpected is null ? Shipment945Fixture.Input : XmlInput) },
+                    inputs = new[] { InputWire(sample is not null ? sample.Input : bytesCase is not null ? bytesCase.Input.CopyBytes() : contrl ? System.Text.Encoding.ASCII.GetBytes(DocumentPreviewTestData.Contrl) : xmlExpected is null ? Shipment945Fixture.Input : XmlInput) },
                     parameters = Array.Empty<object>()
                 }));
                 request.Content.Headers.ContentType = new("application/json");
@@ -61,10 +61,25 @@ public sealed partial class NativeShipmentPackagePilot
                 Assert.Equal(id, root.GetProperty("requestId").GetGuid());
                 Assert.Equal(release, root.GetProperty("releaseId").GetGuid());
                 var output = Assert.Single(root.GetProperty("outputs").EnumerateArray());
-                Assert.Equal(bytesCase is not null ? bytesCase.Family.MediaType : contrl ? "application/edifact" : xmlExpected is null ? "application/edi-x12" : XmlDocumentPolicy.MediaType, output.GetProperty("mediaType").GetString());
-                Assert.Equal(bytesCase?.Expected ?? xmlExpected ?? (contrl ? DocumentPreviewTestData.ContrlExpected : Shipment945Fixture.NativeExpected), output.GetProperty("content").GetBytesFromBase64());
+                Assert.Equal(sample is not null ? sample.Media : bytesCase is not null ? bytesCase.Family.MediaType : contrl ? "application/edifact" : xmlExpected is null ? "application/edi-x12" : XmlDocumentPolicy.MediaType, output.GetProperty("mediaType").GetString());
+                Assert.Equal(sample?.Expected ?? bytesCase?.Expected ?? xmlExpected ?? (contrl ? DocumentPreviewTestData.ContrlExpected : Shipment945Fixture.NativeExpected), output.GetProperty("content").GetBytesFromBase64());
                 if (replay) Assert.Equal(original, bytes);
                 original = bytes;
+            }
+            if (sample is not null)
+            {
+                foreach (var (input, outcome) in new[] { (sample.Malformed, "invalidInput"), (sample.Longer, "resourceLimit") })
+                {
+                    using var req = new HttpRequestMessage(HttpMethod.Post, MappingEndpointRoutes.InvocationsPath);
+                    req.Headers.Authorization = new("Bearer", bearer);
+                    req.Headers.Add(MappingEndpointRoutes.RequestIdHeader, Guid.NewGuid().ToString("D"));
+                    req.Content = new StringContent(JsonSerializer.Serialize(new { schema = MappingEndpointContract.DocumentRequestSchema, inputs = new[] { InputWire(input) } }), System.Text.Encoding.UTF8, "application/json");
+                    using var response = await client.SendAsync(req);
+                    Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+                    using var error = JsonDocument.Parse(await response.Content.ReadAsByteArrayAsync());
+                    Assert.Equal(outcome, error.RootElement.GetProperty("outcome").GetString());
+                    Assert.False(error.RootElement.TryGetProperty("outputs", out _));
+                }
             }
             if (bytesCase is not null)
             {
@@ -85,9 +100,17 @@ public sealed partial class NativeShipmentPackagePilot
                     Assert.Equal(outcome, error.RootElement.GetProperty("outcome").GetString());
                     Assert.False(error.RootElement.TryGetProperty("outputs", out _));
                 }
-                if (bytesCase.Family == NativeDocumentFormat.Xlsx)
+                // Keep the admitted media type: a mismatched declaration never enters the reader.
                 {
-                    using var malformed = await Post([..bytesCase.Input.CopyBytes(),0], bytesCase.Family.MediaType, bearer);
+                    byte[] invalid = bytesCase.Family.Key switch
+                    {
+                        "flextext" => [0xff], // Store requires strict UTF-8
+                        "protobuf" => [0x0a, 0x02, 0x41], // one byte missing from the declared field
+                        "xbrl" => "<xbrl>"u8.ToArray(), // incomplete instance, but valid UTF-8
+                        "xlsx" => [..bytesCase.Input.CopyBytes(), 0], // trailing data after the canonical ZIP
+                        _ => throw new NotSupportedException()
+                    };
+                    using var malformed = await Post(invalid, bytesCase.Family.MediaType, bearer);
                     Assert.Equal(HttpStatusCode.UnprocessableEntity, malformed.StatusCode);
                     using var failure = JsonDocument.Parse(await malformed.Content.ReadAsByteArrayAsync());
                     Assert.Equal("invalidInput", failure.RootElement.GetProperty("outcome").GetString());

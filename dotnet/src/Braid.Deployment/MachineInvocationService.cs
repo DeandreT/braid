@@ -272,6 +272,8 @@ public sealed class MachineInvocationService
                 replay = new(PreviewTargetSelection.All, clock, limits, primary, request.NamedInputs, request.Parameters, token); }
             catch (RegressionCaseException error)
             { return new(error.Failure == RegressionCaseFailure.ResourceLimit ? MachineInvocationOutcome.ResourceLimit : MachineInvocationOutcome.InvalidInput, provenance); }
+            catch (PreviewRunException) when (BuildWorkerProtocol.NativeFormat(intent.Profile.Id) is not null)
+            { return new(request.Primary.ByteCount > NativeDocumentFormat.MaximumBytes ? MachineInvocationOutcome.ResourceLimit : MachineInvocationOutcome.InvalidInput, provenance); }
             var result = await invocations(actor).ExecuteAsync(actor, target, replay, token, pin).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
             var outcome = result.Outcome switch
