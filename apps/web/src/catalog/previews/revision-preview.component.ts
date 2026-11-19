@@ -135,6 +135,8 @@ export class RevisionPreviewComponent {
     display: DocumentRepresentation;
   } | null>(null);
   readonly outputError = signal<PreviewErrorKind | null>(null);
+  readonly receiving = signal<{ received: number; total: number } | null>(null);
+  private transfer?: Subscription;
 
   constructor() {
     inject(UnsentWork).track(
@@ -236,6 +238,7 @@ export class RevisionPreviewComponent {
       this.retainCase();
       this.downloads.forEach((download) => download.unsubscribe());
       this.preview.destroy();
+      this.transfer?.unsubscribe();
     });
   }
 
@@ -488,6 +491,8 @@ export class RevisionPreviewComponent {
 
   private clearOutput(): void {
     this.outputEpoch++;
+    this.transfer?.unsubscribe();
+    this.receiving.set(null);
     this.downloads.forEach((download) => download.unsubscribe());
     this.downloads = [];
     this.shown.set(null);
@@ -495,22 +500,42 @@ export class RevisionPreviewComponent {
   }
 
   download(output: PreviewOutput): void {
+    this.transfer?.unsubscribe();
+    const epoch = this.outputEpoch;
+    const owner = this.context();
+    const scope = this.revision().scope;
+    const current = () => {
+      if (
+        epoch !== this.outputEpoch ||
+        owner.allowedOrganizationId !== scope.organizationId ||
+        this.revision().scope !== scope ||
+        !this.allowed() ||
+        !this.contexts.canSend(owner)
+      )
+        throw new PreviewError("unavailable");
+    };
     this.outputError.set(null);
-    this.downloads.push(
-      this.preview.output(output).subscribe({
-        next: (bytes) => {
-          const url = URL.createObjectURL(
-            new Blob([bytes as BlobPart], { type: output.mediaType }),
-          );
+    this.receiving.set({ received: 0, total: output.byteCount });
+    this.transfer = this.preview
+      .download(output, current, (received) =>
+        this.receiving.set({ received, total: output.byteCount }),
+      )
+      .subscribe({
+        next: (blob) => {
+          this.receiving.set(null);
+          const url = URL.createObjectURL(blob);
           const anchor = this.document.createElement("a");
           anchor.href = url;
           anchor.download = outputFilename(output);
           anchor.click();
           setTimeout(() => URL.revokeObjectURL(url), 0);
         },
-        error: (error: unknown) => this.outputError.set(kindOf(error)),
-      }),
-    );
+        error: (error: unknown) => {
+          this.receiving.set(null);
+          if (epoch === this.outputEpoch && this.contexts.canSend(owner))
+            this.outputError.set(kindOf(error));
+        },
+      });
   }
 
   targetLabel(output: PreviewOutput): string {

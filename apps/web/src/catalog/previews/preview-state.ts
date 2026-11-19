@@ -311,6 +311,31 @@ export class PreviewState {
     );
   }
 
+  download(
+    output: PreviewOutput,
+    current: () => void,
+    progress: (received: number) => void,
+  ) {
+    const binding = this.binding;
+    const run = this.currentRun();
+    if (!binding || !run || !run.outputs.includes(output))
+      throw new PreviewError("invalidLink");
+    const check = () => {
+      if (
+        this.binding !== binding ||
+        this.currentRun() !== run ||
+        !binding.ready()
+      )
+        throw new PreviewError("unavailable");
+      current();
+    };
+    return this.admitted(binding).pipe(
+      switchMap(() =>
+        this.api.download(binding.scope, run.runId, output, check, progress),
+      ),
+    );
+  }
+
   private read(runId: string): void {
     const binding = this.binding;
     if (!binding) return;

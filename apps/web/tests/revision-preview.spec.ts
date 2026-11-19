@@ -687,6 +687,134 @@ test("a preview runs, shows its outputs and downloads their exact bytes", async 
   expect(Buffer.concat(chunks).toString()).toBe(output);
 });
 
+for (const mode of [
+  "valid",
+  "corrupt",
+  "overflow",
+  "short",
+  "leave",
+  "fallback",
+] as const) {
+  test(`verified download: ${mode}`, async ({ page }) => {
+    const previews = new Previews(page);
+    previews.states = [succeeded];
+    await previews.install();
+    await open(page);
+    const region = panel(page);
+    await region.getByLabel("Primary input (JSON)").fill("{}");
+    await region.getByRole("button", { name: "Run preview" }).click();
+    const button = region.getByRole("button", {
+      name: "Download Primary output",
+    });
+    await expect(button).toBeEnabled();
+    await page.evaluate(
+      ({ path, text, mode }) => {
+        const original = window.fetch.bind(window);
+        if (mode === "fallback")
+          Object.defineProperty(window, "TransformStream", {
+            value: undefined,
+          });
+        window.fetch = (input, init) => {
+          if (input !== path) return original(input, init);
+          const bytes = new TextEncoder().encode(text);
+          const headers = {
+            "Content-Type": "application/json",
+            ...(mode === "fallback"
+              ? { "Content-Length": String(bytes.length) }
+              : {}),
+          };
+          return Promise.resolve(
+            new Response(
+              new ReadableStream<Uint8Array>({
+                start(controller) {
+                  controller.enqueue(bytes.slice(0, 8));
+                  if (mode === "fallback") {
+                    controller.enqueue(bytes.slice(8));
+                    controller.close();
+                    return;
+                  }
+                  init?.signal?.addEventListener(
+                    "abort",
+                    () => (document.body.dataset.transferAborted = "true"),
+                    { once: true },
+                  );
+                  window.addEventListener(
+                    "fixture-finish",
+                    () => {
+                      if (init?.signal?.aborted) return;
+                      if (mode === "corrupt") bytes[8] ^= 1;
+                      controller.enqueue(
+                        bytes.slice(8, mode === "short" ? -1 : undefined),
+                      );
+                      if (mode === "overflow")
+                        controller.enqueue(new Uint8Array([1]));
+                      controller.close();
+                    },
+                    { once: true },
+                  );
+                },
+              }),
+              { headers },
+            ),
+          );
+        };
+        const create = URL.createObjectURL.bind(URL);
+        URL.createObjectURL = (blob) => {
+          document.body.dataset.urlCreated = "true";
+          return create(blob);
+        };
+      },
+      { path: `${runPath}/outputs/0`, text: output, mode },
+    );
+    const file =
+      mode === "valid" || mode === "fallback"
+        ? page.waitForEvent("download")
+        : null;
+    await button.click();
+    if (mode !== "fallback") {
+      await expect(
+        region.getByRole("status").filter({ hasText: "Verifying download:" }),
+      ).toContainText(`8 of ${Buffer.byteLength(output)} bytes`);
+      expect(
+        await page.locator("body").getAttribute("data-url-created"),
+      ).toBeNull();
+      if (mode === "valid" && process.env.BRAID_DOWNLOAD_SCREENSHOT)
+        await region.screenshot({
+          path: process.env.BRAID_DOWNLOAD_SCREENSHOT,
+        });
+      if (mode === "leave") {
+        await page.evaluate(() => {
+          history.pushState(
+            {},
+            "",
+            "/organizations/11111111-1111-4111-8111-111111111111/projects",
+          );
+          window.dispatchEvent(new PopStateEvent("popstate"));
+        });
+        await expect(page.locator("body")).toHaveAttribute(
+          "data-transfer-aborted",
+          "true",
+        );
+      }
+      await page.evaluate(() =>
+        window.dispatchEvent(new Event("fixture-finish")),
+      );
+    }
+    if (file) {
+      const chunks = [];
+      for await (const chunk of await (await file).createReadStream())
+        chunks.push(chunk as Buffer);
+      expect(Buffer.concat(chunks)).toEqual(Buffer.from(output));
+    } else {
+      if (mode !== "leave")
+        await expect(region.getByRole("alert")).toContainText("did not match");
+      expect(
+        await page.locator("body").getAttribute("data-url-created"),
+      ).toBeNull();
+    }
+  });
+}
+
 test("invalid input and unsupported mappings show bounded failures", async ({
   page,
 }) => {

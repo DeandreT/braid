@@ -117,6 +117,14 @@ Switch to **Raw text** to see the original separators. A truncated byte window
 is not presented as a complete segment list. Neither view changes the bytes
 used for download.
 
+## Download verification
+
+Preview downloads show the number of bytes received. Studio releases the file
+only after its length and SHA-256 match the selected output. Leaving the revision
+or switching organizations discards an unfinished transfer. Browsers without
+stream support can download explicitly sized, uncompressed attachments up to
+1 MiB; larger outputs need a streaming-capable browser.
+
 ## If you reload the page
 
 This tab remembers your last preview of the revision, so after a reload braid

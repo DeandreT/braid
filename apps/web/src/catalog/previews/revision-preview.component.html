@@ -530,6 +530,7 @@
                             class="catalog-button"
                             type="button"
                             (click)="download(output)"
+                            [disabled]="receiving() !== null"
                           >
                             Download {{ targetLabel(output) }}
                           </button>
@@ -539,6 +540,12 @@
                   </tbody>
                 </table>
               </div>
+            }
+            @if (receiving(); as bytes) {
+              <p role="status">
+                Verifying download: {{ bytes.received }} of
+                {{ bytes.total }} bytes
+              </p>
             }
             @if (outputError(); as kind) {
               <p class="catalog-inline-error" role="alert">
