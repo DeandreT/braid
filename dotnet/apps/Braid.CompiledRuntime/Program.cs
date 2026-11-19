@@ -50,7 +50,8 @@ internal static class CompiledInvocation
         // the document protocol still binds their explicit media types.
         var documents = BuildWorkerProtocol.IsDocumentProfile(request.Intent.Profile.Id) && request.Intent.Boundaries.Any(value => value.Format != "json");
         var csv = request.Intent.Profile.Id == BuildWorkerProtocol.CsvProfile;
-        if (request.Intent.Profile.Id is not (BuildWorkerProtocol.Profile or BuildWorkerProtocol.DocumentProfile or BuildWorkerProtocol.X12InterchangesProfile or BuildWorkerProtocol.CsvProfile) || request.Intent.Profile.Runtime != "dotnet" ||
+        var xml = request.Intent.Profile.Id == BuildWorkerProtocol.XmlProfile;
+        if (request.Intent.Profile.Id is not (BuildWorkerProtocol.Profile or BuildWorkerProtocol.DocumentProfile or BuildWorkerProtocol.X12InterchangesProfile or BuildWorkerProtocol.CsvProfile or BuildWorkerProtocol.XmlProfile) || request.Intent.Profile.Runtime != "dotnet" ||
             request.Intent.Profile.RuntimeVersion != BuildWorkerProtocol.RuntimeVersion || request.Intent.Backend.EngineRevision != BuildWorkerProtocol.Engine ||
             request.Intent.Boundaries.Any(value => !BuildWorkerProtocol.AdmitsBoundary(request.Intent.Profile.Id, value.Format, value.CsvDialect))) return new("unsupported");
         if (csv && (!BuildWorkerProtocol.AdmitsCsvPlan(request.Intent.Boundaries) || request.Replay.NamedInputs.Count != 0 ||
@@ -78,9 +79,9 @@ internal static class CompiledInvocation
             if (assembly.GetName().Name != "Ferrule.Generated") return new("invalidArtifact");
             Type Type(string name) => assembly.GetType(name, throwOnError: true)!;
             var mapping = Type("Ferrule.Generated.GeneratedMapping");
-            var namedType = csv ? null : Type(documents ? "Ferrule.Generated.NamedDocumentBytesInput" : "Ferrule.Generated.NamedJsonBytesInput");
+            var namedType = csv || xml ? null : Type(documents ? "Ferrule.Generated.NamedDocumentBytesInput" : "Ferrule.Generated.NamedJsonBytesInput");
             var namedConstructor = namedType?.GetConstructor([typeof(string), typeof(byte[])]);
-            if (!csv && namedConstructor is null) throw new MissingMethodException();
+            if (!csv && !xml && namedConstructor is null) throw new MissingMethodException();
             var valueType = Type("Ferrule.Runtime.FerruleValue");
             var pairType = typeof(KeyValuePair<,>).MakeGenericType(typeof(string), valueType);
             var pairConstructor = pairType.GetConstructor([typeof(string), valueType]) ?? throw new MissingMethodException();
@@ -98,7 +99,7 @@ internal static class CompiledInvocation
             MethodInfo? allMethod = null, selectedMethod = null, targetPrimary = null, targetNamed = null, csvMethod = null;
             if (csv)
                 csvMethod = mapping.GetMethod("ExecuteCsvDocumentBytes", BindingFlags.Public | BindingFlags.Static, [typeof(byte[]), executionType]) ?? throw new MissingMethodException();
-            else
+            else if (!xml)
             {
                 var sourceListType = typeof(IReadOnlyList<>).MakeGenericType(namedType!);
                 allMethod = mapping.GetMethod(documents ? "ExecuteDocumentBytesOutputsWithHost" : "ExecuteJsonBytesOutputsWithSources", BindingFlags.Public | BindingFlags.Static,
@@ -110,8 +111,8 @@ internal static class CompiledInvocation
                     documents ? [typeof(byte[]), targetType, sourceListType, executionType] :
                         [typeof(byte[]), targetType, sourceListType, executionType, Type("Ferrule.Runtime.IFerruleDynamicJsonSourceLoader")]) ?? throw new MissingMethodException();
             }
-            var named = csv ? null : Array.CreateInstance(namedType!, request.Replay.NamedInputs.Count);
-            for (var i = 0; i < request.Replay.NamedInputs.Count; i++)
+            var named = csv || xml ? null : Array.CreateInstance(namedType!, request.Replay.NamedInputs.Count);
+            for (var i = 0; !xml && i < request.Replay.NamedInputs.Count; i++)
             {
                 var item = request.Replay.NamedInputs[i];
                 named!.SetValue(namedConstructor!.Invoke([item.Name, item.CopyBytes()]), i);
@@ -128,7 +129,21 @@ internal static class CompiledInvocation
             var execution = executionConstructor.Invoke(["entry.native.json", "entry.native.json", request.Replay.CurrentDateTime, parameters]);
             stage = "execution";
             var outputs = new List<RegressionOutput>();
-            if (csv)
+            if (xml)
+            {
+                var declared = request.Intent.Boundaries.Where(b => b.Kind == BuildBoundaryKind.NamedOutput).Select(b => b.Name!).ToArray();
+                var result = CompiledXmlBytes.Invoke(assembly, execution, request.Replay.Target.Kind == PreviewTargetKind.All, request.Replay.Target.Name,
+                    new(null, request.Replay.Primary.CopyBytes()), request.Replay.NamedInputs.Select(i => new CompiledXmlBytes.Document(i.Name, i.CopyBytes())).ToArray(),
+                    declared, request.Replay.Limits.MaximumInputBytes, request.Replay.Limits.MaximumOutputBytes, default);
+                if (result.Length > request.Replay.Limits.MaximumArtifacts) return new("resourceLimit");
+                foreach (var item in result)
+                {
+                    var boundary = request.Intent.Boundaries.Single(b => b.Kind == (item.Name is null ? BuildBoundaryKind.PrimaryOutput : BuildBoundaryKind.NamedOutput) && b.Name == item.Name);
+                    outputs.Add(RegressionOutput.Capture(item.Name is null ? RegressionOutputKey.Primary : RegressionOutputKey.Named(item.Name), item.Bytes,
+                        mediaType: XmlDocumentPolicy.MediaType, xmlMetadata: boundary.XmlMetadata));
+                }
+            }
+            else if (csv)
                 Add(null, csvMethod!.Invoke(null, [request.Replay.Primary.CopyBytes(), execution])!, null);
             else if (request.Replay.Target.Kind == PreviewTargetKind.All)
             {
@@ -196,6 +211,8 @@ internal static class CompiledInvocation
         {
             var cause = error is TargetInvocationException { InnerException: { } inner } ? inner : error;
             if (cause is OutputLimitException) return new("resourceLimit");
+            if (xml && cause is CompiledXmlBytes.InputFailure failure) return new(failure.ResourceLimit ? "resourceLimit" : "invalidInput");
+            if (xml && cause is XmlDocumentException document) return new(document.IsResourceLimit ? "resourceLimit" : "invalidInput");
             if (cause is UnsupportedOutputSyntaxException) return new("unsupported");
             if (csv && cause.GetType().FullName == "Ferrule.Runtime.FerruleCsvInputException")
             {

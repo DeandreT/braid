@@ -67,6 +67,7 @@ export const browserFixtureMigrations = Object.freeze([
   "0064_order_retention_constraints.sql",
   "0065_native_document_profiles.sql",
   "0066_project_creation_retention_hooks.sql",
+  "0067_compiled_xml_builds.sql",
 ]);
 
 export const browserFixtureProtectedTables = Object.freeze([

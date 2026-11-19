@@ -1366,6 +1366,7 @@ fn owned_join_tuple_node(node: &Node) -> bool {
 fn unsupported_kind(node: &Node) -> &'static str {
     match node {
         Node::OwnedPosition(_) => "Explicitly owned position",
+        Node::GeneratedPosition { .. } => "Generated position",
         Node::OwnedRowDocumentPath(_) => "Explicitly owned row document location",
         Node::OwnedSourceDocumentPath(_) => "Explicitly owned source document location",
         Node::OwnedLookup(_) => "Explicitly owned lookup",

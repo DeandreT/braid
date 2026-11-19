@@ -288,6 +288,9 @@ impl Builder<'_> {
                 let mut collections = BTreeMap::new();
                 context.in_join = true;
                 for source in plan.sources() {
+                    let source = source
+                        .as_collection()
+                        .ok_or("Computed join source projection is unsupported.")?;
                     let candidates = self.collection_candidates(source.collection(), parent)?;
                     if candidates.len() != 1 {
                         context.join_ownership_unknown = true;
@@ -344,8 +347,19 @@ impl Builder<'_> {
                     for condition in conditions.iter() {
                         let mut pair = Vec::new();
                         for (collection, leaf) in [
-                            (condition.left_collection(), condition.left_path()),
-                            (right.collection(), condition.right_path()),
+                            (
+                                condition
+                                    .left_collection()
+                                    .ok_or("Computed join key projection is unsupported.")?,
+                                condition.left_path(),
+                            ),
+                            (
+                                right
+                                    .as_collection()
+                                    .ok_or("Computed join source projection is unsupported.")?
+                                    .collection(),
+                                condition.right_path(),
+                            ),
                         ] {
                             for segment in leaf {
                                 self.budget.text(segment)?;
@@ -593,6 +607,14 @@ impl Builder<'_> {
             }
             construction => {
                 let (name, message) = match construction {
+                    ScopeConstruction::CollectDocuments => (
+                        "Collect documents",
+                        "Document collection remains native construction metadata.",
+                    ),
+                    ScopeConstruction::CopyCurrentRows => (
+                        "Copy current rows",
+                        "Row copying remains native construction metadata.",
+                    ),
                     ScopeConstruction::CopyCurrentSource => (
                         "Copy current source",
                         "The complete current source group is copied without field-by-field bindings.",

@@ -52,7 +52,7 @@ internal static class MappingEndpointOpenApi
                     {
                         if (context.JsonTypeInfo.Type == typeof(MappingDocumentInvocationInputV1) ||
                             context.JsonTypeInfo.Type == typeof(MappingDocumentInvocationOutputV1))
-                            schema.Properties!["mediaType"] = Text("application/json", "application/edi-x12", "application/edifact", "text/csv", "text/tab-separated-values");
+                            schema.Properties!["mediaType"] = Text("application/json", "application/edi-x12", "application/edifact", "text/csv", "text/tab-separated-values", "application/xml");
                         if (context.JsonTypeInfo.Type == typeof(CsvDocumentDialect))
                         {
                             schema.Properties!["schema"] = Text(CsvDocumentPolicy.DialectSchema);

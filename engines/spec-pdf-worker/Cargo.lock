@@ -68,6 +68,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "braid-spec-pdf-worker"
+version = "0.1.0"
+dependencies = [
+ "format-pdf",
+ "ir",
+ "libc",
+ "lopdf",
+ "mapping",
+ "rustix",
+ "seccompiler",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -230,7 +246,7 @@ dependencies = [
 [[package]]
 name = "format-pdf"
 version = "0.1.0"
-source = "git+https://github.com/DeandreT/ferrule?rev=238369bf0071ee8ea097d8c54fa5061f433807fb#238369bf0071ee8ea097d8c54fa5061f433807fb"
+source = "git+https://github.com/DeandreT/ferrule?rev=740af0c38ede7d814a17146bab2bffd7301320c9#740af0c38ede7d814a17146bab2bffd7301320c9"
 dependencies = [
  "ir",
  "mapping",
@@ -291,7 +307,7 @@ dependencies = [
 [[package]]
 name = "ir"
 version = "0.1.0"
-source = "git+https://github.com/DeandreT/ferrule?rev=238369bf0071ee8ea097d8c54fa5061f433807fb#238369bf0071ee8ea097d8c54fa5061f433807fb"
+source = "git+https://github.com/DeandreT/ferrule?rev=740af0c38ede7d814a17146bab2bffd7301320c9#740af0c38ede7d814a17146bab2bffd7301320c9"
 dependencies = [
  "json-pattern",
  "serde",
@@ -316,7 +332,7 @@ dependencies = [
 [[package]]
 name = "json-pattern"
 version = "0.1.0"
-source = "git+https://github.com/DeandreT/ferrule?rev=238369bf0071ee8ea097d8c54fa5061f433807fb#238369bf0071ee8ea097d8c54fa5061f433807fb"
+source = "git+https://github.com/DeandreT/ferrule?rev=740af0c38ede7d814a17146bab2bffd7301320c9#740af0c38ede7d814a17146bab2bffd7301320c9"
 
 [[package]]
 name = "libc"
@@ -366,7 +382,7 @@ dependencies = [
 [[package]]
 name = "mapping"
 version = "0.1.0"
-source = "git+https://github.com/DeandreT/ferrule?rev=238369bf0071ee8ea097d8c54fa5061f433807fb#238369bf0071ee8ea097d8c54fa5061f433807fb"
+source = "git+https://github.com/DeandreT/ferrule?rev=740af0c38ede7d814a17146bab2bffd7301320c9#740af0c38ede7d814a17146bab2bffd7301320c9"
 dependencies = [
  "ir",
  "regex",
@@ -792,22 +808,6 @@ name = "weezl"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a28ac98ddc8b9274cb41bb4d9d4d5c425b6020c50c46f25559911905610b4a88"
-
-[[package]]
-name = "braid-spec-pdf-worker"
-version = "0.1.0"
-dependencies = [
- "format-pdf",
- "ir",
- "libc",
- "lopdf",
- "mapping",
- "rustix",
- "seccompiler",
- "serde",
- "serde_json",
- "sha2",
-]
 
 [[package]]
 name = "windows-link"

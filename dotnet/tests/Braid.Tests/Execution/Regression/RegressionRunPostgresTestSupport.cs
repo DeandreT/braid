@@ -60,7 +60,7 @@ internal sealed class RegressionRunPostgresTestSupport : IAsyncDisposable
     {
         var outputs = Value.Expected;
         return RegressionCaseExecution.Complete(MappingPreviewStatus.Succeeded, outputs,
-            new RegressionComparisonService().Compare(Value.Expected, new(OperationStatusV1.Succeeded, outputs)));
+            new RegressionComparisonService().Compare(Value.Expected, new(OperationStatusV1.Succeeded, outputs)), Value.Runtime.Profile);
     }
     public async ValueTask DisposeAsync()
     {

@@ -62,7 +62,7 @@ public sealed class BuildPreflightService
         {
             var refusal = boundary.Format switch
             {
-                "xml" => BuildPreflightReason.UnsupportedXmlBuild,
+                "xml" when intent.Profile.Id != BuildWorkerProtocol.XmlProfile => BuildPreflightReason.UnsupportedXmlBuild,
                 "flexText" => BuildPreflightReason.UnsupportedFlexTextBuild,
                 "xlsx" => BuildPreflightReason.UnsupportedXlsxBuild,
                 "protobuf" => BuildPreflightReason.UnsupportedProtobufBuild,

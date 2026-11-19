@@ -15,12 +15,19 @@ public static class BuildWorkerProtocol
     public const string DocumentProfile = "braid.ferrule-csharp-document.v1";
     public const string X12InterchangesProfile = "braid.ferrule-csharp-x12-interchanges.v1";
     public const string CsvProfile = "braid.ferrule-csharp-csv.v1";
-    public static bool IsDocumentProfile(string profile) => profile is DocumentProfile or X12InterchangesProfile or CsvProfile;
-    public static string PreviewProfileFor(string profile) => profile == CsvProfile ? CsvDocumentPolicy.Profile :
+    public static bool XmlBuildEnabled(Func<string, string?> read) => read("BRAID_BUILDS_XML_ENABLED") switch
+    {
+        null or "false" => false,
+        "true" => true,
+        _ => throw new ArgumentException("XML build enablement must be true or false.")
+    };
+    public const string XmlProfile = "braid.ferrule-csharp-xml.v1";
+    public static bool IsDocumentProfile(string profile) => profile is DocumentProfile or X12InterchangesProfile or CsvProfile or XmlProfile;
+    public static string PreviewProfileFor(string profile) => profile == XmlProfile ? XmlPreviewAdmission.Profile : profile == CsvProfile ? CsvDocumentPolicy.Profile :
         IsDocumentProfile(profile) ? DocumentPreviewPolicy.Profile : PreviewPolicy.Profile;
     public const string SdkVersion = "10.0.112";
     public const string RuntimeVersion = "10.0.12";
-    public const string Engine = "238369bf0071ee8ea097d8c54fa5061f433807fb";
+    public const string Engine = "740af0c38ede7d814a17146bab2bffd7301320c9";
     public const int MaximumNativeBytes = 4 * 1024 * 1024;
     public const int MaximumSourceBytes = 32 * 1024 * 1024;
     public const int MaximumHeaderBytes = 128 * 1024;
@@ -35,7 +42,8 @@ public static class BuildWorkerProtocol
     public sealed record Request(string ProtocolVersion, string RequestId, RevisionScope Revision,
         string NativeDigest, string IntentDigest, string Operation, string Profile);
     public sealed record Boundary(string Kind, string? Name, string Format,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CsvDocumentDialect? CsvDialect = null);
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CsvDocumentDialect? CsvDialect = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] XmlDocumentMetadata? XmlMetadata = null);
     public sealed record File(string Path, int ByteCount, string Sha256);
     public sealed record Response(string ProtocolVersion, string? RequestId, RevisionScope? Revision,
         string? NativeDigest, string? IntentDigest, string EngineRevision, string Profile, string Status,
@@ -87,6 +95,10 @@ public static class BuildWorkerProtocol
                     !identities.Add((boundary.Kind, boundary.Name))) throw Invalid();
             if (!identities.Contains(("primaryInput", null)) || !identities.Contains(("primaryOutput", null))) throw Invalid();
             if (expected.Profile == CsvProfile && identities.Count != 2) throw Invalid();
+            if (expected.Profile == XmlProfile)
+                XmlDocumentMetadataJson.MeasureOperation(header.Boundaries.Where(b => b.Kind is "primaryInput" or "namedInput").Select(b => b.XmlMetadata ?? throw Invalid()).ToArray(),
+                    header.Boundaries.Where(b => b.Kind is "primaryOutput" or "namedOutput").Select(b => b.XmlMetadata ?? throw Invalid()).ToArray());
+            else if (header.Boundaries.Any(b => b.XmlMetadata is not null)) throw Invalid();
         }
         return new(header, contents.AsReadOnly());
     }
@@ -109,6 +121,7 @@ public static class BuildWorkerProtocol
         Profile => format == "json",
         DocumentProfile or X12InterchangesProfile => format is "json" or "x12" or "edifact",
         CsvProfile => format is "csv" or "tsv",
+        XmlProfile => format == "xml",
         _ => false
     };
     public static bool AdmitsBoundary(string profile, string format, CsvDocumentDialect? dialect) =>
@@ -120,6 +133,7 @@ public static class BuildWorkerProtocol
     public static string MediaType(string format) => format switch
     {
         "json" => "application/json",
+        "xml" => "application/xml",
         "x12" => "application/edi-x12",
         "edifact" => "application/edifact",
         "csv" => "text/csv",
@@ -133,10 +147,10 @@ public static class BuildWorkerProtocol
         "primaryOutput" => BuildBoundaryKind.PrimaryOutput,
         "namedOutput" => BuildBoundaryKind.NamedOutput,
         _ => throw Invalid()
-    }, boundary.Name, boundary.Format, boundary.CsvDialect);
+    }, boundary.Name, boundary.Format, boundary.CsvDialect, boundary.XmlMetadata);
     private static void ValidateRequest(Request request)
     {
-        if (request.ProtocolVersion != Protocol || request.Profile is not (Profile or DocumentProfile or X12InterchangesProfile or CsvProfile) || request.Operation is not ("inspect" or "compile") ||
+        if (request.ProtocolVersion != Protocol || request.Profile is not (Profile or DocumentProfile or X12InterchangesProfile or CsvProfile or XmlProfile) || request.Operation is not ("inspect" or "compile") ||
             !Guid.TryParseExact(request.RequestId, "D", out var id) || id == Guid.Empty || id.ToString("D") != request.RequestId ||
             Sha256Digest.Parse(request.NativeDigest).Value != request.NativeDigest || Sha256Digest.Parse(request.IntentDigest).Value != request.IntentDigest) throw Invalid();
     }

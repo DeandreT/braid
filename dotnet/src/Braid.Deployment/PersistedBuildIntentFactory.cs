@@ -18,7 +18,8 @@ public sealed record CsvBuildBoundaryObservation(RevisionScope Revision, Sha256D
 public sealed class PersistedBuildIntentFactory(IBuildMetadataReader metadata, IRevisionReportMetadataReader sources,
     IRevisionReportReader reports, RegressionRunReadService evidence, BuildBackendIdentity backend, BuildRuntimeProfile profile,
     BuildBackendIdentity? documentBackend = null, BuildRuntimeProfile? documentProfile = null, BuildRuntimeProfile? interchangeProfile = null,
-    BuildBackendIdentity? csvBackend = null, BuildRuntimeProfile? csvProfile = null, ICsvBuildBoundaryReader? csvBoundaries = null) : IBuildIntentFactory
+    BuildBackendIdentity? csvBackend = null, BuildRuntimeProfile? csvProfile = null, ICsvBuildBoundaryReader? csvBoundaries = null,
+    BuildBackendIdentity? xmlBackend = null, BuildRuntimeProfile? xmlProfile = null, ICsvBuildBoundaryReader? xmlBoundaries = null) : IBuildIntentFactory
 {
     public async Task<BuildIntent?> CreateAsync(ActorContext actor, MappingScope mapping, Guid approvalId,
         BuildApprovalSelection selection, CancellationToken token = default)
@@ -36,8 +37,9 @@ public sealed class PersistedBuildIntentFactory(IBuildMetadataReader metadata, I
         if (retained.Environment.Reference != environment) throw Inconsistent();
         var selectedProfile = retained.Environment.Profile;
         var csv = csvProfile is not null && selectedProfile == csvProfile && selectedProfile.Id == BuildWorkerProtocol.CsvProfile;
+        var xml = xmlProfile is not null && selectedProfile == xmlProfile && selectedProfile.Id == BuildWorkerProtocol.XmlProfile;
         var document = selectedProfile == documentProfile || selectedProfile == interchangeProfile;
-        var selectedBackend = selectedProfile == profile ? backend : csv && csvBoundaries is not null ? csvBackend : document ? documentBackend : null;
+        var selectedBackend = selectedProfile == profile ? backend : csv && csvBoundaries is not null ? csvBackend : xml && xmlBoundaries is not null ? xmlBackend : document ? documentBackend : null;
         if (!retained.Environment.Active || selectedBackend is null) return null;
         var source = await sources.GetSourceAsync(actor, scope, token).ConfigureAwait(false);
         if (source is null) return null;
@@ -61,7 +63,7 @@ public sealed class PersistedBuildIntentFactory(IBuildMetadataReader metadata, I
             return null;
         if (projection.Boundaries.Count is < 1 or > 128) return null;
         var boundaries = new List<BuildBoundary>(projection.Boundaries.Count);
-        if (!csv) foreach (var boundary in projection.Boundaries)
+        if (!csv && !xml) foreach (var boundary in projection.Boundaries)
             {
                 token.ThrowIfCancellationRequested();
                 if (!(document ? BuildWorkerProtocol.AdmitsFormat(selectedProfile.Id, boundary.Format) : boundary.Format == "json") ||
@@ -77,12 +79,13 @@ public sealed class PersistedBuildIntentFactory(IBuildMetadataReader metadata, I
                 };
                 boundaries.Add(new(kind, kind is BuildBoundaryKind.PrimaryInput or BuildBoundaryKind.PrimaryOutput ? null : boundary.Name, boundary.Format));
             }
-        if (csv)
+        if (csv || xml)
         {
-            var native = await csvBoundaries!.ReadAsync(actor, source.Source, token).ConfigureAwait(false);
+            var native = await (xml ? xmlBoundaries : csvBoundaries)!.ReadAsync(actor, source.Source, token).ConfigureAwait(false);
             if (native is null) return null;
             if (native.Revision != scope || native.NativeDigest != source.Source.NativeObject.Digest || native.Backend != selectedBackend) throw Inconsistent();
-            if (!BuildWorkerProtocol.AdmitsCsvPlan(native.Boundaries)) return null;
+            if (xml && native.Boundaries.Any(b => b.Format != "xml" || b.XmlMetadata is null)) return null;
+            if (csv && !BuildWorkerProtocol.AdmitsCsvPlan(native.Boundaries)) return null;
             boundaries.AddRange(native.Boundaries);
         }
         if (boundaries.Distinct().Count() != boundaries.Count ||

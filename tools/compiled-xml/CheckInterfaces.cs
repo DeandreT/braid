@@ -48,3 +48,20 @@ foreach (var (maxIn, maxOut) in new[] { (2 * source.Length - 1, total), (2 * sou
     catch (XmlDocumentException error) when (error.Reason == XmlDocumentFailure.ByteLimit) { }
 }
 Console.WriteLine("Braid byte binding: three selections, exact limits, one-byte input/output refusals");
+
+foreach (var selection in new (bool all, string? name)[] { (true, null), (false, null), (false, "copy") })
+{
+    void Run(byte[] input, CompiledXmlBytes.ProjectionLimits limits) => CompiledXmlBytes.Invoke(
+        typeof(GeneratedMapping).Assembly, clock, selection.all, selection.name, new(null, input),
+        selection.all ? [new("lookup", source)] : [], ["copy"], 256, 1024, default, limits);
+    // Order has two scalar children. Field name bytes: 4+8, plus the string value 'A'.
+    Run(source, new(3, 13, 7));
+    foreach (var lower in new CompiledXmlBytes.ProjectionLimits[] { new(2, 13, 7), new(3, 12, 7), new(3, 13, 6) })
+    {
+        try { Run(source, lower); throw new InvalidOperationException("Projection limit not enforced"); }
+        catch (CompiledXmlBytes.InputFailure error) when (error.ResourceLimit) { }
+    }
+    try { Run("<Order>"u8.ToArray(), new(3, 13, 7)); throw new InvalidOperationException("Incomplete XML accepted"); }
+    catch (XmlDocumentException error) when (!error.IsResourceLimit) { }
+}
+Console.WriteLine("Bounded XML: all three projection budgets and malformed document remain distinct");

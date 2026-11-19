@@ -48,6 +48,7 @@ public static class BuildWorkerRegistration
         if (!enabled) return services;
         string Required(string name) => environment(name) is { Length: > 0 } value && !string.IsNullOrWhiteSpace(value)
             ? value : throw new ArgumentException($"Build worker requires {name}.");
+        var xmlEnabled = BuildWorkerProtocol.XmlBuildEnabled(environment);
         var dispatcher = Required("BRAID_BUILD_DISPATCHER_CONNECTION_STRING");
         var writer = Required("BRAID_BUILD_WRITER_CONNECTION_STRING");
         var access = Required("BRAID_BUILD_ACCESS_CONNECTION_STRING");
@@ -71,7 +72,7 @@ public static class BuildWorkerRegistration
             new PostgresRevisionReportMetadataReader(provider.GetRequiredKeyedService<PostgresRevisionReportDatabase>(Key)),
             new RegressionRunReadService(provider.GetRequiredKeyedService<PostgresRegressionRunStore>(Key),
                 provider.GetRequiredKeyedService<PostgresRegressionCaseStore>(Key)),
-            provider.GetRequiredKeyedService<IInspectionWorkerRunner>(Key)));
+            provider.GetRequiredKeyedService<IInspectionWorkerRunner>(Key), xmlEnabled));
         services.AddSingleton<BuildRunExecutor>();
         services.AddSingleton<BuildRunPump>();
         services.AddHostedService<BuildWorkerService>();
@@ -79,7 +80,7 @@ public static class BuildWorkerRegistration
     }
 
     private sealed class Execution(string writer, IBuildRunStore runs, IPrivateObjectStore native, IProjectReader projects,
-        IRevisionReportMetadataReader reports, RegressionRunReadService evidence, IInspectionWorkerRunner runner) : IBuildRunExecution, IExecutionAdmission
+        IRevisionReportMetadataReader reports, RegressionRunReadService evidence, IInspectionWorkerRunner runner, bool xmlEnabled) : IBuildRunExecution, IExecutionAdmission
     {
         public bool CanExecute => runner is not IExecutionAdmission { CanExecute: false };
 
@@ -89,7 +90,7 @@ public static class BuildWorkerRegistration
             await using var controls = new PostgresBuildStore(writer, writer: true, claim);
             var admission = new ClaimedAdmission(runs, claim, new BuildControlService(controls, projects, reports, evidence));
             var objects = new PostgresBuildObjectStore(controls, native, actor);
-            var compiler = new FerruleBuildCompiler(runner, new(actor, admission, objects));
+            var compiler = new FerruleBuildCompiler(runner, new(actor, admission, objects), xmlEnabled);
             return await new BuildWorkflow(admission, compiler, controls, objects).ExecuteAsync(actor, claim.Intent, token).ConfigureAwait(false);
         }
     }

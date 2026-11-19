@@ -178,7 +178,7 @@ test("declared EDI preview and saved comparison use real bytes in the authentica
       timeout: 300_000,
     });
     await expect(preview).toContainText(
-      "238369bf0071ee8ea097d8c54fa5061f433807fb",
+      "740af0c38ede7d814a17146bab2bffd7301320c9",
     );
     const output = preview.getByRole("region", {
       name: "Preview outputs",

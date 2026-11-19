@@ -829,7 +829,7 @@ export function expectReport(
     expect(provenance?.confirmed).toBe(true);
     expect(provenance?.backend.id).toBe("ferrule");
     expect(provenance?.backend.revision).toBe(
-      "238369bf0071ee8ea097d8c54fa5061f433807fb",
+      "740af0c38ede7d814a17146bab2bffd7301320c9",
     );
     expect(provenance?.backend.buildId).toBe(
       "sha256:439291fb4d665e3ba9c086e88214a73fd44552af80932a9b40c97f5816c7047e",

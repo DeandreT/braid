@@ -40242,6 +40242,16 @@
                 "$ref": "#/components/schemas/BuildCsvDialectV1"
               }
             ]
+          },
+          "xmlMetadata": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/XmlDocumentMetadataV1"
+              }
+            ]
           }
         }
       },
@@ -40311,6 +40321,16 @@
             ]
           },
           "csvProfile": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BuildRuntimeV1"
+              }
+            ]
+          },
+          "xmlProfile": {
             "oneOf": [
               {
                 "type": "null"
@@ -40394,6 +40414,16 @@
             ]
           },
           "csvProfile": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BuildRuntimeV1"
+              }
+            ]
+          },
+          "xmlProfile": {
             "oneOf": [
               {
                 "type": "null"

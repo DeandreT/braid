@@ -22,6 +22,57 @@ public sealed class FerruleServiceCompileTests
 {
     [ServiceCompileFact]
     [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public async Task Structured_xml_public_compiler_and_child_preserve_bytes_and_classify_input()
+    {
+        var root = TemporaryRoot();
+        try
+        {
+            var mapping = JsonNode.Parse(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "FerruleFixtures", "xml-closed.native.json")))!;
+            mapping["extra_targets"] = new JsonArray(new JsonObject { ["name"] = "copy", ["schema"] = mapping["target"]!.DeepClone(),
+                ["root"] = mapping["root"]!.DeepClone(), ["options"] = mapping["target_options"]!.DeepClone() });
+            var bytes = Encoding.UTF8.GetBytes(mapping.ToJsonString());
+            await using var generator = new ProcessCompileRunner(CompileOptions(root));
+            var actor = new ActorContext(new(Guid.NewGuid()));
+            var reference = new PrivateObjectReference(PrivateObjectId.Create(Scope, PrivateObjectClass.NativeArtifact), Sha256Digest.FromBytes(bytes), bytes.Length);
+            var source = new NativeSource(actor, reference, bytes);
+            var compiler = new FerruleBuildCompiler(generator, new(actor, source, source), xmlEnabled: true);
+            var metadata = XmlDocumentMetadata.WithoutHints;
+            var intent = new BuildIntent(Guid.NewGuid(), Scope, reference.Digest, compiler.XmlBackend, FerruleBuildCompiler.XmlProfile,
+                [new(BuildBoundaryKind.PrimaryInput, null, "xml", xmlMetadata: metadata), new(BuildBoundaryKind.PrimaryOutput, null, "xml", xmlMetadata: metadata),
+                 new(BuildBoundaryKind.NamedOutput, "copy", "xml", xmlMetadata: metadata)], new(new(Scope.OrganizationId, Scope.ProjectId), Guid.NewGuid(), 1), Guid.NewGuid(), Guid.NewGuid());
+            Assert.Equal(BuildPreflightReason.UnsupportedXmlBuild, (await new FerruleBuildCompiler(generator, new(actor, source, source)).InspectAsync(intent)).RefusalReason);
+            var capability = await compiler.InspectAsync(intent);
+            Assert.Equal(BuildPreflightOutcome.Supported, new BuildPreflightService().Evaluate(intent, capability).Outcome);
+            var artifact = await compiler.BuildAsync(intent, new(bytes, bytes.Length));
+            var published = BuildArtifactReference.Create(intent, capability, artifact.Digest, artifact.Length);
+            await using var worker = new ProcessCompiledRuntimeRunner(FerruleCompiledServiceTests.Options(root));
+            var runtime = new FerruleCompiledBuildRuntime(worker, compiler.XmlBackend);
+            await using var interpreter = new ProcessWorkerRunner(new(Executable!, DockerWorkerProfile.Preview, root));
+            const string clock = "2026-10-24T12:00:00Z";
+            foreach (var target in new[] { PreviewTargetSelection.All, PreviewTargetSelection.Primary, PreviewTargetSelection.Named("copy") })
+            {
+                var replay = new RegressionReplay(target, clock, PreviewLimits.Default, new(null,"<Order><code>A</code><quantity>2</quantity></Order>"u8, xmlMetadata:metadata), [], []);
+                var result = await runtime.ExecuteAsync(published, artifact, replay);
+                var interpreted = await new FerrulePreviewBackend(interpreter, PreviewExecutionProfile.XmlDocument, xmlEnabled: true).PreviewAsync(new(NativeArtifact.Admit(Scope, bytes, PreviewPolicy.MaximumNativeBytes), target, replay.Primary, [], [], clock, replay.Limits) { Profile = PreviewExecutionProfile.XmlDocument });
+                Assert.Equal(MappingPreviewStatus.Succeeded, interpreted.Status);
+                Assert.Equal(CompiledBuildOutcome.Completed, result.Outcome);
+                Assert.Equal(interpreted.Artifacts.Count, result.Outputs!.Outputs.Count);
+                for (int i = 0; i < interpreted.Artifacts.Count; i++) Assert.Equal(interpreted.Artifacts[i].Bytes, result.Outputs.Outputs[i].CopyBytes());
+            }
+            var invalid = await runtime.ExecuteAsync(published, artifact, new(PreviewTargetSelection.All, clock, PreviewLimits.Default,
+                new(null,"<Order>"u8, xmlMetadata:metadata), [], []));
+            Assert.Equal(CompiledBuildOutcome.InvalidInput, invalid.Outcome);
+            Assert.Null(invalid.Outputs);
+            var limited = await runtime.ExecuteAsync(published, artifact, new(PreviewTargetSelection.All, clock,
+                PreviewLimits.Default with { MaximumOutputBytes = 16 },
+                new(null, "<Order><code>A</code><quantity>2</quantity></Order>"u8, xmlMetadata: metadata), [], []));
+            Assert.Equal(CompiledBuildOutcome.ResourceLimit, limited.Outcome);
+            Assert.Null(limited.Outputs);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+    [ServiceCompileFact]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
     public async Task Document_x12_compiler_and_restricted_runtime_match_the_interpreted_complete_envelope_bytes()
         => await DocumentCompilerParity(false, false);
 

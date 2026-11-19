@@ -232,7 +232,7 @@ internal sealed class MappingEndpointRoutes(MappingEndpointCalls calls)
         var media = new List<MachineInputMedia>();
         foreach (var input in inputs.EnumerateArray())
         {
-            Object(input, documentProfile ? ["name", "content", "mediaType", "csvDialect"] : ["name", "content"]);
+            Object(input, documentProfile ? ["name", "content", "mediaType", "csvDialect", "xmlMetadata"] : ["name", "content"]);
             string? name = null;
             if (input.TryGetProperty("name", out var named) && named.ValueKind != JsonValueKind.Null)
                 name = named.ValueKind == JsonValueKind.String ? named.GetString() : throw new FormatException();
@@ -241,11 +241,18 @@ internal sealed class MappingEndpointRoutes(MappingEndpointCalls calls)
             var bytes = Convert.FromBase64String(content.GetString()!);
             var dialect = documentProfile ? BuildCsvDialect.ReadOptional(input) : null;
             var mediaType = documentProfile ? Text(input, "mediaType") : PreviewPolicy.MediaType;
+            XmlDocumentMetadata? metadata = null;
+            if (input.TryGetProperty("xmlMetadata", out var xml) != (mediaType == XmlDocumentPolicy.MediaType)) throw new FormatException();
+            if (mediaType == XmlDocumentPolicy.MediaType)
+            {
+                try { metadata = XmlDocumentMetadataJson.Read(xml, XmlDocumentRole.Input); }
+                catch (XmlDocumentException) { throw new FormatException(); }
+            }
             if (CsvDocumentPolicy.AdmitsMediaType(mediaType) ? !CsvDocumentPolicy.Admits(dialect, mediaType) : dialect is not null)
                 throw new FormatException();
             if (bytes.Length == 0 && dialect is null) throw new FormatException();
-            documents.Add(new(name, bytes, dialect));
-            if (documentProfile) media.Add(new(name, mediaType, dialect));
+            documents.Add(new(name, bytes, dialect, metadata));
+            if (documentProfile) media.Add(new(name, mediaType, dialect, metadata));
         }
         var parameters = new List<PreviewParameter>();
         if (root.TryGetProperty("parameters", out var values))

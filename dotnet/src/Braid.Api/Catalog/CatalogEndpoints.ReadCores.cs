@@ -131,7 +131,8 @@ public static partial class CatalogEndpoints
             options.DocumentProfile is { } documentProfile ? CatalogBuildMapping.Profile(documentProfile) : null,
             options.InterchangeProfile is { } interchangeProfile ? CatalogBuildMapping.Profile(interchangeProfile) : null,
             options.CsvBackend is { } csvBackend ? CatalogBuildMapping.Backend(csvBackend) : null,
-            options.CsvProfile is { } csvProfile ? CatalogBuildMapping.Profile(csvProfile) : null);
+            options.CsvProfile is { } csvProfile ? CatalogBuildMapping.Profile(csvProfile) : null,
+            options.XmlProfile is { } xml ? CatalogBuildMapping.Profile(xml) : null);
         return await BuildMappingAccessAsync(services, actor, mapping, ct) ? response : null;
     }
 
