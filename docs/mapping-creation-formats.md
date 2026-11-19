@@ -3,7 +3,7 @@
 `MappingCreationPlan(CreationPlanV2)` extends the application authoring boundary to
 JSON, XML, CSV, TSV, X12 and EDIFACT, independently on either side. It lowers a
 closed typed plan to `braid.authoring.v1` plus `ferrule.edit.v1` operations. The
-Ferrule dependency stays pinned to `740af0c38ede7d814a17146bab2bffd7301320c9`.
+Ferrule dependency stays pinned to `9149905759b4f65baf043b975624e45805a50142`.
 
 ## Storage
 

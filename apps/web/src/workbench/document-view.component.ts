@@ -98,6 +98,13 @@ import { csvDocumentLimits } from "./csv-document";
           Bounded lexical outline only, not schema validation. Download retains
           the original bytes.
         </p>
+      } @else if (data().workbook; as workbook) {
+        <div class="csv-table-scroll" tabindex="0" role="region" aria-label="Workbook table">
+          <table><caption>Worksheet · showing {{workbook.rows.length}} of {{workbook.total}} data rows</caption>
+          <thead><tr>@for (column of workbook.header; track $index) { <th scope="col"><span>{{column}}</span></th> }</tr></thead>
+          <tbody>@for (row of workbook.rows; track $index) { <tr>@for (cell of row; track $index) { <td><span>{{cell}}</span></td> }</tr> }</tbody></table>
+        </div>
+        <p>Read-only worksheet. Download retains the original workbook bytes.</p>
       } @else if (tableView()) {
         @if (csvTable(); as table) {
           <div

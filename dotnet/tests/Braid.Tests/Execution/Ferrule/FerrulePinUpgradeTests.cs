@@ -13,7 +13,7 @@ namespace Braid.Tests;
 /// <summary>Authored identity/provenance cases; not worker, image, storage or migration qualification.</summary>
 public sealed class FerrulePinUpgradeTests
 {
-    private const string CurrentRevision = "740af0c38ede7d814a17146bab2bffd7301320c9";
+    private const string CurrentRevision = "9149905759b4f65baf043b975624e45805a50142";
     private const string CurrentAdapter = "braid.ferrule-adapter.v3";
 
     /// <summary>Historical engine/adapter pairs, with immutable image identities (including a synthetic prior-pin fixture).</summary>

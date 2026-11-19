@@ -3,7 +3,7 @@
 `braid_ferrule_core::authoring::compile(&[u8])` creates a fresh Ferrule project,
 applies `ferrule.edit.v1` operations and returns an authoritative `edit::Checkpoint`.
 It performs no I/O and accepts no template, native project, URL or resource path.
-Ferrule remains pinned to `740af0c38ede7d814a17146bab2bffd7301320c9`.
+Ferrule remains pinned to `9149905759b4f65baf043b975624e45805a50142`.
 
 ## Closed request
 

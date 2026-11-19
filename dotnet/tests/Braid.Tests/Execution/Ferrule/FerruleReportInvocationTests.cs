@@ -617,7 +617,7 @@ public sealed class FerruleReportInvocationTests
         ["revision"] = header["revision"]!.DeepClone(),
         ["nativeDigest"] = header["nativeDigest"]!.DeepClone(),
         ["documentId"] = "entry.native.json",
-        ["engineRevision"] = "740af0c38ede7d814a17146bab2bffd7301320c9",
+        ["engineRevision"] = "9149905759b4f65baf043b975624e45805a50142",
         ["result"] = result,
         ["failure"] = null
     };

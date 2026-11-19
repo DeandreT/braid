@@ -50,7 +50,7 @@ const succeeded = run("completed", {
   recordsWritten: "1",
   provenance: {
     confirmed: true,
-    engineRevision: "740af0c38ede7d814a17146bab2bffd7301320c9",
+    engineRevision: "9149905759b4f65baf043b975624e45805a50142",
     backendBuild: "sha256:" + "c".repeat(64),
     adapterBuild: "braid.ferrule-preview-adapter.v1",
     profile: "braid.ferrule-json-preview.v1",

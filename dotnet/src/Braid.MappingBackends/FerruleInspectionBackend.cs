@@ -13,7 +13,7 @@ namespace Braid.MappingBackends;
 public sealed partial class FerruleInspectionBackend(IInspectionWorkerRunner runner) : IMappingInspectionBackend, IMappingProjectionBackend, Braid.Application.IMappingEditBackend
 {
     public const string ProtocolVersion = "braid.ferrule-host.v1";
-    public const string EngineRevision = "740af0c38ede7d814a17146bab2bffd7301320c9";
+    public const string EngineRevision = "9149905759b4f65baf043b975624e45805a50142";
     public const string AdapterBuild = "braid.ferrule-adapter.v3";
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
     private static readonly JsonSerializerOptions JsonOptions = CreateOptions();

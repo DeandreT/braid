@@ -38,7 +38,8 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend, IExecutionAd
         PreviewExecutionProfile.Document => DocumentPreviewPolicy.Profile,
         _ => PreviewPolicy.Profile
     };
-    private string SelectedProtocol => NativeFormat?.Profile ?? _profile switch
+    private const string PortableProtocol = "braid.ferrule-portable-workbook-preview.v1";
+    private string SelectedProtocol => NativeFormat == NativeDocumentFormat.Xlsx ? PortableProtocol : NativeFormat?.Profile ?? _profile switch
     {
         PreviewExecutionProfile.CsvDocument => CsvProtocolVersion,
         PreviewExecutionProfile.XmlDocument => XmlPreviewAdmission.Profile,
@@ -139,8 +140,6 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend, IExecutionAd
             return Invalid("XML metadata requires its own admission profile.");
         if (NativeFormat is { } nativeFormat)
         {
-            if (nativeFormat == NativeDocumentFormat.Xlsx && _runner is ProcessWorkerRunner or FerruleServiceRunner)
-                return LocalFailure(artifact, MappingPreviewStatus.UnsupportedCapability, "preview.xlsxOutputUnavailable", NativeDocumentFormat.XlsxOutputRefusal);
             if (!_nativeFormats.Contains(nativeFormat)) return LocalFailure(artifact, MappingPreviewStatus.UnsupportedCapability, "preview.nativeDisabled", "This native document profile is not enabled.");
             if (request.NamedInputs.Count != 0 || request.Target.Kind == PreviewTargetKind.Named) return Invalid("Native documents require primary boundaries.");
             try
@@ -335,7 +334,7 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend, IExecutionAd
             && response.Revision == new HostRevision(scope.OrganizationId.ToString("D"), scope.ProjectId.ToString("D"),
                 scope.MappingId.ToString("D"), scope.RevisionId.ToString("D"))
             && response.NativeDigest == artifact.Digest.Value && response.DocumentId == InspectionPolicy.DocumentId);
-        Require(response.EngineRevision == FerruleInspectionBackend.EngineRevision && response.Profile == SelectedProfile);
+        Require(response.EngineRevision == FerruleInspectionBackend.EngineRevision && response.Profile == (NativeFormat == NativeDocumentFormat.Xlsx ? PortableProtocol : SelectedProfile));
         Require((response.Result is null) != (response.Failure is null));
         var maximumText = request.Limits.MaximumTextBytes;
         var offset = 4 + (int)length;

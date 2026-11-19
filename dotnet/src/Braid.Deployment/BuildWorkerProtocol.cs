@@ -27,7 +27,7 @@ public static class BuildWorkerProtocol
         IsDocumentProfile(profile) ? DocumentPreviewPolicy.Profile : PreviewPolicy.Profile;
     public const string SdkVersion = "10.0.112";
     public const string RuntimeVersion = "10.0.12";
-    public const string Engine = "740af0c38ede7d814a17146bab2bffd7301320c9";
+    public const string Engine = "9149905759b4f65baf043b975624e45805a50142";
     public const int MaximumNativeBytes = 4 * 1024 * 1024;
     public const int MaximumSourceBytes = 32 * 1024 * 1024;
     public const int MaximumHeaderBytes = 128 * 1024;

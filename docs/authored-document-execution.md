@@ -7,7 +7,7 @@ the pinned engine revision, and SHA-256 digests of the native, sample and output
 There is no revision identity or requirement to save the proposal first.
 
 Implementation: `engines/ferrule-host/core/src/authored_document/`.
-Ferrule revision: `740af0c38ede7d814a17146bab2bffd7301320c9`.
+Ferrule revision: `9149905759b4f65baf043b975624e45805a50142`.
 
 ## Executable boundaries
 
@@ -167,7 +167,7 @@ Response header:
 {
   "protocolVersion": "braid.ferrule-authored-preview.v1",
   "request": "exact parsed request object, or null if unavailable",
-  "engineRevision": "740af0c38ede7d814a17146bab2bffd7301320c9",
+  "engineRevision": "9149905759b4f65baf043b975624e45805a50142",
   "result": "null or {outputDigest, outputByteCount, format, mediaType}",
   "failure": "null or {code}"
 }

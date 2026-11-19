@@ -9,20 +9,20 @@ members = ["core"]
 
 [dependencies]
 braid-ferrule-core = { path = "core" }
-ferrule-mapping = { package = "mapping", git = "https://github.com/DeandreT/ferrule", rev = "c22b3470109a9583fd54f25d9889737650e8448e" }
-ferrule-engine = { package = "engine", git = "https://github.com/DeandreT/ferrule", rev = "c22b3470109a9583fd54f25d9889737650e8448e" }
-ferrule-ir = { package = "ir", git = "https://github.com/DeandreT/ferrule", rev = "c22b3470109a9583fd54f25d9889737650e8448e" }
-ferrule-cli = { package = "cli", git = "https://github.com/DeandreT/ferrule", rev = "c22b3470109a9583fd54f25d9889737650e8448e" }
-ferrule-codegen = { package = "codegen", git = "https://github.com/DeandreT/ferrule", rev = "c22b3470109a9583fd54f25d9889737650e8448e" }
-ferrule-codegen-csharp = { package = "codegen-csharp", git = "https://github.com/DeandreT/ferrule", rev = "c22b3470109a9583fd54f25d9889737650e8448e" }
-ferrule-format-csv = { package = "format-csv", git = "https://github.com/DeandreT/ferrule", rev = "c22b3470109a9583fd54f25d9889737650e8448e" }
-ferrule-format-xml = { package = "format-xml", git = "https://github.com/DeandreT/ferrule", rev = "c22b3470109a9583fd54f25d9889737650e8448e" }
-ferrule-format-xbrl = { package = "format-xbrl", git = "https://github.com/DeandreT/ferrule", rev = "c22b3470109a9583fd54f25d9889737650e8448e" }
-ferrule-format-protobuf = { package = "format-protobuf", git = "https://github.com/DeandreT/ferrule", rev = "c22b3470109a9583fd54f25d9889737650e8448e" }
-ferrule-format-xlsx = { package = "format-xlsx", git = "https://github.com/DeandreT/ferrule", rev = "c22b3470109a9583fd54f25d9889737650e8448e" }
-ferrule-format-flextext = { package = "format-flextext", git = "https://github.com/DeandreT/ferrule", rev = "c22b3470109a9583fd54f25d9889737650e8448e" }
+ferrule-mapping = { package = "mapping", git = "https://github.com/DeandreT/ferrule", rev = "9149905759b4f65baf043b975624e45805a50142" }
+ferrule-engine = { package = "engine", git = "https://github.com/DeandreT/ferrule", rev = "9149905759b4f65baf043b975624e45805a50142" }
+ferrule-ir = { package = "ir", git = "https://github.com/DeandreT/ferrule", rev = "9149905759b4f65baf043b975624e45805a50142" }
+ferrule-cli = { package = "cli", git = "https://github.com/DeandreT/ferrule", rev = "9149905759b4f65baf043b975624e45805a50142" }
+ferrule-codegen = { package = "codegen", git = "https://github.com/DeandreT/ferrule", rev = "9149905759b4f65baf043b975624e45805a50142" }
+ferrule-codegen-csharp = { package = "codegen-csharp", git = "https://github.com/DeandreT/ferrule", rev = "9149905759b4f65baf043b975624e45805a50142" }
+ferrule-format-csv = { package = "format-csv", git = "https://github.com/DeandreT/ferrule", rev = "9149905759b4f65baf043b975624e45805a50142" }
+ferrule-format-xml = { package = "format-xml", git = "https://github.com/DeandreT/ferrule", rev = "9149905759b4f65baf043b975624e45805a50142" }
+ferrule-format-xbrl = { package = "format-xbrl", git = "https://github.com/DeandreT/ferrule", rev = "9149905759b4f65baf043b975624e45805a50142" }
+ferrule-format-protobuf = { package = "format-protobuf", git = "https://github.com/DeandreT/ferrule", rev = "9149905759b4f65baf043b975624e45805a50142" }
+ferrule-format-xlsx = { package = "format-xlsx", git = "https://github.com/DeandreT/ferrule", rev = "9149905759b4f65baf043b975624e45805a50142" }
+ferrule-format-flextext = { package = "format-flextext", git = "https://github.com/DeandreT/ferrule", rev = "9149905759b4f65baf043b975624e45805a50142" }
 quick-xml = "=0.41.0"
-ferrule-mfd = { package = "mfd", git = "https://github.com/DeandreT/ferrule", rev = "c22b3470109a9583fd54f25d9889737650e8448e" }
+ferrule-mfd = { package = "mfd", git = "https://github.com/DeandreT/ferrule", rev = "9149905759b4f65baf043b975624e45805a50142" }
 anyhow = "=1.0.103"
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = { version = "=1.0.150", features = ["float_roundtrip"] }

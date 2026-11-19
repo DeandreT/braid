@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 pub const PROTOCOL_VERSION: &str = "braid.ferrule-host.v1";
-pub const ENGINE_REVISION: &str = "c22b3470109a9583fd54f25d9889737650e8448e";
+pub const ENGINE_REVISION: &str = "9149905759b4f65baf043b975624e45805a50142";
 pub const MAX_HEADER_BYTES: usize = 16 * 1024;
 pub const MAX_NATIVE_BYTES: usize = 4 * 1024 * 1024;
 pub const MAX_RESPONSE_BYTES: usize = 8 * 1024 * 1024;

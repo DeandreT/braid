@@ -9,6 +9,7 @@ import { parseCsvDocument, type CsvDocumentResult } from "./csv-document";
 import { xmlOutline, type XmlOutlineLine } from "./xml-outline";
 import { xmlMetadata } from "../catalog/previews/xml-contract";
 import { nativeSettings } from "../catalog/previews/native-document-contract";
+import { workbookMedia, workbookTable, type WorkbookTable } from "./workbook-table";
 
 /** Dialect metadata belongs to this exact artifact, never its filename or a sibling output. */
 export type WorkbenchDocument = RegressionDocument & {
@@ -18,6 +19,7 @@ export type WorkbenchDocument = RegressionDocument & {
 export interface DocumentRepresentation {
   name: string | null;
   byteCount: number;
+  workbook?: WorkbookTable | null;
   text: string;
   truncated: boolean;
   format: "utf8" | "hex";
@@ -94,6 +96,7 @@ export function displayBytes(
   return {
     name,
     byteCount: bytes.length,
+    workbook: mediaType === workbookMedia ? workbookTable(bytes) : null,
     text,
     truncated: bytes.length > (format === "hex" ? 1024 : 65536),
     format,

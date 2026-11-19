@@ -154,8 +154,6 @@ public static class XlsxSettingsJson
 /// <summary>Reads only explicit saved flat-sheet metadata; no workbook, path, graph or resource is opened.</summary>
 public static class XlsxNativeSettings
 {
-    private static readonly string[] InputKeys = ["has_header_row", "tabular_kind", "xlsx_columns", "xlsx_sheet", "xlsx_start_row"];
-    private static readonly string[] OutputKeys = [.. InputKeys, "xlsx_headers"];
 
     public static (XlsxDocumentSettings Input, XlsxDocumentSettings Output) Read(NativeArtifact artifact)
     {
@@ -174,10 +172,20 @@ public static class XlsxNativeSettings
             }
             foreach (var key in new[] { "extra_sources", "extra_targets" })
                 if (root.TryGetProperty(key, out var items) && (items.ValueKind != JsonValueKind.Array || items.GetArrayLength() != 0)) throw new JsonException();
-            return (ReadOptions(root.GetProperty("source_options"), InputKeys), ReadOptions(root.GetProperty("target_options"), OutputKeys));
+            var iteration = root.GetProperty("root").GetProperty("source");
+            if (iteration.ValueKind != JsonValueKind.Array || iteration.GetArrayLength() != 0) throw new JsonException();
+            return (Portable(root.GetProperty("source_options")), Portable(root.GetProperty("target_options")));
         }
         catch (Exception error) when (error is JsonException or InvalidOperationException or KeyNotFoundException or ArgumentException or FormatException)
         { throw new PreviewRunException("The revision does not declare primary flat XLSX workbooks."); }
+    }
+
+    private static XlsxDocumentSettings Portable(JsonElement options)
+    {
+        var settings = ReadOptions(options, ["tabular_kind", "xlsx_sheet", "has_header_row"]);
+        if (!options.GetProperty("has_header_row").GetBoolean() || settings.Sheet is { } sheet &&
+            (sheet.Equals("History", StringComparison.OrdinalIgnoreCase) || sheet.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '_'))) throw new JsonException();
+        return settings;
     }
 
     // Full closed option/schema/graph admission remains native. This projection cannot enable execution.

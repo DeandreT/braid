@@ -1,0 +1,89 @@
+{
+  "source": {
+    "name": "Row",
+    "kind": {
+      "kind": "group",
+      "children": [
+        {
+          "name": "label",
+          "kind": {
+            "kind": "scalar",
+            "ty": "string"
+          }
+        },
+        {
+          "name": "quantity",
+          "kind": {
+            "kind": "scalar",
+            "ty": "int"
+          }
+        }
+      ]
+    }
+  },
+  "target": {
+    "name": "Row",
+    "kind": {
+      "kind": "group",
+      "children": [
+        {
+          "name": "label",
+          "kind": {
+            "kind": "scalar",
+            "ty": "string"
+          }
+        },
+        {
+          "name": "quantity",
+          "kind": {
+            "kind": "scalar",
+            "ty": "int"
+          }
+        }
+      ]
+    }
+  },
+  "source_path": "not-a-workbook.json",
+  "target_path": "not-a-workbook.csv",
+  "source_options": {
+    "tabular_kind": "xlsx",
+    "xlsx_sheet": "Order",
+    "has_header_row": true
+  },
+  "target_options": {
+    "tabular_kind": "xlsx",
+    "xlsx_sheet": "Order",
+    "has_header_row": true
+  },
+  "graph": {
+    "nodes": {
+      "1": {
+        "kind": "source_field",
+        "path": [
+          "label"
+        ]
+      },
+      "2": {
+        "kind": "source_field",
+        "path": [
+          "quantity"
+        ]
+      }
+    }
+  },
+  "root": {
+    "target_field": "",
+    "source": [],
+    "bindings": [
+      {
+        "target_field": "label",
+        "node": 1
+      },
+      {
+        "target_field": "quantity",
+        "node": 2
+      }
+    ],
+    "children": []
+  }
+}
