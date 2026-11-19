@@ -2,7 +2,7 @@
 
 The restricted worker uses Ferrule's `mapping`, `ir`, `engine`, `cli`, `mfd`,
 `codegen`, and `codegen-csharp` libraries at revision
-`796eb8230561f200ca81c153c946a8fe08884e75`, with every transitive Ferrule
+`9149905759b4f65baf043b975624e45805a50142`, with every transitive Ferrule
 package locked to the same revision. The shared core also uses Ferrule's
 `edit-ops` and `editor-ui` libraries for deterministic command history. The `cli` library supplies only its public
 in-memory payload API to the preview operation; the worker does not run the

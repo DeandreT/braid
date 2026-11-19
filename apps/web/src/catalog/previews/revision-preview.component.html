@@ -518,9 +518,7 @@
                             class="catalog-button"
                             type="button"
                             [disabled]="
-                              output.mediaType === 'application/x-protobuf' ||
-                              output.mediaType ===
-                                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                              output.mediaType === 'application/x-protobuf'
                             "
                             (click)="show(output)"
                           >

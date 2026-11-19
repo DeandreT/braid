@@ -14,6 +14,7 @@ public sealed class LifecycleOrderConservationTests(PostgresFixture fixture)
     [InlineData(66)]
     [InlineData(67)]
     [InlineData(68)]
+    [InlineData(69)]
     public async Task Clean_schema_matches_the_restricted_lifecycle_catalog_contract(int prefix)
     {
         await using var db = await fixture.CreateCaseAsync(false);
@@ -24,7 +25,7 @@ public sealed class LifecycleOrderConservationTests(PostgresFixture fixture)
         await using var tx = await cn.BeginTransactionAsync();
         await using var command = new NpgsqlCommand("SET LOCAL search_path=pg_catalog; " + LifecycleCatalogAdmission.CaptureSql, cn, tx);
         var captured = await command.ExecuteScalarAsync() as string;
-        Assert.True(captured == (prefix switch { 64 => LifecycleCatalogAdmission.Fingerprint, 65 => LifecycleCatalogAdmission.NativeProfileFingerprint, 66 => LifecycleCatalogAdmission.RetentionHookFingerprint, 67 => LifecycleCatalogAdmission.CompiledXmlFingerprint, 68 => LifecycleCatalogAdmission.CompiledByteFingerprint, _ => throw new ArgumentOutOfRangeException(nameof(prefix)) }), $"Catalog fingerprint: {captured}");
+        Assert.True(captured == (prefix switch { 64 => LifecycleCatalogAdmission.Fingerprint, 65 => LifecycleCatalogAdmission.NativeProfileFingerprint, 66 => LifecycleCatalogAdmission.RetentionHookFingerprint, 67 => LifecycleCatalogAdmission.CompiledXmlFingerprint, 68 => LifecycleCatalogAdmission.CompiledByteFingerprint, 69 => LifecycleCatalogAdmission.WorkbookFingerprint, _ => throw new ArgumentOutOfRangeException(nameof(prefix)) }), $"Catalog fingerprint: {captured}");
     }
 
     [PostgresFact]

@@ -37,8 +37,8 @@ public sealed class NativePreviewReplayHttpTests(PostgresFixture fixture)
         Verify(NativeDocumentFormat.Xbrl, "xbrl-instance", DocumentPreviewTestData.XbrlInstance("5"), DocumentPreviewTestData.XbrlInstance("not-a-number"));
 
     [DocumentPreviewFact]
-    public Task Valid_workbook_output_is_refused_before_worker_dispatch_or_persistence() =>
-        Verify(NativeDocumentFormat.Xlsx, "xlsx-flat", Workbook("Orders"), null);
+    public Task Portable_workbook_replays_exact_bytes_and_refuses_a_rewritten_workbook() =>
+        Verify(NativeDocumentFormat.Xlsx, "xlsx-portable", Convert.FromBase64String(JsonSerializer.Deserialize<string>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "FerruleFixtures", "xlsx-portable-bytes.json")))!), Workbook("Orders"));
 
     private async Task Verify(NativeDocumentFormat format, string fixtureName, byte[] valid, byte[]? corrupt)
     {
@@ -87,21 +87,6 @@ public sealed class NativePreviewReplayHttpTests(PostgresFixture fixture)
                     return await client.SendAsync(request);
                 }
                 using var submit = await Submit(bytes);
-                if (format == NativeDocumentFormat.Xlsx)
-                {
-                    Assert.False(context.GetProperty("features").TryGetProperty("nativePreviewProfiles", out _));
-                    Assert.Equal(HttpStatusCode.NotImplemented, submit.StatusCode);
-                    using var problem = JsonDocument.Parse(await submit.Content.ReadAsByteArrayAsync());
-                    Assert.Equal(NativeDocumentFormat.XlsxOutputRefusal, problem.RootElement.GetProperty("detail").GetString());
-                    Assert.Equal(0L, await test.Case.ScalarAsync<long>("SELECT count(*) FROM braid.preview_runs"));
-                    var artifact = Braid.Domain.NativeArtifact.Admit(revision, native, PreviewPolicy.MaximumNativeBytes);
-                    var request = new MappingPreviewRequest(artifact, PreviewTargetSelection.Primary, new(null, valid, documentSettings: NativeDocumentNativeSettings.Read(artifact, format).Input), [], [], "2026-11-07T12:00:00Z", PreviewLimits.Default) { Profile = format.Execution };
-                    var refusal = await backend.PreviewAsync(request);
-                    Assert.Equal(MappingPreviewStatus.UnsupportedCapability, refusal.Status);
-                    Assert.Equal("preview.xlsxOutputUnavailable", refusal.Failure!.Code);
-                    Assert.False(refusal.Provenance.Confirmed);
-                    return;
-                }
                 var created = await CatalogHttpTestSupport.JsonAsync(submit, HttpStatusCode.Created);
                 var run = Guid.Parse(created.GetProperty("run").GetProperty("runId").GetString()!);
                 Assert.Equal(PreviewExecutionOutcome.Completed, await test.Executor(backend, options).ExecuteAsync(revision.OrganizationId, run, Guid.NewGuid()));

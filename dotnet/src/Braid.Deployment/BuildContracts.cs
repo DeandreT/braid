@@ -81,7 +81,7 @@ public sealed record BuildBoundary
         CsvDialect = csvDialect;
         if (xmlMetadata is not null && (format != "xml" || !XmlDocumentPolicy.Admits(xmlMetadata, XmlRole))) throw new BuildContractException(BuildContractFailure.InvalidInput);
         XmlMetadata = xmlMetadata;
-        if (documentSettings is not null && (named || format is not ("flexText" or "protobuf" or "xbrl") || !documentSettings.Admits(BuildWorkerProtocol.MediaType(format)))) throw new BuildContractException(BuildContractFailure.InvalidInput);
+        if (documentSettings is not null && (named || format is not ("flexText" or "protobuf" or "xbrl" or "xlsx") || !documentSettings.Admits(BuildWorkerProtocol.MediaType(format)))) throw new BuildContractException(BuildContractFailure.InvalidInput);
         DocumentSettings = documentSettings;
     }
 

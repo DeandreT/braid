@@ -66,7 +66,7 @@ public sealed class BuildPreflightService
                 "pdf" => BuildPreflightReason.UnsupportedPdfBuild,
                 "database" => BuildPreflightReason.StatefulDatabaseBuild,
                 "flexText" when intent.Profile.Id != BuildWorkerProtocol.FlexProfile => BuildPreflightReason.UnsupportedFlexTextBuild,
-                "xlsx" => BuildPreflightReason.UnsupportedXlsxBuild,
+                "xlsx" when intent.Profile.Id != BuildWorkerProtocol.WorkbookProfile => BuildPreflightReason.UnsupportedXlsxBuild,
                 "protobuf" when intent.Profile.Id != BuildWorkerProtocol.ProtoProfile => BuildPreflightReason.UnsupportedProtobufBuild,
                 "xbrl" when intent.Profile.Id != BuildWorkerProtocol.XbrlProfile => BuildPreflightReason.UnsupportedXbrlBuild,
                 _ => BuildPreflightReason.None

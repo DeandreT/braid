@@ -5,6 +5,7 @@ use ferrule_mapping::{FormatOptions, Project, TabularBoundaryKind};
 use serde::{Deserialize, Serialize};
 
 pub const PROFILE: &str = "braid.ferrule-xlsx-preview.v1";
+pub const PORTABLE_PROFILE: &str = "braid.ferrule-portable-workbook-preview.v1";
 pub const READ_JSON_PROFILE: &str = "braid.ferrule-xlsx-to-json-preview.v1";
 pub const SERVICE_OUTPUT_REFUSAL: &str =
     "XLSX output requires a worksheet thread unavailable in the restricted service runner.";

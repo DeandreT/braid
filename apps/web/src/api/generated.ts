@@ -3510,6 +3510,7 @@ export interface components {
         | "braid.ferrule-csv-preview.v1"
         | "braid.ferrule-xml-preview.v1"
         | "braid.ferrule-flextext-preview.v1"
+        | "braid.ferrule-xlsx-preview.v1"
         | "braid.ferrule-protobuf-preview.v1"
         | "braid.ferrule-xbrl-preview.v1"
         | null;
@@ -12361,6 +12362,7 @@ export interface operations {
           "application/edi-x12": string;
           "application/edifact": string;
           "application/json": string;
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
           "application/x-protobuf": string;
           "application/xbrl+xml": string;
           "application/xml": string;

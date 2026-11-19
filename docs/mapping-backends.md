@@ -48,9 +48,7 @@ can read a document is not evidence that the generated mapping can read it.
 - **FlexText, Protobuf and XBRL:** use native previews and saved exact-byte
   cases. A layout, message descriptor or instance declaration belongs to the
   revision, not the upload. Opt-in builds admit primary string Store layouts, scalar Protobuf messages, and instant-period XBRL tables respectively. The compiled endpoint takes the media type and bytes; it reads settings from the activated release, never from caller overrides.
-- **XLSX:** flat workbook read to JSON is a worker protocol, not a catalog
-  preview. New workbook output needs a worksheet thread and is direct-worker
-  only. There is no catalog workbook-output table or compiled endpoint.
+- **XLSX:** catalog preview, saved exact-byte cases and compiled releases support only Ferrule’s canonical flat workbook package. Each workbook is limited to 256 KiB, 256 data rows and 26 contiguous string, integer or boolean columns. The table shows up to 50 rows; download returns the original bytes. Resaved or compressed workbooks, formulas, extra sheets and updates to existing workbooks are not admitted.
 - **PDF:** the pinned Ferrule bounded document profile rejects PDF output. A
   renderer dependency, or a worker for reading specification PDFs, is not a
   mapping-output capability. Admission requires a bounded renderer verified
@@ -132,7 +130,7 @@ external side effects in v1.
 ## Ferrule integration
 
 The restricted worker pins:
-[`796eb8230561f200ca81c153c946a8fe08884e75`](https://github.com/DeandreT/ferrule/commit/796eb8230561f200ca81c153c946a8fe08884e75).
+[`9149905759b4f65baf043b975624e45805a50142`](https://github.com/DeandreT/ferrule/commit/9149905759b4f65baf043b975624e45805a50142).
 It consumes `mapping`, `ir`, and `engine` for inspection, validation and
 projection, the `cli` library's in-memory payload API for bounded JSON preview,
 and `codegen` and `codegen-csharp` for in-memory C# source generation in the
@@ -189,7 +187,7 @@ failure publishes no artifact frames.
 | Worker protocol | Saved settings and output |
 | --- | --- |
 | `braid.ferrule-flextext-preview.v1` | The canonical saved FlexText layout (up to 16 KiB) must match the boundary schema. Input and output are UTF-8; a declared empty document is distinct from a missing frame. Output modes that pad fixed columns or collect whole record sets or switch arms before checking size are refused. |
-| `braid.ferrule-xlsx-preview.v1` | The native codec reads a flat worksheet and writes a new workbook. Direct worker only. The restricted service refuses workbook output before execution because the pinned writer requires a worksheet thread. The catalog does not offer this profile. Updating an existing file, formulas and external links are outside this profile. |
+| `braid.ferrule-xlsx-preview.v1` | The catalog selects the restricted portable-workbook worker protocol. Both boundaries must declare the supported flat worksheet settings. The older general XLSX output protocol remains refused by the restricted runner. Updating an existing file, formulas and external links are outside this profile. |
 | `braid.ferrule-xlsx-to-json-preview.v1` | Worker protocol only. Read one flat worksheet using the saved source options and return plain JSON; no workbook writer is invoked. Named boundaries, dynamic outputs and other target options are refused. |
 | `braid.ferrule-protobuf-preview.v1` | Use the embedded schema, imports and root message. Return binary bytes, not text; the output must decode against the saved target schema. |
 | `braid.ferrule-xbrl-preview.v1` | Read and write an instance with the saved source and target instance options. A taxonomy reference does not authorize fetching a file or making a network request. |
@@ -197,11 +195,11 @@ failure publishes no artifact frames.
 The catalog enables the FlexText, Protobuf and XBRL profiles separately for saved-revision previews and
 exact-byte regression. Configure `BRAID_PREVIEWS_<FORMAT>_ENABLED` on the server
 and preview worker, or `BRAID_REGRESSIONS_<FORMAT>_ENABLED` on the server and
-regression worker, with `FORMAT` set to `FLEXTEXT`, `PROTOBUF` or `XBRL`.
+regression worker, with `FORMAT` set to `FLEXTEXT`, `XLSX`, `PROTOBUF` or `XBRL`.
 The parent workflow must also be enabled. Each flag defaults to false.
 Run recovery binds the stored input length, digest and canonical boundary
 settings to the original revision. Regression cases retain the original bytes,
-clock, limits and runtime identity. To enable bounded byte builds, set `BRAID_BUILDS_<FORMAT>_ENABLED=true` on the build API and build worker, with the same compiler identity and transport used for boundary inspection. Each flag defaults to false. Unsupported layouts remain refusals. XLSX is not included. PDF rendering and database connections
+clock, limits and runtime identity. To enable bounded byte builds, set `BRAID_BUILDS_<FORMAT>_ENABLED=true` on the build API and build worker, with the same compiler identity and transport used for boundary inspection. Each flag defaults to false. Unsupported layouts remain refusals. PDF rendering and database connections
 are not admitted by these profiles.
 
 The [flat CSV document core](csv-documents.md) has a separate direct-preview and
@@ -236,7 +234,7 @@ pin its resulting commit in the dependent braid PR.
 
 ## Source references
 
-- [Ferrule project codec at the selected revision](https://github.com/DeandreT/ferrule/blob/796eb8230561f200ca81c153c946a8fe08884e75/crates/mapping/src/project_file.rs).
-- [Ferrule public host exports](https://github.com/DeandreT/ferrule/blob/796eb8230561f200ca81c153c946a8fe08884e75/crates/cli/src/lib.rs).
-- [Ferrule in-memory execution](https://github.com/DeandreT/ferrule/blob/796eb8230561f200ca81c153c946a8fe08884e75/crates/cli/src/payload.rs).
-- [Ferrule architecture and capability boundaries](https://github.com/DeandreT/ferrule/blob/796eb8230561f200ca81c153c946a8fe08884e75/docs/architecture.md).
+- [Ferrule project codec at the selected revision](https://github.com/DeandreT/ferrule/blob/9149905759b4f65baf043b975624e45805a50142/crates/mapping/src/project_file.rs).
+- [Ferrule public host exports](https://github.com/DeandreT/ferrule/blob/9149905759b4f65baf043b975624e45805a50142/crates/cli/src/lib.rs).
+- [Ferrule in-memory execution](https://github.com/DeandreT/ferrule/blob/9149905759b4f65baf043b975624e45805a50142/crates/cli/src/payload.rs).
+- [Ferrule architecture and capability boundaries](https://github.com/DeandreT/ferrule/blob/9149905759b4f65baf043b975624e45805a50142/docs/architecture.md).

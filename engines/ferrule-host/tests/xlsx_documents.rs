@@ -327,3 +327,62 @@ fn generated_csharp_builds_refuse_xlsx_explicitly() {
         Err("unsupportedXlsxBuild")
     ));
 }
+
+#[test]
+fn portable_profile_only_admits_canonical_rows_and_returns_exact_new_package() {
+    let mut mapping: serde_json::Value = serde_json::from_slice(NATIVE).unwrap();
+    mapping["source_options"]
+        .as_object_mut()
+        .unwrap()
+        .remove("xlsx_start_row");
+    mapping["target_options"]
+        .as_object_mut()
+        .unwrap()
+        .remove("xlsx_headers");
+    mapping["target"]["kind"]["children"][0]["name"] = "label".into();
+    mapping["root"]["bindings"][0]["target_field"] = "label".into();
+    mapping["target_options"]["xlsx_sheet"] = "Order".into();
+    let native = serde_json::to_vec(&mapping).unwrap();
+    let rows = [row("<A>&", -1), row("東京", 17)];
+    let src = ferrule_format_xlsx::to_flat_package(&project().source, &rows, "Orders").unwrap();
+
+    let run = |bytes: &[u8]| {
+        let mut h = header(&native, bytes);
+        h.protocol_version = xlsx_document::PORTABLE_PROFILE.into();
+        process_preview(&h, &native, &[bytes.to_vec()])
+    };
+    assert!(run(&workbook("Orders", &rows)).outputs.is_empty());
+    let result = run(&src);
+    let [output] = result.outputs.as_slice() else {
+        panic!("{:?}", result.response.failure)
+    };
+    // Complete package digest of the generated .NET consumer for these mapped rows.
+    assert_eq!(
+        support::digest(output),
+        "6fd5a294eb4037d09781b5d2cfe5bd881a3f7bb31ba481335f3dbde68577062f"
+    );
+    let mut h = header(&native, &src);
+    h.protocol_version = xlsx_document::PORTABLE_PROFILE.into();
+    let mut frame = support::framed_bytes(&serde_json::to_vec(&h).unwrap(), &native);
+    frame.extend((src.len() as u32).to_be_bytes());
+    frame.extend(&src);
+    let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_braid-ferrule-host"))
+        .args([
+            "--service-sandbox",
+            "--cpu-seconds=30",
+            "--memory-bytes=536870912",
+            "--open-files=64",
+        ])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    child.stdin.take().unwrap().write_all(&frame).unwrap();
+    let reply = child.wait_with_output().unwrap();
+    assert!(reply.status.success());
+    let bytes = reply.stdout.strip_prefix(b"BFS1").unwrap();
+    let n = u32::from_be_bytes(bytes[..4].try_into().unwrap()) as usize;
+    let metadata: serde_json::Value = serde_json::from_slice(&bytes[4..4 + n]).unwrap();
+    assert!(metadata["failure"].is_null(), "{metadata}");
+    assert_eq!(&bytes[8 + n..], output);
+}

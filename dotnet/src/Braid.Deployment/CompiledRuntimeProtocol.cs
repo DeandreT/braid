@@ -232,7 +232,7 @@ public static class CompiledRuntimeProtocol
     {
         BuildWorkerProtocol.CsvProfile => CsvProtocol,
         BuildWorkerProtocol.XmlProfile => XmlProtocol,
-        BuildWorkerProtocol.FlexProfile or BuildWorkerProtocol.ProtoProfile or BuildWorkerProtocol.XbrlProfile => DocumentProtocol,
+        BuildWorkerProtocol.FlexProfile or BuildWorkerProtocol.ProtoProfile or BuildWorkerProtocol.XbrlProfile or BuildWorkerProtocol.WorkbookProfile => DocumentProtocol,
         BuildWorkerProtocol.DocumentProfile or BuildWorkerProtocol.X12InterchangesProfile => DocumentProtocol,
         // Legacy qualification also uses this grammar to bind replay digests for
         // other backends. Execution admission independently checks runtime support.

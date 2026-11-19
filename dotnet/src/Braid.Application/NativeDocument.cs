@@ -63,11 +63,11 @@ public sealed class NativeDocumentFormat
     public string BuildStatus { get; }
     public string BuildRefusal { get; }
 
-    public static IReadOnlyList<NativeDocumentFormat> CatalogFormats { get; } = Array.AsReadOnly(new[] { FlexText, Protobuf, Xbrl });
+    public static IReadOnlyList<NativeDocumentFormat> CatalogFormats { get; } = Array.AsReadOnly(new[] { FlexText, Xlsx, Protobuf, Xbrl });
     public const string XlsxOutputRefusal = "XLSX output requires a worksheet thread unavailable in the restricted service runner.";
 
     public static IReadOnlyList<NativeDocumentFormat> EnabledFormats(Func<string,string?> read, bool regression) =>
-        CatalogFormats.Where(f => NativeDocumentPolicy.Enabled(read, regression ? f.RegressionEnabledSetting : f.EnabledSetting, true)).ToArray();
+        CatalogFormats.Where(f => NativeDocumentPolicy.Enabled(read, regression ? f.RegressionEnabledSetting : f.EnabledSetting, f != Xlsx)).ToArray();
     public static NativeDocumentFormat? FromProfile(string? profile) => All.FirstOrDefault(format => format.Profile == profile);
     public static NativeDocumentFormat? FromExecution(PreviewExecutionProfile profile) => All.FirstOrDefault(format => format.Execution == profile);
     public static NativeDocumentFormat? FromSettingsSchema(string? schema) => All.FirstOrDefault(format => format.SettingsSchema == schema);
@@ -76,7 +76,7 @@ public sealed class NativeDocumentFormat
     public void CheckBytes(ReadOnlySpan<byte> bytes)
     {
         if (bytes.Length > MaximumBytes) throw new PreviewRunException($"{Label} document exceeds its byte limit.");
-        if (this == Xlsx) XlsxDocumentPolicy.CheckBytes(bytes);
+        if (this == Xlsx) { if (bytes.Length > 256 * 1024) throw new PreviewRunException("Portable workbook exceeds 256 KiB."); XlsxDocumentPolicy.CheckBytes(bytes); }
         if (!RequiresUtf8) return;
         try { _ = Utf8.GetCharCount(bytes); }
         catch (DecoderFallbackException) { throw new PreviewRunException($"{Label} requires strict UTF-8."); }

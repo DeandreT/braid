@@ -144,7 +144,7 @@ dependencies = [
 [[package]]
 name = "document-source"
 version = "0.1.0"
-source = "git+https://github.com/DeandreT/ferrule?rev=796eb8230561f200ca81c153c946a8fe08884e75#796eb8230561f200ca81c153c946a8fe08884e75"
+source = "git+https://github.com/DeandreT/ferrule?rev=9149905759b4f65baf043b975624e45805a50142#9149905759b4f65baf043b975624e45805a50142"
 dependencies = [
  "ir",
  "mapping",
@@ -154,7 +154,7 @@ dependencies = [
 [[package]]
 name = "edit-ops"
 version = "0.1.0"
-source = "git+https://github.com/DeandreT/ferrule?rev=796eb8230561f200ca81c153c946a8fe08884e75#796eb8230561f200ca81c153c946a8fe08884e75"
+source = "git+https://github.com/DeandreT/ferrule?rev=9149905759b4f65baf043b975624e45805a50142#9149905759b4f65baf043b975624e45805a50142"
 dependencies = [
  "editor-ui",
  "functions",
@@ -168,7 +168,7 @@ dependencies = [
 [[package]]
 name = "editor-ui"
 version = "0.1.0"
-source = "git+https://github.com/DeandreT/ferrule?rev=796eb8230561f200ca81c153c946a8fe08884e75#796eb8230561f200ca81c153c946a8fe08884e75"
+source = "git+https://github.com/DeandreT/ferrule?rev=9149905759b4f65baf043b975624e45805a50142#9149905759b4f65baf043b975624e45805a50142"
 dependencies = [
  "ir",
  "mapping",
@@ -177,7 +177,7 @@ dependencies = [
 [[package]]
 name = "engine"
 version = "0.1.0"
-source = "git+https://github.com/DeandreT/ferrule?rev=796eb8230561f200ca81c153c946a8fe08884e75#796eb8230561f200ca81c153c946a8fe08884e75"
+source = "git+https://github.com/DeandreT/ferrule?rev=9149905759b4f65baf043b975624e45805a50142#9149905759b4f65baf043b975624e45805a50142"
 dependencies = [
  "document-source",
  "format-csv",
@@ -206,7 +206,7 @@ checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
 [[package]]
 name = "format-csv"
 version = "0.1.0"
-source = "git+https://github.com/DeandreT/ferrule?rev=796eb8230561f200ca81c153c946a8fe08884e75#796eb8230561f200ca81c153c946a8fe08884e75"
+source = "git+https://github.com/DeandreT/ferrule?rev=9149905759b4f65baf043b975624e45805a50142#9149905759b4f65baf043b975624e45805a50142"
 dependencies = [
  "csv",
  "csv-core",
@@ -219,7 +219,7 @@ dependencies = [
 [[package]]
 name = "format-edi"
 version = "0.1.0"
-source = "git+https://github.com/DeandreT/ferrule?rev=796eb8230561f200ca81c153c946a8fe08884e75#796eb8230561f200ca81c153c946a8fe08884e75"
+source = "git+https://github.com/DeandreT/ferrule?rev=9149905759b4f65baf043b975624e45805a50142#9149905759b4f65baf043b975624e45805a50142"
 dependencies = [
  "ir",
  "mapping",
@@ -229,7 +229,7 @@ dependencies = [
 [[package]]
 name = "format-flextext"
 version = "0.1.0"
-source = "git+https://github.com/DeandreT/ferrule?rev=796eb8230561f200ca81c153c946a8fe08884e75#796eb8230561f200ca81c153c946a8fe08884e75"
+source = "git+https://github.com/DeandreT/ferrule?rev=9149905759b4f65baf043b975624e45805a50142#9149905759b4f65baf043b975624e45805a50142"
 dependencies = [
  "ir",
  "mapping",
@@ -240,7 +240,7 @@ dependencies = [
 [[package]]
 name = "format-json"
 version = "0.1.0"
-source = "git+https://github.com/DeandreT/ferrule?rev=796eb8230561f200ca81c153c946a8fe08884e75#796eb8230561f200ca81c153c946a8fe08884e75"
+source = "git+https://github.com/DeandreT/ferrule?rev=9149905759b4f65baf043b975624e45805a50142#9149905759b4f65baf043b975624e45805a50142"
 dependencies = [
  "ir",
  "json-pattern",
@@ -253,7 +253,7 @@ dependencies = [
 [[package]]
 name = "format-xml"
 version = "0.1.0"
-source = "git+https://github.com/DeandreT/ferrule?rev=796eb8230561f200ca81c153c946a8fe08884e75#796eb8230561f200ca81c153c946a8fe08884e75"
+source = "git+https://github.com/DeandreT/ferrule?rev=9149905759b4f65baf043b975624e45805a50142#9149905759b4f65baf043b975624e45805a50142"
 dependencies = [
  "ir",
  "quick-xml",
@@ -264,7 +264,7 @@ dependencies = [
 [[package]]
 name = "functions"
 version = "0.1.0"
-source = "git+https://github.com/DeandreT/ferrule?rev=796eb8230561f200ca81c153c946a8fe08884e75#796eb8230561f200ca81c153c946a8fe08884e75"
+source = "git+https://github.com/DeandreT/ferrule?rev=9149905759b4f65baf043b975624e45805a50142#9149905759b4f65baf043b975624e45805a50142"
 dependencies = [
  "format-flextext",
  "format-json",
@@ -369,7 +369,7 @@ dependencies = [
 [[package]]
 name = "ir"
 version = "0.1.0"
-source = "git+https://github.com/DeandreT/ferrule?rev=796eb8230561f200ca81c153c946a8fe08884e75#796eb8230561f200ca81c153c946a8fe08884e75"
+source = "git+https://github.com/DeandreT/ferrule?rev=9149905759b4f65baf043b975624e45805a50142#9149905759b4f65baf043b975624e45805a50142"
 dependencies = [
  "json-pattern",
  "serde",
@@ -395,7 +395,7 @@ dependencies = [
 [[package]]
 name = "json-pattern"
 version = "0.1.0"
-source = "git+https://github.com/DeandreT/ferrule?rev=796eb8230561f200ca81c153c946a8fe08884e75#796eb8230561f200ca81c153c946a8fe08884e75"
+source = "git+https://github.com/DeandreT/ferrule?rev=9149905759b4f65baf043b975624e45805a50142#9149905759b4f65baf043b975624e45805a50142"
 
 [[package]]
 name = "json5"
@@ -428,7 +428,7 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 [[package]]
 name = "mapping"
 version = "0.1.0"
-source = "git+https://github.com/DeandreT/ferrule?rev=796eb8230561f200ca81c153c946a8fe08884e75#796eb8230561f200ca81c153c946a8fe08884e75"
+source = "git+https://github.com/DeandreT/ferrule?rev=9149905759b4f65baf043b975624e45805a50142#9149905759b4f65baf043b975624e45805a50142"
 dependencies = [
  "ir",
  "regex",

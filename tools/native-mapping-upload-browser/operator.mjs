@@ -559,7 +559,7 @@ await runBrowserFixture({
           ingestion.admission_policy_id === "braid.native-admission.v1" &&
           String(ingestion.effective_native_byte_limit) === "4194304" &&
           ingestion.engine_revision ===
-            "796eb8230561f200ca81c153c946a8fe08884e75" &&
+            "9149905759b4f65baf043b975624e45805a50142" &&
           ingestion.backend_build === cfg.workerImage &&
           ingestion.adapter_build === "braid.ferrule-adapter.v3" &&
           String(ingestion.claim_count) === "1" &&

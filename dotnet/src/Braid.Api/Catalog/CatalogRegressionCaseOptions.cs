@@ -25,7 +25,7 @@ public sealed record CatalogRegressionCaseOptions
         if (xmlRuntime is not null && (!enabled || runtime is null || xmlRuntime.Profile != XmlPreviewAdmission.Profile ||
             xmlRuntime.BackendId != runtime.BackendId || xmlRuntime.EngineRevision != runtime.EngineRevision || xmlRuntime.BackendBuild != runtime.BackendBuild))
             throw new ArgumentException("XML cases require an enabled, separately pinned runtime.");
-        NativeRuntimes = nativeRuntimes?.Where(r => r.Profile != NativeDocumentFormat.Xlsx.Profile).ToArray() ?? [];
+        NativeRuntimes = nativeRuntimes?.ToArray() ?? [];
         if (NativeRuntimes.Any(r => !enabled || runtime is null || NativeDocumentFormat.FromProfile(r.Profile)?.AdapterBuild != r.AdapterBuild || r.BackendBuild != runtime.BackendBuild || r.BackendId != runtime.BackendId || r.EngineRevision != runtime.EngineRevision)) throw new ArgumentException("Invalid native runtime.");
         XmlRuntime = xmlRuntime;
     }

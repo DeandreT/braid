@@ -120,7 +120,7 @@ public sealed class FerruleBuildCompiler : IBuildCompiler
         var refusal = BuildPreflightService.DocumentRefusal(intent);
         if (!xmlEnabled && intent.Profile == XmlProfile) refusal = BuildPreflightReason.UnsupportedXmlBuild;
         var nativeFormat = BuildWorkerProtocol.NativeFormat(intent.Profile.Id);
-        if (nativeFormat is not null && !enabledFormats.Contains(nativeFormat)) refusal = intent.Profile.Id switch { BuildWorkerProtocol.FlexProfile => BuildPreflightReason.UnsupportedFlexTextBuild, BuildWorkerProtocol.ProtoProfile => BuildPreflightReason.UnsupportedProtobufBuild, _ => BuildPreflightReason.UnsupportedXbrlBuild };
+        if (nativeFormat is not null && !enabledFormats.Contains(nativeFormat)) refusal = intent.Profile.Id switch { BuildWorkerProtocol.WorkbookProfile => BuildPreflightReason.UnsupportedXlsxBuild, BuildWorkerProtocol.FlexProfile => BuildPreflightReason.UnsupportedFlexTextBuild, BuildWorkerProtocol.ProtoProfile => BuildPreflightReason.UnsupportedProtobufBuild, _ => BuildPreflightReason.UnsupportedXbrlBuild };
         if (refusal != BuildPreflightReason.None)
             return new(intent.Revision, intent.NativeDigest, intent.Backend, intent.Profile, intent.Boundaries,
                 CapabilityStatus.Unsupported, refusalReason: refusal);

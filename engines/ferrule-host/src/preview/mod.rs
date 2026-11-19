@@ -92,7 +92,7 @@ pub fn handle_preview(
         discard(reader);
         return write_outcome(writer, &refused(&header, &refusal));
     }
-    if restricted && header.is_xlsx_preview() {
+    if restricted && header.protocol_version == crate::xlsx_document::PROFILE {
         discard(reader);
         return write_outcome(
             writer,
@@ -498,6 +498,9 @@ pub fn process_preview(
         // selector refuses. Only separately admitted document profiles opt in.
         options = options.with_bounded_documents();
     }
+    if header.protocol_version == crate::xlsx_document::PORTABLE_PROFILE {
+        options = options.with_portable_workbook();
+    }
     if let Some(selection) = admission.selection {
         options = options.with_target(selection);
     }
@@ -770,6 +773,7 @@ fn check_header(header: &PreviewRequestHeader) -> Result<(), Refusal> {
             | CSV_PREVIEW_PROTOCOL_VERSION
             | XML_PREVIEW_PROTOCOL_VERSION
             | crate::flextext_document::PROFILE
+            | crate::xlsx_document::PORTABLE_PROFILE
             | crate::xlsx_document::PROFILE
             | crate::xlsx_document::READ_JSON_PROFILE
             | crate::native_document::PROTOBUF_PROFILE

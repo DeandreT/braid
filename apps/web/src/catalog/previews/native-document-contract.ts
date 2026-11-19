@@ -1,5 +1,11 @@
 const formats = [
   ["flextext", "FlexText", "text/plain", "txt"],
+  [
+    "xlsx",
+    "Portable workbook",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "xlsx",
+  ],
   ["protobuf", "Protocol Buffers", "application/x-protobuf", "pb"],
   ["xbrl", "XBRL instance", "application/xbrl+xml", "xbrl"],
 ] as const;

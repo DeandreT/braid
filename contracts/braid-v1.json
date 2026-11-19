@@ -8451,6 +8451,12 @@
                   "format": "binary"
                 }
               },
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
               "application/x-protobuf": {
                 "schema": {
                   "type": "string",
@@ -41725,6 +41731,7 @@
               "braid.ferrule-csv-preview.v1",
               "braid.ferrule-xml-preview.v1",
               "braid.ferrule-flextext-preview.v1",
+              "braid.ferrule-xlsx-preview.v1",
               "braid.ferrule-protobuf-preview.v1",
               "braid.ferrule-xbrl-preview.v1",
               null

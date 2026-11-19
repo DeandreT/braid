@@ -153,8 +153,6 @@ public static partial class CatalogEndpoints
             if (!revision.Access.Can(ProjectAction.SubmitPreview))
                 return NotFound();
             var body = await ReadPreviewBodyAsync(context.Request, options.BodyByteLimit, context.RequestAborted);
-            if (body.Profile == NativeDocumentFormat.Xlsx.Profile)
-                return Results.Problem(statusCode: StatusCodes.Status501NotImplemented, title: "XLSX output is unavailable", detail: NativeDocumentFormat.XlsxOutputRefusal);
             var submission = PreviewSubmission(new RevisionPreviewSubject(scope), key, body);
             var service = context.RequestServices.GetRequiredService<PreviewRunService>();
             var native = NativeDocumentFormat.FromExecution(submission.Profile);

@@ -23,10 +23,10 @@ internal static class LifecycleCatalogAdmission
     {
         await using var command = new NpgsqlCommand(CaptureSql, connection, transaction);
         var fingerprint = await command.ExecuteScalarAsync(token) as string;
-        if (fingerprint is Fingerprint or NativeProfileFingerprint or RetentionHookFingerprint or CompiledXmlFingerprint or CompiledByteFingerprint) return;
+        if (fingerprint is Fingerprint or NativeProfileFingerprint or RetentionHookFingerprint or CompiledXmlFingerprint or CompiledByteFingerprint or WorkbookFingerprint) return;
         // Migration 0026 omits presentation-only column grants when its optional login is absent.
         // A missing grant on a provisioned login is still drift, not an optional installation.
-        if (fingerprint is WithoutDisplayRetentionHookFingerprint or WithoutDisplayCompiledXmlFingerprint or WithoutDisplayCompiledByteFingerprint)
+        if (fingerprint is WithoutDisplayRetentionHookFingerprint or WithoutDisplayCompiledXmlFingerprint or WithoutDisplayCompiledByteFingerprint or WithoutDisplayWorkbookFingerprint)
         {
             await using var role = new NpgsqlCommand("SELECT pg_catalog.to_regrole('braid_account_display') IS NULL", connection, transaction);
             if (await role.ExecuteScalarAsync(token) is true) return;
@@ -37,6 +37,8 @@ internal static class LifecycleCatalogAdmission
     internal const string NativeProfileFingerprint = "30d4a7118a07043cf68a7957ed813edf32bfe0e6a3609ca1d5d44aaac45acc13:5d151cd13813fdbe63905e329c8beea5bb46c686beba6183761540b9a2f6900d";
     internal const string RetentionHookFingerprint = "30d4a7118a07043cf68a7957ed813edf32bfe0e6a3609ca1d5d44aaac45acc13:2fa9afd22e15bc2f6010227c1fff393ec49eb9770a974f16bc6a89e371244e16";
     private const string WithoutDisplayRetentionHookFingerprint = "08531c89c1d3c90505769ad9b8b71420ff217f7321d5e288f4a6402ad4f5ef8d:2fa9afd22e15bc2f6010227c1fff393ec49eb9770a974f16bc6a89e371244e16";
+    private const string WithoutDisplayWorkbookFingerprint = "08531c89c1d3c90505769ad9b8b71420ff217f7321d5e288f4a6402ad4f5ef8d:6c4449d805f8a3cb3aa7d2d63b782ff56fc03a406ed2d038f6f738fb8ce9a52e";
+    internal const string WorkbookFingerprint = "30d4a7118a07043cf68a7957ed813edf32bfe0e6a3609ca1d5d44aaac45acc13:6c4449d805f8a3cb3aa7d2d63b782ff56fc03a406ed2d038f6f738fb8ce9a52e";
     internal const string CompiledByteFingerprint = "30d4a7118a07043cf68a7957ed813edf32bfe0e6a3609ca1d5d44aaac45acc13:7d9fe164fdf03386f0c9bc3df588bfbe8671daf7a343e2264dc029e4517ca2a9";
     private const string WithoutDisplayCompiledByteFingerprint = "08531c89c1d3c90505769ad9b8b71420ff217f7321d5e288f4a6402ad4f5ef8d:7d9fe164fdf03386f0c9bc3df588bfbe8671daf7a343e2264dc029e4517ca2a9";
     internal const string CompiledXmlFingerprint = "30d4a7118a07043cf68a7957ed813edf32bfe0e6a3609ca1d5d44aaac45acc13:491978c8fe91ea13dbd0b1aed5ec6b6d27fdd45b6de4a7efb73def4baf5f2f68";

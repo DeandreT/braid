@@ -23,17 +23,18 @@ public static class BuildWorkerProtocol
     };
     public const string XmlProfile = "braid.ferrule-csharp-xml.v1";
     public const string FlexProfile = "braid.ferrule-csharp-flextext.v1";
+    public const string WorkbookProfile = "braid.ferrule-csharp-xlsx.v1";
     public const string ProtoProfile = "braid.ferrule-csharp-protobuf.v1";
     public const string XbrlProfile = "braid.ferrule-csharp-xbrl.v1";
-    public static IReadOnlyList<string> EnabledByteProfiles(Func<string,string?> read) => new[] { FlexProfile, ProtoProfile, XbrlProfile }.Where(id =>
+    public static IReadOnlyList<string> EnabledByteProfiles(Func<string,string?> read) => new[] { FlexProfile, ProtoProfile, XbrlProfile, WorkbookProfile }.Where(id =>
         read($"BRAID_BUILDS_{NativeFormat(id)!.Key.ToUpperInvariant()}_ENABLED") switch { null or "false" => false, "true" => true, _ => throw new ArgumentException("Native byte build enablement must be true or false.") }).ToArray();
-    public static NativeDocumentFormat? NativeFormat(string profile) => profile switch { FlexProfile => NativeDocumentFormat.FlexText, ProtoProfile => NativeDocumentFormat.Protobuf, XbrlProfile => NativeDocumentFormat.Xbrl, _ => null };
+    public static NativeDocumentFormat? NativeFormat(string profile) => profile switch { WorkbookProfile => NativeDocumentFormat.Xlsx, FlexProfile => NativeDocumentFormat.FlexText, ProtoProfile => NativeDocumentFormat.Protobuf, XbrlProfile => NativeDocumentFormat.Xbrl, _ => null };
     public static bool IsDocumentProfile(string profile) => NativeFormat(profile) is not null || profile is DocumentProfile or X12InterchangesProfile or CsvProfile or XmlProfile;
     public static string PreviewProfileFor(string profile) => NativeFormat(profile) is { } native ? native.Profile : profile == XmlProfile ? XmlPreviewAdmission.Profile : profile == CsvProfile ? CsvDocumentPolicy.Profile :
         IsDocumentProfile(profile) ? DocumentPreviewPolicy.Profile : PreviewPolicy.Profile;
     public const string SdkVersion = "10.0.112";
     public const string RuntimeVersion = "10.0.12";
-    public const string Engine = "796eb8230561f200ca81c153c946a8fe08884e75";
+    public const string Engine = "9149905759b4f65baf043b975624e45805a50142";
     public const int MaximumNativeBytes = 4 * 1024 * 1024;
     public const int MaximumSourceBytes = 32 * 1024 * 1024;
     public const int MaximumHeaderBytes = 128 * 1024;
@@ -131,6 +132,7 @@ public static class BuildWorkerProtocol
         CsvProfile => format is "csv" or "tsv",
         XmlProfile => format == "xml",
         FlexProfile => format == "flexText",
+        WorkbookProfile => format == "xlsx",
         ProtoProfile => format == "protobuf",
         XbrlProfile => format == "xbrl",
         _ => false
@@ -146,6 +148,7 @@ public static class BuildWorkerProtocol
         "json" => "application/json",
         "flexText" => NativeDocumentFormat.FlexText.MediaType,
         "protobuf" => NativeDocumentFormat.Protobuf.MediaType,
+        "xlsx" => NativeDocumentFormat.Xlsx.MediaType,
         "xbrl" => NativeDocumentFormat.Xbrl.MediaType,
         "xml" => "application/xml",
         "x12" => "application/edi-x12",
