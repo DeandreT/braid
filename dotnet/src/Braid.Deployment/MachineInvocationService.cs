@@ -7,7 +7,7 @@ using Braid.Domain;
 
 namespace Braid.Deployment;
 
-public sealed record MachineInputMedia(string? Name, string MediaType, CsvDocumentDialect? CsvDialect = null);
+public sealed record MachineInputMedia(string? Name, string MediaType, CsvDocumentDialect? CsvDialect = null, XmlDocumentMetadata? XmlMetadata = null);
 
 /// <summary>
 /// One machine request for the whole qualified artifact: the primary input, every declared named input and
@@ -29,7 +29,9 @@ public sealed class MachineInvocationRequest
             throw new ArgumentException("Input and parameter names must be unique.");
         if (inputMedia is not null)
         {
-            if (inputMedia.Any(value => value is null || (CsvDocumentPolicy.AdmitsMediaType(value.MediaType)
+            if (inputMedia.Any(value => value is null || (value.MediaType == XmlDocumentPolicy.MediaType || value.XmlMetadata is not null
+                    ? value.CsvDialect is not null || !XmlDocumentPolicy.Admits(value.XmlMetadata, XmlDocumentRole.Input, value.MediaType)
+                    : CsvDocumentPolicy.AdmitsMediaType(value.MediaType)
                     ? !CsvDocumentPolicy.Admits(value.CsvDialect, value.MediaType)
                     : value.CsvDialect is not null || !DocumentPreviewPolicy.AdmitsMediaType(value.MediaType))) ||
                 inputMedia.Select(value => value.Name).Distinct(StringComparer.Ordinal).Count() != inputMedia.Count ||
@@ -41,7 +43,7 @@ public sealed class MachineInvocationRequest
         foreach (var input in NamedInputs.Prepend(primary))
         {
             var declared = InputMedia?.Single(value => value.Name == input.Name);
-            if (input.CsvDialect != declared?.CsvDialect || input.ByteCount == 0 && declared?.CsvDialect is null)
+            if (input.XmlMetadata != declared?.XmlMetadata || input.CsvDialect != declared?.CsvDialect || input.ByteCount == 0 && declared?.CsvDialect is null)
                 throw new ArgumentException("Empty CSV input requires its explicit admitted dialect.");
         }
         if (InputMedia?.Any(value => value.CsvDialect is not null) == true &&
@@ -62,6 +64,7 @@ public sealed class MachineInvocationRequest
                 {
                     var declared = InputMedia.Single(value => value.Name == input.Name);
                     json.WriteString("mediaType", declared.MediaType);
+                    if (declared.XmlMetadata is { } xml) { json.WritePropertyName("xmlMetadata"); XmlDocumentMetadataJson.Write(json, xml, XmlDocumentRole.Input); }
                     if (declared.CsvDialect is { } dialect)
                     {
                         json.WritePropertyName("csvDialect");
@@ -255,7 +258,7 @@ public sealed class MachineInvocationService
                 var boundaries = intent.Boundaries.Where(value => value.Kind is BuildBoundaryKind.PrimaryInput or BuildBoundaryKind.NamedInput).ToArray();
                 if (boundaries.Length != media.Count || media.Any(value => !boundaries.Any(boundary => boundary.Name == value.Name &&
                     BuildWorkerProtocol.AdmitsBoundary(intent.Profile.Id, boundary.Format, boundary.CsvDialect) &&
-                    BuildWorkerProtocol.MediaType(boundary.Format) == value.MediaType && boundary.CsvDialect == value.CsvDialect)))
+                    BuildWorkerProtocol.MediaType(boundary.Format) == value.MediaType && boundary.CsvDialect == value.CsvDialect && boundary.XmlMetadata == value.XmlMetadata)))
                     return new(MachineInvocationOutcome.InvalidInput, provenance);
             }
             RegressionReplay replay;
@@ -282,7 +285,7 @@ public sealed class MachineInvocationService
                 result.Outputs.Outputs.Any(output => !intent.Boundaries.Any(boundary =>
                     boundary.Kind == (output.Key.IsPrimary ? BuildBoundaryKind.PrimaryOutput : BuildBoundaryKind.NamedOutput) &&
                     boundary.Name == output.Key.Name && BuildWorkerProtocol.AdmitsFormat(intent.Profile.Id, boundary.Format) &&
-                    BuildWorkerProtocol.MediaType(boundary.Format) == output.MediaType && boundary.CsvDialect == output.CsvDialect))))
+                    BuildWorkerProtocol.MediaType(boundary.Format) == output.MediaType && boundary.CsvDialect == output.CsvDialect && boundary.XmlMetadata == output.XmlMetadata))))
                 outcome = MachineInvocationOutcome.IntegrityFailure;
             var response = outcome == MachineInvocationOutcome.Completed ? Encode(requestId, provenance, clock, result.Outputs!, documents) : null;
             if (response?.Length > MachineInvocationPolicy.MaximumRetainedBytes) (outcome, response) = (MachineInvocationOutcome.ResourceLimit, null);
@@ -340,6 +343,7 @@ public sealed class MachineInvocationService
                 json.WriteString("name", output.Key.IsPrimary ? null : output.Key.Name);
                 json.WriteString("sha256", output.Digest.Value);
                 if (documents) json.WriteString("mediaType", output.MediaType);
+                if (output.XmlMetadata is { } xml) { json.WritePropertyName("xmlMetadata"); XmlDocumentMetadataJson.Write(json, xml, XmlDocumentRole.Output); }
                 if (output.CsvDialect is { } dialect)
                 {
                     if (!documents) throw new ArgumentException("CSV output requires document mode.");

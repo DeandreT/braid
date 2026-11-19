@@ -24,7 +24,7 @@ public sealed class MachineDocumentInvocationTests
         Assert.True(operation.GetProperty("requestBody").GetProperty("content").TryGetProperty("application/json", out _));
         var schemas = root.GetProperty("components").GetProperty("schemas");
         var mediaValues = schemas.GetProperty("MappingDocumentInvocationInputV1").GetProperty("properties").GetProperty("mediaType").GetProperty("enum");
-        Assert.Equal(new[] { "application/json", "application/edi-x12", "application/edifact", "text/csv", "text/tab-separated-values" },
+        Assert.Equal(new[] { "application/json", "application/edi-x12", "application/edifact", "text/csv", "text/tab-separated-values", "application/xml" },
             mediaValues.EnumerateArray().Select(value => value.GetString()));
         var body = Body();
         Assert.Equal(body["schema"]!.GetValue<string>(), schemas.GetProperty("MappingDocumentInvocationRequestV1").GetProperty("properties").GetProperty("schema").GetProperty("enum")[0].GetString());
@@ -40,6 +40,8 @@ public sealed class MachineDocumentInvocationTests
         foreach (var media in mediaValues.EnumerateArray())
         {
             var sample = Body(); sample["inputs"]![0]!["mediaType"] = media.GetString();
+            if (media.GetString() == XmlDocumentPolicy.MediaType)
+                sample["inputs"]![0]!["xmlMetadata"] = JsonNode.Parse(XmlDocumentMetadataJson.Encode(XmlDocumentMetadata.WithoutHints, XmlDocumentRole.Input));
             if (CsvDocumentPolicy.AdmitsMediaType(media.GetString()!))
                 sample["inputs"]![0]!["csvDialect"] = JsonSerializer.SerializeToNode(BuildCsvContractTests.Dialect(
                     media.GetString() == "text/csv" ? "," : "\t"), new JsonSerializerOptions(JsonSerializerDefaults.Web));

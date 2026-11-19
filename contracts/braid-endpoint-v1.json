@@ -776,7 +776,8 @@
               "application/edi-x12",
               "application/edifact",
               "text/csv",
-              "text/tab-separated-values"
+              "text/tab-separated-values",
+              "application/xml"
             ],
             "type": "string"
           },
@@ -827,6 +828,55 @@
               }
             },
             "description": "Resolved saved CSV settings. Delimiter and quote are single ASCII characters; disabled quoting requires null quote. A tab delimiter identifies TSV. All fields are required."
+          },
+          "xmlMetadata": {
+            "required": [
+              "schema",
+              "safetyProfile",
+              "schemaHints"
+            ],
+            "type": "object",
+            "properties": {
+              "schema": {
+                "type": "string"
+              },
+              "safetyProfile": {
+                "type": "string"
+              },
+              "schemaHints": {
+                "required": [
+                  "noNamespaceLocation",
+                  "locations"
+                ],
+                "type": "object",
+                "properties": {
+                  "noNamespaceLocation": {
+                    "type": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "locations": {
+                    "type": "array",
+                    "items": {
+                      "required": [
+                        "namespace",
+                        "location"
+                      ],
+                      "type": "object",
+                      "properties": {
+                        "namespace": {
+                          "type": "string"
+                        },
+                        "location": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "additionalProperties": false
@@ -856,7 +906,8 @@
               "application/edi-x12",
               "application/edifact",
               "text/csv",
-              "text/tab-separated-values"
+              "text/tab-separated-values",
+              "application/xml"
             ],
             "type": "string"
           },
@@ -901,6 +952,55 @@
               }
             },
             "description": "Resolved saved CSV settings. Delimiter and quote are single ASCII characters; disabled quoting requires null quote. A tab delimiter identifies TSV. All fields are required."
+          },
+          "xmlMetadata": {
+            "required": [
+              "schema",
+              "safetyProfile",
+              "schemaHints"
+            ],
+            "type": "object",
+            "properties": {
+              "schema": {
+                "type": "string"
+              },
+              "safetyProfile": {
+                "type": "string"
+              },
+              "schemaHints": {
+                "required": [
+                  "noNamespaceLocation",
+                  "locations"
+                ],
+                "type": "object",
+                "properties": {
+                  "noNamespaceLocation": {
+                    "type": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "locations": {
+                    "type": "array",
+                    "items": {
+                      "required": [
+                        "namespace",
+                        "location"
+                      ],
+                      "type": "object",
+                      "properties": {
+                        "namespace": {
+                          "type": "string"
+                        },
+                        "location": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "content": {
             "type": "string",
@@ -942,7 +1042,8 @@
                     "application/edi-x12",
                     "application/edifact",
                     "text/csv",
-                    "text/tab-separated-values"
+                    "text/tab-separated-values",
+                    "application/xml"
                   ],
                   "type": "string"
                 },
@@ -993,6 +1094,55 @@
                     }
                   },
                   "description": "Resolved saved CSV settings. Delimiter and quote are single ASCII characters; disabled quoting requires null quote. A tab delimiter identifies TSV. All fields are required."
+                },
+                "xmlMetadata": {
+                  "required": [
+                    "schema",
+                    "safetyProfile",
+                    "schemaHints"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "schema": {
+                      "type": "string"
+                    },
+                    "safetyProfile": {
+                      "type": "string"
+                    },
+                    "schemaHints": {
+                      "required": [
+                        "noNamespaceLocation",
+                        "locations"
+                      ],
+                      "type": "object",
+                      "properties": {
+                        "noNamespaceLocation": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
+                        "locations": {
+                          "type": "array",
+                          "items": {
+                            "required": [
+                              "namespace",
+                              "location"
+                            ],
+                            "type": "object",
+                            "properties": {
+                              "namespace": {
+                                "type": "string"
+                              },
+                              "location": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               },
               "additionalProperties": false
@@ -1099,7 +1249,8 @@
                     "application/edi-x12",
                     "application/edifact",
                     "text/csv",
-                    "text/tab-separated-values"
+                    "text/tab-separated-values",
+                    "application/xml"
                   ],
                   "type": "string"
                 },
@@ -1144,6 +1295,55 @@
                     }
                   },
                   "description": "Resolved saved CSV settings. Delimiter and quote are single ASCII characters; disabled quoting requires null quote. A tab delimiter identifies TSV. All fields are required."
+                },
+                "xmlMetadata": {
+                  "required": [
+                    "schema",
+                    "safetyProfile",
+                    "schemaHints"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "schema": {
+                      "type": "string"
+                    },
+                    "safetyProfile": {
+                      "type": "string"
+                    },
+                    "schemaHints": {
+                      "required": [
+                        "noNamespaceLocation",
+                        "locations"
+                      ],
+                      "type": "object",
+                      "properties": {
+                        "noNamespaceLocation": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
+                        "locations": {
+                          "type": "array",
+                          "items": {
+                            "required": [
+                              "namespace",
+                              "location"
+                            ],
+                            "type": "object",
+                            "properties": {
+                              "namespace": {
+                                "type": "string"
+                              },
+                              "location": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
                 },
                 "content": {
                   "type": "string",
