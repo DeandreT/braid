@@ -15,16 +15,17 @@
     "independentReviewSession": "ses_e02edcf65ffekHa8gi2eEXwim3",
     "reviewedScope": "Revised design, source implementation only: one unprivileged Python supervisor and reaper, one gated Bun child, no runtime admission.",
     "reviewedCandidate": "bb42a6899a523925e3abd9ca9db2e9096d059943",
+    "targetedReviewBase": "14017e15127abf5020852bad105d7bdac83f03b3",
     "remediationDesign": "README.md: protected pre-execution supervisor-byte admission, bounded fork-to-exec pidfd gate, refusal of traced/blocked launch, and terminal-only custody settlement.",
     "implementationReview": "Pending independent review of the exact candidate source hashes below."
   },
   "sourceFiles": {
-    "README.md": "2bfcd7072d0f4b7f671db4f29ab87d1dc0e1d7d9b2b2de430f1c0381ebc37831",
+    "README.md": "064267dcba42fe61ea8fab30c138d3084bb8bc977dbc8e4bfa43e3181a9f7705",
     "bootstrap.py": "2b3a8614564f2aa5c38c6e309bc3c982f25e80d406a6821f3a297be3c02244b6",
     "fixture.c": "dd61fa10fe13c30fdc11d54a739264abe804ddcae73d3b4d91e33a5223f8fec1",
-    "supervisor.py": "6765416931f0eaaeb3bf5fc8c7a5bc2427a68edf1db77a02348db05e96aa5dc4",
+    "supervisor.py": "95b920ad7a0c6458103f146e5c91dfdbc4e726e75e1716c91662a1418f9bf4d8",
     "worker.mjs": "a98129bab3df823e2daf4a0a507f9612f07e53aba12b6c4348a7f98d0f5a2918",
-    "test_supervisor.py": "797474f3cc8160c13caa9bcfa7fca5fbfc78d07dd09729301bea2d77051c858f"
+    "test_supervisor.py": "c0a7f177a01097c237c40a68252b134155a61ae628f294400e692bc714f2913f"
   },
   "staticElfReviewSha256": null,
   "bun": {
@@ -73,9 +74,10 @@
     "executable": "Verify upstream signed Bun checksums with an independently authenticated upstream key, then inventory the extracted official executable (not the ZIP). Canonical non-symlink ELF64 little-endian x86-64 glibc, approved actual path/size/hash, trusted parent directories, no set-ID or file capabilities; no PATH lookup, wrapper, strip, variant, install, or replacement fallback. The standalone 256 MiB runtime file cap does not waive the capture owner's independent 64 MiB cap.",
     "supervisorBootstrap": "Before starting Python, verify an independently admitted CPython 3.15.2 executable, its actual PT_INTERP, RPATH-selected native dependencies, extension modules, and stdlib. Independently verify the exact bootstrap.py bytes against the approved manifest; require the canonical root-owned protected bootstrap path and parent directories. Use the real interpreter path with -I -S -B and a clean environment. Never start supervisor.py directly. Bootstrap verifies the independent manifest pin and hashes the protected sibling supervisor.py before executing exactly the same in-memory bytes; the supervisor cannot establish its own pre-execution trust.",
     "execGate": "No forked child exec before Python owns the child's pidfd and grants P. On missing pidfd or failed admission the parent half-closes the gate to emit EOF while retaining handles; the nonblocking child gate also expires at 750 ms from before fork. Refuse tracing and initially blocked SIGINT/SIGTERM. Never settle process custody from stopped/continued wait status, EOF, or pidfd readiness; only terminal WIFEXITED or WIFSIGNALED.",
+    "permitCommit": "P, G, and Q share one masked decision. Latched or pending SIGINT/SIGTERM or an expired absolute deadline refuses the write. A successful single-byte write advances the phase; cancellation observed after the decision bars later permits, not a byte already sent. Restore the previous mask on every path.",
     "staticReview": "Use static ELF/SYMBOL/VERSION inspection on exact bytes, not ldd or a probe that runs unadmitted code. Bun PT_INTERP must resolve to the pinned root-owned GNU loader; that loader and all transitive DT_NEEDED objects must be admitted with exact ELF machine/class, SONAME, version requirements, sizes, paths and SHA-256. Review executable and all dependencies for RPATH/RUNPATH, DT_AUDIT/DEPAUDIT, FILTER/AUXILIARY or any other mechanism that can defeat the exact dependency inventory; do not admit an alternative search or startup code path. Account for trusted loader/libc constructors and IFUNCs in their already approved bytes, not in the test DSO.",
     "lookup": "Explicit pinned GNU loader, --inhibit-cache, --glibc-hwcaps-mask empty, --library-path /usr/lib. Every required SONAME must resolve in that directory to its canonical approved root-owned file and meet every required symbol version. Reject an unknown dependency, default-path fall-through, alternate hwcaps variant, extra search directory, preloading/audit, any /etc/ld.so.preload, or unreviewed runtime module. Environment must not supply LD_*, GLIBC_TUNABLES, Bun preloads, package configuration or dotenv. Verify pinned Bun options and built-in module resolution; no automatic installs.",
     "library": "ELF64 little-endian x86-64 ET_DYN, at most 256 KiB; no PT_INTERP, RPATH/RUNPATH, INIT/FINI or arrays, constructor/IFUNC definitions, text relocations or executable stack. Require immediate binding, RELRO, exactly DT_NEEDED libc.so.6 and only reviewed libc imports/versions. Allowed API exports: braid_fixture_abi_v1 and braid_fixture_query_v1. System V scalar ABI only; no JS pointers, struct exchange, callbacks, or descriptor arguments.",
-    "load": "Load only the byte-verified sealed memfd at literal /proc/self/fd/3; no candidate search, embedded library, substitution or alternative pathname. Review pinned Bun's internal absolute-path retry to prove it cannot choose other bytes. Require baseline mapped file identities before load and the exact added sealed inode before any fixture symbol call. Missing procfs, memfd seals, pidfd, loader or process observation is refusal/unproven; no elevated or alternate backend, no numeric PID signaling."
+    "load": "Load only the byte-verified sealed memfd at literal /proc/self/fd/3; no candidate search, embedded library, substitution or alternative pathname. Review pinned Bun's internal absolute-path retry to prove it cannot choose other bytes. Require baseline mapped file identities before load and the exact added sealed inode before any fixture symbol call. Missing procfs, CPython memfd sealing API, memfd seals, pidfd, loader or process observation is refusal/unproven; no elevated or alternate backend, no numeric PID signaling."
   }
 }

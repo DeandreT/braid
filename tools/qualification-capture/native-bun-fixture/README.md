@@ -39,6 +39,16 @@ pointers. No Bun socket backend or Bun worker is under test.
 | `C` | Parent → child | One cancellation byte. EOF alone is not cooperative cancellation. |
 | `R` + signed little-endian i32 | Child → parent | Native return after closing C-owned descriptors. |
 
+`P`, `G` and `Q` share one commit point. The supervisor blocks SIGINT and
+SIGTERM on the single parent thread, checks latched and kernel-pending
+cancellation and the absolute deadline (including the shorter exec gate for
+`P`), then attempts one nonblocking byte write. Only a successful write
+advances the phase. A signal arriving after the cancellation snapshot cannot
+undo that write: the supervisor checks pending signals before restoring the
+old mask and checks the cancellation latch and overall deadline again after
+restoration. A late cancellation bars subsequent permits and still requires
+child settlement.
+
 The normal case needs `R/42`, EOF and reaped status 0. The hold case samples
 only `/proc/<child>/task/<child>/syscall`, after `W`, for Linux x86-64
 `poll`/`ppoll` with exactly two fds. It then needs an actual `C` write, `R/-3`,

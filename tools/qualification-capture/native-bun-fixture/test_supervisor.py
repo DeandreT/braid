@@ -15,6 +15,176 @@ import supervisor
 
 
 class OwnerContract(unittest.TestCase):
+    def permit_owner(self, phase):
+        owner = supervisor.Owner()
+        owner.phase = phase
+        owner.fds = {"gate": 8, "control": 9, "pidfd": 10}
+        owner.end = 12
+        return owner
+
+    def test_permits_commit_once_in_order(self):
+        owner = self.permit_owner("preexec")
+        with (
+            patch.object(supervisor, "STOP", False),
+            patch.object(supervisor.signal, "pthread_sigmask", return_value=set()),
+            patch.object(supervisor.signal, "sigpending", return_value={signal.SIGUSR1}),
+            patch.object(supervisor.time, "monotonic", return_value=10),
+            patch.object(supervisor.os, "write", return_value=1) as write,
+        ):
+            self.assertTrue(owner.commit_permit(b"P", gate_end=11))
+            self.assertTrue(owner.commit_permit(b"G"))
+            self.assertTrue(owner.commit_permit(b"Q"))
+            with self.assertRaisesRegex(supervisor.Refused, "permitOrder"):
+                owner.commit_permit(b"Q")
+            self.assertEqual(owner.phase, "query")
+            self.assertIsNone(owner.failure)
+            self.assertEqual(write.call_args_list, [call(8, b"P"), call(9, b"G"), call(9, b"Q")])
+
+    def test_all_permits_refuse_a_signal_pending_after_an_earlier_checkpoint(self):
+        for permit, (_, phase, _) in supervisor.PERMITS.items():
+            with self.subTest(permit=permit):
+                owner = self.permit_owner(phase)
+                old = {signal.SIGUSR1}
+                with (
+                    patch.object(supervisor, "STOP", False),
+                    patch.object(supervisor.time, "monotonic", return_value=10),
+                    patch.object(supervisor.signal, "pthread_sigmask", return_value=old) as mask,
+                    patch.object(supervisor.signal, "sigpending",
+                                 return_value={signal.SIGTERM}),
+                    patch.object(supervisor.os, "write") as write,
+                ):
+                    owner.checkpoints()
+                    self.assertIsNone(owner.failure)
+                    options = {"gate_end": 11} if permit == b"P" else {}
+                    self.assertFalse(owner.commit_permit(permit, **options))
+                    self.assertEqual(owner.failure, "cancelled")
+                    self.assertEqual(owner.phase, phase)
+                    write.assert_not_called()
+                    self.assertEqual(mask.call_args_list, [
+                        call(signal.SIG_BLOCK, supervisor.SIGNALS), call(signal.SIG_SETMASK, old)
+                    ])
+
+    def test_latched_cancellation_while_entering_mask_prevents_publish(self):
+        owner = self.permit_owner("admit")
+
+        def mask(action, _signals):
+            if action == signal.SIG_BLOCK:
+                supervisor.request_stop(signal.SIGINT, None)
+            return set()
+
+        with (
+            patch.object(supervisor, "STOP", False),
+            patch.object(supervisor.signal, "pthread_sigmask", side_effect=mask),
+            patch.object(supervisor.signal, "sigpending", return_value=set()),
+            patch.object(supervisor.time, "monotonic", return_value=10),
+            patch.object(supervisor.os, "write") as write,
+        ):
+            owner.checkpoints()
+            self.assertIsNone(owner.failure)
+            self.assertFalse(owner.commit_permit(b"G"))
+            self.assertEqual(owner.failure, "cancelled")
+            write.assert_not_called()
+
+    def test_deadline_is_checked_inside_commit_for_run_and_exec_gate(self):
+        for permit, phase, cutoff, options, reason in (
+            (b"Q", "load", 12, {}, "deadline"),
+            (b"P", "preexec", 11, {"gate_end": 11}, "execNotPermitted"),
+        ):
+            with self.subTest(permit=permit):
+                owner = self.permit_owner(phase)
+                # Time advances after the earlier checkpoint, inside the mask.
+                clock = [10]
+
+                def pending():
+                    clock[0] = cutoff
+                    return set()
+
+                with (
+                    patch.object(supervisor, "STOP", False),
+                    patch.object(supervisor.signal, "pthread_sigmask", return_value=set()) as mask,
+                    patch.object(supervisor.signal, "sigpending", side_effect=pending),
+                    patch.object(supervisor.time, "monotonic", side_effect=lambda: clock[0]),
+                    patch.object(supervisor.os, "write") as write,
+                ):
+                    owner.checkpoints()
+                    self.assertFalse(owner.commit_permit(permit, **options))
+                    self.assertEqual(owner.failure, reason)
+                    self.assertEqual(owner.phase, phase)
+                    write.assert_not_called()
+                    self.assertEqual(mask.call_args_list[-1], call(signal.SIG_SETMASK, set()))
+
+    def test_pending_after_commit_keeps_sent_permit_but_prevents_next_one(self):
+        owner = self.permit_owner("preexec")
+        with (
+            patch.object(supervisor, "STOP", False),
+            patch.object(supervisor.signal, "pthread_sigmask", return_value=set()),
+            patch.object(supervisor.signal, "sigpending",
+                         side_effect=(set(), {signal.SIGTERM}, set(), set())),
+            patch.object(supervisor.time, "monotonic", return_value=10),
+            patch.object(supervisor.os, "write", return_value=1) as write,
+        ):
+            self.assertTrue(owner.commit_permit(b"P", gate_end=11))
+            self.assertEqual(owner.phase, "admit")
+            self.assertEqual(owner.failure, "cancelled")
+            self.assertFalse(owner.commit_permit(b"G"))
+            write.assert_called_once_with(8, b"P")
+
+    def test_delivery_on_unmask_and_deadline_after_write_stop_further_work(self):
+        for reason in ("cancelled", "deadline"):
+            with self.subTest(reason=reason):
+                owner = self.permit_owner("admit")
+                clock = [10]
+
+                def mask(action, _signals):
+                    if action == signal.SIG_SETMASK and reason == "cancelled":
+                        supervisor.request_stop(signal.SIGTERM, None)
+                    return {signal.SIGUSR1}
+
+                def publish(_fd, _permit):
+                    if reason == "deadline":
+                        clock[0] = 12
+                    return 1
+
+                with (
+                    patch.object(supervisor, "STOP", False),
+                    patch.object(supervisor.signal, "pthread_sigmask", side_effect=mask) as masks,
+                    patch.object(supervisor.signal, "sigpending", return_value=set()),
+                    patch.object(supervisor.time, "monotonic", side_effect=lambda: clock[0]),
+                    patch.object(supervisor.os, "write", side_effect=publish) as write,
+                ):
+                    self.assertTrue(owner.commit_permit(b"G"))
+                    self.assertEqual(owner.phase, "load")
+                    self.assertEqual(owner.failure, reason)
+                    self.assertFalse(owner.commit_permit(b"Q"))
+                    write.assert_called_once_with(9, b"G")
+                    self.assertEqual(masks.call_args_list[-1],
+                                     call(signal.SIG_SETMASK, {signal.SIGUSR1}))
+
+    def test_failed_write_restores_mask_and_never_retries(self):
+        owner = self.permit_owner("load")
+        with (
+            patch.object(supervisor, "STOP", False),
+            patch.object(supervisor.signal, "pthread_sigmask", return_value=set()) as mask,
+            patch.object(supervisor.signal, "sigpending", return_value=set()),
+            patch.object(supervisor.time, "monotonic", return_value=10),
+            patch.object(supervisor.os, "write",
+                         side_effect=BlockingIOError(errno.EAGAIN, "mock")) as write,
+        ):
+            with self.assertRaises(BlockingIOError):
+                owner.commit_permit(b"Q")
+            self.assertEqual(owner.phase, "load")
+            write.assert_called_once_with(9, b"Q")
+            self.assertEqual(mask.call_args_list[-1], call(signal.SIG_SETMASK, set()))
+
+    def test_absent_python_sealing_api_refuses_before_creating_artifact(self):
+        with (
+            patch.object(supervisor, "fcntl", SimpleNamespace()),
+            patch.object(supervisor.os, "memfd_create") as create,
+        ):
+            with self.assertRaisesRegex(supervisor.Refused, "memfdSealsUnavailable"):
+                supervisor.Owner().make_artifact(b"fixture")
+            create.assert_not_called()
+
     def test_full_width_boundary(self):
         for fd in (0, 3, 1048575, 67108863):
             self.assertTrue(supervisor.fits(fd), fd)

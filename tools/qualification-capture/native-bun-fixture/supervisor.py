@@ -32,11 +32,12 @@ TERMINATE = 0.250
 REAP = 1.0
 TICK = 0.005
 MARKER = "/memfd:braid-fixture-v1 (deleted)"
-SEALS = (
-    fcntl.F_SEAL_WRITE | fcntl.F_SEAL_GROW |
-    fcntl.F_SEAL_SHRINK | fcntl.F_SEAL_SEAL
-) if sys.platform == "linux" else 0
 SIGNALS = (signal.SIGINT, signal.SIGTERM)
+PERMITS = {
+    b"P": ("gate", "preexec", "admit"),
+    b"G": ("control", "admit", "load"),
+    b"Q": ("control", "load", "query"),
+}
 STOP = False
 
 
@@ -333,7 +334,7 @@ class Owner:
         self.data = bytearray()
         self.failure = None
         self.eof = False
-        self.phase = "admit"
+        self.phase = "preexec"
         self.observed = False
         self.cancel_at = None
         self.stop_at = None
@@ -383,6 +384,12 @@ class Owner:
             right.close()
 
     def make_artifact(self, payload):
+        try:
+            add, get = fcntl.F_ADD_SEALS, fcntl.F_GET_SEALS
+            seals = (fcntl.F_SEAL_WRITE | fcntl.F_SEAL_GROW |
+                     fcntl.F_SEAL_SHRINK | fcntl.F_SEAL_SEAL)
+        except AttributeError as error:
+            raise Refused("memfdSealsUnavailable") from error
         self.own("artifact", os.memfd_create("braid-fixture-v1",
                                             os.MFD_CLOEXEC | os.MFD_ALLOW_SEALING))
         fd = self.fds["artifact"]
@@ -391,8 +398,8 @@ class Owner:
             count = os.write(fd, rest)
             require(count > 0, "sealWrite")
             rest = rest[count:]
-        fcntl.fcntl(fd, fcntl.F_ADD_SEALS, SEALS)
-        require(fcntl.fcntl(fd, fcntl.F_GET_SEALS) == SEALS and
+        fcntl.fcntl(fd, add, seals)
+        require(fcntl.fcntl(fd, get) == seals and
                 os.pread(fd, len(payload) + 1, 0) == payload, "sealedBytes")
         elf_header(fd, {3})
         return inode(os.fstat(fd))
@@ -450,7 +457,6 @@ class Owner:
                 # Do not unwind into the parent's reaper or interpreter teardown.
                 os._exit(4)
         self.pid = pid
-        permitted = False
         try:
             try:
                 self.own("pidfd", os.pidfd_open(pid))
@@ -458,12 +464,10 @@ class Owner:
                 raise Refused("pidfdUnavailable") from error
             for name in ("childIn", "childOut", "childGate", "null"):
                 self.close(name)  # Parent never retains the worker output peer.
-            self.checkpoints()
-            require(self.failure is None and time.monotonic() < gate_end, "execNotPermitted")
-            require(os.write(self.fds["gate"], b"P") == 1, "execGateWrite")
-            permitted = True
+            require(self.commit_permit(b"P", gate_end=gate_end),
+                    self.failure or "execNotPermitted")
         finally:
-            if not permitted:
+            if self.phase == "preexec":
                 self.abort_exec_gate()
 
     def reap_once(self):
@@ -478,8 +482,40 @@ class Owner:
             self.check_stop_bound(time.monotonic())
             self.status = status
 
-    def control(self, byte):
-        return os.write(self.fds["control"], byte) == 1
+    def latch_pending_cancel(self):
+        if signal.sigpending().intersection(SIGNALS) or STOP:
+            self.fail("cancelled")
+
+    def commit_permit(self, permit, *, gate_end=None):
+        """Decide once under the mask; a later signal cannot retract a byte."""
+        channel, before, after = PERMITS[permit]
+        require(self.phase == before and "pidfd" in self.fds, "permitOrder")
+        require((permit == b"P") == (gate_end is not None), "permitDeadline")
+        fd = self.fds[channel]  # All permit sockets are nonblocking.
+        previous = signal.pthread_sigmask(signal.SIG_BLOCK, SIGNALS)
+        try:
+            # This snapshot is the cancellation commit point. An arrival
+            # after it may not suppress this one write but must bar later work.
+            self.latch_pending_cancel()
+            now = time.monotonic()
+            if now >= self.end:
+                self.fail("deadline")
+            elif gate_end is not None and now >= gate_end:
+                self.fail("execNotPermitted")
+            if self.failure is not None:
+                return False
+            require(os.write(fd, permit) == 1, "permitWrite")
+            self.phase = after
+            return True
+        finally:
+            try:
+                self.latch_pending_cancel()
+            finally:
+                signal.pthread_sigmask(signal.SIG_SETMASK, previous)
+            self.checkpoints()  # Includes cancellation delivered on unmask.
+
+    def write_cancel(self):
+        return os.write(self.fds["control"], b"C") == 1
 
     def collect(self):
         if self.eof:
@@ -542,7 +578,7 @@ class Owner:
     def cancel_for_failure(self):
         if self.phase == "query" and self.cancel_at is None:
             try:
-                if self.control(b"C"):
+                if self.write_cancel():
                     self.cancel_at = time.monotonic()
             except OSError:
                 pass  # The failure and pidfd settlement remain authoritative.
@@ -570,17 +606,11 @@ class Owner:
                             os.getpgid(self.pid) == self.pid, "childIsolation")
                     untraced(proc_bytes(f"/proc/{self.pid}/status", SOURCE_CAP))
                     maps_match(self.pid, native)
-                    self.checkpoints()
-                    if self.failure is None:
-                        require(self.control(b"G"), "permitWrite")
-                        self.phase = "load"
+                    self.commit_permit(b"G")
                 elif self.phase == "load" and len(self.data) >= 4:
                     require(self.data == normal_prefix, "frameProtocol")
                     maps_match(self.pid, native, library)
-                    self.checkpoints()
-                    if self.failure is None:
-                        require(self.control(b"Q"), "permitWrite")
-                        self.phase = "query"
+                    self.commit_permit(b"Q")
                 elif hold and self.phase == "query" and len(self.data) >= 6 and self.cancel_at is None:
                     require(self.data == prefix, "nativeUnproven")
                     proof_end = proof_end or (now + PROOF)
@@ -592,7 +622,7 @@ class Owner:
                     if blocked:
                         self.checkpoints()
                         if self.failure is None:
-                            require(time.monotonic() < proof_end and self.control(b"C"),
+                            require(time.monotonic() < proof_end and self.write_cancel(),
                                     "nativeUnproven")
                             self.observed = True
                             self.cancel_at = time.monotonic()
