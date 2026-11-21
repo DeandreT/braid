@@ -1,0 +1,77 @@
+{
+  "schema": "braid.native-bun-fixture.v1",
+  "runtimeApproved": false,
+  "platform": "linux-x86_64-glibc",
+  "bunVersion": "1.4.5",
+  "bunSource": "a7733435cf40429e3b35c36072769df2052b80f1",
+  "sourceReview": {
+    "issue": "https://github.com/DeandreT/braid/issues/4",
+    "baseline": "7de55f4c214e44205564c95301929b130bcd83eb",
+    "originalDesign": {
+      "record": "braid-4-native-design.md",
+      "title": "Braid #4: source review and native fixture candidate",
+      "sha256": "562b541fd4d8b39935e22949cc0243281941c85047c74c6495ddadaa360f3c80"
+    },
+    "independentReviewSession": "ses_e02edcf65ffekHa8gi2eEXwim3",
+    "reviewedScope": "Revised design, source implementation only: one unprivileged Python supervisor and reaper, one gated Bun child, no runtime admission.",
+    "implementationReview": "Pending independent review of the exact candidate source hashes below."
+  },
+  "sourceFiles": {
+    "README.md": "4cfd9bcd219e02f18d886cb978d35f7307bc86225fe140f7d7cd0f7963997143",
+    "fixture.c": "dd61fa10fe13c30fdc11d54a739264abe804ddcae73d3b4d91e33a5223f8fec1",
+    "supervisor.py": "067b5a8f36d149d498af0f1da4021eab0126dd3ed422ee7f60f600f3c1bf0f60",
+    "worker.mjs": "a98129bab3df823e2daf4a0a507f9612f07e53aba12b6c4348a7f98d0f5a2918",
+    "test_supervisor.py": "d1a72ab5fbe1b1769f2b0014438e9f119aa2de69a4f834a022b1a736bbc70a95"
+  },
+  "staticElfReviewSha256": null,
+  "bun": {
+    "status": "No admitted executable; official source/release reference is not executable admission.",
+    "release": "https://github.com/oven-sh/bun/releases/tag/bun-v1.4.5",
+    "asset": "bun-linux-x64.zip",
+    "archiveSha256": "94559b3b528995a49452f9f2404cec74f2efd7d06e0a000a8cd214b02c3666eb",
+    "path": null,
+    "size": null,
+    "sha256": null
+  },
+  "supervisorInterpreter": {
+    "status": "Installed path observed; runtime, distribution, and complete dependency footprint unadmitted.",
+    "candidatePath": "/opt/braid-runtimes/cpython-3.15.2/bin/python3.15",
+    "path": null,
+    "size": null,
+    "sha256": null
+  },
+  "loader": {
+    "status": "Existing GNU loader observed, not admitted.",
+    "candidateCanonicalPath": "/usr/lib/ld-linux-x86-64.so.2",
+    "path": null,
+    "size": null,
+    "sha256": null
+  },
+  "dependencies": null,
+  "library": {
+    "status": "Not built or admitted.",
+    "file": "libbraid_fixture_v1.so",
+    "size": null,
+    "sha256": null
+  },
+  "proposedBuild": {
+    "workingDirectory": "Fresh task-owned directory on verified /mnt/perok; separate from the capture owner and all other runs.",
+    "argv": [
+      "/usr/bin/gcc", "-std=c17", "-D_GNU_SOURCE", "-O2", "-fPIC",
+      "-fvisibility=hidden", "-fno-common", "-fstack-protector-strong",
+      "-Wall", "-Wextra", "-Werror", "-shared", "-nostartfiles", "-fuse-ld=bfd",
+      "-Wl,-z,defs,-z,now,-z,relro,-z,noexecstack",
+      "-o", "<WORK>/libbraid_fixture_v1.so", "<SOURCE>/fixture.c"
+    ],
+    "requirements": "One reviewed command; record clean build environment, exact source, compiler, assembler, linker, target headers/sysroot, versions, hashes, output size and SHA-256. No installs, downloads at build time, native loader, or Docker."
+  },
+  "artifactPolicy": {
+    "approval": "Do not edit this proposal into an authorization. Produce a separate reviewed manifest only after independent approval of its exact source and artifact bytes. Distribute its manifest SHA-256 independently. The reviewed elf-review.json must be bound to the same files.",
+    "executable": "Verify upstream signed Bun checksums with an independently authenticated upstream key, then inventory the extracted official executable (not the ZIP). Canonical non-symlink ELF64 little-endian x86-64 glibc, approved actual path/size/hash, trusted parent directories, no set-ID or file capabilities; no PATH lookup, wrapper, strip, variant, install, or replacement fallback. The standalone 256 MiB runtime file cap does not waive the capture owner's independent 64 MiB cap.",
+    "supervisorBootstrap": "Before starting Python, verify an independently admitted CPython 3.15.2 executable, its actual PT_INTERP, RPATH-selected native dependencies, extension modules, and stdlib. Use its real, protected path with -I -S -B and a clean environment. The later self-hash cannot establish pre-execution trust.",
+    "staticReview": "Use static ELF/SYMBOL/VERSION inspection on exact bytes, not ldd or a probe that runs unadmitted code. Bun PT_INTERP must resolve to the pinned root-owned GNU loader; that loader and all transitive DT_NEEDED objects must be admitted with exact ELF machine/class, SONAME, version requirements, sizes, paths and SHA-256. Review executable and all dependencies for RPATH/RUNPATH, DT_AUDIT/DEPAUDIT, FILTER/AUXILIARY or any other mechanism that can defeat the exact dependency inventory; do not admit an alternative search or startup code path. Account for trusted loader/libc constructors and IFUNCs in their already approved bytes, not in the test DSO.",
+    "lookup": "Explicit pinned GNU loader, --inhibit-cache, --glibc-hwcaps-mask empty, --library-path /usr/lib. Every required SONAME must resolve in that directory to its canonical approved root-owned file and meet every required symbol version. Reject an unknown dependency, default-path fall-through, alternate hwcaps variant, extra search directory, preloading/audit, any /etc/ld.so.preload, or unreviewed runtime module. Environment must not supply LD_*, GLIBC_TUNABLES, Bun preloads, package configuration or dotenv. Verify pinned Bun options and built-in module resolution; no automatic installs.",
+    "library": "ELF64 little-endian x86-64 ET_DYN, at most 256 KiB; no PT_INTERP, RPATH/RUNPATH, INIT/FINI or arrays, constructor/IFUNC definitions, text relocations or executable stack. Require immediate binding, RELRO, exactly DT_NEEDED libc.so.6 and only reviewed libc imports/versions. Allowed API exports: braid_fixture_abi_v1 and braid_fixture_query_v1. System V scalar ABI only; no JS pointers, struct exchange, callbacks, or descriptor arguments.",
+    "load": "Load only the byte-verified sealed memfd at literal /proc/self/fd/3; no candidate search, embedded library, substitution or alternative pathname. Review pinned Bun's internal absolute-path retry to prove it cannot choose other bytes. Require baseline mapped file identities before load and the exact added sealed inode before any fixture symbol call. Missing procfs, memfd seals, pidfd, loader or process observation is refusal/unproven; no elevated or alternate backend, no numeric PID signaling."
+  }
+}
