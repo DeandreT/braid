@@ -16,6 +16,16 @@ import supervisor
 
 
 class OwnerContract(unittest.TestCase):
+    def test_worker_argv_keeps_optional_config_value_out_of_positionals(self):
+        loader = Path("/usr/lib/ld-linux-x86-64.so.2")
+        bun = Path("/protected/bin/bun")
+        source = "// inert eval source\n"
+        self.assertEqual(supervisor.worker_argv(loader, bun, source), [
+            str(loader), "--inhibit-cache", "--glibc-hwcaps-mask", "",
+            "--library-path", "/usr/lib", "--argv0", str(bun), str(bun),
+            "--config=/dev/null", "--no-env-file", "--no-install", "--eval", source,
+        ])
+
     def terminal_worker(self, phase="admit"):
         owner = supervisor.Owner()
         owner.phase = phase

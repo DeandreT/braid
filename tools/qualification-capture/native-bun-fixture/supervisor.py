@@ -773,6 +773,14 @@ class Owner:
                 time.sleep(TICK if not self.overdue else 0.050)
 
 
+def worker_argv(loader, bun, source):
+    # Bun 1.4.5's optional --config value must be joined with "=".
+    # A separate /dev/null token is positional and stops parsing before --eval.
+    return [str(loader), "--inhibit-cache", "--glibc-hwcaps-mask", "", "--library-path",
+            "/usr/lib", "--argv0", str(bun), str(bun), "--config=/dev/null",
+            "--no-env-file", "--no-install", "--eval", source]
+
+
 def run(args):
     owner = Owner()
     old = {sig: signal.signal(sig, request_stop) for sig in SIGNALS}
@@ -786,12 +794,9 @@ def run(args):
         library = owner.make_artifact(payload)
         config = {"mode": int(args.case == "hold"), "size": len(payload), "sha256": sha}
         source = "const fixture=Object.freeze(" + json.dumps(config) + ");\n" + worker.decode("utf-8")
-        argv = [str(loader), "--inhibit-cache", "--glibc-hwcaps-mask", "", "--library-path",
-                "/usr/lib", "--argv0", str(bun), str(bun), "--config", "/dev/null",
-                "--no-env-file", "--no-install", "--eval", source]
         env = {"HOME": str(args.work), "XDG_CONFIG_HOME": str(args.work),
                "TMPDIR": str(args.work), "LANG": "C", "TZ": "UTC", "BUN_NO_TELEMETRY": "1"}
-        owner.launch(hard, argv, env, args.work)
+        owner.launch(hard, worker_argv(loader, bun, source), env, args.work)
         owner.supervise(native, library, args.case == "hold")
     except Refused as error:
         owner.fail(str(error))

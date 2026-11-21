@@ -109,6 +109,9 @@ cutoff is the check with SIGINT/SIGTERM blocked after all owned closes.
   paths and whole dependency closure. The supervisor uses the exact approved GNU
   loader, no cache or hardware-capability subdirectory preference, `/usr/lib`
   as its only explicit library directory, a clean environment and fixed argv.
+  In Bun 1.4.5 the optional config path must be one argument:
+  `--config=/dev/null`. With a separate `/dev/null` token, Bun treats it as
+  the entry path and stops parsing flags before `--eval`.
   Static review must establish that no object falls through to another path
   or loads other code before admission. The mapping checks then tie the actual
   child to approved inodes before granting each permit. There is no alternate
