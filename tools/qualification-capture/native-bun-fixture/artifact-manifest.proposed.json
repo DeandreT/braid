@@ -61,11 +61,24 @@
   "proposedBuild": {
     "workingDirectory": "Fresh task-owned directory on verified /mnt/perok; separate from the capture owner and all other runs.",
     "argv": [
-      "/usr/bin/gcc", "-std=c17", "-D_GNU_SOURCE", "-O2", "-fPIC",
-      "-fvisibility=hidden", "-fno-common", "-fstack-protector-strong",
-      "-Wall", "-Wextra", "-Werror", "-shared", "-nostartfiles", "-fuse-ld=bfd",
+      "/usr/bin/gcc",
+      "-std=c17",
+      "-D_GNU_SOURCE",
+      "-O2",
+      "-fPIC",
+      "-fvisibility=hidden",
+      "-fno-common",
+      "-fstack-protector-strong",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-shared",
+      "-nostartfiles",
+      "-fuse-ld=bfd",
       "-Wl,-z,defs,-z,now,-z,relro,-z,noexecstack",
-      "-o", "<WORK>/libbraid_fixture_v1.so", "<SOURCE>/fixture.c"
+      "-o",
+      "<WORK>/libbraid_fixture_v1.so",
+      "<SOURCE>/fixture.c"
     ],
     "requirements": "One reviewed command; record clean build environment, exact source, compiler, assembler, linker, target headers/sysroot, versions, hashes, output size and SHA-256. No installs, downloads at build time, native loader, or Docker."
   },
