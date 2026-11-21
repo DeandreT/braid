@@ -14,14 +14,17 @@
     },
     "independentReviewSession": "ses_e02edcf65ffekHa8gi2eEXwim3",
     "reviewedScope": "Revised design, source implementation only: one unprivileged Python supervisor and reaper, one gated Bun child, no runtime admission.",
+    "reviewedCandidate": "bb42a6899a523925e3abd9ca9db2e9096d059943",
+    "remediationDesign": "README.md: protected pre-execution supervisor-byte admission, bounded fork-to-exec pidfd gate, refusal of traced/blocked launch, and terminal-only custody settlement.",
     "implementationReview": "Pending independent review of the exact candidate source hashes below."
   },
   "sourceFiles": {
-    "README.md": "4cfd9bcd219e02f18d886cb978d35f7307bc86225fe140f7d7cd0f7963997143",
+    "README.md": "2bfcd7072d0f4b7f671db4f29ab87d1dc0e1d7d9b2b2de430f1c0381ebc37831",
+    "bootstrap.py": "2b3a8614564f2aa5c38c6e309bc3c982f25e80d406a6821f3a297be3c02244b6",
     "fixture.c": "dd61fa10fe13c30fdc11d54a739264abe804ddcae73d3b4d91e33a5223f8fec1",
-    "supervisor.py": "067b5a8f36d149d498af0f1da4021eab0126dd3ed422ee7f60f600f3c1bf0f60",
+    "supervisor.py": "6765416931f0eaaeb3bf5fc8c7a5bc2427a68edf1db77a02348db05e96aa5dc4",
     "worker.mjs": "a98129bab3df823e2daf4a0a507f9612f07e53aba12b6c4348a7f98d0f5a2918",
-    "test_supervisor.py": "d1a72ab5fbe1b1769f2b0014438e9f119aa2de69a4f834a022b1a736bbc70a95"
+    "test_supervisor.py": "797474f3cc8160c13caa9bcfa7fca5fbfc78d07dd09729301bea2d77051c858f"
   },
   "staticElfReviewSha256": null,
   "bun": {
@@ -68,7 +71,8 @@
   "artifactPolicy": {
     "approval": "Do not edit this proposal into an authorization. Produce a separate reviewed manifest only after independent approval of its exact source and artifact bytes. Distribute its manifest SHA-256 independently. The reviewed elf-review.json must be bound to the same files.",
     "executable": "Verify upstream signed Bun checksums with an independently authenticated upstream key, then inventory the extracted official executable (not the ZIP). Canonical non-symlink ELF64 little-endian x86-64 glibc, approved actual path/size/hash, trusted parent directories, no set-ID or file capabilities; no PATH lookup, wrapper, strip, variant, install, or replacement fallback. The standalone 256 MiB runtime file cap does not waive the capture owner's independent 64 MiB cap.",
-    "supervisorBootstrap": "Before starting Python, verify an independently admitted CPython 3.15.2 executable, its actual PT_INTERP, RPATH-selected native dependencies, extension modules, and stdlib. Use its real, protected path with -I -S -B and a clean environment. The later self-hash cannot establish pre-execution trust.",
+    "supervisorBootstrap": "Before starting Python, verify an independently admitted CPython 3.15.2 executable, its actual PT_INTERP, RPATH-selected native dependencies, extension modules, and stdlib. Independently verify the exact bootstrap.py bytes against the approved manifest; require the canonical root-owned protected bootstrap path and parent directories. Use the real interpreter path with -I -S -B and a clean environment. Never start supervisor.py directly. Bootstrap verifies the independent manifest pin and hashes the protected sibling supervisor.py before executing exactly the same in-memory bytes; the supervisor cannot establish its own pre-execution trust.",
+    "execGate": "No forked child exec before Python owns the child's pidfd and grants P. On missing pidfd or failed admission the parent half-closes the gate to emit EOF while retaining handles; the nonblocking child gate also expires at 750 ms from before fork. Refuse tracing and initially blocked SIGINT/SIGTERM. Never settle process custody from stopped/continued wait status, EOF, or pidfd readiness; only terminal WIFEXITED or WIFSIGNALED.",
     "staticReview": "Use static ELF/SYMBOL/VERSION inspection on exact bytes, not ldd or a probe that runs unadmitted code. Bun PT_INTERP must resolve to the pinned root-owned GNU loader; that loader and all transitive DT_NEEDED objects must be admitted with exact ELF machine/class, SONAME, version requirements, sizes, paths and SHA-256. Review executable and all dependencies for RPATH/RUNPATH, DT_AUDIT/DEPAUDIT, FILTER/AUXILIARY or any other mechanism that can defeat the exact dependency inventory; do not admit an alternative search or startup code path. Account for trusted loader/libc constructors and IFUNCs in their already approved bytes, not in the test DSO.",
     "lookup": "Explicit pinned GNU loader, --inhibit-cache, --glibc-hwcaps-mask empty, --library-path /usr/lib. Every required SONAME must resolve in that directory to its canonical approved root-owned file and meet every required symbol version. Reject an unknown dependency, default-path fall-through, alternate hwcaps variant, extra search directory, preloading/audit, any /etc/ld.so.preload, or unreviewed runtime module. Environment must not supply LD_*, GLIBC_TUNABLES, Bun preloads, package configuration or dotenv. Verify pinned Bun options and built-in module resolution; no automatic installs.",
     "library": "ELF64 little-endian x86-64 ET_DYN, at most 256 KiB; no PT_INTERP, RPATH/RUNPATH, INIT/FINI or arrays, constructor/IFUNC definitions, text relocations or executable stack. Require immediate binding, RELRO, exactly DT_NEEDED libc.so.6 and only reviewed libc imports/versions. Allowed API exports: braid_fixture_abi_v1 and braid_fixture_query_v1. System V scalar ABI only; no JS pointers, struct exchange, callbacks, or descriptor arguments.",

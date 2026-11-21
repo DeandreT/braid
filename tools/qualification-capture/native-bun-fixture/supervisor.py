@@ -1,6 +1,5 @@
 """Standalone Braid #4 source candidate; never a capture driver."""
 
-import argparse
 import errno
 import fcntl
 import hashlib
@@ -27,6 +26,7 @@ LIB_CAP = 256 << 10
 SOURCE_CAP = 64 << 10
 RUN = 2.0
 PROOF = 0.150
+EXEC_GATE = 0.750
 COOPERATE = 0.250
 TERMINATE = 0.250
 REAP = 1.0
@@ -201,7 +201,7 @@ def runtime_manifest(manifest, manifest_path, workspace):
             and report["librarySha256"] == manifest["library"]["sha256"]
             and report["dependencies"] == manifest["dependencies"], "elfReviewBinding")
     sources = {}
-    for name in ("fixture.c", "worker.mjs", "supervisor.py"):
+    for name in ("fixture.c", "worker.mjs"):
         data = file_bytes(HERE / name, SOURCE_CAP)
         require(digest(data) == manifest["sourceFiles"][name], "sourceDigest")
         sources[name] = data
@@ -232,6 +232,16 @@ def runtime_manifest(manifest, manifest_path, workspace):
     return bun, loader, native, sources["worker.mjs"], payload, artifact["sha256"]
 
 
+def untraced(status):
+    require(re.search(rb"(?m)^TracerPid:[ \t]+0$", status) is not None, "tracedLaunch")
+
+
+def launch_policy(status):
+    untraced(status)
+    require(not set(SIGNALS).intersection(signal.pthread_sigmask(signal.SIG_BLOCK, ())),
+            "blockedCancellationSignals")
+
+
 def validate_host():
     require(sys.platform == "linux" and platform.machine() == "x86_64" and
             sys.implementation.name == "cpython" and sys.version_info[:3] == (3, 15, 2)
@@ -242,6 +252,7 @@ def validate_host():
             signal.getsignal(signal.SIGCHLD) == signal.SIG_DFL and
             signal.getsignal(signal.SIGPIPE) == signal.SIG_IGN, "reaperPolicy")
     status = proc_bytes("/proc/self/status", SOURCE_CAP)
+    launch_policy(status)
     for key in (b"CapInh", b"CapPrm", b"CapEff", b"CapAmb"):
         require(key + b":" in status and
                 re.search(rb"(?m)^" + key + rb":\s+0+$", status) is not None, "capabilities")
@@ -297,9 +308,26 @@ def request_stop(_number, _frame):
     STOP = True
 
 
+def await_exec_permit(fd, end):
+    require(fits(fd), "descriptorRange")
+    poller = select.poll()
+    poller.register(fd, select.POLLIN)
+    while (remaining := end - time.monotonic()) > 0:
+        if not poller.poll(max(1, int(remaining * 1000))):
+            continue
+        try:
+            byte = os.read(fd, 1)
+        except BlockingIOError:
+            continue
+        # EOF or any unexpected byte means refuse, including a late permit.
+        return byte == b"P" and time.monotonic() < end
+    return False
+
+
 class Owner:
     def __init__(self):
         self.fds = {}
+        self.gate_writer = None
         self.pid = None
         self.status = None
         self.data = bytearray()
@@ -321,11 +349,15 @@ class Owner:
         fd = self.fds.pop(name, None)
         if fd is not None:
             try:
+                if name == "gate":
+                    self.gate_writer.detach()
+                    self.gate_writer = None
                 os.close(fd)
             except OSError:
                 self.fail("closeFailure")
 
     def close_all(self):
+        require(self.pid is None or self.status is not None, "childNotReaped")
         for name in tuple(self.fds):
             self.close(name)
 
@@ -337,10 +369,17 @@ class Owner:
                                         socket.SOCK_NONBLOCK | socket.SOCK_CLOEXEC)
         try:
             require(fits(left.fileno()) and fits(right.fileno()), "descriptorRange")
-            self.own(parent, left.detach())
+            if parent == "gate":
+                # Keep the original socket object for shutdown on a refusal.
+                # No second wrapper briefly owning the same fd.
+                self.own(parent, left.fileno())
+                self.gate_writer, left = left, None
+            else:
+                self.own(parent, left.detach())
             self.own(child, right.detach())
         finally:
-            left.close()
+            if left is not None:
+                left.close()
             right.close()
 
     def make_artifact(self, payload):
@@ -358,38 +397,74 @@ class Owner:
         elf_header(fd, {3})
         return inode(os.fstat(fd))
 
+    def child_exec(self, hard, argv, env, workspace, gate_end):
+        # Drop this process's writer copy before waiting, so parent loss also
+        # produces EOF. No loader, slot installation, or Bun before a permit.
+        os.close(self.gate_writer.detach())
+        gate = self.fds["childGate"]
+        require(await_exec_permit(gate, gate_end), "execNotPermitted")
+        os.close(gate)
+        os.setsid()
+        for sig in SIGNALS:
+            signal.signal(sig, signal.SIG_DFL)
+        # Move all sources away from target slots before touching 0..3.
+        copies = [checked(fcntl.fcntl(self.fds[name], fcntl.F_DUPFD_CLOEXEC, 4))
+                  for name in ("childIn", "childOut", "null", "artifact")]
+        for target, fd in enumerate(copies):
+            require(os.dup2(fd, target, inheritable=True) == target, "dupSlot")
+        # Inherited set was exact before fork. All copies are below hard.
+        os.closerange(4, hard)
+        require(active_fds() == {0, 1, 2, 3}, "childInheritance")
+        os.chdir(workspace)
+        launch_policy(proc_bytes("/proc/self/status", SOURCE_CAP))
+        require(time.monotonic() < gate_end, "execNotPermitted")
+        os.execve(argv[0], argv, env)
+
+    def abort_exec_gate(self):
+        # Publish EOF without surrendering the owned fd. Even if shutdown
+        # fails, the child's absolute gate cutoff does not depend on us.
+        try:
+            self.gate_writer.shutdown(socket.SHUT_WR)
+        except OSError:
+            self.fail("execGateFailure")
+
     def launch(self, hard, argv, env, workspace):
         self.socketpair("control", "childIn")
         self.socketpair("output", "childOut")
+        self.socketpair("gate", "childGate")
         self.own("null", os.open("/dev/null", os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC))
         info = os.fstat(self.fds["null"])
         require(stat.S_ISCHR(info.st_mode) and
                 (os.major(info.st_rdev), os.minor(info.st_rdev)) == (1, 3), "devNull")
         require(active_fds() == {0, 1, 2, *self.fds.values()}, "unexpectedInheritance")
+        launch_policy(proc_bytes("/proc/self/status", SOURCE_CAP))
         require(not STOP, "cancelled")
-        self.end = time.monotonic() + RUN  # Before fork; success includes all closes.
+        start = time.monotonic()
+        self.end = start + RUN  # Before fork; success includes all closes.
+        gate_end = min(start + EXEC_GATE, self.end)
         pid = os.fork()
         if pid == 0:
             try:
-                os.setsid()
-                for sig in SIGNALS:
-                    signal.signal(sig, signal.SIG_DFL)
-                # Move all sources away from target slots before touching 0..3.
-                copies = [checked(fcntl.fcntl(self.fds[name], fcntl.F_DUPFD_CLOEXEC, 4))
-                          for name in ("childIn", "childOut", "null", "artifact")]
-                for target, fd in enumerate(copies):
-                    require(os.dup2(fd, target, inheritable=True) == target, "dupSlot")
-                # Inherited set was exact before fork. All copies are below hard.
-                os.closerange(4, hard)
-                require(active_fds() == {0, 1, 2, 3}, "childInheritance")
-                os.chdir(workspace)
-                os.execve(argv[0], argv, env)
-            except BaseException:
+                self.child_exec(hard, argv, env, workspace, gate_end)
+            finally:
+                # Do not unwind into the parent's reaper or interpreter teardown.
                 os._exit(4)
         self.pid = pid
-        for name in ("childIn", "childOut", "null"):
-            self.close(name)  # Parent never retains child endpoints (EOF would be false).
-        self.own("pidfd", os.pidfd_open(pid))
+        permitted = False
+        try:
+            try:
+                self.own("pidfd", os.pidfd_open(pid))
+            except OSError as error:
+                raise Refused("pidfdUnavailable") from error
+            for name in ("childIn", "childOut", "childGate", "null"):
+                self.close(name)  # Parent never retains the worker output peer.
+            self.checkpoints()
+            require(self.failure is None and time.monotonic() < gate_end, "execNotPermitted")
+            require(os.write(self.fds["gate"], b"P") == 1, "execGateWrite")
+            permitted = True
+        finally:
+            if not permitted:
+                self.abort_exec_gate()
 
     def reap_once(self):
         if self.pid is None or self.status is not None:
@@ -397,6 +472,9 @@ class Owner:
         # Exactly one reaper; neither EOF nor a readable pidfd changes status.
         waited, status = os.waitpid(self.pid, os.WNOHANG)
         if waited == self.pid:
+            if not (os.WIFEXITED(status) or os.WIFSIGNALED(status)):
+                self.fail("nonterminalWaitStatus")
+                return
             self.check_stop_bound(time.monotonic())
             self.status = status
 
@@ -490,6 +568,7 @@ class Owner:
                 if self.phase == "admit" and len(self.data) >= 2:
                     require(self.data == b"A\n" and os.getsid(self.pid) == self.pid and
                             os.getpgid(self.pid) == self.pid, "childIsolation")
+                    untraced(proc_bytes(f"/proc/{self.pid}/status", SOURCE_CAP))
                     maps_match(self.pid, native)
                     self.checkpoints()
                     if self.failure is None:
@@ -608,14 +687,5 @@ def run(args):
             signal.signal(sig, handler)
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
-    parser.add_argument("--manifest", type=Path, required=True)
-    parser.add_argument("--approved-manifest-sha256", required=True)
-    parser.add_argument("--work", type=Path, required=True)
-    parser.add_argument("--case", choices=("reply", "hold"), required=True)
-    return run(parser.parse_args())
-
-
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit("Use the independently admitted protected bootstrap.")

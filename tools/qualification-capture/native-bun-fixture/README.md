@@ -9,18 +9,28 @@ before any runtime test.
 
 ## Ownership and proof
 
-`supervisor.py` is the only supervisor and reaper. It requires a single
-unprivileged CPython process with only fds 0–2 on entry. Before fork it checks
-the inherited hard fd limit and the exact open set. The child calls `setsid`,
-duplicates checked original fds using full-width integers, installs exactly
-the reviewed four slots (two separate Unix socketpair ends, `/dev/null`, sealed
-library) and execs. It never spawns another process. The supervisor opens a
-pidfd for the child and has no numeric-PID or group signal fallback. The C
-library keeps full-width descriptors locally; its FFI surface accepts no
-descriptors or pointers. No Bun socket backend or Bun worker is under test.
+`supervisor.py` is the only supervisor and reaper. It requires a single,
+untraced, unprivileged CPython process with SIGINT and SIGTERM unblocked and
+only fds 0–2 on entry. Before fork it checks the inherited hard fd limit and
+the exact open set. The forked Python child closes its copy of the dedicated
+gate writer and waits for `P` for at most 750 ms from the pre-fork clock. The
+parent writes `P` only after obtaining a checked pidfd for that child and
+settling its unused child endpoint copies. Without a pidfd, it shuts down the
+gate's write side to deliver EOF, without closing the retained handles; the
+child's absolute deadline is the backstop if shutdown or delivery fails. EOF,
+a wrong byte, and a late permit never lead to exec.
+
+After `P`, the child calls `setsid`, duplicates checked original fds using
+full-width integers, and installs exactly the four reviewed slots (two
+separate Unix socketpair ends, `/dev/null`, sealed library). It rechecks
+tracing and its signal mask before exec and never spawns another process.
+The parent has no numeric-PID or group signal fallback. The C library keeps
+full-width descriptors locally; its FFI surface accepts no descriptors or
+pointers. No Bun socket backend or Bun worker is under test.
 
 | Bytes | Direction | Meaning |
 | --- | --- | --- |
+| `P` | Parent → forked Python child (separate socket) | The parent owns a checked pidfd; exec may proceed within the gate deadline. |
 | `A\n` | Child → parent | The worker checked the fixed stdio types and the sealed artifact's bytes. |
 | `G` | Parent → child | The parent verified session/group isolation and pre-load file mappings. |
 | `L\n` | Child → parent | `dlopen` returned; no fixture function was called. |
@@ -43,7 +53,9 @@ sends SIGKILL 250 ms later if needed, and allows another 1 s for reaping. The
 latter is an observation bound, not a guarantee about Linux scheduling. If
 missed, `workerStopUnconfirmed` is sticky; the same supervisor keeps reaping
 with its handles intact and no success can be emitted. A readable pidfd is
-only a wakeup. Final success requires wait status, the frame contract, EOF,
+only a wakeup. Only `WIFEXITED` or `WIFSIGNALED` settles process custody;
+a stopped or continued status is a failed run and does not release any live
+handles. Final success also requires normal exit, the frame contract, EOF,
 clean final closes, and the final cancellation/deadline check. The reporting
 cutoff is the check with SIGINT/SIGTERM blocked after all owned closes.
 
@@ -58,9 +70,16 @@ cutoff is the check with SIGINT/SIGTERM blocked after all owned closes.
   manifest. The supervisor binds that review digest; it does not infer ELF
   dependency policy from a SONAME or a map of filenames.
 - Admit CPython's exact loader, libraries, stdlib and extensions **before**
-  starting the supervisor, with a clean launch environment and `-I -S -B`.
-  The supervisor checks its interpreter binary against the manifest as a
-  consistency check, not as its bootstrapping trust decision.
+  starting the protected bootstrap. Independently verify `bootstrap.py`
+  against the approved manifest before invoking it through the real CPython
+  path with a clean environment and `-I -S -B`. Use a canonical, root-owned,
+  non-user-writable source directory for the bootstrap and its fixed sibling
+  `supervisor.py`; do not execute the checkout copy or start the supervisor
+  directly. The bootstrap verifies the independently supplied manifest pin,
+  checks the opened supervisor file and hashes the exact bytes before any
+  supervisor code runs. It executes that verified in-memory buffer, not an
+  import or a second pathname lookup. The supervisor's later interpreter
+  check is consistency only, not its bootstrapping trust decision.
 - For Bun, admit only the reviewed official runtime, canonical root-controlled
   paths and whole dependency closure. The supervisor uses the exact approved GNU
   loader, no cache or hardware-capability subdirectory preference, `/usr/lib`
@@ -76,9 +95,10 @@ cutoff is the check with SIGINT/SIGTERM blocked after all owned closes.
   invocation. The fixture's standalone executable cap does not qualify Bun for
   the capture owner's separate 64 MiB limit.
 
-The proposed manifest references the original design and independent
-source-only review. Neither that review nor this implementation admits a
-runtime. Before promoting the candidate, cover the reply and observed hold
-paths; refusal on wrong artifacts, unexpected inodes or inherited fds; no
-success on deadline/cancellation/close error; readiness or EOF without wait
-status; and ownership after the stop bound is missed.
+The proposed manifest references the original design and the independent
+source-only review that led to this pre-exec gate and protected bootstrap.
+Neither admits a runtime. Before promoting the candidate, cover the reply
+and observed hold paths; refusal on wrong artifacts, tracing, blocked
+cancellation, unexpected inodes or inherited fds; no success on
+deadline/cancellation/close error; pidfd failure with no exec; and retention
+of custody until terminal wait even after a stopped status or missed bound.
