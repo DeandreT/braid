@@ -127,9 +127,10 @@ exact.
 Use an observer as the driver, for example:
 
 ```sh
-python3.12 tools/qualification-capture/capture.py run --root /var/lib/braid-qualification \
+PY=/opt/braid-runtimes/cpython-3.15.2/bin/python3.15
+"$PY" -I -B /opt/braid/tools/qualification-capture/capture.py run --root /var/lib/braid-qualification \
   --deadline-seconds 900 --trusted /opt/braid/tools/catalog-browser/observe-host.py -- \
-  /usr/bin/python3.12 /opt/braid/tools/catalog-browser/observe-host.py --fixture-id <UUID>
+  "$PY" -I -B /opt/braid/tools/catalog-browser/observe-host.py --fixture-id "$FIXTURE_ID"
 ```
 
 The owner appends `--output <capture>/evidence`, which already satisfies the
@@ -142,7 +143,12 @@ The owner prints one JSON line with the capture ID and outcome. It exits 0 only 
 ## Operator steps
 
 1. Install the reviewed `capture.py` and the observer as root-owned `0644` files, for
-   example under `/opt/braid/tools/`, with a root-owned `/usr/bin/python3.12`.
+   example under `/opt/braid/tools/`. Use the same reviewed, root-owned CPython
+   executable for the owner and the Python observer. Pin its absolute path and
+   verify its distribution checksum; do not resolve `python3` through `PATH`.
+   Before changing the pin, run `"$PY" -I -B -m unittest discover -s
+   tools/qualification-capture -p test_capture.py` from the reviewed checkout.
+   This checks the owner without starting a privileged observer.
 2. Create the capture root as root, `0700`, outside the checkout.
 3. Run the owner as root in the exclusive window with the observer as its driver.
    Send `finish` to its standard input after operator cleanup has settled.
