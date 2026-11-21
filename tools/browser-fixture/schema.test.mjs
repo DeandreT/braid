@@ -4,13 +4,88 @@ import { readdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { test } from "node:test";
 import {
+  browserFixtureRolePairs,
+  browserFixtureUncredentialedRoles,
+  matchesBrowserFixtureRoles,
+} from "./roles.mjs";
+import {
   browserFixtureMigrations,
   browserFixtureProtectedTables,
+  browserFixtureRowsQuery,
   matchesBrowserFixtureMigrationJournal,
   regressionReadProfile,
 } from "./schema.mjs";
 
 const migrations = new URL("../../migrations/postgres/", import.meta.url);
+
+test("the browser fixture admits the complete initializer role roster without enabling opt-in passwords", () => {
+  const init = readFileSync(
+    new URL("../../deploy/local/postgres-init.sh", import.meta.url),
+    "utf8",
+  );
+  const required = browserFixtureRolePairs.map(([name]) => name);
+  const disabled = browserFixtureUncredentialedRoles;
+  const names = [...required, ...disabled];
+  assert.deepEqual(
+    [...init.matchAll(/^CREATE ROLE (braid_\w+) /gm)]
+      .map((match) => match[1])
+      .sort(),
+    names.toSorted(),
+  );
+  const rows = names.map((name) => ({
+    name,
+    hasPassword: required.includes(name),
+    login: true,
+    super: false,
+    createDb: false,
+    createRole: false,
+    inherit: false,
+    replication: false,
+    bypass: false,
+  }));
+  assert.equal(matchesBrowserFixtureRoles(rows), true);
+  const last = rows.at(-1);
+  const rest = rows.slice(0, -1);
+  for (const altered of [
+    rest,
+    [...rest, rows[0]],
+    [...rest, { ...last, name: "braid_unknown" }],
+    [...rest, { ...last, hasPassword: true }],
+    [{ ...rows[0], hasPassword: false }, ...rows.slice(1)],
+    ...[
+      "super",
+      "createDb",
+      "createRole",
+      "inherit",
+      "replication",
+      "bypass",
+    ].map((key) => [...rest, { ...last, [key]: true }]),
+  ])
+    assert.equal(matchesBrowserFixtureRoles(altered), false);
+});
+
+test("the complete fixture snapshot keeps one ordered entry per table without a variadic call", () => {
+  const tables = [
+    ...browserFixtureProtectedTables,
+    "organizations",
+    "build_publications",
+  ];
+  assert.ok(tables.length > 50);
+  const query = browserFixtureRowsQuery(tables);
+  assert.match(query, /^SELECT json_object_agg\(/);
+  assert.deepEqual(
+    [...query.matchAll(/\((\d+),'([a-z_]+)',\(SELECT/g)].map(
+      ([, ordinal, name]) => [Number(ordinal), name],
+    ),
+    tables.map((name, ordinal) => [ordinal, name]),
+  );
+  assert.match(query, /ORDER BY entry\.ordinal/);
+  assert.match(query, /FROM braid\.build_publications r/);
+  assert.match(query, /to_jsonb\(r\)-'artifact_body'/);
+  assert.match(query, /'artifact_body_sha256'/);
+  for (const invalid of [[], ["organizations", "organizations"], ["a'"]])
+    assert.throws(() => browserFixtureRowsQuery(invalid));
+});
 
 test("production entry assets do not depend on an admitted base element", () => {
   const configuration = JSON.parse(
