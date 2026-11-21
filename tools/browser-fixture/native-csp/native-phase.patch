@@ -1,0 +1,292 @@
+--- /dev/null
++++ b/third_party/blink/renderer/core/frame/csp/credit_scope.h
+@@ -0,0 +1,67 @@
++// Experimental accounting for one explicitly enrolled producer tree. Not a
++// Chromium collector. Never interprets an empty set as browser-wide coverage.
++#pragma once
++#include <cstdint>
++#include <memory>
++#include <mutex>
++#include <optional>
++#include <utility>
++
++namespace braid::probe {
++class Scope {
++  struct State {
++    std::mutex lock;
++    unsigned count = 0;
++    bool lost = false, sealed = false;
++  };
++ public:
++  enum class Status { Open, Pending, ClosedLocalOnly, Failed };
++  class Credit {
++    friend class Scope;
++    explicit Credit(std::shared_ptr<State> s) : state_(std::move(s)) {}
++    std::shared_ptr<State> state_;
++    void End(bool lost) {
++      auto s = std::move(state_);
++      if (!s) return;
++      std::lock_guard guard(s->lock);
++      s->lost |= lost;
++      --s->count;
++    }
++   public:
++    Credit(Credit&&) = default;
++    Credit& operator=(Credit&&) = delete;
++    Credit(const Credit&) = delete;
++    ~Credit() { End(true); } // A discarded closure cannot appear delivered.
++    // Single-owner token. Split before publishing a child, not on arrival.
++    std::optional<Credit> Child() const {
++      auto s = state_;
++      if (!s) return {};
++      std::lock_guard guard(s->lock);
++      if (s->lost || s->count >= 4096) { s->lost = true; return {}; }
++      ++s->count;
++      return Credit(s);
++    }
++    // Local producer completion only; not native DOM dispatch or Node receipt.
++    void Completed() { End(false); }
++  };
++  Scope() = default;
++  Scope(const Scope&) = delete;
++  std::optional<Credit> Root() {
++    std::lock_guard guard(state_->lock);
++    if (state_->lost || state_->sealed || state_->count >= 4096) {
++      state_->lost = true; return {};
++    }
++    ++state_->count;
++    return Credit(state_);
++  }
++  void SealIngress() { std::lock_guard guard(state_->lock); state_->sealed = true; }
++  Status Inspect() const {
++    std::lock_guard guard(state_->lock);
++    if (state_->lost) return Status::Failed;
++    if (!state_->sealed) return Status::Open;
++    return state_->count ? Status::Pending : Status::ClosedLocalOnly;
++  }
++ private:
++  std::shared_ptr<State> state_ = std::make_shared<State>();
++};
++}
+--- /dev/null
++++ b/third_party/blink/renderer/core/frame/csp/phase_probe.h
+@@ -0,0 +1,40 @@
++// Qualification-only native hooks. No web, inspector or command-line API.
++#ifndef BRAID_ISOLATED_CSP_PHASE_PROBE_H_
++#define BRAID_ISOLATED_CSP_PHASE_PROBE_H_
++#include "base/memory/stack_allocated.h"
++#include "base/functional/callback.h"
++#include "third_party/blink/renderer/core/frame/csp/credit_scope.h"
++namespace blink {
++class Event;
++class EventTarget;
++// Stack-bounded, one original event and one receiver. Phase instrumentation
++// calls Check only for the identical native pair. A nested dispatch cannot
++// complete its parent's obligation.
++class CspFixtureAttempt {
++  STACK_ALLOCATED();
++
++ public:
++  using Check = base::RepeatingCallback<bool(const Event&)>;
++  CspFixtureAttempt(const Event& event, const EventTarget& receiver, Check check)
++      : previous_(active_), event_(&event), receiver_(&receiver), check_(std::move(check)) { active_ = this; }
++  ~CspFixtureAttempt() { active_ = previous_; }
++  CspFixtureAttempt(const CspFixtureAttempt&) = delete;
++  CspFixtureAttempt& operator=(const CspFixtureAttempt&) = delete;
++  static void AtPhase(const Event& event, const EventTarget& receiver) {
++    auto* a = active_;
++    if (!a || &event != a->event_ || &receiver != a->receiver_) return;
++    if (a->visited_) { a->matched_ = false; return; }
++    a->visited_ = true;
++    a->matched_ = a->check_.Run(event);
++  }
++  bool matched() const { return matched_; }
++ private:
++  inline static thread_local CspFixtureAttempt* active_ = nullptr;
++  CspFixtureAttempt* const previous_;
++  const Event* const event_;
++  const EventTarget* const receiver_;
++  const Check check_;
++  bool visited_ = false, matched_ = false;
++};
++}  // namespace blink
++#endif
+--- a/third_party/blink/renderer/core/frame/csp/execution_context_csp_delegate.h
++++ b/third_party/blink/renderer/core/frame/csp/execution_context_csp_delegate.h
+@@ -7,6 +7,7 @@
+ 
+ #include "third_party/blink/public/mojom/security_context/insecure_request_policy.mojom-blink-forward.h"
+ #include "third_party/blink/renderer/core/frame/csp/content_security_policy.h"
++#include "third_party/blink/renderer/core/frame/csp/phase_probe.h"
+ 
+ namespace blink {
+ 
+@@ -20,6 +21,11 @@
+  public:
+   explicit ExecutionContextCSPDelegate(ExecutionContext&);
+ 
++  // Only native tests install this enrollment; it does not enroll other delegates.
++  void SetFixtureProbe(std::shared_ptr<braid::probe::Scope> scope, CspFixtureAttempt::Check check) {
++    fixture_probe_ = std::move(scope);
++    fixture_check_ = std::move(check);
++  }
+   void Trace(Visitor*) const override;
+ 
+   // ContentSecurityPolicyDelegate overrides:
+@@ -55,7 +61,10 @@
+   SecurityContext& GetSecurityContext();
+   Document* GetDocument();
+   void DispatchViolationEventInternal(const SecurityPolicyViolationEventInit*,
+-                                      Element*);
++                                      Element*, std::optional<braid::probe::Scope::Credit>, Document*, bool,
++                                      CspFixtureAttempt::Check);
++  std::shared_ptr<braid::probe::Scope> fixture_probe_;
++  CspFixtureAttempt::Check fixture_check_;
+ 
+   const Member<ExecutionContext> execution_context_;
+ };
+--- a/third_party/blink/renderer/core/frame/csp/execution_context_csp_delegate.cc
++++ b/third_party/blink/renderer/core/frame/csp/execution_context_csp_delegate.cc
+@@ -170,12 +170,14 @@
+ void ExecutionContextCSPDelegate::DispatchViolationEvent(
+     const SecurityPolicyViolationEventInit& violation_data,
+     Element* element) {
++  auto credit = fixture_probe_ ? fixture_probe_->Root() : std::nullopt;
++  Document* const original = credit ? GetDocument() : nullptr;
+   execution_context_->GetTaskRunner(TaskType::kNetworking)
+       ->PostTask(
+           FROM_HERE,
+-          BindOnce(&ExecutionContextCSPDelegate::DispatchViolationEventInternal,
++          blink::BindOnce(&ExecutionContextCSPDelegate::DispatchViolationEventInternal,
+                    WrapPersistent(this), WrapPersistent(&violation_data),
+-                   WrapPersistent(element)));
++                   WrapPersistent(element), std::move(credit), WrapWeakPersistent(original), original != nullptr, fixture_check_));
+ }
+ 
+ void ExecutionContextCSPDelegate::PostViolationReport(
+@@ -298,7 +300,8 @@
+ 
+ void ExecutionContextCSPDelegate::DispatchViolationEventInternal(
+     const SecurityPolicyViolationEventInit* violation_data,
+-    Element* element) {
++    Element* element, std::optional<braid::probe::Scope::Credit> credit,
++    Document* original, bool had_document, CspFixtureAttempt::Check check) {
+   // Worklets don't support Events in general.
+   if (execution_context_->IsWorkletGlobalScope())
+     return;
+@@ -317,13 +320,23 @@
+       event_type_names::kSecuritypolicyviolation, violation_data);
+   DCHECK(event.bubbles());
+ 
++  auto dispatch = [&](EventTarget& receiver) {
++    if (!credit || !check || execution_context_->IsContextDestroyed() ||
++        ((had_document && !original) || GetDocument() != original)) {
++      receiver.DispatchEvent(event);  // Do not suppress normal browser behavior.
++      return;  // Unconfirmed fixture credits fail on destruction.
++    }
++    CspFixtureAttempt attempt(event, receiver, check);
++    receiver.DispatchEvent(event);
++    if (attempt.matched()) credit->Completed();
++  };
+   if (auto* document = GetDocument()) {
+     if (element && element->isConnected() && element->GetDocument() == document)
+-      element->DispatchEvent(event);
++      dispatch(*element);
+     else
+-      document->DispatchEvent(event);
++      dispatch(*document);
+   } else if (auto* scope = DynamicTo<WorkerGlobalScope>(*execution_context_)) {
+-    scope->DispatchEvent(event);
++    dispatch(*scope);
+   }
+ }
+ 
+--- a/third_party/blink/renderer/core/dom/events/event_dispatcher.cc
++++ b/third_party/blink/renderer/core/dom/events/event_dispatcher.cc
+@@ -26,6 +26,7 @@
+  */
+ 
+ #include "third_party/blink/renderer/core/dom/events/event_dispatcher.h"
++#include "third_party/blink/renderer/core/frame/csp/phase_probe.h"
+ 
+ #include <optional>
+ 
+@@ -310,7 +311,7 @@
+   // down. When we get to the last one, the target, change the event phase to
+   // AT_TARGET and fire only the capture listeners on it.
+   event_->SetEventPhase(Event::PhaseType::kCapturingPhase);
+-
++  CspFixtureAttempt::AtPhase(*event_, *node_);
+   if (!node_->GetDocument().HasCaptureListener()) {
+     DCHECK(RuntimeEnabledFeatures::SkipEventCaptureEnabled());
+     return kContinueDispatching;
+--- a/third_party/blink/renderer/core/dom/events/event_target.cc
++++ b/third_party/blink/renderer/core/dom/events/event_target.cc
+@@ -30,6 +30,7 @@
+  */
+ 
+ #include "third_party/blink/renderer/core/dom/events/event_target.h"
++#include "third_party/blink/renderer/core/frame/csp/phase_probe.h"
+ 
+ #include <memory>
+ #include <optional>
+@@ -890,6 +891,7 @@
+   event.SetTarget(this);
+   event.SetCurrentTarget(this);
+   event.SetEventPhase(Event::PhaseType::kAtTarget);
++  CspFixtureAttempt::AtPhase(event, *this);
+   DispatchEventResult dispatch_result = FireEventListeners(event);
+   if (RuntimeEnabledFeatures::ClearCurrentTargetAfterDispatchEnabled()) {
+     event.SetCurrentTarget(nullptr);
+--- a/third_party/blink/renderer/core/frame/csp/content_security_policy_test.cc
++++ b/third_party/blink/renderer/core/frame/csp/content_security_policy_test.cc
+@@ -4,6 +4,11 @@
+ 
+ #include "third_party/blink/renderer/core/frame/csp/content_security_policy.h"
+ 
++#include "base/run_loop.h"
++#include "base/functional/bind.h"
++#include "third_party/blink/renderer/core/frame/csp/execution_context_csp_delegate.h"
++#include "third_party/blink/renderer/core/events/security_policy_violation_event.h"
++#include "third_party/blink/renderer/bindings/core/v8/v8_security_policy_violation_event_disposition.h"
+ #include "base/memory/raw_ptr_exclusion.h"
+ #include "base/test/metrics/histogram_tester.h"
+ #include "base/test/scoped_feature_list.h"
+@@ -98,6 +103,37 @@
+   Persistent<NullExecutionContext> execution_context;
+ };
+ 
++TEST_F(ContentSecurityPolicyTest, FixtureLocalCaptureIsNotBrowserCutoff) {
++  using Status = braid::probe::Scope::Status;
++  auto page = std::make_unique<DummyPageHolder>();
++  auto& window = *page->GetFrame().DomWindow();
++  auto* delegate = MakeGarbageCollected<ExecutionContextCSPDelegate>(window);
++  auto local = std::make_shared<braid::probe::Scope>();
++  delegate->SetFixtureProbe(local, base::BindRepeating([](const Event& e) {
++    // Only the delegate arms the exact native CSP event on this stack.
++    auto& event = static_cast<const SecurityPolicyViolationEvent&>(e);
++    return event.isTrusted() && event.effectiveDirective() == "worker-src" &&
++           event.violatedDirective() == "worker-src" && event.blockedURI() == "https://example.test/owned-worker.js" &&
++           event.disposition().AsEnum() == V8SecurityPolicyViolationEventDisposition::Enum::kEnforce;
++  }));
++  page->GetDocument().SetURL(secure_url);
++  window.GetSecurityContext().SetSecurityOriginForTesting(secure_origin);
++  csp->BindToDelegate(*delegate);
++  csp->AddPolicies(ParseContentSecurityPolicies("worker-src 'none'", ContentSecurityPolicyType::kEnforce,
++                                                 ContentSecurityPolicySource::kHTTP, *secure_origin));
++  const KURL blocked("https://example.test/owned-worker.js");
++  EXPECT_FALSE(csp->AllowWorkerContextFromSource(blocked));
++  local->SealIngress(); EXPECT_EQ(Status::Pending, local->Inspect());
++  base::RunLoop().RunUntilIdle(); EXPECT_EQ(Status::ClosedLocalOnly, local->Inspect());
++  EXPECT_FALSE(csp->AllowWorkerContextFromSource(blocked));
++  base::RunLoop().RunUntilIdle(); EXPECT_EQ(Status::Failed, local->Inspect());
++  auto mismatch = std::make_shared<braid::probe::Scope>();
++  delegate->SetFixtureProbe(mismatch, base::BindRepeating([](const Event&) { return false; }));
++  EXPECT_FALSE(csp->AllowWorkerContextFromSource(blocked));
++  mismatch->SealIngress();
++  base::RunLoop().RunUntilIdle(); EXPECT_EQ(Status::Failed, mismatch->Inspect());
++}
++
+ TEST_F(ContentSecurityPolicyTest, ParseInsecureRequestPolicy) {
+   struct TestCase {
+     const char* header;

@@ -1,0 +1,16 @@
+diff --git a/packages/playwright-core/src/server/chromium/chromium.ts b/packages/playwright-core/src/server/chromium/chromium.ts
+index 222fb07..53ea8b5 100644
+--- a/packages/playwright-core/src/server/chromium/chromium.ts
++++ b/packages/playwright-core/src/server/chromium/chromium.ts
+@@ -70,6 +70,11 @@ export class Chromium extends BrowserType {
+   }
+ 
+   override launch(progress: Progress, options: types.LaunchOptions, protocolLogger?: types.ProtocolLogger): Promise<Browser> {
++    // This isolated fixture only supports the explicit sandboxed local launch.
++    // It does not advertise a CSP cutoff or a browser receipt capability.
++    if (!options.executablePath || options.chromiumSandbox !== true || options.channel ||
++        options.ignoreDefaultArgs || options.ignoreAllDefaultArgs || options.args?.length)
++      throw new Error('Fixture requires an explicit sandboxed executable and default arguments');
+     if (options.channel?.startsWith('bidi-'))
+       return this._bidiChromium.launch(progress, options, protocolLogger);
+     return super.launch(progress, options, protocolLogger);
