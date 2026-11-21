@@ -1,4 +1,4 @@
-"""Source contract tests; no Bun, library, fork, signals, or observer needed."""
+"""Source contract and inert memfd tests; no Bun, library, fork, or observer."""
 
 import errno
 import json
@@ -176,14 +176,81 @@ class OwnerContract(unittest.TestCase):
             write.assert_called_once_with(9, b"Q")
             self.assertEqual(mask.call_args_list[-1], call(signal.SIG_SETMASK, set()))
 
-    def test_absent_python_sealing_api_refuses_before_creating_artifact(self):
-        with (
-            patch.object(supervisor, "fcntl", SimpleNamespace()),
-            patch.object(supervisor.os, "memfd_create") as create,
+    def test_mismatched_seal_exports_refuse_before_creating_artifact(self):
+        for name, correct in supervisor.SEAL_UAPI.items():
+            with (
+                self.subTest(name=name),
+                patch.object(supervisor, "fcntl", SimpleNamespace(**{name: correct + 1})),
+                patch.object(supervisor.os, "memfd_create") as create,
+            ):
+                with self.assertRaisesRegex(supervisor.Refused, "memfdSealConstantMismatch"):
+                    supervisor.Owner().seal_artifact(b"inert")
+                create.assert_not_called()
+
+    def test_seal_commands_refuse_other_platforms_and_32_bit_abi(self):
+        for module, name, value in (
+            (supervisor.sys, "platform", "freebsd"),
+            (supervisor.platform, "machine", lambda: "aarch64"),
+            (supervisor.sys, "byteorder", "big"),
+            (supervisor.struct, "calcsize", lambda fmt: 4 if fmt != "@P" else 8),
         ):
-            with self.assertRaisesRegex(supervisor.Refused, "memfdSealsUnavailable"):
-                supervisor.Owner().make_artifact(b"fixture")
-            create.assert_not_called()
+            with (
+                self.subTest(name=name),
+                patch.object(module, name, value),
+                patch.object(supervisor.os, "memfd_create") as create,
+            ):
+                with self.assertRaisesRegex(supervisor.Refused, "memfdSealAbi"):
+                    supervisor.Owner().seal_artifact(b"inert")
+                create.assert_not_called()
+
+    def test_inert_memfd_roundtrip_with_no_python_constant_exports(self):
+        owner = supervisor.Owner()
+        payload = b"Braid fixture test: inert bytes only\n"
+        kernel_fcntl = supervisor.fcntl.fcntl
+        try:
+            # Exercise the same path as pinned CPython, even if this test is
+            # also run on a CPython that exports the seal constants.
+            with patch.object(supervisor, "fcntl", SimpleNamespace(fcntl=kernel_fcntl)):
+                fd = owner.seal_artifact(payload)
+            self.assertEqual(kernel_fcntl(fd, 1034), 0x0f)
+            self.assertEqual(os.pread(fd, len(payload) + 1, 0), payload)
+            with self.assertRaises(PermissionError) as blocked:
+                os.pwrite(fd, b"x", 0)
+            self.assertEqual(blocked.exception.errno, errno.EPERM)
+        finally:
+            owner.close_all()
+
+    def test_seal_apply_mask_and_byte_mismatches_do_not_admit(self):
+        payload = b"inert"
+        for results, returned, reason in (
+            ((1,), payload, "sealApply"),
+            ((0, 0x0e), payload, "sealMask"),
+            ((0, 0x1f), payload, "sealMask"),
+            ((0, 0x0f), b"wrong", "sealedBytes"),
+            ((0, 0x0f), payload + b"!", "sealedBytes"),
+        ):
+            with self.subTest(results=results, returned=returned):
+                owner = supervisor.Owner()
+                operation = Mock(side_effect=results)
+                with (
+                    patch.object(supervisor, "fcntl",
+                                 SimpleNamespace(fcntl=operation, **supervisor.SEAL_UAPI)),
+                    patch.object(supervisor.os, "memfd_create", return_value=8),
+                    patch.object(supervisor.os, "write", return_value=len(payload)),
+                    patch.object(supervisor.os, "pread", return_value=returned) as read,
+                    patch.object(supervisor.os, "close") as close,
+                ):
+                    try:
+                        with self.assertRaisesRegex(supervisor.Refused, reason):
+                            owner.seal_artifact(payload)
+                        self.assertEqual(operation.call_args_list, [
+                            call(8, 1033, 0x0f), call(8, 1034)
+                        ][:len(results)])
+                        if reason != "sealedBytes":
+                            read.assert_not_called()
+                    finally:
+                        owner.close_all()
+                    close.assert_called_once_with(8)
 
     def test_full_width_boundary(self):
         for fd in (0, 3, 1048575, 67108863):

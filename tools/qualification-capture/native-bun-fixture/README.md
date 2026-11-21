@@ -98,6 +98,13 @@ cutoff is the check with SIGINT/SIGTERM blocked after all owned closes.
   or loads other code before admission. The mapping checks then tie the actual
   child to approved inodes before granting each permit. There is no alternate
   runtime, interpreter, loader, `.so`, dependency or proc access route.
+- The supervisor binds the Linux x86-64 little-endian LP64 sealing ABI:
+  `F_ADD_SEALS=1033`, `F_GET_SEALS=1034`, and `SEAL`, `SHRINK`, `GROW`,
+  `WRITE` bits `1`, `2`, `4`, `8` respectively. These are Linux UAPI values,
+  not guesses from whether CPython exposes the names. Any exported value
+  must match. Before fork, the supervisor requires exact `0x0f` kernel
+  readback and exact byte readback, then performs its ELF check. Refuse
+  any mismatch; no unsealed fallback.
 - A future run uses one private, nonprivileged work directory containing only
   `libbraid_fixture_v1.so`, the correct separately admitted manifest and its
   sibling `elf-review.json`. Pass the manifest SHA-256 via an independent

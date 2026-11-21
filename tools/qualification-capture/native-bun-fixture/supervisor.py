@@ -13,6 +13,7 @@ import select
 import signal
 import socket
 import stat
+import struct
 import sys
 import threading
 import time
@@ -32,6 +33,17 @@ TERMINATE = 0.250
 REAP = 1.0
 TICK = 0.005
 MARKER = "/memfd:braid-fixture-v1 (deleted)"
+# Linux UAPI: linux/fcntl.h and asm-generic/fcntl.h. CPython may omit
+# some or all of these names; a conflicting export is not admissible.
+SEAL_UAPI = {
+    "F_ADD_SEALS": 1033,
+    "F_GET_SEALS": 1034,
+    "F_SEAL_SEAL": 0x01,
+    "F_SEAL_SHRINK": 0x02,
+    "F_SEAL_GROW": 0x04,
+    "F_SEAL_WRITE": 0x08,
+}
+SEAL_MASK = 0x0f
 SIGNALS = (signal.SIGINT, signal.SIGTERM)
 PERMITS = {
     b"P": ("gate", "preexec", "admit"),
@@ -325,6 +337,18 @@ def await_exec_permit(fd, end):
     return False
 
 
+def memfd_seal_commands():
+    require(sys.platform == "linux" and platform.machine() == "x86_64" and
+            sys.byteorder == "little" and
+            all(struct.calcsize("@" + kind) == width
+                for kind, width in (("i", 4), ("l", 8), ("P", 8))),
+            "memfdSealAbi")
+    for name, value in SEAL_UAPI.items():
+        exposed = getattr(fcntl, name, value)
+        require(type(exposed) is int and exposed == value, "memfdSealConstantMismatch")
+    return SEAL_UAPI["F_ADD_SEALS"], SEAL_UAPI["F_GET_SEALS"]
+
+
 class Owner:
     def __init__(self):
         self.fds = {}
@@ -383,13 +407,8 @@ class Owner:
                 left.close()
             right.close()
 
-    def make_artifact(self, payload):
-        try:
-            add, get = fcntl.F_ADD_SEALS, fcntl.F_GET_SEALS
-            seals = (fcntl.F_SEAL_WRITE | fcntl.F_SEAL_GROW |
-                     fcntl.F_SEAL_SHRINK | fcntl.F_SEAL_SEAL)
-        except AttributeError as error:
-            raise Refused("memfdSealsUnavailable") from error
+    def seal_artifact(self, payload):
+        add, get = memfd_seal_commands()
         self.own("artifact", os.memfd_create("braid-fixture-v1",
                                             os.MFD_CLOEXEC | os.MFD_ALLOW_SEALING))
         fd = self.fds["artifact"]
@@ -398,9 +417,13 @@ class Owner:
             count = os.write(fd, rest)
             require(count > 0, "sealWrite")
             rest = rest[count:]
-        fcntl.fcntl(fd, add, seals)
-        require(fcntl.fcntl(fd, get) == seals and
-                os.pread(fd, len(payload) + 1, 0) == payload, "sealedBytes")
+        require(fcntl.fcntl(fd, add, SEAL_MASK) == 0, "sealApply")
+        require(fcntl.fcntl(fd, get) == SEAL_MASK, "sealMask")
+        require(os.pread(fd, len(payload) + 1, 0) == payload, "sealedBytes")
+        return fd
+
+    def make_artifact(self, payload):
+        fd = self.seal_artifact(payload)
         elf_header(fd, {3})
         return inode(os.fstat(fd))
 
