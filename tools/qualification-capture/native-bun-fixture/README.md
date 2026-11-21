@@ -59,14 +59,18 @@ independently, and the native poll has its own absolute 4 s backstop.
 
 After a failed run that had a child, the final JSON includes a bounded `worker`
 object: last permit published, last complete frame matching the expected
-prefix, bounded byte count, EOF, terminal exit code or signal, and an
-allowlisted native-result category for a complete `R` frame. The Python
+prefix and permitted phase, bounded byte count, EOF, terminal exit code or
+signal, and an allowlisted native-result category for a complete `R` after
+`Q`. Bytes that contradict the prefix, length or published permits set
+`protocolContradiction`; the receipt keeps the byte count, EOF and raw exit
+code or signal without treating those bytes as progress. The Python
 pre-exec child and Bun worker return distinct fixed failure codes so the
 receipt can flag the gate, descriptor setup, failed exec syscall, worker
-guards, FFI import, library open, ABI check, or query. These exit hints are
-not proof that a frame or admission check passed. There are no raw frame
-bytes, paths, exception messages, or child stderr in the receipt. Success
-and pre-fork refusals keep their original JSON shape.
+guards, FFI import, library open, ABI check, or query. Hints are suppressed
+unless the required permit was published; they are not proof that a frame
+or admission check passed. There are no raw frame bytes, paths, exception
+messages, or child stderr in the receipt. Success and pre-fork refusals keep
+their original JSON shape.
 
 The main 2 s clock starts before fork and includes final owned closes. On a
 stop, the supervisor gives 250 ms for cooperative exit, then sends SIGTERM,

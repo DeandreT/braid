@@ -45,7 +45,7 @@ class OwnerContract(unittest.TestCase):
                     "outcome": "refused", "reason": "workerResult",
                     "worker": {"lastPermit": "P", "lastFrame": None, "frameBytes": 0,
                                "eof": True, "exitCode": code, "exitSignal": number,
-                               "exitHint": hint, "nativeResult": None},
+                               "exitHint": hint, "nativeResult": None, "protocolContradiction": False},
                 }))
 
     def test_complete_admission_frame_and_load_exit_give_distinct_receipt(self):
@@ -72,7 +72,43 @@ class OwnerContract(unittest.TestCase):
         self.assertEqual(owner.worker_diagnostic(False), {
             "lastPermit": "G", "lastFrame": "A", "frameBytes": 2, "eof": True,
             "exitCode": 47, "exitSignal": None, "exitHint": "libraryOpen", "nativeResult": None,
+            "protocolContradiction": False,
         })
+
+    def test_terminal_drain_cannot_claim_frames_past_the_last_permit(self):
+        for phase, hold, permit, frame in (
+            ("admit", False, "P", "A"),
+            ("load", False, "G", "L"),
+            ("load", True, "G", "L"),
+        ):
+            with self.subTest(phase=phase, hold=hold):
+                owner = self.terminal_worker(phase)
+                data = b"A\nL\n" + (b"W\n" if hold else b"") + b"R*\0\0\0"
+                with (
+                    patch.object(supervisor.time, "monotonic", return_value=10),
+                    patch.object(supervisor.os, "waitpid", return_value=(123, 0)),
+                    patch.object(supervisor.os, "read", side_effect=(data, b"")),
+                    patch.object(owner, "commit_permit") as grant,
+                ):
+                    with self.assertRaisesRegex(supervisor.Refused, "workerResult"):
+                        owner.supervise({}, None, hold)
+                    grant.assert_not_called()
+                self.assertEqual(owner.worker_diagnostic(hold), {
+                    "lastPermit": permit, "lastFrame": frame, "frameBytes": len(data),
+                    "eof": True, "exitCode": 0, "exitSignal": None, "exitHint": None,
+                    "nativeResult": None, "protocolContradiction": True,
+                })
+
+    def test_exit_hint_never_claims_progress_past_the_last_permit(self):
+        for phase, code in (("preexec", 43), ("admit", 47), ("load", 50)):
+            with self.subTest(phase=phase, code=code):
+                owner = self.terminal_worker(phase)
+                owner.status = code << 8
+                owner.eof = True
+                receipt = owner.worker_diagnostic(False)
+                self.assertEqual(receipt["exitCode"], code)
+                self.assertIsNone(receipt["exitHint"])
+                self.assertTrue(receipt["eof"])
 
     def test_final_frame_is_drained_even_if_terminal_status_is_seen_first(self):
         owner = self.terminal_worker("query")
@@ -94,18 +130,20 @@ class OwnerContract(unittest.TestCase):
         owner.status = 4 << 8
         owner.eof = True
         cases = (
-            (b"A\nL\nR\xfe", False, "L", None),
-            (b"A\nL\nR" + (-2).to_bytes(4, "little", signed=True), False, "R", "badDescriptor"),
-            (b"A\nL\nRtest", False, "R", "unexpected"),
-            (b"A\nL\nRtestExtra", False, "L", None),
-            (b"A\nL\nW\nR" + (-3).to_bytes(4, "little", signed=True), True, "R", "cancelled"),
+            (b"A\nL\nR\xfe", False, "L", None, False),
+            (b"A\nL\nR" + (-2).to_bytes(4, "little", signed=True), False, "R", "badDescriptor", False),
+            (b"A\nL\nRtest", False, "R", "unexpected", False),
+            (b"A\nL\nRtestExtra", False, "L", None, True),
+            (b"A\nX\n", False, "A", None, True),
+            (b"A\nL\nW\nR" + (-3).to_bytes(4, "little", signed=True), True, "R", "cancelled", False),
         )
-        for data, hold, frame, result in cases:
+        for data, hold, frame, result, contradiction in cases:
             with self.subTest(data=data):
                 owner.data = bytearray(data)
                 receipt = owner.worker_diagnostic(hold)
                 self.assertEqual((receipt["lastFrame"], receipt["nativeResult"]), (frame, result))
                 self.assertLessEqual(receipt["frameBytes"], 12)
+                self.assertIs(receipt["protocolContradiction"], contradiction)
                 self.assertNotIn("test", json.dumps(receipt))
 
     def test_prefork_tamper_output_is_unchanged(self):

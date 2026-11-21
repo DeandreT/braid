@@ -54,23 +54,23 @@ CHILD_GATE_EXIT = 20
 CHILD_SETUP_EXIT = 21
 CHILD_EXEC_EXIT = 22
 EXIT_HINTS = {
-    CHILD_GATE_EXIT: "execGate",
-    CHILD_SETUP_EXIT: "preexecSetup",
-    CHILD_EXEC_EXIT: "execSyscall",
+    CHILD_GATE_EXIT: (0, "execGate"),
+    CHILD_SETUP_EXIT: (1, "preexecSetup"),
+    CHILD_EXEC_EXIT: (1, "execSyscall"),
     # Worker exit hints are supplemental; they do not admit a frame or permit.
-    40: "workerIdentity",
-    41: "workerStdio",
-    42: "artifactDescriptor",
-    43: "artifactBytes",
-    44: "admissionFrame",
-    45: "loadPermit",
-    46: "ffiImport",
-    47: "libraryOpen",
-    48: "loadFrame",
-    49: "queryPermit",
-    50: "abiCheck",
-    51: "nativeQuery",
-    52: "resultFrame",
+    40: (1, "workerIdentity"),
+    41: (1, "workerStdio"),
+    42: (1, "artifactDescriptor"),
+    43: (1, "artifactBytes"),
+    44: (1, "admissionFrame"),
+    45: (1, "loadPermit"),
+    46: (2, "ffiImport"),
+    47: (2, "libraryOpen"),
+    48: (2, "loadFrame"),
+    49: (2, "queryPermit"),
+    50: (3, "abiCheck"),
+    51: (3, "nativeQuery"),
+    52: (3, "resultFrame"),
 }
 NATIVE_RESULTS = {
     42: "reply", -1: "badArgument", -2: "badDescriptor", -3: "cancelled",
@@ -649,12 +649,20 @@ class Owner:
     def worker_diagnostic(self, hold):
         """One bounded receipt from owned state, never raw worker output."""
         prefix = frame_prefix(hold)
+        issued, permit = {"preexec": (0, None), "admit": (1, "P"),
+                          "load": (2, "G"), "query": (3, "Q")}[self.phase]
+        # Terminal/EOF draining can read bytes sent without a matching grant.
+        # Keep their count but never interpret them as progress past the gate.
+        max_bytes = issued * 2 if issued < 3 else len(prefix) + 5
+        fixed = prefix + b"R"
+        contradiction = (len(self.data) > max_bytes or
+                         self.data[:len(fixed)] != fixed[:len(self.data)])
         last_frame = None
         native_result = None
         for index, marker in enumerate(("A", "L", "W") if hold else ("A", "L"), 1):
-            if self.data.startswith(prefix[:index * 2]):
+            if issued >= index and self.data.startswith(prefix[:index * 2]):
                 last_frame = marker
-        if len(self.data) == len(prefix) + 5 and self.data.startswith(prefix + b"R"):
+        if issued == 3 and not contradiction and len(self.data) == len(prefix) + 5:
             last_frame = "R"
             result = int.from_bytes(self.data[-4:], "little", signed=True)
             native_result = NATIVE_RESULTS.get(result, "unexpected")
@@ -664,15 +672,17 @@ class Owner:
                 exit_code = os.WEXITSTATUS(self.status)
             elif os.WIFSIGNALED(self.status):
                 exit_signal = os.WTERMSIG(self.status)
+        minimum, exit_hint = EXIT_HINTS.get(exit_code, (0, None))
         return {
-            "lastPermit": {"preexec": None, "admit": "P", "load": "G", "query": "Q"}[self.phase],
+            "lastPermit": permit,
             "lastFrame": last_frame,
             "frameBytes": min(len(self.data), 12),
             "eof": self.eof,
             "exitCode": exit_code,
             "exitSignal": exit_signal,
-            "exitHint": EXIT_HINTS.get(exit_code),
+            "exitHint": exit_hint if issued >= minimum else None,
             "nativeResult": native_result,
+            "protocolContradiction": contradiction,
         }
 
     def outcome(self, case):
