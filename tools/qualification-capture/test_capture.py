@@ -4,11 +4,12 @@ import os
 from pathlib import Path
 import shutil
 import signal
+import subprocess
 import sys
 import tempfile
 import threading
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 import capture
 
@@ -16,7 +17,147 @@ FIXTURES = Path(__file__).resolve().parent / 'fixtures'
 POSIX = unittest.skipUnless(os.name == 'posix', 'the owner runs only on the Linux qualification host')
 
 
-class DrainTests(unittest.TestCase):
+@POSIX
+class DriverTests(unittest.TestCase):
+    def setUp(self):
+        self.child = Mock(returncode=None, args=['fixture'])
+        self.child.stdout.fileno.return_value = 42
+        self.child.poll.return_value = None
+        self.pipe = Mock()
+        self.pipe.poll.return_value = [(42, capture.select.POLLIN)]
+        self.clock = 0
+        self.cancelled = False
+        self.read = self.enterContext(patch.object(capture.os, 'read', return_value=b''))
+        self.launch = self.enterContext(patch.object(capture.subprocess, 'Popen', return_value=self.child))
+        self.enterContext(patch.object(capture.os, 'set_blocking'))
+        self.enterContext(patch.object(capture.select, 'poll', return_value=self.pipe))
+        self.enterContext(patch.object(capture, 'monotonic', lambda: self.clock))
+
+    def drive(self, deadline=10):
+        return capture.drive(Path('/unused'), ['fixture'], deadline, lambda: self.cancelled)
+
+    def exit(self, code=0):
+        self.child.returncode = code
+        return code
+
+    def test_cancellation_before_spawn_avoids_launch(self):
+        self.cancelled = True
+        self.assertEqual('cancelled', self.drive().failure)
+        self.launch.assert_not_called()
+
+    def test_zero_exit_at_or_after_cutoff_cannot_pass(self):
+        for observed_at in (0.025, 0.026):
+            def observe_exit():
+                self.clock = observed_at
+                return self.exit()
+
+            with self.subTest(observed_at=observed_at):
+                self.clock, self.child.returncode = 0, None
+                self.child.poll.side_effect = observe_exit
+                self.assertEqual('deadline', self.drive(deadline=0.025).failure)
+                self.child.terminate.assert_not_called()
+                self.child.kill.assert_not_called()
+
+    def test_poll_slice_is_clamped_and_late_zero_exit_is_not_accepted(self):
+        def wait_for_pipe(timeout):
+            self.assertEqual(25, timeout)
+            self.clock = 0.026
+            self.exit()
+            return [(42, capture.select.POLLIN)]
+
+        self.pipe.poll.side_effect = wait_for_pipe
+        self.assertEqual('deadline', self.drive(deadline=0.025).failure)
+        self.read.assert_not_called()
+
+    def test_cancellation_wins_when_observed_with_expiry_and_exit(self):
+        def observe_exit():
+            self.cancelled, self.clock = True, 10
+            return self.exit(3)
+
+        self.child.poll.side_effect = observe_exit
+        self.assertEqual('cancelled', self.drive().failure)
+
+    def test_zero_exit_is_not_enough_when_eof_arrives_at_cutoff(self):
+        def read_eof(*_):
+            self.clock = 10
+            return b''
+
+        self.child.poll.return_value = self.exit()
+        self.read.side_effect = read_eof
+        self.assertEqual(capture.DriverResult('deadline', settled=False), self.drive())
+
+    def test_zero_exit_after_stop_does_not_clear_cancellation(self):
+        def cancel_while_waiting(_timeout):
+            self.cancelled = True
+            return []
+
+        self.pipe.poll.side_effect = cancel_while_waiting
+        self.child.wait.side_effect = lambda **_: self.exit()
+        self.assertEqual(capture.DriverResult('cancelled', settled=False), self.drive())
+        self.child.wait.assert_called_once_with(timeout=capture.GRACE_SECONDS)
+
+    def test_stdout_without_eof_has_a_bounded_grace_after_exit(self):
+        def wait_for_pipe(_timeout):
+            self.clock = capture.GRACE_SECONDS
+            return []
+
+        self.child.poll.return_value = self.exit()
+        self.pipe.poll.side_effect = wait_for_pipe
+        self.assertEqual(capture.DriverResult('outputDidNotSettle', settled=False), self.drive())
+        self.child.kill.assert_not_called()
+        self.child.stdout.close.assert_called_once_with()
+
+    def test_zero_exit_with_partial_stdout_then_read_error_cannot_pass(self):
+        self.child.poll.return_value = self.exit()
+        self.read.side_effect = [b'partial', OSError('private fixture detail')]
+        self.assertEqual(capture.DriverResult('outputDidNotSettle', b'partial', settled=False), self.drive())
+        self.child.stdout.close.assert_called_once_with()
+
+    def test_output_at_limit_passes_but_one_more_byte_revokes(self):
+        data = b'a' * 10
+        for extra in (b'', b'x'):
+            with self.subTest(extra=extra), patch.object(capture, 'STDOUT_LIMIT', len(data)):
+                self.child.poll.return_value = self.exit()
+                self.read.reset_mock()
+                self.read.side_effect = [data, extra]
+                self.assertEqual(capture.DriverResult('outputLimit' if extra else None, data, not extra),
+                                 self.drive())
+                self.assertEqual([call(42, 11), call(42, 1)], self.read.call_args_list)
+
+    def test_stdout_close_failure_cannot_pass_even_after_eof_and_zero_exit(self):
+        self.child.poll.return_value = self.exit()
+        self.child.stdout.close.side_effect = OSError('fixture')
+        self.assertEqual(capture.DriverResult('outputDidNotSettle', settled=False), self.drive())
+
+
+class StopTests(unittest.TestCase):
+    def test_stop_requires_wait_status_not_just_a_signal_request(self):
+        grace = capture.GRACE_SECONDS
+        timeout = subprocess.TimeoutExpired(['fixture'], grace)
+        for waits, reaped, expected in [
+            ([0], True, [call.terminate(), call.wait(timeout=grace)]),
+            ([timeout, -signal.SIGKILL], True,
+             [call.terminate(), call.wait(timeout=grace), call.kill(), call.wait(timeout=grace)]),
+            ([timeout, timeout], False,
+             [call.terminate(), call.wait(timeout=grace), call.kill(), call.wait(timeout=grace)]),
+        ]:
+            with self.subTest(waits=waits):
+                child = Mock()
+                child.wait.side_effect = waits
+                self.assertEqual(reaped, capture.stop(child))
+                self.assertEqual(expected, child.mock_calls)
+
+    def test_signal_or_wait_error_still_attempts_bounded_escalation(self):
+        child = Mock()
+        child.terminate.side_effect = PermissionError
+        child.kill.side_effect = PermissionError
+        child.wait.side_effect = [OSError, -signal.SIGKILL]
+        self.assertTrue(capture.stop(child))
+        self.assertEqual([call.terminate(), call.wait(timeout=capture.GRACE_SECONDS),
+                          call.kill(), call.wait(timeout=capture.GRACE_SECONDS)], child.mock_calls)
+
+
+class PreflightTests(unittest.TestCase):
     def test_oversized_driver_refused_before_capture_creation_or_execution(self):
         with tempfile.TemporaryDirectory() as tmp:
             driver = Path(tmp) / 'driver'
@@ -30,14 +171,6 @@ class DrainTests(unittest.TestCase):
                     capture.run_capture(root, [str(driver)], 1)
             launch.assert_not_called()
             self.assertEqual([], list(root.iterdir()))
-
-    def test_zero_exit_with_partial_stdout_then_read_error_cannot_pass(self):
-        child = Mock(returncode=0)
-        child.stdout.read1.side_effect = [b'partial', OSError('private fixture detail')]
-        with patch.object(capture.subprocess, 'Popen', return_value=child):
-            result = capture.drive(Path('/unused'), ['fixture'], 10, threading.Event())
-        self.assertEqual(('outputDidNotSettle', b'partial'), result)
-        child.stdout.close.assert_called_once_with()
 
 
 class MarkerTests(unittest.TestCase):
@@ -272,9 +405,134 @@ class OwnerTests(unittest.TestCase):
             path = self.assertRevoked('', 'cancelled')
         self.assertTrue((path / capture.MANIFEST).is_file())
 
+    def test_deadline_during_layout_close_revokes_a_timely_driver_exit(self):
+        real = capture.close_layout
+        now = 0
+
+        def close_then_expire(*arguments):
+            nonlocal now
+            real(*arguments)
+            now = 30
+
+        with patch.object(capture, 'monotonic', lambda: now), patch.object(
+                capture, 'close_layout', close_then_expire):
+            path = self.assertRevoked('', 'deadline')
+        self.assertTrue((path / capture.MANIFEST).is_file())
+
+    def test_unconfirmed_stop_revokes_without_reading_live_evidence(self):
+        child = Mock(returncode=None)
+        child.stdout.fileno.return_value = 42
+        child.wait.side_effect = subprocess.TimeoutExpired(['fixture'], capture.GRACE_SECONDS)
+
+        def launch(*args, **kwargs):
+            signal.raise_signal(signal.SIGTERM)
+            return child
+
+        with (patch.object(capture.subprocess, 'Popen', side_effect=launch),
+              patch.object(capture.os, 'set_blocking'),
+              patch.object(capture.select, 'poll'),
+              patch.object(capture, 'close_layout') as close):
+            path = self.assertRevoked('', 'driverStopUnconfirmed')
+        close.assert_not_called()
+        child.stdout.close.assert_called_once_with()
+        self.assertFalse((path / capture.MANIFEST).exists())
+
+    def test_signal_during_handler_restoration_revokes_before_publication(self):
+        real_signal = signal.signal
+        previously_handled = Mock()
+        old_term = real_signal(signal.SIGTERM, previously_handled)
+        self.handlers[signal.SIGTERM] = previously_handled
+        self.addCleanup(real_signal, signal.SIGTERM, old_term)
+
+        def restore_then_cancel(number, handler):
+            previous = real_signal(number, handler)
+            if handler is previously_handled:
+                signal.raise_signal(signal.SIGTERM)
+            return previous
+
+        with patch.object(signal, 'signal', restore_then_cancel):
+            self.assertRevoked('', 'cancelled')
+        previously_handled.assert_not_called()
+
+    def test_restoring_ignored_disposition_does_not_discard_pending_cancellation(self):
+        real_signal = signal.signal
+        old_term = real_signal(signal.SIGTERM, signal.SIG_IGN)
+        self.handlers[signal.SIGTERM] = signal.SIG_IGN
+        self.addCleanup(real_signal, signal.SIGTERM, old_term)
+
+        def restore_then_cancel(number, handler):
+            previous = real_signal(number, handler)
+            if number == signal.SIGINT and handler is self.handlers[number]:
+                signal.raise_signal(signal.SIGTERM)
+            return previous
+
+        with patch.object(signal, 'signal', restore_then_cancel):
+            self.assertRevoked('', 'cancelled')
+
+    def test_deadline_while_staging_success_marker_revokes_before_link(self):
+        sync, now = os.fsync, 0
+
+        def sync_then_expire(fd):
+            nonlocal now
+            sync(fd)
+            if Path(os.readlink(f'/proc/self/fd/{fd}')).name.startswith(f'.{capture.EXIT}.'):
+                now = 30
+
+        with patch.object(capture, 'monotonic', lambda: now), patch.object(os, 'fsync', sync_then_expire):
+            self.assertRevoked('', 'deadline')
+
+    def test_signal_after_cutoff_is_delivered_to_restored_handler(self):
+        previously_handled = Mock()
+        old_term = signal.signal(signal.SIGTERM, previously_handled)
+        self.handlers[signal.SIGTERM] = previously_handled
+        self.addCleanup(signal.signal, signal.SIGTERM, old_term)
+        link = os.link
+
+        def link_and_cancel(source, destination):
+            if destination.name == capture.EXIT:
+                signal.raise_signal(signal.SIGTERM)
+                previously_handled.assert_not_called()
+            link(source, destination)
+
+        with patch.object(os, 'link', link_and_cancel):
+            code, report, _ = self.run_owner('')
+        self.assertEqual((0, 'passed'), (code, report['notice']['outcome']))
+        previously_handled.assert_called_once()
+
+    def test_previously_blocked_signal_is_not_consumed_by_capture(self):
+        blocked = {signal.SIGTERM}
+        previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, blocked)
+        try:
+            signal.raise_signal(signal.SIGTERM)
+            code, report, _ = self.run_owner('')
+            self.assertEqual((0, 'passed'), (code, report['notice']['outcome']))
+            self.assertIn(signal.SIGTERM, signal.sigpending())
+        finally:
+            signal.sigtimedwait(blocked, 0)
+            signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+
     def test_layout_close_failure_is_revoked(self):
         with patch.object(capture, 'close_layout', side_effect=OSError('fsync failed')):
             self.assertRevoked('', 'layoutCloseFailure')
+
+    def test_late_cancellation_cannot_hide_a_layout_close_failure(self):
+        def cancel_and_fail(*_):
+            signal.raise_signal(signal.SIGTERM)
+            raise OSError('fixture')
+
+        with patch.object(capture, 'close_layout', side_effect=cancel_and_fail):
+            self.assertRevoked('', 'layoutCloseFailure')
+
+    def test_nonregular_evidence_is_refused_without_opening_it_in_blocking_mode(self):
+        original_open = os.open
+
+        def check_flags(path, flags, *args, **kwargs):
+            if Path(path).name == 'receipt.fifo':
+                self.assertTrue(flags & os.O_NONBLOCK)
+            return original_open(path, flags, *args, **kwargs)
+
+        with patch.object(os, 'open', check_flags):
+            self.assertRevoked('os.mkfifo(os.path.join(output, "receipt.fifo"))\n', 'layoutCloseFailure')
 
     def test_partial_handler_install_and_failed_restore_revoke(self):
         numbers = list(self.handlers)
