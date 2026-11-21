@@ -15,17 +15,19 @@
     "independentReviewSession": "ses_e02edcf65ffekHa8gi2eEXwim3",
     "reviewedScope": "Revised design, source implementation only: one unprivileged Python supervisor and reaper, one gated Bun child, no runtime admission.",
     "reviewedCandidate": "bb42a6899a523925e3abd9ca9db2e9096d059943",
-    "targetedReviewBase": "e45bfff6211cb184196395b0666535e21f435d07",
+    "targetedReviewBase": "06766b14e77219f9f4ab9114f092cefeb383639a",
+    "phaseDiagnosticReviewBase": "d38dddda77bc7fffaa9fd726fec5377b3c65a19b",
+    "startupArgvReviewBase": "9f386d48099ce7a9a2d5152f9e5ff65bdc742875",
     "remediationDesign": "README.md: protected pre-execution supervisor-byte admission, bounded fork-to-exec pidfd gate, refusal of traced/blocked launch, and terminal-only custody settlement.",
-    "implementationReview": "Pending independent review of the exact candidate source hashes below."
+    "implementationReview": "The Bun 1.4.5 optional-config argv fix requires independent review of these exact bytes and fresh runtime admission."
   },
   "sourceFiles": {
-    "README.md": "74d310b9704740fde8edb30ee3cd1f79c376dc2ff84081c973ba5bc69f82545a",
+    "README.md": "0dfc1803cf7b1d2a4163988f95de1df77402328ea4046f7bc6f1e14d939e966e",
     "bootstrap.py": "2b3a8614564f2aa5c38c6e309bc3c982f25e80d406a6821f3a297be3c02244b6",
     "fixture.c": "dd61fa10fe13c30fdc11d54a739264abe804ddcae73d3b4d91e33a5223f8fec1",
-    "supervisor.py": "0124267410e2b4da1e2ac60cfcee44ff7374218e2a477193c6658b66c9d665a7",
-    "worker.mjs": "a98129bab3df823e2daf4a0a507f9612f07e53aba12b6c4348a7f98d0f5a2918",
-    "test_supervisor.py": "d89d0ecc598a11f7498710e32c0eeeaa27b07c8e03fdbe06764042844e2c67f8"
+    "supervisor.py": "47719a1e2a769982bc0d70a8043721bf945980ea82b54449182abcda68eb3bea",
+    "worker.mjs": "79c91b3e4775efeec0f39bcc71b253d8c32d44d5135d83ff123bd4cde6318e3c",
+    "test_supervisor.py": "1423162404a25643267a34d333e7f398cb4b41cfd8094cb6b72767b650989c36"
   },
   "staticElfReviewSha256": null,
   "bun": {
@@ -88,6 +90,7 @@
     "supervisorBootstrap": "Before starting Python, verify an independently admitted CPython 3.15.2 executable, its actual PT_INTERP, RPATH-selected native dependencies, extension modules, and stdlib. Independently verify the exact bootstrap.py bytes against the approved manifest; require the canonical root-owned protected bootstrap path and parent directories. Use the real interpreter path with -I -S -B and a clean environment. Never start supervisor.py directly. Bootstrap verifies the independent manifest pin and hashes the protected sibling supervisor.py before executing exactly the same in-memory bytes; the supervisor cannot establish its own pre-execution trust.",
     "execGate": "No forked child exec before Python owns the child's pidfd and grants P. On missing pidfd or failed admission the parent half-closes the gate to emit EOF while retaining handles; the nonblocking child gate also expires at 750 ms from before fork. Refuse tracing and initially blocked SIGINT/SIGTERM. Never settle process custody from stopped/continued wait status, EOF, or pidfd readiness; only terminal WIFEXITED or WIFSIGNALED.",
     "permitCommit": "P, G, and Q share one masked decision. Latched or pending SIGINT/SIGTERM or an expired absolute deadline refuses the write. A successful single-byte write advances the phase; cancellation observed after the decision bars later permits, not a byte already sent. Restore the previous mask on every path.",
+    "bunStartup": "Pass --config=/dev/null as one argument before --no-env-file, --no-install, and --eval. In Bun 1.4.5 a separate /dev/null is a positional entry point and terminates CLI option parsing before --eval.",
     "staticReview": "Use static ELF/SYMBOL/VERSION inspection on exact bytes, not ldd or a probe that runs unadmitted code. Bun PT_INTERP must resolve to the pinned root-owned GNU loader; that loader and all transitive DT_NEEDED objects must be admitted with exact ELF machine/class, SONAME, version requirements, sizes, paths and SHA-256. Review executable and all dependencies for RPATH/RUNPATH, DT_AUDIT/DEPAUDIT, FILTER/AUXILIARY or any other mechanism that can defeat the exact dependency inventory; do not admit an alternative search or startup code path. Account for trusted loader/libc constructors and IFUNCs in their already approved bytes, not in the test DSO.",
     "lookup": "Explicit pinned GNU loader, --inhibit-cache, --glibc-hwcaps-mask empty, --library-path /usr/lib. Every required SONAME must resolve in that directory to its canonical approved root-owned file and meet every required symbol version. Reject an unknown dependency, default-path fall-through, alternate hwcaps variant, extra search directory, preloading/audit, any /etc/ld.so.preload, or unreviewed runtime module. Environment must not supply LD_*, GLIBC_TUNABLES, Bun preloads, package configuration or dotenv. Verify pinned Bun options and built-in module resolution; no automatic installs.",
     "library": "ELF64 little-endian x86-64 ET_DYN, at most 256 KiB; no PT_INTERP, RPATH/RUNPATH, INIT/FINI or arrays, constructor/IFUNC definitions, text relocations or executable stack. Require immediate binding, RELRO, exactly DT_NEEDED libc.so.6 and only reviewed libc imports/versions. Allowed API exports: braid_fixture_abi_v1 and braid_fixture_query_v1. System V scalar ABI only; no JS pointers, struct exchange, callbacks, or descriptor arguments.",
