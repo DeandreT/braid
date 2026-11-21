@@ -69,7 +69,25 @@ export const browserFixtureMigrations = Object.freeze([
   "0066_project_creation_retention_hooks.sql",
   "0067_compiled_xml_builds.sql",
   "0068_compiled_native_documents.sql",
+  "0069_portable_workbook.sql",
 ]);
+
+export function matchesBrowserFixtureMigrationJournal(rows, sourceHashes) {
+  return (
+    rows.length === browserFixtureMigrations.length &&
+    rows.every((row, index) => {
+      const expected =
+        sourceHashes["migrations/postgres/" + browserFixtureMigrations[index]];
+      return (
+        String(row.version) === String(index + 1) &&
+        typeof expected === "string" &&
+        expected.length === 64 &&
+        /^[a-f0-9]{64}$/.test(expected) &&
+        row.checksum === expected
+      );
+    })
+  );
+}
 
 export const browserFixtureProtectedTables = Object.freeze([
   "audit_log_events",

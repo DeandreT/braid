@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { test } from "node:test";
 import {
   browserFixtureMigrations,
   browserFixtureProtectedTables,
+  matchesBrowserFixtureMigrationJournal,
   regressionReadProfile,
 } from "./schema.mjs";
 
@@ -55,6 +57,56 @@ test("the browser fixture admits exactly the current ordered migration inventory
     readdirSync(migrations)
       .filter((name) => /^\d{4}_.*\.sql$/.test(name))
       .sort(),
+  );
+});
+
+test("the complete migration journal binds each version to the admitted SQL bytes", () => {
+  const journal = browserFixtureMigrations.map((name, index) => ({
+    version: index + 1,
+    checksum: createHash("sha256")
+      .update(readFileSync(new URL(name, migrations)))
+      .digest("hex"),
+  }));
+  const sourceHashes = Object.fromEntries(
+    browserFixtureMigrations.map((name, index) => [
+      "migrations/postgres/" + name,
+      journal[index].checksum,
+    ]),
+  );
+  const workbook = "migrations/postgres/0069_portable_workbook.sql";
+  assert.equal(
+    sourceHashes[workbook],
+    "4beed03b89b305fa65d443abf8036ad6fcb8811dc9941d3034098844dde75f48",
+  );
+  assert.equal(
+    matchesBrowserFixtureMigrationJournal(journal, sourceHashes),
+    true,
+  );
+  const previous = journal.slice(0, -1);
+  const final = journal.at(-1);
+  for (const rows of [
+    previous,
+    [...journal, final],
+    [...previous, { ...final, version: 68 }],
+    [...previous, { ...final, checksum: "0".repeat(64) }],
+    [...journal].reverse(),
+  ])
+    assert.equal(
+      matchesBrowserFixtureMigrationJournal(rows, sourceHashes),
+      false,
+    );
+  const malformed = final.checksum + "\n";
+  assert.equal(
+    matchesBrowserFixtureMigrationJournal(
+      [...previous, { ...final, checksum: malformed }],
+      { ...sourceHashes, [workbook]: malformed },
+    ),
+    false,
+  );
+  delete sourceHashes[workbook];
+  assert.equal(
+    matchesBrowserFixtureMigrationJournal(journal, sourceHashes),
+    false,
   );
 });
 

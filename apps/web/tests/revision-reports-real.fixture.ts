@@ -832,7 +832,7 @@ export function expectReport(
       "9149905759b4f65baf043b975624e45805a50142",
     );
     expect(provenance?.backend.buildId).toBe(
-      "sha256:439291fb4d665e3ba9c086e88214a73fd44552af80932a9b40c97f5816c7047e",
+      "sha256:a63f57a009717d2171e48c02c068e9dcb19974561b91cf8484345d02d5c05439",
     );
     expect(provenance?.adapterVersion).toBe("braid.ferrule-adapter.v3");
     if (value.operation === "projection") {

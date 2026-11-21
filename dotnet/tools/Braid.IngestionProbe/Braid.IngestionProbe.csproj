@@ -3,6 +3,7 @@
     <OutputType>Exe</OutputType>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../WorkerProbeSupport/InspectionWorkerName.cs" Link="WorkerProbeSupport/InspectionWorkerName.cs" />
     <ProjectReference Include="../../src/Braid.Application/Braid.Application.csproj" />
     <ProjectReference Include="../../src/Braid.Domain/Braid.Domain.csproj" />
     <ProjectReference Include="../../src/Braid.MappingBackends/Braid.MappingBackends.csproj" />

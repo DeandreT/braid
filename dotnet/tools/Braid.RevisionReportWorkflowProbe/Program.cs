@@ -360,8 +360,7 @@ internal static class Program
             if (index >= 0)
             {
                 var name = arguments[index + 1];
-                if (name.Length != 45 || !name.StartsWith("braid-inspect-", StringComparison.Ordinal) ||
-                    name.AsSpan(13).ContainsAnyExcept("0123456789abcdef"))
+                if (!Braid.WorkerProbeSupport.InspectionWorkerName.IsExact(name))
                     throw new InvalidOperationException();
                 var path = Path.Combine(directory, name);
                 using var record = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);

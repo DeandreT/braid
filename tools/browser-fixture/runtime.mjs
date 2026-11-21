@@ -27,6 +27,7 @@ import { createOnFreeSubnet, isPoolOverlap } from "./test-subnets.mjs";
 import {
   browserFixtureMigrations,
   browserFixtureProtectedTables,
+  matchesBrowserFixtureMigrationJournal,
   regressionReadProfile,
 } from "./schema.mjs";
 
@@ -277,7 +278,7 @@ export async function runBrowserFixture(definition) {
     absolute(cfg.dotnet);
     const workerImage = regressionScenario
       ? cfg.workerImage
-      : "sha256:439291fb4d665e3ba9c086e88214a73fd44552af80932a9b40c97f5816c7047e";
+      : "sha256:a63f57a009717d2171e48c02c068e9dcb19974561b91cf8484345d02d5c05439";
     check(!regressionScenario || /^sha256:[a-f0-9]{64}$/.test(workerImage));
     const postgresImage =
       "postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc";
@@ -2219,15 +2220,7 @@ export async function runBrowserFixture(definition) {
       );
       tool(["migrate"]);
       const migrated = journal();
-      check(
-        migrated.length === migrations.length &&
-          migrated.every(
-            (row, index) =>
-              String(row.version) === String(index + 1) &&
-              row.checksum ===
-                sourceHashes["migrations/postgres/" + migrations[index]],
-          ),
-      );
+      check(matchesBrowserFixtureMigrationJournal(migrated, sourceHashes));
       tool(["migrate"]);
       check(equivalent(journal(), migrated));
       manifest = await scenario.setup(migrated);

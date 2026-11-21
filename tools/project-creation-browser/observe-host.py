@@ -15,7 +15,7 @@ import urllib.parse
 import uuid
 
 PG_IMAGE = 'postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc'
-WORKER_IMAGE = 'sha256:439291fb4d665e3ba9c086e88214a73fd44552af80932a9b40c97f5816c7047e'
+WORKER_IMAGE = 'sha256:a63f57a009717d2171e48c02c068e9dcb19974561b91cf8484345d02d5c05439'
 OWNER, NONCE, CASE = ('braid.qualification.' + key for key in ('owner', 'nonce', 'case'))
 LABELS = (OWNER, NONCE, CASE)
 WORKER = re.compile(r'braid-inspect-[0-9a-f]{32}')

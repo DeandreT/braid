@@ -439,8 +439,7 @@ internal sealed class RevisionReportProcessProbe : IAsyncDisposable
         foreach (var record in records)
         {
             var name = Path.GetFileName(record);
-            if (name.Length != 45 || !name.StartsWith("braid-inspect-", StringComparison.Ordinal) ||
-                name.AsSpan(13).ContainsAnyExcept("0123456789abcdef") || await File.ReadAllTextAsync(record) != "owned")
+            if (!Braid.WorkerProbeSupport.InspectionWorkerName.IsExact(name) || await File.ReadAllTextAsync(record) != "owned")
                 throw new InvalidOperationException("The owned workflow worker record was invalid.");
             var inspected = await InspectOwnedWorkerAsync(name);
             var message = inspected.Error.Trim();

@@ -9,8 +9,7 @@ internal static class WorkerShutdownProbeGuards
         if (ready.Kind != "host-ready" || ready.HostPid is not > 1 || ready.StartTicks is not > 0 ||
             ready.ProcessGroup != ready.HostPid || create.Kind != "command-start" || create.Operation != "create" ||
             create.CliPid is not > 1 || create.StartTicks is not > 0 || create.ProcessGroup != ready.ProcessGroup ||
-            create.ContainerName is not { Length: 45 } name || !name.StartsWith("braid-inspect-", StringComparison.Ordinal) ||
-            !name["braid-inspect-".Length..].All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f'))
+            !Braid.WorkerProbeSupport.InspectionWorkerName.IsExact(create.ContainerName))
             throw new InvalidOperationException("The experiment has no complete owned host/create identity.");
         if (identity.HasExited || identity.Pid != create.CliPid || identity.StartTicks != create.StartTicks ||
             identity.ProcessGroup != ready.ProcessGroup)
