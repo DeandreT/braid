@@ -556,7 +556,6 @@ export const test = base.extend<{}, { catalogOwner: CatalogOwner }>({
   ],
 });
 export { expect };
-export { base as controlledTest };
 
 export const projectPath = (s: ProjectScope) =>
   `/catalog/organizations/${s.organizationId}/projects/${s.projectId}`;
@@ -572,6 +571,8 @@ export const metadataValue = (page: Page, label: string) =>
   page
     .locator("dt", { hasText: new RegExp(`^${label}$`) })
     .locator("xpath=following-sibling::dd[1]");
+export const catalogWriteAction =
+  /^(Create project|Create mapping|Upload mapping|Upload revision|Edit mapping(?: metadata)?|Manage membership|Run preview|Try sample|Start chat|Derive report)$/i;
 export async function expectRevision(
   page: Page,
   value: Revision,

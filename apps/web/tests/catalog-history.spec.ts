@@ -4,6 +4,7 @@ import { isSessionStatusRequest } from "./browser-session-status.fixture";
 import { organizationContextPath } from "./organization-context.fixture";
 import {
   catalogApi,
+  catalogWriteAction,
   expect,
   expectRevision,
   mappingPath,
@@ -185,9 +186,10 @@ async function linkPaths(list: Locator): Promise<string[]> {
 }
 async function readOnly(page: Page): Promise<void> {
   await expect(
-    page.getByRole("button", {
-      name: /^(Create project|Create mapping|Upload revision|Edit metadata|Manage membership|Run preview|Start chat|Derive report)$/i,
-    }),
+    page.getByRole("button", { name: catalogWriteAction }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: catalogWriteAction }),
   ).toHaveCount(0);
   await expect(page.locator("input[type=file],textarea,select")).toHaveCount(0);
 }
@@ -584,9 +586,7 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
     await expect(
       page.getByRole("heading", { name: "Not found", exact: true }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("region", { name: "Version history", exact: true }),
-    ).toHaveCount(0);
+    await expect(page.locator('[aria-label="Version history"]')).toHaveCount(0);
     expect(scopedReads.slice(beforeOrganizationDenial)).toEqual([]);
     expect(forbiddenReads).toEqual([]);
   });

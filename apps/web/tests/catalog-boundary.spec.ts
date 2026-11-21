@@ -9,7 +9,7 @@ import {
   revisionPath,
   synthetic,
   syntheticCatalog,
-  controlledTest as test,
+  test,
 } from "./catalog.fixture";
 import type { Request } from "@playwright/test";
 import {
