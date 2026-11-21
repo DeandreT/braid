@@ -55,7 +55,9 @@ export class ExecutionOwner<M extends ExecutionManifest = ExecutionManifest> {
     const b = this.binding,
       prefix = this.kind.toUpperCase();
     if (!b.distribution?.trim() || !b.storageProfile?.startsWith("/"))
-      throw new Error("Prepare execution bindings with a Linux storage profile.");
+      throw new Error(
+        "Prepare execution bindings with a Linux storage profile.",
+      );
     this.child = spawn(
       "wsl.exe",
       [
