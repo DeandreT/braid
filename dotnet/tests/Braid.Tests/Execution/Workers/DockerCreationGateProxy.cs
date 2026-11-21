@@ -242,8 +242,7 @@ internal sealed class DockerCreationGateProxy : IAsyncDisposable
         var uri = new Uri("http://docker" + path);
         var name = uri.Query.TrimStart('?').Split('&').Single(value => value.StartsWith("name=", StringComparison.Ordinal));
         name = Uri.UnescapeDataString(name["name=".Length..]);
-        if (name.Length != 45 || !name.StartsWith("braid-inspect-", StringComparison.Ordinal) ||
-            name["braid-inspect-".Length..].Any(character => character is not (>= 'a' and <= 'f' or >= '0' and <= '9')))
+        if (!Braid.WorkerProbeSupport.InspectionWorkerName.IsExact(name))
             throw new InvalidOperationException("The test proxy refused an unexpected worker name.");
         return name;
     }

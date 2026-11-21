@@ -5,6 +5,7 @@
     <GenerateProgramFile>false</GenerateProgramFile>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../tools/WorkerProbeSupport/InspectionWorkerName.cs" Link="WorkerProbeSupport/InspectionWorkerName.cs" />
     <Compile Include="../../tools/Braid.HostPrivacyProbe/BrowserQualificationAdmissionWire.cs" Link="BrowserQualificationAdmissionWire.cs" />
     <Compile Include="../../tools/Braid.HostPrivacyProbe/BrowserQualificationAdmission.cs" Link="BrowserQualificationAdmission.cs" />
     <Compile Include="../../tools/Braid.HostPrivacyProbe/BrowserQualificationNetwork.cs" Link="BrowserQualificationNetwork.cs" />

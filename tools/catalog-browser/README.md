@@ -55,7 +55,7 @@ source, publications and observer records. Keep the immutable image pins.
   "dotnet": null,
   "docker": "/usr/bin/docker",
   "daemonSocket": "/var/run/docker.sock",
-  "workerImage": "sha256:439291fb4d665e3ba9c086e88214a73fd44552af80932a9b40c97f5816c7047e",
+  "workerImage": "sha256:a63f57a009717d2171e48c02c068e9dcb19974561b91cf8484345d02d5c05439",
   "postgresImage": "postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc",
   "outerObserverAdmission": { "path": null, "sha256": null },
   "source": {

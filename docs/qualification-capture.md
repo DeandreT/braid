@@ -3,10 +3,10 @@
 Root-operated host observers such as `tools/catalog-browser/observe-host.py` and
 `tools/project-creation-browser/observe-host.py` write qualification evidence into a
 private output directory. `tools/qualification-capture/capture.py` owns one such run
-as a capture and records a durable, truthful terminal outcome. A crash, deadline,
-cancellation, driver failure or close failure can never leave a record that reads as
-success. The owner is Python standard library only and runs on the Linux
-qualification host; the reader and marker primitives are portable.
+as a capture and records a durable terminal outcome. Observed deadline expiry,
+cancellation, driver failure and close failure do not qualify. The owner is Python
+standard library only and runs on the Linux qualification host; the reader and
+marker primitives are portable.
 
 ## Capture layout
 
@@ -31,6 +31,10 @@ atomic and fails if the name exists. The directory is then fsynced. A marker is
 either absent or complete, and no attempt can overwrite an earlier one, including
 concurrent attempts.
 
+The link can be visible before the directory sync or close finishes. A live read,
+or a read after an owner that did not return status 0, is not an acknowledgment of
+a durable success on a new capture.
+
 - Success is one immutable `complete.exit` attempt with `exit: 0`. It binds the
   SHA-256 of the exact `header.json` and `manifest.json` bytes.
 - Failure first publishes `complete.revoked` with the failure category. Only after
@@ -42,12 +46,12 @@ concurrent attempts.
 
 The reader derives the outcome from the markers:
 
-| Markers | Outcome |
-| --- | --- |
-| none | `incomplete` (running, crashed or killed). Never qualifies. |
-| `complete.revoked` (with or without `complete.exit`) | `revoked` with its category. |
-| `complete.exit` with `exit: 0` only | `passed`, after full replay. |
-| nonzero `complete.exit` without revocation | protocol violation (invalid). |
+| Markers                                              | Outcome                                                     |
+| ---------------------------------------------------- | ----------------------------------------------------------- |
+| none                                                 | `incomplete` (running, crashed or killed). Never qualifies. |
+| `complete.revoked` (with or without `complete.exit`) | `revoked` with its category.                                |
+| `complete.exit` with `exit: 0` only                  | `passed`, after full replay.                                |
+| nonzero `complete.exit` without revocation           | protocol violation (invalid).                               |
 
 If the revocation itself cannot be published, the owner prints outcome `uncertain`
 and exits with status 2 without encoding a failure. The capture then reads as `incomplete`, or as
@@ -64,38 +68,56 @@ the earlier marker state if one already exists.
   an absolute, non-symlink regular file owned by root or the effective user, with no
   group or world write permission. Its SHA-256 becomes the trusted-code inventory.
 
-After creating the layout and header, the owner installs SIGINT/SIGTERM handlers that
-only set a cancellation flag. It then follows a fixed order:
+After creating the layout and header, the owner installs SIGINT/SIGTERM handlers
+that only set a cancellation flag and starts the monotonic capture deadline. It
+then follows a fixed order:
 
-1. Drive the child (the managed child close), then check cancellation.
-2. Close the layout: write `driver.stdout`, fsync every evidence file and directory,
-   write `manifest.json`. Then check cancellation again.
-3. Restore the original signal handlers, then check cancellation a final time.
-4. Call `finish(capture, failure)`.
+1. Drive the child and close its stdout. Both the direct child's exit status and
+   stdout EOF must be observed before the deadline, even if they arrive in the
+   final polling slice.
+2. If the driver and stdout settled, close the layout: write `driver.stdout`,
+   fsync every evidence file and directory, and write `manifest.json`. Otherwise,
+   record the failure without collecting potentially live evidence.
+3. Mask SIGINT/SIGTERM before restoring the previous handlers. Just before
+   linking the staged success marker, the finisher checks the flag, newly
+   pending cancellation and the deadline. It records and consumes pending
+   cancellation before restoring any `SIG_IGN` disposition, which would
+   discard the signal. After this check, signals belong to the restored
+   handlers or dispositions, and the original mask applies when publication
+   returns.
+4. Return success only after terminal publication, including directory sync and
+   close. A publication failure uses the same revocation protocol.
 
 `finish` is the single source-owned terminal and the only code that writes
 `complete.exit` or `complete.revoked`. Every normal, failure, layout-close and
-late-cancellation path selects a failure category or none, then reaches this same
-finisher. Success is selected only when no category was selected, after the outer
-layout close and handler restoration. Nothing in the protocol uses `os.replace`.
+late-cancellation path reaches this same finisher. Cancellation takes precedence
+over expiry when both are observed at the same check. An already selected failure
+is not cleared by a late child success; an unconfirmed stop takes precedence over
+the reason for stopping. Nothing in the protocol uses `os.replace`.
 
 Failure categories: `cancelled`, `deadline`, `driverStartFailure`, `driverFailed`,
-`outputLimit`, `outputDidNotSettle`, `layoutCloseFailure`, `ownerFailure` and
-`terminalWriteFailure`.
+`driverStopUnconfirmed`, `outputLimit`, `outputDidNotSettle`, `layoutCloseFailure`,
+`ownerFailure` and `terminalWriteFailure`.
 
 ## Cancellation and deadline ownership
 
-The main thread owns the monotonic deadline, the cancellation flag and every effect:
-terminating or killing the child, and writing records and markers. The only blocking
-query it delegates is reading the child's standard output. That runs in one bounded
-daemon worker thread, which only appends to an in-memory buffer limited to 1 MiB.
-The main thread waits on the child in 50 ms slices, so cancellation and the deadline
-are checked continuously. On cancellation, deadline or an output overflow, it sends
-SIGTERM, waits 5 s, then sends SIGKILL. It joins the worker for at most 5 s. A worker
-that has not settled becomes `outputDidNotSettle` rather than blocking the terminal.
+The owner polls the direct child and a nonblocking stdout pipe in slices of at
+most 50 ms, checking the remaining time and cancellation between operations.
+Stdout is capped at 1 MiB. If the child exits first, stdout must reach EOF within
+5 seconds of observing the exit and before the capture deadline.
 
-The owner uses no native library or FFI runtime. It never stores descriptors in a
-narrow field or blocks the main thread on a native call.
+If the direct child has not exited when the run fails, the owner requests
+SIGTERM and allows up to 5 seconds to reap it. If that does not confirm exit,
+it requests SIGKILL and allows up to 5 more seconds. If neither wait confirms
+exit, the owner closes its pipe end and revokes as `driverStopUnconfirmed`,
+without writing a manifest. This is not proof that the driver or its descendants
+stopped. Verify that the observer, its descendants and its resources have
+settled before releasing the qualification window or retrying.
+
+The capture deadline is a cutoff for success, not a hard bound on launch,
+filesystem calls, cleanup, or terminal publication. The owner uses no native
+library or FFI runtime. Run it as a standalone process, with the default
+SIGCHLD disposition and no other code reaping its direct child.
 
 ## Replay reader
 
@@ -127,9 +149,10 @@ exact.
 Use an observer as the driver, for example:
 
 ```sh
-python3.12 tools/qualification-capture/capture.py run --root /var/lib/braid-qualification \
+PY=/opt/braid-runtimes/cpython-3.15.2/bin/python3.15
+"$PY" -I -B /opt/braid/tools/qualification-capture/capture.py run --root /var/lib/braid-qualification \
   --deadline-seconds 900 --trusted /opt/braid/tools/catalog-browser/observe-host.py -- \
-  /usr/bin/python3.12 /opt/braid/tools/catalog-browser/observe-host.py --fixture-id <UUID>
+  "$PY" -I -B /opt/braid/tools/catalog-browser/observe-host.py --fixture-id "$FIXTURE_ID"
 ```
 
 The owner appends `--output <capture>/evidence`, which already satisfies the
@@ -142,9 +165,21 @@ The owner prints one JSON line with the capture ID and outcome. It exits 0 only 
 ## Operator steps
 
 1. Install the reviewed `capture.py` and the observer as root-owned `0644` files, for
-   example under `/opt/braid/tools/`, with a root-owned `/usr/bin/python3.12`.
+   example under `/opt/braid/tools/`. Use the same reviewed, root-owned CPython
+   executable for the owner and the Python observer. Pin its absolute path and
+   verify its distribution checksum; do not resolve `python3` through `PATH`.
+   Before changing the pin, test the owner from the reviewed checkout:
+
+   ```sh
+   "$PY" -I -B -m unittest discover -s tools/qualification-capture -p test_capture.py
+   ```
+
+   This does not start a privileged observer or update either installed script.
+   Compare the installed scripts to the reviewed source before running a capture.
+
 2. Create the capture root as root, `0700`, outside the checkout.
 3. Run the owner as root in the exclusive window with the observer as its driver.
    Send `finish` to its standard input after operator cleanup has settled.
-4. Replay with `capture.py read <capture>`. Accept only `passed`, after comparing the
-   header's trusted-code digests with the reviewed source.
+4. Require owner exit status 0, then replay with `capture.py read <capture>`.
+   Accept only `passed`, after comparing the header's trusted-code digests
+   with the reviewed source.

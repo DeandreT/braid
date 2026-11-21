@@ -7,6 +7,7 @@ complete.revoked. See docs/qualification-capture.md.
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 import datetime
 import hashlib
 import json
@@ -14,12 +15,12 @@ import math
 import os
 from pathlib import Path
 import platform
+import select
 import signal
 import stat
 import subprocess
 import sys
-import threading
-import time
+from time import monotonic
 import uuid
 
 SCHEMA = 'braid.qualification-capture.v1'
@@ -57,7 +58,7 @@ def sync_directory(path: Path) -> None:
             os.close(fd)
 
 
-def write_new(path: Path, data: bytes) -> None:
+def write_new(path: Path, data: bytes, *, before_link=None) -> None:
     """Durably publish complete bytes at path or raise FileExistsError; never replaces."""
     temporary = path.with_name(f'.{path.name}.{uuid.uuid4().hex}.tmp')
     fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | NOFOLLOW, 0o600)
@@ -69,6 +70,8 @@ def write_new(path: Path, data: bytes) -> None:
             os.fsync(fd)
         finally:
             os.close(fd)
+        if before_link is not None and (failure := before_link()) is not None:
+            raise Refusal(failure)
         os.link(temporary, path)  # atomic no-replace: EEXIST when any earlier attempt won
     finally:
         os.unlink(temporary)
@@ -224,59 +227,103 @@ def preflight(root: Path, argv, deadline, trusted) -> list[dict]:
     return inventory
 
 
-def stop(child: subprocess.Popen) -> None:
-    child.terminate()
-    try:
-        child.wait(GRACE_SECONDS)
-    except subprocess.TimeoutExpired:
-        child.kill()
-        child.wait()
+def stop(child: subprocess.Popen) -> bool:
+    """Request shutdown and report whether the direct child was reaped."""
+    for request in (child.terminate, child.kill):
+        try:
+            request()
+        except OSError:
+            pass  # The signal request is not proof either way; still try to reap.
+        try:
+            child.wait(timeout=GRACE_SECONDS)
+        except (subprocess.TimeoutExpired, OSError):
+            continue
+        return True
+    return False
 
 
-def drive(capture: Path, argv: list[str], deadline: float, cancelled: threading.Event) -> tuple[str | None, bytes]:
-    """Run the driver; the main thread owns the deadline and every effect, the worker only reads."""
-    end = time.monotonic() + deadline
-    if cancelled.is_set():
-        return 'cancelled', b''
+def interrupted(end: float, cancelled) -> str | None:
+    if cancelled():
+        return 'cancelled'
+    return 'deadline' if monotonic() >= end else None
+
+
+@dataclass(frozen=True)
+class DriverResult:
+    failure: str | None
+    output: bytes = b''
+    settled: bool = True
+
+
+def drive(capture: Path, argv: list[str], end: float, cancelled) -> DriverResult:
+    """Observe the direct child's exit and stdout EOF under the same deadline."""
+    if failure := interrupted(end, cancelled):
+        return DriverResult(failure)
+    # An ignored SIGCHLD (or a competing reaper) can make Popen synthesize exit 0.
+    if signal.getsignal(signal.SIGCHLD) != signal.SIG_DFL:
+        return DriverResult('ownerFailure')
     try:
         child = subprocess.Popen([*argv, '--output', str(capture / EVIDENCE)], stdout=subprocess.PIPE,
                                  stderr=subprocess.DEVNULL, close_fds=True)
     except OSError:
-        return 'driverStartFailure', b''
-    output, overflow, complete = bytearray(), threading.Event(), threading.Event()
+        return DriverResult(interrupted(end, cancelled) or 'driverStartFailure')
 
-    def drain():
-        try:
-            for chunk in iter(lambda: child.stdout.read1(65536), b''):
-                if len(output) + len(chunk) > STDOUT_LIMIT:
-                    overflow.set()
-                else:
-                    output.extend(chunk)
-            complete.set()  # Only EOF proves the output was drained.
-        except OSError:
-            pass  # The owner refuses incomplete output; never serialize the error.
+    output, eof, stdout_end = bytearray(), False, None
+    try:
+        fd = child.stdout.fileno()
+        os.set_blocking(fd, False)
+        pipe = select.poll()
+        pipe.register(fd, select.POLLIN)
+        while not (failure := interrupted(end, cancelled)):
+            returncode = child.poll()
+            if failure := interrupted(end, cancelled):
+                break  # Exit status has no timestamp; observation at or after the cutoff is late.
+            if eof and returncode is not None:
+                failure = 'driverFailed' if returncode else None
+                break
+            if returncode is not None and stdout_end is None:
+                stdout_end = monotonic() + GRACE_SECONDS
+            if stdout_end is not None and monotonic() >= stdout_end:
+                failure = interrupted(end, cancelled) or 'outputDidNotSettle'
+                break
+            wait_end = min(end, stdout_end) if stdout_end is not None else end
+            remaining = min(POLL_SECONDS, wait_end - monotonic())
+            if remaining <= 0 or not pipe.poll(math.ceil(remaining * 1000)):
+                continue
+            if failure := interrupted(end, cancelled):
+                break
+            try:
+                chunk = os.read(fd, min(65536, STDOUT_LIMIT + 1 - len(output)))
+            except BlockingIOError:
+                continue
+            if failure := interrupted(end, cancelled):
+                break
+            if stdout_end is not None and monotonic() >= stdout_end:
+                failure = interrupted(end, cancelled) or 'outputDidNotSettle'
+                break
+            if not chunk:
+                eof = True
+                pipe.unregister(fd)
+            elif len(output) + len(chunk) > STDOUT_LIMIT:
+                failure = 'outputLimit'
+                break
+            else:
+                output.extend(chunk)
+    except OSError:
+        failure = interrupted(end, cancelled) or 'outputDidNotSettle'
+    except Exception:
+        failure = 'ownerFailure'
 
-    worker = threading.Thread(target=drain, daemon=True)
-    worker.start()
-    failure = None
-    while failure is None:
-        try:
-            child.wait(POLL_SECONDS)
-            break
-        except subprocess.TimeoutExpired:
-            failure = ('cancelled' if cancelled.is_set() else 'deadline' if time.monotonic() >= end
-                       else 'outputLimit' if overflow.is_set() else None)
-    if failure is not None:
-        stop(child)
-    worker.join(GRACE_SECONDS)
-    if worker.is_alive():
-        return failure or 'outputDidNotSettle', bytes(output)
-    child.stdout.close()
-    if not complete.is_set():
+    reaped = child.returncode is not None or stop(child)
+    closed = False
+    try:
+        child.stdout.close()
+        closed = True
+    except OSError:
         failure = failure or 'outputDidNotSettle'
-    if overflow.is_set():
-        failure = failure or 'outputLimit'
-    return failure or (None if child.returncode == 0 else 'driverFailed'), bytes(output)
+    if not reaped:
+        return DriverResult('driverStopUnconfirmed', settled=False)
+    return DriverResult(failure or interrupted(end, cancelled), bytes(output), eof and closed)
 
 
 def close_layout(capture: Path, output: bytes) -> None:
@@ -285,7 +332,7 @@ def close_layout(capture: Path, output: bytes) -> None:
     for name in sorted(os.listdir(capture / EVIDENCE)):
         fds: list[int] = []
         try:
-            fd = os.open(capture / EVIDENCE / name, READ_FLAGS)
+            fd = os.open(capture / EVIDENCE / name, READ_FLAGS | os.O_NONBLOCK)
             fds.append(fd)
             if not stat.S_ISREG(os.fstat(fd).st_mode):
                 raise Refusal('evidenceLayoutInvalid')
@@ -300,13 +347,16 @@ def close_layout(capture: Path, output: bytes) -> None:
     write_new(capture / MANIFEST, canonical({'members': members}))
 
 
-def finish(capture: Path, failure: str | None) -> int:
+def finish(capture: Path, failure: str | None, *, before_success=None) -> int:
     """The single source-owned terminal: success only when no failure was selected anywhere."""
     if failure is None:
         try:
             write_new(capture / EXIT, canonical({'exit': 0, 'headerSha256': sha256(read_small(capture / HEADER)),
-                                                 'manifestSha256': sha256(read_small(capture / MANIFEST))}))
+                                                  'manifestSha256': sha256(read_small(capture / MANIFEST))}),
+                      before_link=before_success)
             return 0
+        except Refusal as error:
+            failure = str(error)  # Success was declined before the link.
         except (OSError, CaptureInvalid):
             failure = 'terminalWriteFailure'
     try:
@@ -332,29 +382,76 @@ def run_capture(root, argv: list[str], deadline: float, trusted=()) -> tuple[int
         'createdUtc': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'driver': argv,
         'trustedCode': inventory, 'runtime': {'implementation': platform.python_implementation(),
                                              'version': platform.python_version(), 'platform': sys.platform}}))
-    cancelled = threading.Event()
+    cancellation = False
+
+    def cancel(*_):
+        nonlocal cancellation
+        cancellation = True
+
+    def cancelled():
+        return cancellation
+
+    numbers = (signal.SIGINT, signal.SIGTERM)
     previous = {}
-    failure = None
-    try:
-        for number in (signal.SIGINT, signal.SIGTERM):
-            previous[number] = signal.signal(number, lambda *_: cancelled.set())
-        failure, output = drive(capture, argv, deadline, cancelled)
-        failure = failure or ('cancelled' if cancelled.is_set() else None)  # after the managed child close
-        try:
-            close_layout(capture, output)
-        except (OSError, Refusal, CaptureInvalid):
-            failure = failure or 'layoutCloseFailure'
-        failure = failure or ('cancelled' if cancelled.is_set() else None)  # after the layout close
-    except Exception:
-        failure = failure or 'ownerFailure'
-    finally:
-        for number, handler in previous.items():
+
+    def restore_handlers(numbers_to_restore):
+        restored = True
+        for number in numbers_to_restore:
             try:
-                signal.signal(number, handler)
+                signal.signal(number, previous.pop(number))
             except Exception:
-                failure = failure or 'ownerFailure'
-    failure = failure or ('cancelled' if cancelled.is_set() else None)  # after handler restoration
-    return finish(capture, failure), capture
+                restored = False
+        return restored
+
+    failure, mask = None, None
+
+    def admit_success():
+        pending = (signal.sigpending() & set(numbers)) - mask
+        for number in pending:
+            signal.sigtimedwait({number}, 0)  # Consume the cancellation we record, not a prior blocked signal.
+        interrupted_before_link = 'cancelled' if pending else interrupted(end, cancelled)
+        if not restore_handlers(list(previous)):
+            return interrupted_before_link or 'ownerFailure'
+        return interrupted_before_link or interrupted(end, cancelled)
+
+    try:
+        try:
+            for number in numbers:
+                previous[number] = signal.signal(number, cancel)
+            end = monotonic() + deadline
+            result = drive(capture, argv, end, cancelled)
+            failure = result.failure or interrupted(end, cancelled)
+            if result.settled:
+                try:
+                    close_layout(capture, result.output)
+                except (OSError, Refusal, CaptureInvalid):
+                    failure = failure or 'layoutCloseFailure'
+            failure = failure or interrupted(end, cancelled)
+        except Exception:
+            failure = failure or 'ownerFailure'
+
+        # No signal may fall back to its previous handler during the success
+        # decision. While masked, newly pending signals are part of that decision.
+        try:
+            mask = signal.pthread_sigmask(signal.SIG_BLOCK, numbers)
+        except OSError:
+            failure = failure or 'ownerFailure'
+        # SIG_IGN discards a pending signal. Do not restore that disposition
+        # before sampling pending cancellation.
+        ordinary = [number for number, handler in previous.items() if handler != signal.SIG_IGN]
+        if not restore_handlers(ordinary):
+            failure = failure or 'ownerFailure'
+        code = finish(capture, failure, before_success=admit_success)
+    finally:
+        restored = restore_handlers(list(previous))
+        if mask is not None:
+            try:
+                signal.pthread_sigmask(signal.SIG_SETMASK, mask)
+            except OSError:
+                restored = False
+        if not restored:
+            code = finish(capture, failure or 'ownerFailure')
+    return code, capture
 
 
 def main(arguments=None) -> int:

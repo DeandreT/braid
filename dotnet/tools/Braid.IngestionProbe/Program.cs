@@ -183,8 +183,7 @@ internal static class Program
             if (nameIndex >= 0)
             {
                 var name = arguments[nameIndex + 1];
-                if (name.Length != 45 || !name.StartsWith("braid-inspect-", StringComparison.Ordinal) ||
-                    name.AsSpan(13).ContainsAnyExcept("0123456789abcdef"))
+                if (!Braid.WorkerProbeSupport.InspectionWorkerName.IsExact(name))
                     throw new InvalidOperationException("The owned worker name was invalid.");
                 var record = Path.Combine(directory, name);
                 File.WriteAllText(record, "owned");

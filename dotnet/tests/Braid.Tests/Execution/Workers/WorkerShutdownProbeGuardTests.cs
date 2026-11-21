@@ -24,6 +24,22 @@ public sealed class WorkerShutdownProbeGuardTests
     }
 
     [Fact]
+    public void InspectionWorkerNameRequiresTheExactPrefixAndLowercaseGuidShape()
+    {
+        Assert.True(Braid.WorkerProbeSupport.InspectionWorkerName.IsExact(Name));
+        foreach (var invalid in new[] { null, Name[..^1], Name + "a", Name + "\n",
+            Name.ToUpperInvariant(), Name[..^1] + "A", Name[..^1] + "g",
+            Name[..^1] + "\uFF10", "weft-inspect-" + new string('a', 32),
+            $"braid-inspect-{Guid.Empty:D}" })
+        {
+            Assert.False(Braid.WorkerProbeSupport.InspectionWorkerName.IsExact(invalid));
+            var create = Create with { ContainerName = invalid };
+            Assert.Throws<InvalidOperationException>(() =>
+                WorkerShutdownProbeGuards.RequireLiveCreateBeforeSignal(Ready, create, [Ready, create], Live));
+        }
+    }
+
+    [Fact]
     public void PreSignalCreateExitKillRemovalAndHostTerminalRecordsRefuseTheExperiment()
     {
         foreach (var terminal in new[] { Row(3, "command-exit", "create"), Row(3, "command-kill", "create"),
