@@ -1,5 +1,6 @@
 import {
   catalogApi,
+  catalogWriteAction,
   expect,
   expectRevision,
   mappingPath,
@@ -8,7 +9,7 @@ import {
   revisionPath,
   synthetic,
   syntheticCatalog,
-  controlledTest as test,
+  test,
 } from "./catalog.fixture";
 
 test("controlled UI: real links, concrete revision routes, breadcrumbs and unknown routes", async ({
@@ -170,14 +171,10 @@ test("controlled UI: project write flags do not expose mutations without matchin
     synthetic.project.name,
   );
   await expect(
-    page.getByRole("button", {
-      name: /^(Create project|Create mapping|Upload revision|Edit metadata|Manage membership|Run preview|Start chat|Derive report)$/i,
-    }),
+    page.getByRole("button", { name: catalogWriteAction }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole("link", {
-      name: /^(Create project|Create mapping|Upload revision|Edit metadata|Manage membership|Run preview|Start chat|Derive report)$/i,
-    }),
+    page.getByRole("link", { name: catalogWriteAction }),
   ).toHaveCount(0);
 });
 

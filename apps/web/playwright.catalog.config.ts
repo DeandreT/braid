@@ -36,6 +36,9 @@ export default defineConfig({
   ],
   fullyParallel: false,
   workers: 1,
+  // The packaged web host belongs to the single-use worker fixture. After a
+  // failure Playwright would replace that worker against an already-used lease.
+  maxFailures: 1,
   forbidOnly: true,
   retries: 0,
   timeout: 240_000,

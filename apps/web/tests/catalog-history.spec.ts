@@ -4,6 +4,7 @@ import { isSessionStatusRequest } from "./browser-session-status.fixture";
 import { organizationContextPath } from "./organization-context.fixture";
 import {
   catalogApi,
+  catalogWriteAction,
   expect,
   expectRevision,
   mappingPath,
@@ -34,6 +35,16 @@ async function capture<T>(
   const failedRequests = new Map<Request, string | undefined>();
   const pending = new Set<Promise<void>>();
   const values: { usable: boolean; value?: T }[] = [];
+  const diagnostic: string[] = [];
+  // Retain only method, path and status, never cursors, bodies, headers or tokens.
+  const note = (request: Request, state: string) => {
+    const url = new URL(request.url());
+    if (url.origin !== expected.origin || !url.pathname.startsWith("/api/"))
+      return;
+    const label = `${request.method()} ${url.pathname} ${state}`;
+    if (!diagnostic.includes(label) && diagnostic.length < 24)
+      diagnostic.push(label);
+  };
   const stop = Symbol("catalog capture stopped");
   let stopReads!: () => void;
   const stopped = new Promise<typeof stop>((resolve) => {
@@ -67,6 +78,7 @@ async function capture<T>(
     finish({ ok: true, value: first.value as T });
   };
   const observe = (request: Request) => {
+    note(request, "sent");
     const url = new URL(request.url());
     let queryCount = 0;
     url.searchParams.forEach(() => {
@@ -88,6 +100,7 @@ async function capture<T>(
     }
   };
   const observeFailure = (request: Request) => {
+    note(request, "did not complete");
     if (!requests.has(request)) return;
     const errorText = request.failure()?.errorText;
     failedRequests.set(request, errorText);
@@ -121,6 +134,7 @@ async function capture<T>(
   };
   const observeResponse = (reply: Response) => {
     const request = reply.request();
+    note(request, String(reply.status()));
     if (!requests.has(request)) return;
     responses.add(request);
     const value: { usable: boolean; value?: T } = { usable: false };
@@ -146,7 +160,9 @@ async function capture<T>(
   const timer = setTimeout(() => {
     fail(
       new Error(
-        "Expected usable actual catalog JSON within observation deadline",
+        `Expected usable actual catalog JSON from ${expected.pathname} within observation deadline; ` +
+          `${requests.size} matching requests, ${responses.size} responses. ` +
+          `Observed API traffic: ${diagnostic.join("; ") || "none"}`,
       ),
     );
   }, 10_000);
@@ -185,9 +201,10 @@ async function linkPaths(list: Locator): Promise<string[]> {
 }
 async function readOnly(page: Page): Promise<void> {
   await expect(
-    page.getByRole("button", {
-      name: /^(Create project|Create mapping|Upload revision|Edit metadata|Manage membership|Run preview|Start chat|Derive report)$/i,
-    }),
+    page.getByRole("button", { name: catalogWriteAction }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: catalogWriteAction }),
   ).toHaveCount(0);
   await expect(page.locator("input[type=file],textarea,select")).toHaveCount(0);
 }
@@ -584,9 +601,7 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
     await expect(
       page.getByRole("heading", { name: "Not found", exact: true }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("region", { name: "Version history", exact: true }),
-    ).toHaveCount(0);
+    await expect(page.locator('[aria-label="Version history"]')).toHaveCount(0);
     expect(scopedReads.slice(beforeOrganizationDenial)).toEqual([]);
     expect(forbiddenReads).toEqual([]);
   });
