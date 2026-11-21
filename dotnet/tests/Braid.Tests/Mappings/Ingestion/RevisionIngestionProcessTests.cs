@@ -444,8 +444,7 @@ internal sealed class IngestionProcessProbe : IAsyncDisposable
         foreach (var record in Directory.EnumerateFiles(workerStateDirectory))
         {
             var name = Path.GetFileName(record);
-            if (name.Length != 45 || !name.StartsWith("braid-inspect-", StringComparison.Ordinal) ||
-                name.AsSpan(13).ContainsAnyExcept("0123456789abcdef") || await File.ReadAllTextAsync(record) != "owned")
+            if (!Braid.WorkerProbeSupport.InspectionWorkerName.IsExact(name) || await File.ReadAllTextAsync(record) != "owned")
                 throw new InvalidOperationException("The owned ingestion worker record was invalid.");
             // This probe's legacy "owned" record contains only a random name, not the
             // runner's independent operation marker or an acknowledged immutable ID.

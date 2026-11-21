@@ -24,7 +24,7 @@ Start the operator with `bun <operator> --config <configuration>`. Host-side set
 - `BRAID_NATIVE_MAPPING_UPLOAD_BASE_URL`: exact concrete read origin.
 
 The worker image is
-`sha256:439291fb4d665e3ba9c086e88214a73fd44552af80932a9b40c97f5816c7047e`;
+`sha256:a63f57a009717d2171e48c02c068e9dcb19974561b91cf8484345d02d5c05439`;
 the PostgreSQL16.15 reference is
 `postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc`.
 The runtime pins the actual images, daemon, profiles, loopback origin/PG port,
