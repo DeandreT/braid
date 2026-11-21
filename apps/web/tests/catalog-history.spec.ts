@@ -1,6 +1,7 @@
 import type { Locator, Page, Request, Response } from "@playwright/test";
 import type { components } from "../src/api/generated";
 import { isSessionStatusRequest } from "./browser-session-status.fixture";
+import { organizationContextPath } from "./organization-context.fixture";
 import {
   catalogApi,
   expect,
@@ -204,18 +205,24 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
   const projects = projectsPath(fixture.organizationId);
   const forbiddenReads: string[] = [];
   const scopedReads: string[] = [];
+  const contextPath = organizationContextPath(fixture.organizationId);
+  const foreignContext = organizationContextPath(
+    fixture.projects.foreign.organizationId,
+  );
   const id = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
   const resourceRead = new RegExp(
     `^/api/v1/organizations/${id}/projects(?:/${id}(?:/mappings(?:/${id}(?:/revisions(?:/${id})?)?)?)?)?$`,
   );
   page.context().on("request", (request) => {
     const path = new URL(request.url()).pathname;
-    if (path.startsWith("/api/v1/organizations/")) scopedReads.push(path);
+    if (resourceRead.test(path)) scopedReads.push(path);
     if (isSessionStatusRequest(request, fixture.readOrigin)) return;
     if (
       request.method() !== "GET" ||
       (path.startsWith("/api/") &&
         path !== "/api/v1/catalog/context" &&
+        path !== contextPath &&
+        path !== foreignContext &&
         !resourceRead.test(path))
     )
       forbiddenReads.push(path);
@@ -489,8 +496,7 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
     await expect(metadataValue(page, "Revision ID")).toHaveCount(0);
     await catalogOwner.control("api-start", "viewer");
     const restoredAdmission = page.waitForResponse(
-      (response) =>
-        new URL(response.url()).pathname === "/api/v1/catalog/context",
+      (response) => new URL(response.url()).pathname === contextPath,
     );
     await workspaceAccess
       .getByRole("button", { name: "Retry", exact: true })
@@ -509,8 +515,7 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
     await expectRevision(page, original);
     await catalogOwner.control("restart-profile", "readerUnavailable");
     const unavailable = page.waitForResponse(
-      (response) =>
-        new URL(response.url()).pathname === "/api/v1/catalog/context",
+      (response) => new URL(response.url()).pathname === contextPath,
     );
     await page
       .getByRole("button", { name: "Refresh catalog", exact: true })
@@ -545,13 +550,14 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
     ).toHaveCount(0);
     await catalogOwner.control("revoke-org");
     const revokedAdmission = page.waitForResponse(
-      (response) =>
-        new URL(response.url()).pathname === "/api/v1/catalog/context",
+      (response) => new URL(response.url()).pathname === contextPath,
     );
     await page
       .getByRole("button", { name: "Refresh catalog", exact: true })
       .click();
-    await (await revokedAdmission).finished();
+    const revoked = await revokedAdmission;
+    expect(revoked.status()).toBe(404);
+    await revoked.finished();
     await expect(
       page.getByRole("heading", { name: "Not found", exact: true }),
     ).toBeVisible();
