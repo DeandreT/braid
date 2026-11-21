@@ -12,15 +12,21 @@ import {
   test,
 } from "./catalog.fixture";
 import type { Request } from "@playwright/test";
+import {
+  organizationContextPath,
+  routeOrganizationContext,
+} from "./organization-context.fixture";
 
 test("controlled boundary: malformed and foreign organization links dispatch no scoped resource request", async ({
   page,
 }) => {
   await syntheticCatalog(page);
-  const requests: string[] = [];
+  const foreign = "10000000-0000-4000-8000-000000000099";
+  const requests: { path: string; method: string }[] = [];
   page.on("request", (request) => {
-    if (new URL(request.url()).pathname.startsWith("/api/v1/organizations/"))
-      requests.push(request.url());
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith("/api/v1/organizations/"))
+      requests.push({ path, method: request.method() });
   });
   for (const [path, heading] of [
     ["/catalog/organizations/not-a-uuid/projects", "Invalid link"],
@@ -28,10 +34,7 @@ test("controlled boundary: malformed and foreign organization links dispatch no 
       `/catalog/organizations/${synthetic.org}/projects/00000000-0000-0000-0000-000000000000`,
       "Invalid link",
     ],
-    [
-      "/catalog/organizations/10000000-0000-4000-8000-000000000099/projects",
-      "Not found",
-    ],
+    [`/catalog/organizations/${foreign}/projects`, "Not found"],
     [projectsPath(synthetic.org) + "?cursor=A", "Invalid link"],
     [projectsPath(synthetic.org) + "?cursor=YR", "Invalid link"],
     [
@@ -46,7 +49,11 @@ test("controlled boundary: malformed and foreign organization links dispatch no 
     ).toBeVisible();
     await expect(page.getByText("No projects", { exact: true })).toHaveCount(0);
   }
-  expect(requests).toEqual([]);
+  // A well-formed foreign link can query its own admission, but denial
+  // must stop all project and mapping reads. Malformed links do neither.
+  expect(requests).toEqual([
+    { path: organizationContextPath(foreign), method: "GET" },
+  ]);
 });
 
 for (const kind of ["project", "mapping", "revision", "page"] as const) {
@@ -150,7 +157,7 @@ for (const [status, code, heading] of [
     page,
   }) => {
     await syntheticCatalog(page);
-    await page.route("**/api/v1/catalog/context", (route) =>
+    await routeOrganizationContext(page, (route) =>
       route.fulfill({ status, json: { code } }),
     );
     await page.goto(projectsPath(synthetic.org));
@@ -170,7 +177,7 @@ test("controlled freshness: focus and visibility coalesce into one fresh context
   await syntheticCatalog(page);
   let contextRequests = 0;
   let admitted = true;
-  await page.route("**/api/v1/catalog/context", async (route) => {
+  await routeOrganizationContext(page, async (route) => {
     contextRequests++;
     await route.fulfill(
       admitted
