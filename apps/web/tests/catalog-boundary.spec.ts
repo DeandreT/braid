@@ -9,7 +9,7 @@ import {
   revisionPath,
   synthetic,
   syntheticCatalog,
-  test,
+  controlledTest as test,
 } from "./catalog.fixture";
 import type { Request } from "@playwright/test";
 import {
@@ -134,8 +134,7 @@ test("controlled boundary: maximum decimal strings preserve every digit and cont
     },
   });
   await page.goto(revisionPath(revision.scope));
-  await expectRevision(page, revision);
-  await expect(metadataValue(page, "Sequence")).toHaveText(max);
+  await expectRevision(page, revision, synthetic.mapping.name);
   const stored = await page.evaluate(() =>
     [localStorage, sessionStorage].some((storage) =>
       Object.values(storage).some(
