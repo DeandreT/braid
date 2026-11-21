@@ -421,9 +421,31 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
 
   await test.step("one-way owner-authored project and organization revocations clear prior content on the next actual read", async () => {
     await catalogOwner.control("revoke-project");
-    await page
-      .getByRole("button", { name: "Refresh catalog", exact: true })
-      .click();
+    const refresh = page.getByRole("button", {
+      name: "Refresh catalog",
+      exact: true,
+    });
+    const revisionReads = new Set([
+      catalogApi(projectPath(project)),
+      catalogApi(mappingPath(mapping)),
+      catalogApi(revisionPath(original.scope)),
+    ]);
+    await Promise.all([
+      page.waitForResponse(
+        (response) => {
+          const url = new URL(response.url());
+          return (
+            url.origin === fixture.readOrigin &&
+            !url.search &&
+            revisionReads.has(url.pathname) &&
+            response.request().method() === "GET" &&
+            response.status() === 404
+          );
+        },
+        { timeout: 10_000 },
+      ),
+      refresh.click(),
+    ]);
     await expect(
       page.getByRole("heading", { name: "Not found", exact: true }),
     ).toBeVisible();
@@ -432,15 +454,18 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
     ).toHaveCount(0);
     await catalogOwner.control("revoke-org");
     const beforeOrganizationDenial = scopedReads.length;
-    const revokedAdmission = page.waitForResponse(
-      (response) => new URL(response.url()).pathname === contextPath,
-    );
-    await page
-      .getByRole("button", { name: "Refresh catalog", exact: true })
-      .click();
-    const revoked = await revokedAdmission;
+    const [revoked] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url() === fixture.readOrigin + contextPath &&
+          response.request().method() === "GET",
+        { timeout: 10_000 },
+      ),
+      refresh.click(),
+    ]);
     expect(revoked.status()).toBe(404);
-    await revoked.finished();
+    // Angular may abort its completed fetch during teardown. The HTTP denial
+    // and the rendered state are the evidence, not Chromium's loading event.
     await expect(
       page.getByRole("heading", { name: "Not found", exact: true }),
     ).toBeVisible();
