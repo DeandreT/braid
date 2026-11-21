@@ -452,6 +452,15 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
     await expect(
       page.getByText(original.nativeDigest.value, { exact: false }),
     ).toHaveCount(0);
+    // Once the project is denied there is no workbench and no Refresh button.
+    // The denied route's Retry control must check the organization again.
+    const retryDenied = page
+      .getByRole("alert")
+      .filter({
+        has: page.getByRole("heading", { name: "Not found", exact: true }),
+      })
+      .getByRole("button", { name: "Retry", exact: true });
+    await expect(retryDenied).toBeVisible();
     await catalogOwner.control("revoke-org");
     const beforeOrganizationDenial = scopedReads.length;
     const [revoked] = await Promise.all([
@@ -461,7 +470,7 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
           response.request().method() === "GET",
         { timeout: 10_000 },
       ),
-      refresh.click(),
+      retryDenied.click(),
     ]);
     expect(revoked.status()).toBe(404);
     // Angular may abort its completed fetch during teardown. The HTTP denial
