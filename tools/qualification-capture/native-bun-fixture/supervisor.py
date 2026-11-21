@@ -50,6 +50,32 @@ PERMITS = {
     b"G": ("control", "admit", "load"),
     b"Q": ("control", "load", "query"),
 }
+CHILD_GATE_EXIT = 20
+CHILD_SETUP_EXIT = 21
+CHILD_EXEC_EXIT = 22
+EXIT_HINTS = {
+    CHILD_GATE_EXIT: "execGate",
+    CHILD_SETUP_EXIT: "preexecSetup",
+    CHILD_EXEC_EXIT: "execSyscall",
+    # Worker exit hints are supplemental; they do not admit a frame or permit.
+    40: "workerIdentity",
+    41: "workerStdio",
+    42: "artifactDescriptor",
+    43: "artifactBytes",
+    44: "admissionFrame",
+    45: "loadPermit",
+    46: "ffiImport",
+    47: "libraryOpen",
+    48: "loadFrame",
+    49: "queryPermit",
+    50: "abiCheck",
+    51: "nativeQuery",
+    52: "resultFrame",
+}
+NATIVE_RESULTS = {
+    42: "reply", -1: "badArgument", -2: "badDescriptor", -3: "cancelled",
+    -4: "deadline", -5: "ioFailure", -6: "closeFailure",
+}
 STOP = False
 
 
@@ -349,6 +375,10 @@ def memfd_seal_commands():
     return SEAL_UAPI["F_ADD_SEALS"], SEAL_UAPI["F_GET_SEALS"]
 
 
+def frame_prefix(hold):
+    return b"A\nL\nW\n" if hold else b"A\nL\n"
+
+
 class Owner:
     def __init__(self):
         self.fds = {}
@@ -359,6 +389,8 @@ class Owner:
         self.failure = None
         self.eof = False
         self.phase = "preexec"
+        # Only mutated in the forked Python child; successful exec never returns.
+        self.preexec_failure = CHILD_GATE_EXIT
         self.observed = False
         self.cancel_at = None
         self.stop_at = None
@@ -433,6 +465,7 @@ class Owner:
         os.close(self.gate_writer.detach())
         gate = self.fds["childGate"]
         require(await_exec_permit(gate, gate_end), "execNotPermitted")
+        self.preexec_failure = CHILD_SETUP_EXIT
         os.close(gate)
         os.setsid()
         for sig in SIGNALS:
@@ -448,6 +481,7 @@ class Owner:
         os.chdir(workspace)
         launch_policy(proc_bytes("/proc/self/status", SOURCE_CAP))
         require(time.monotonic() < gate_end, "execNotPermitted")
+        self.preexec_failure = CHILD_EXEC_EXIT
         os.execve(argv[0], argv, env)
 
     def abort_exec_gate(self):
@@ -478,7 +512,7 @@ class Owner:
                 self.child_exec(hard, argv, env, workspace, gate_end)
             finally:
                 # Do not unwind into the parent's reaper or interpreter teardown.
-                os._exit(4)
+                os._exit(self.preexec_failure)
         self.pid = pid
         try:
             try:
@@ -612,10 +646,49 @@ class Owner:
         if time.monotonic() >= self.end:
             self.fail("deadline")
 
+    def worker_diagnostic(self, hold):
+        """One bounded receipt from owned state, never raw worker output."""
+        prefix = frame_prefix(hold)
+        last_frame = None
+        native_result = None
+        for index, marker in enumerate(("A", "L", "W") if hold else ("A", "L"), 1):
+            if self.data.startswith(prefix[:index * 2]):
+                last_frame = marker
+        if len(self.data) == len(prefix) + 5 and self.data.startswith(prefix + b"R"):
+            last_frame = "R"
+            result = int.from_bytes(self.data[-4:], "little", signed=True)
+            native_result = NATIVE_RESULTS.get(result, "unexpected")
+        exit_code = exit_signal = None
+        if self.status is not None:
+            if os.WIFEXITED(self.status):
+                exit_code = os.WEXITSTATUS(self.status)
+            elif os.WIFSIGNALED(self.status):
+                exit_signal = os.WTERMSIG(self.status)
+        return {
+            "lastPermit": {"preexec": None, "admit": "P", "load": "G", "query": "Q"}[self.phase],
+            "lastFrame": last_frame,
+            "frameBytes": min(len(self.data), 12),
+            "eof": self.eof,
+            "exitCode": exit_code,
+            "exitSignal": exit_signal,
+            "exitHint": EXIT_HINTS.get(exit_code),
+            "nativeResult": native_result,
+        }
+
+    def outcome(self, case):
+        reason = "workerStopUnconfirmed" if self.overdue else self.failure
+        if reason is None:
+            return 0, {"outcome": "fixtureOnly", "case": case, "workerReaped": True}
+        result = {"outcome": "unproven" if case == "hold" and self.pid is not None else "refused",
+                  "reason": reason}
+        if self.pid is not None:
+            result["worker"] = self.worker_diagnostic(case == "hold")
+        return 1, result
+
     def supervise(self, native, library, hold):
         proof_end = None
         normal_prefix = b"A\nL\n"
-        prefix = normal_prefix + (b"W\n" if hold else b"")
+        prefix = frame_prefix(hold)
         while True:
             self.checkpoints()
             self.reap_once()
@@ -724,16 +797,9 @@ def run(args):
         if owner.end is not None and time.monotonic() >= owner.end:
             owner.fail("deadline")
     try:
-        reason = "workerStopUnconfirmed" if owner.overdue else owner.failure
-        if args.case == "hold" and owner.pid is not None and reason is not None:
-            # Preserve the failure reason without claiming native cancellation.
-            result = {"outcome": "unproven", "reason": reason}
-        elif reason is not None:
-            result = {"outcome": "refused", "reason": reason}
-        else:
-            result = {"outcome": "fixtureOnly", "case": args.case, "workerReaped": True}
+        code, result = owner.outcome(args.case)
         print(json.dumps(result, sort_keys=True), flush=True)
-        return int(reason is not None)
+        return code
     finally:
         signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
         for sig, handler in old.items():

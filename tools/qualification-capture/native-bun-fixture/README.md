@@ -57,6 +57,17 @@ access, a late sample, a signal, a slow exit, or an incomplete or unexpected
 frame makes the hold case unproven. The worker's two admission waits time out
 independently, and the native poll has its own absolute 4 s backstop.
 
+After a failed run that had a child, the final JSON includes a bounded `worker`
+object: last permit published, last complete frame matching the expected
+prefix, bounded byte count, EOF, terminal exit code or signal, and an
+allowlisted native-result category for a complete `R` frame. The Python
+pre-exec child and Bun worker return distinct fixed failure codes so the
+receipt can flag the gate, descriptor setup, failed exec syscall, worker
+guards, FFI import, library open, ABI check, or query. These exit hints are
+not proof that a frame or admission check passed. There are no raw frame
+bytes, paths, exception messages, or child stderr in the receipt. Success
+and pre-fork refusals keep their original JSON shape.
+
 The main 2 s clock starts before fork and includes final owned closes. On a
 stop, the supervisor gives 250 ms for cooperative exit, then sends SIGTERM,
 sends SIGKILL 250 ms later if needed, and allows another 1 s for reaping. The

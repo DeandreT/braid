@@ -15,17 +15,17 @@
     "independentReviewSession": "ses_e02edcf65ffekHa8gi2eEXwim3",
     "reviewedScope": "Revised design, source implementation only: one unprivileged Python supervisor and reaper, one gated Bun child, no runtime admission.",
     "reviewedCandidate": "bb42a6899a523925e3abd9ca9db2e9096d059943",
-    "targetedReviewBase": "e45bfff6211cb184196395b0666535e21f435d07",
+    "targetedReviewBase": "06766b14e77219f9f4ab9114f092cefeb383639a",
     "remediationDesign": "README.md: protected pre-execution supervisor-byte admission, bounded fork-to-exec pidfd gate, refusal of traced/blocked launch, and terminal-only custody settlement.",
-    "implementationReview": "Pending independent review of the exact candidate source hashes below."
+    "implementationReview": "The bounded worker phase/exit diagnostics require independent review of these exact bytes and fresh runtime admission."
   },
   "sourceFiles": {
-    "README.md": "74d310b9704740fde8edb30ee3cd1f79c376dc2ff84081c973ba5bc69f82545a",
+    "README.md": "822ef86c017c4937c8a88585dc296757a13b505e756721e787dcfbf3ba86dafb",
     "bootstrap.py": "2b3a8614564f2aa5c38c6e309bc3c982f25e80d406a6821f3a297be3c02244b6",
     "fixture.c": "dd61fa10fe13c30fdc11d54a739264abe804ddcae73d3b4d91e33a5223f8fec1",
-    "supervisor.py": "0124267410e2b4da1e2ac60cfcee44ff7374218e2a477193c6658b66c9d665a7",
-    "worker.mjs": "a98129bab3df823e2daf4a0a507f9612f07e53aba12b6c4348a7f98d0f5a2918",
-    "test_supervisor.py": "d89d0ecc598a11f7498710e32c0eeeaa27b07c8e03fdbe06764042844e2c67f8"
+    "supervisor.py": "e8e7e66e8c0883938416b074be73c3a06c0cde83eca7e2b4bfd31e6573842a50",
+    "worker.mjs": "79c91b3e4775efeec0f39bcc71b253d8c32d44d5135d83ff123bd4cde6318e3c",
+    "test_supervisor.py": "6b500fb4a8ffb8f7b2f362497db5c0307907c3dd228ead73556f15d768a64b08"
   },
   "staticElfReviewSha256": null,
   "bun": {
