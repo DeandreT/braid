@@ -50,6 +50,32 @@ PERMITS = {
     b"G": ("control", "admit", "load"),
     b"Q": ("control", "load", "query"),
 }
+CHILD_GATE_EXIT = 20
+CHILD_SETUP_EXIT = 21
+CHILD_EXEC_EXIT = 22
+EXIT_HINTS = {
+    CHILD_GATE_EXIT: (0, "execGate"),
+    CHILD_SETUP_EXIT: (1, "preexecSetup"),
+    CHILD_EXEC_EXIT: (1, "execSyscall"),
+    # Worker exit hints are supplemental; they do not admit a frame or permit.
+    40: (1, "workerIdentity"),
+    41: (1, "workerStdio"),
+    42: (1, "artifactDescriptor"),
+    43: (1, "artifactBytes"),
+    44: (1, "admissionFrame"),
+    45: (1, "loadPermit"),
+    46: (2, "ffiImport"),
+    47: (2, "libraryOpen"),
+    48: (2, "loadFrame"),
+    49: (2, "queryPermit"),
+    50: (3, "abiCheck"),
+    51: (3, "nativeQuery"),
+    52: (3, "resultFrame"),
+}
+NATIVE_RESULTS = {
+    42: "reply", -1: "badArgument", -2: "badDescriptor", -3: "cancelled",
+    -4: "deadline", -5: "ioFailure", -6: "closeFailure",
+}
 STOP = False
 
 
@@ -349,6 +375,10 @@ def memfd_seal_commands():
     return SEAL_UAPI["F_ADD_SEALS"], SEAL_UAPI["F_GET_SEALS"]
 
 
+def frame_prefix(hold):
+    return b"A\nL\nW\n" if hold else b"A\nL\n"
+
+
 class Owner:
     def __init__(self):
         self.fds = {}
@@ -359,6 +389,8 @@ class Owner:
         self.failure = None
         self.eof = False
         self.phase = "preexec"
+        # Only mutated in the forked Python child; successful exec never returns.
+        self.preexec_failure = CHILD_GATE_EXIT
         self.observed = False
         self.cancel_at = None
         self.stop_at = None
@@ -433,6 +465,7 @@ class Owner:
         os.close(self.gate_writer.detach())
         gate = self.fds["childGate"]
         require(await_exec_permit(gate, gate_end), "execNotPermitted")
+        self.preexec_failure = CHILD_SETUP_EXIT
         os.close(gate)
         os.setsid()
         for sig in SIGNALS:
@@ -448,6 +481,7 @@ class Owner:
         os.chdir(workspace)
         launch_policy(proc_bytes("/proc/self/status", SOURCE_CAP))
         require(time.monotonic() < gate_end, "execNotPermitted")
+        self.preexec_failure = CHILD_EXEC_EXIT
         os.execve(argv[0], argv, env)
 
     def abort_exec_gate(self):
@@ -478,7 +512,7 @@ class Owner:
                 self.child_exec(hard, argv, env, workspace, gate_end)
             finally:
                 # Do not unwind into the parent's reaper or interpreter teardown.
-                os._exit(4)
+                os._exit(self.preexec_failure)
         self.pid = pid
         try:
             try:
@@ -612,10 +646,59 @@ class Owner:
         if time.monotonic() >= self.end:
             self.fail("deadline")
 
+    def worker_diagnostic(self, hold):
+        """One bounded receipt from owned state, never raw worker output."""
+        prefix = frame_prefix(hold)
+        issued, permit = {"preexec": (0, None), "admit": (1, "P"),
+                          "load": (2, "G"), "query": (3, "Q")}[self.phase]
+        # Terminal/EOF draining can read bytes sent without a matching grant.
+        # Keep their count but never interpret them as progress past the gate.
+        max_bytes = issued * 2 if issued < 3 else len(prefix) + 5
+        fixed = prefix + b"R"
+        contradiction = (len(self.data) > max_bytes or
+                         self.data[:len(fixed)] != fixed[:len(self.data)])
+        last_frame = None
+        native_result = None
+        for index, marker in enumerate(("A", "L", "W") if hold else ("A", "L"), 1):
+            if issued >= index and self.data.startswith(prefix[:index * 2]):
+                last_frame = marker
+        if issued == 3 and not contradiction and len(self.data) == len(prefix) + 5:
+            last_frame = "R"
+            result = int.from_bytes(self.data[-4:], "little", signed=True)
+            native_result = NATIVE_RESULTS.get(result, "unexpected")
+        exit_code = exit_signal = None
+        if self.status is not None:
+            if os.WIFEXITED(self.status):
+                exit_code = os.WEXITSTATUS(self.status)
+            elif os.WIFSIGNALED(self.status):
+                exit_signal = os.WTERMSIG(self.status)
+        minimum, exit_hint = EXIT_HINTS.get(exit_code, (0, None))
+        return {
+            "lastPermit": permit,
+            "lastFrame": last_frame,
+            "frameBytes": min(len(self.data), 12),
+            "eof": self.eof,
+            "exitCode": exit_code,
+            "exitSignal": exit_signal,
+            "exitHint": exit_hint if issued >= minimum else None,
+            "nativeResult": native_result,
+            "protocolContradiction": contradiction,
+        }
+
+    def outcome(self, case):
+        reason = "workerStopUnconfirmed" if self.overdue else self.failure
+        if reason is None:
+            return 0, {"outcome": "fixtureOnly", "case": case, "workerReaped": True}
+        result = {"outcome": "unproven" if case == "hold" and self.pid is not None else "refused",
+                  "reason": reason}
+        if self.pid is not None:
+            result["worker"] = self.worker_diagnostic(case == "hold")
+        return 1, result
+
     def supervise(self, native, library, hold):
         proof_end = None
         normal_prefix = b"A\nL\n"
-        prefix = normal_prefix + (b"W\n" if hold else b"")
+        prefix = frame_prefix(hold)
         while True:
             self.checkpoints()
             self.reap_once()
@@ -690,6 +773,14 @@ class Owner:
                 time.sleep(TICK if not self.overdue else 0.050)
 
 
+def worker_argv(loader, bun, source):
+    # Bun 1.4.5's optional --config value must be joined with "=".
+    # A separate /dev/null token is positional and stops parsing before --eval.
+    return [str(loader), "--inhibit-cache", "--glibc-hwcaps-mask", "", "--library-path",
+            "/usr/lib", "--argv0", str(bun), str(bun), "--config=/dev/null",
+            "--no-env-file", "--no-install", "--eval", source]
+
+
 def run(args):
     owner = Owner()
     old = {sig: signal.signal(sig, request_stop) for sig in SIGNALS}
@@ -703,12 +794,9 @@ def run(args):
         library = owner.make_artifact(payload)
         config = {"mode": int(args.case == "hold"), "size": len(payload), "sha256": sha}
         source = "const fixture=Object.freeze(" + json.dumps(config) + ");\n" + worker.decode("utf-8")
-        argv = [str(loader), "--inhibit-cache", "--glibc-hwcaps-mask", "", "--library-path",
-                "/usr/lib", "--argv0", str(bun), str(bun), "--config", "/dev/null",
-                "--no-env-file", "--no-install", "--eval", source]
         env = {"HOME": str(args.work), "XDG_CONFIG_HOME": str(args.work),
                "TMPDIR": str(args.work), "LANG": "C", "TZ": "UTC", "BUN_NO_TELEMETRY": "1"}
-        owner.launch(hard, argv, env, args.work)
+        owner.launch(hard, worker_argv(loader, bun, source), env, args.work)
         owner.supervise(native, library, args.case == "hold")
     except Refused as error:
         owner.fail(str(error))
@@ -724,16 +812,9 @@ def run(args):
         if owner.end is not None and time.monotonic() >= owner.end:
             owner.fail("deadline")
     try:
-        reason = "workerStopUnconfirmed" if owner.overdue else owner.failure
-        if args.case == "hold" and owner.pid is not None and reason is not None:
-            # Preserve the failure reason without claiming native cancellation.
-            result = {"outcome": "unproven", "reason": reason}
-        elif reason is not None:
-            result = {"outcome": "refused", "reason": reason}
-        else:
-            result = {"outcome": "fixtureOnly", "case": args.case, "workerReaped": True}
+        code, result = owner.outcome(args.case)
         print(json.dumps(result, sort_keys=True), flush=True)
-        return int(reason is not None)
+        return code
     finally:
         signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
         for sig, handler in old.items():

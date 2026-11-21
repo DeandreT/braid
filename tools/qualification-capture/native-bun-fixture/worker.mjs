@@ -5,6 +5,23 @@ import { fstatSync, readlinkSync, readSync, writeSync } from "node:fs";
 const libraryFd = 3;
 const libraryPath = "/proc/self/fd/3";
 const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
+// Fixed failure exit codes shared with supervisor.py. No raw error text.
+const FAILURE = {
+  identity: 40,
+  stdio: 41,
+  artifactDescriptor: 42,
+  artifactBytes: 43,
+  admissionFrame: 44,
+  loadPermit: 45,
+  ffiImport: 46,
+  libraryOpen: 47,
+  loadFrame: 48,
+  queryPermit: 49,
+  abi: 50,
+  query: 51,
+  resultFrame: 52,
+};
+let failure = FAILURE.identity;
 
 async function permit(expected) {
   const until = performance.now() + 750;
@@ -31,6 +48,7 @@ function send(bytes) {
 }
 
 function verifyLibrary() {
+  failure = FAILURE.artifactDescriptor;
   const stat = fstatSync(libraryFd);
   if (
     !stat.isFile() ||
@@ -40,6 +58,7 @@ function verifyLibrary() {
     readlinkSync(libraryPath) !== "/memfd:braid-fixture-v1 (deleted)"
   )
     throw new Error("libraryDescriptor");
+  failure = FAILURE.artifactBytes;
   const bytes = Buffer.alloc(stat.size);
   let offset = 0;
   while (offset < bytes.length) {
@@ -57,15 +76,19 @@ async function main() {
     process.platform !== "linux" ||
     process.arch !== "x64" ||
     Bun.version !== "1.4.5" ||
-    ![0, 1].includes(fixture.mode) ||
-    !fstatSync(0).isSocket() ||
-    !fstatSync(1).isSocket()
+    ![0, 1].includes(fixture.mode)
   )
-    return 4;
+    return failure;
+  failure = FAILURE.stdio;
+  if (!fstatSync(0).isSocket() || !fstatSync(1).isSocket()) return failure;
   verifyLibrary();
+  failure = FAILURE.admissionFrame;
   send(Buffer.from("A\n"));
-  if (!(await permit(0x47))) return 4; // G: pre-load maps/process admission.
+  failure = FAILURE.loadPermit;
+  if (!(await permit(0x47))) return failure; // G: pre-load maps/process admission.
+  failure = FAILURE.ffiImport;
   const { dlopen, FFIType } = await import("bun:ffi");
+  failure = FAILURE.libraryOpen;
   const library = dlopen(libraryPath, {
     braid_fixture_abi_v1: { args: [], returns: FFIType.uint32_t },
     braid_fixture_query_v1: {
@@ -73,11 +96,16 @@ async function main() {
       returns: FFIType.int32_t,
     },
   });
+  failure = FAILURE.loadFrame;
   send(Buffer.from("L\n"));
-  if (!(await permit(0x51))) return 4; // Q: exact memfd mapping admitted.
-  if (library.symbols.braid_fixture_abi_v1() !== 0x42523401) return 4;
+  failure = FAILURE.queryPermit;
+  if (!(await permit(0x51))) return failure; // Q: exact memfd mapping admitted.
+  failure = FAILURE.abi;
+  if (library.symbols.braid_fixture_abi_v1() !== 0x42523401) return failure;
+  failure = FAILURE.query;
   const result = library.symbols.braid_fixture_query_v1(fixture.mode, 41);
-  if (![42, -1, -2, -3, -4, -5, -6].includes(result)) return 4;
+  if (![42, -1, -2, -3, -4, -5, -6].includes(result)) return failure;
+  failure = FAILURE.resultFrame;
   const frame = Buffer.alloc(5);
   frame[0] = 0x52;
   frame.writeInt32LE(result, 1);
@@ -90,5 +118,5 @@ async function main() {
 try {
   process.exit(await main());
 } catch {
-  process.exit(4);
+  process.exit(failure);
 }

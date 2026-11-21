@@ -4,6 +4,7 @@ import errno
 import json
 import os
 from pathlib import Path
+import re
 import signal
 import stat
 from types import SimpleNamespace
@@ -15,6 +16,158 @@ import supervisor
 
 
 class OwnerContract(unittest.TestCase):
+    def test_worker_argv_keeps_optional_config_value_out_of_positionals(self):
+        loader = Path("/usr/lib/ld-linux-x86-64.so.2")
+        bun = Path("/protected/bin/bun")
+        source = "// inert eval source\n"
+        self.assertEqual(supervisor.worker_argv(loader, bun, source), [
+            str(loader), "--inhibit-cache", "--glibc-hwcaps-mask", "",
+            "--library-path", "/usr/lib", "--argv0", str(bun), str(bun),
+            "--config=/dev/null", "--no-env-file", "--no-install", "--eval", source,
+        ])
+
+    def terminal_worker(self, phase="admit"):
+        owner = supervisor.Owner()
+        owner.phase = phase
+        owner.pid = 123
+        owner.fds = {"output": 8}
+        owner.end = 12
+        owner.pause = Mock()
+        return owner
+
+    def test_early_exit_receipt_distinguishes_preexec_worker_guard_and_signal(self):
+        for status, code, number, hint in (
+            (22 << 8, 22, None, "execSyscall"),
+            (43 << 8, 43, None, "artifactBytes"),
+            (signal.SIGSEGV, None, signal.SIGSEGV, None),
+        ):
+            with (
+                self.subTest(status=status),
+                patch.object(supervisor.time, "monotonic", return_value=10),
+                patch.object(supervisor.os, "waitpid", return_value=(123, status)),
+                patch.object(supervisor.os, "read", return_value=b""),
+            ):
+                owner = self.terminal_worker()
+                with self.assertRaisesRegex(supervisor.Refused, "workerResult"):
+                    owner.supervise({}, None, hold=False)
+                owner.fail("workerResult")
+                self.assertEqual(owner.outcome("reply"), (1, {
+                    "outcome": "refused", "reason": "workerResult",
+                    "worker": {"lastPermit": "P", "lastFrame": None, "frameBytes": 0,
+                               "eof": True, "exitCode": code, "exitSignal": number,
+                               "exitHint": hint, "nativeResult": None, "protocolContradiction": False},
+                }))
+
+    def test_complete_admission_frame_and_load_exit_give_distinct_receipt(self):
+        owner = self.terminal_worker()
+
+        def commit(permit):
+            self.assertEqual(permit, b"G")
+            owner.phase = "load"
+
+        with (
+            patch.object(owner, "commit_permit", side_effect=commit) as grant,
+            patch.object(supervisor.time, "monotonic", return_value=10),
+            patch.object(supervisor.os, "waitpid", side_effect=((0, 0), (123, 47 << 8))),
+            patch.object(supervisor.os, "read", side_effect=(b"A\n", b"")),
+            patch.object(supervisor.os, "getsid", return_value=123),
+            patch.object(supervisor.os, "getpgid", return_value=123),
+            patch.object(supervisor, "proc_bytes", return_value=b"TracerPid:\t0\n"),
+            patch.object(supervisor, "maps_match") as maps,
+        ):
+            with self.assertRaisesRegex(supervisor.Refused, "workerResult"):
+                owner.supervise({}, None, hold=False)
+            grant.assert_called_once_with(b"G")
+            maps.assert_called_once_with(123, {})
+        self.assertEqual(owner.worker_diagnostic(False), {
+            "lastPermit": "G", "lastFrame": "A", "frameBytes": 2, "eof": True,
+            "exitCode": 47, "exitSignal": None, "exitHint": "libraryOpen", "nativeResult": None,
+            "protocolContradiction": False,
+        })
+
+    def test_terminal_drain_cannot_claim_frames_past_the_last_permit(self):
+        for phase, hold, permit, frame in (
+            ("admit", False, "P", "A"),
+            ("load", False, "G", "L"),
+            ("load", True, "G", "L"),
+        ):
+            with self.subTest(phase=phase, hold=hold):
+                owner = self.terminal_worker(phase)
+                data = b"A\nL\n" + (b"W\n" if hold else b"") + b"R*\0\0\0"
+                with (
+                    patch.object(supervisor.time, "monotonic", return_value=10),
+                    patch.object(supervisor.os, "waitpid", return_value=(123, 0)),
+                    patch.object(supervisor.os, "read", side_effect=(data, b"")),
+                    patch.object(owner, "commit_permit") as grant,
+                ):
+                    with self.assertRaisesRegex(supervisor.Refused, "workerResult"):
+                        owner.supervise({}, None, hold)
+                    grant.assert_not_called()
+                self.assertEqual(owner.worker_diagnostic(hold), {
+                    "lastPermit": permit, "lastFrame": frame, "frameBytes": len(data),
+                    "eof": True, "exitCode": 0, "exitSignal": None, "exitHint": None,
+                    "nativeResult": None, "protocolContradiction": True,
+                })
+
+    def test_exit_hint_never_claims_progress_past_the_last_permit(self):
+        for phase, code in (("preexec", 43), ("admit", 47), ("load", 50)):
+            with self.subTest(phase=phase, code=code):
+                owner = self.terminal_worker(phase)
+                owner.status = code << 8
+                owner.eof = True
+                receipt = owner.worker_diagnostic(False)
+                self.assertEqual(receipt["exitCode"], code)
+                self.assertIsNone(receipt["exitHint"])
+                self.assertTrue(receipt["eof"])
+
+    def test_final_frame_is_drained_even_if_terminal_status_is_seen_first(self):
+        owner = self.terminal_worker("query")
+        owner.data.extend(b"A\nL\n")
+        with (
+            patch.object(supervisor.time, "monotonic", return_value=10),
+            patch.object(supervisor.os, "waitpid", return_value=(123, 0)),
+            patch.object(supervisor.os, "read", side_effect=(b"R*", b"\0\0\0", b"")),
+            patch.object(owner, "commit_permit") as grant,
+        ):
+            owner.supervise({}, None, hold=False)
+            grant.assert_not_called()
+        self.assertEqual(owner.outcome("reply"), (0, {
+            "outcome": "fixtureOnly", "case": "reply", "workerReaped": True,
+        }))
+
+    def test_result_category_requires_complete_frame_and_never_reports_raw_value(self):
+        owner = self.terminal_worker("query")
+        owner.status = 4 << 8
+        owner.eof = True
+        cases = (
+            (b"A\nL\nR\xfe", False, "L", None, False),
+            (b"A\nL\nR" + (-2).to_bytes(4, "little", signed=True), False, "R", "badDescriptor", False),
+            (b"A\nL\nRtest", False, "R", "unexpected", False),
+            (b"A\nL\nRtestExtra", False, "L", None, True),
+            (b"A\nX\n", False, "A", None, True),
+            (b"A\nL\nW\nR" + (-3).to_bytes(4, "little", signed=True), True, "R", "cancelled", False),
+        )
+        for data, hold, frame, result, contradiction in cases:
+            with self.subTest(data=data):
+                owner.data = bytearray(data)
+                receipt = owner.worker_diagnostic(hold)
+                self.assertEqual((receipt["lastFrame"], receipt["nativeResult"]), (frame, result))
+                self.assertLessEqual(receipt["frameBytes"], 12)
+                self.assertIs(receipt["protocolContradiction"], contradiction)
+                self.assertNotIn("test", json.dumps(receipt))
+
+    def test_prefork_tamper_output_is_unchanged(self):
+        owner = supervisor.Owner()
+        owner.fail("libraryDigest")
+        self.assertEqual(owner.outcome("reply"), (1, {"outcome": "refused", "reason": "libraryDigest"}))
+
+    def test_worker_exit_code_contract_matches_supervisor(self):
+        source = (supervisor.HERE / "worker.mjs").read_text()
+        table = re.search(r"const FAILURE = \{([^}]+)\}", source)
+        self.assertIsNotNone(table)
+        codes = [int(value) for value in re.findall(r": (\d+),", table[1])]
+        self.assertEqual(sorted(codes), sorted(code for code in supervisor.EXIT_HINTS if code >= 40))
+
     def permit_owner(self, phase):
         owner = supervisor.Owner()
         owner.phase = phase

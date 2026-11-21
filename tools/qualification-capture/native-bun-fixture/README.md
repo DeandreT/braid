@@ -57,6 +57,21 @@ access, a late sample, a signal, a slow exit, or an incomplete or unexpected
 frame makes the hold case unproven. The worker's two admission waits time out
 independently, and the native poll has its own absolute 4 s backstop.
 
+After a failed run that had a child, the final JSON includes a bounded `worker`
+object: last permit published, last complete frame matching the expected
+prefix and permitted phase, bounded byte count, EOF, terminal exit code or
+signal, and an allowlisted native-result category for a complete `R` after
+`Q`. Bytes that contradict the prefix, length or published permits set
+`protocolContradiction`; the receipt keeps the byte count, EOF and raw exit
+code or signal without treating those bytes as progress. The Python
+pre-exec child and Bun worker return distinct fixed failure codes so the
+receipt can flag the gate, descriptor setup, failed exec syscall, worker
+guards, FFI import, library open, ABI check, or query. Hints are suppressed
+unless the required permit was published; they are not proof that a frame
+or admission check passed. There are no raw frame bytes, paths, exception
+messages, or child stderr in the receipt. Success and pre-fork refusals keep
+their original JSON shape.
+
 The main 2 s clock starts before fork and includes final owned closes. On a
 stop, the supervisor gives 250 ms for cooperative exit, then sends SIGTERM,
 sends SIGKILL 250 ms later if needed, and allows another 1 s for reaping. The
@@ -94,6 +109,9 @@ cutoff is the check with SIGINT/SIGTERM blocked after all owned closes.
   paths and whole dependency closure. The supervisor uses the exact approved GNU
   loader, no cache or hardware-capability subdirectory preference, `/usr/lib`
   as its only explicit library directory, a clean environment and fixed argv.
+  In Bun 1.4.5 the optional config path must be one argument:
+  `--config=/dev/null`. With a separate `/dev/null` token, Bun treats it as
+  the entry path and stops parsing flags before `--eval`.
   Static review must establish that no object falls through to another path
   or loads other code before admission. The mapping checks then tie the actual
   child to approved inodes before granting each permit. There is no alternate
