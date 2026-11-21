@@ -82,8 +82,14 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
   const overviewRead = new RegExp(
     `^/api/v1/organizations/${fixture.organizationId}/projects/${id}/(?:creation-capabilities|lifecycle|automation|regression-suites/${id}|mappings/${id}/(?:lifecycle|automation))$`,
   );
+  // These background requests expose service/feature status, not resources.
+  // Only the two exact queryless GETs are part of the read-only browser lane.
+  const statusReads = new Set([
+    "/api/v1/health",
+    "/api/v1/catalog/interchange",
+  ]);
   page.context().on("request", (request) => {
-    const { origin, pathname: path } = new URL(request.url());
+    const { origin, pathname: path, search } = new URL(request.url());
     if (/^\/api\/v1\/organizations\/[^/]+\/projects(?:\/|$)/.test(path))
       scopedReads.push(path);
     if (isSessionStatusRequest(request, fixture.readOrigin)) return;
@@ -94,6 +100,7 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
           (path !== "/api/v1/catalog/context" &&
             path !== contextPath &&
             path !== foreignContext &&
+            !(search === "" && statusReads.has(path)) &&
             !resourceRead.test(path) &&
             !overviewRead.test(path))))
     )
