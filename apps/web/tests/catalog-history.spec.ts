@@ -1,6 +1,7 @@
-import type { Locator, Page, Request, Response } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import type { components } from "../src/api/generated";
 import { isSessionStatusRequest } from "./browser-session-status.fixture";
+import { captureCatalogResponse } from "./catalog-response.fixture";
 import { organizationContextPath } from "./organization-context.fixture";
 import {
   catalogApi,
@@ -20,7 +21,7 @@ type ProjectPage = components["schemas"]["CatalogProjectPageV1"];
 type MappingPage = components["schemas"]["CatalogMappingPageV1"];
 type RevisionPage = components["schemas"]["CatalogRevisionPageV1"];
 
-async function capture<T>(
+function capture<T>(
   page: Page,
   path: string,
   action: () => Promise<unknown>,
@@ -28,162 +29,7 @@ async function capture<T>(
 ): Promise<T> {
   const origin = process.env.BRAID_CATALOG_BASE_URL;
   if (!origin) throw new Error("Expected explicit packaged catalog origin");
-  const expected = new URL(path, origin);
-  const requests = new Set<Request>();
-  const pendingRequests = new Set<Request>();
-  const responses = new Set<Request>();
-  const failedRequests = new Map<Request, string | undefined>();
-  const pending = new Set<Promise<void>>();
-  const values: { usable: boolean; value?: T }[] = [];
-  const diagnostic: string[] = [];
-  // Retain only method, path and status, never cursors, bodies, headers or tokens.
-  const note = (request: Request, state: string) => {
-    const url = new URL(request.url());
-    if (url.origin !== expected.origin || !url.pathname.startsWith("/api/"))
-      return;
-    const label = `${request.method()} ${url.pathname} ${state}`;
-    if (!diagnostic.includes(label) && diagnostic.length < 24)
-      diagnostic.push(label);
-  };
-  const stop = Symbol("catalog capture stopped");
-  let stopReads!: () => void;
-  const stopped = new Promise<typeof stop>((resolve) => {
-    stopReads = () => resolve(stop);
-  });
-  type Outcome = { ok: true; value: T } | { ok: false; error: unknown };
-  let finish!: (outcome: Outcome) => void;
-  const done = new Promise<Outcome>((resolve) => {
-    finish = resolve;
-  });
-  let closed = false;
-  let actionDone = false;
-  const close = () => {
-    if (closed) return;
-    closed = true;
-    page.off("request", observe);
-    page.off("response", observeResponse);
-    page.off("requestfailed", observeFailure);
-    stopReads();
-  };
-  const fail = (error: unknown) => {
-    if (closed) return;
-    close();
-    finish({ ok: false, error });
-  };
-  const complete = () => {
-    if (closed || !actionDone || pendingRequests.size || pending.size) return;
-    const first = values.find((value) => value.usable);
-    if (!first) return;
-    close();
-    finish({ ok: true, value: first.value as T });
-  };
-  const observe = (request: Request) => {
-    note(request, "sent");
-    const url = new URL(request.url());
-    let queryCount = 0;
-    url.searchParams.forEach(() => {
-      queryCount++;
-    });
-    if (
-      request.method() === "GET" &&
-      url.origin === expected.origin &&
-      url.pathname === expected.pathname &&
-      queryCount === Object.keys(query).length &&
-      Object.entries(query).every(
-        ([key, value]) =>
-          url.searchParams.getAll(key).length === 1 &&
-          url.searchParams.get(key) === value,
-      )
-    ) {
-      requests.add(request);
-      pendingRequests.add(request);
-    }
-  };
-  const observeFailure = (request: Request) => {
-    note(request, "did not complete");
-    if (!requests.has(request)) return;
-    const errorText = request.failure()?.errorText;
-    failedRequests.set(request, errorText);
-    if (errorText !== "net::ERR_ABORTED") {
-      fail(new Error("Expected successful actual catalog request"));
-    } else if (!responses.has(request)) {
-      pendingRequests.delete(request);
-      complete();
-    }
-  };
-  const read = async (
-    reply: Response,
-    value: { usable: boolean; value?: T },
-  ) => {
-    expect(reply.status()).toBe(200);
-    let body: Awaited<ReturnType<Response["body"]>>;
-    try {
-      const received = await Promise.race([reply.body(), stopped]);
-      if (received === stop) return;
-      body = received;
-    } catch {
-      if (failedRequests.get(reply.request()) === "net::ERR_ABORTED") return;
-      throw new Error("Expected usable actual catalog response body");
-    }
-    try {
-      value.value = JSON.parse(body.toString("utf8")) as T;
-    } catch {
-      throw new Error("Expected valid actual catalog response JSON");
-    }
-    value.usable = true;
-  };
-  const observeResponse = (reply: Response) => {
-    const request = reply.request();
-    note(request, String(reply.status()));
-    if (!requests.has(request)) return;
-    responses.add(request);
-    const value: { usable: boolean; value?: T } = { usable: false };
-    values.push(value);
-    const task = read(reply, value);
-    pending.add(task);
-    void task.then(
-      () => {
-        pending.delete(task);
-        pendingRequests.delete(request);
-        complete();
-      },
-      (error: unknown) => {
-        pending.delete(task);
-        fail(error);
-      },
-    );
-  };
-  page.on("request", observe);
-  page.on("response", observeResponse);
-  page.on("requestfailed", observeFailure);
-  // Use the catalog's existing expectation budget for the whole observation.
-  const timer = setTimeout(() => {
-    fail(
-      new Error(
-        `Expected usable actual catalog JSON from ${expected.pathname} within observation deadline; ` +
-          `${requests.size} matching requests, ${responses.size} responses. ` +
-          `Observed API traffic: ${diagnostic.join("; ") || "none"}`,
-      ),
-    );
-  }, 10_000);
-  let actionTask: Promise<void> = Promise.resolve();
-  try {
-    actionTask = Promise.race([action(), stopped]).then(() => {
-      if (closed) return;
-      actionDone = true;
-      complete();
-    }, fail);
-    const outcome = await done;
-    if (!outcome.ok) throw outcome.error;
-    return outcome.value;
-  } catch (error) {
-    fail(error);
-    throw error;
-  } finally {
-    close();
-    clearTimeout(timer);
-    await Promise.allSettled([...pending, actionTask]);
-  }
+  return captureCatalogResponse<T>(page, origin, path, action, query);
 }
 function nextPageQuery(
   cursor: string | null | undefined,
@@ -363,6 +209,12 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
     expect(second.mappings.map((m) => m.scope)).toEqual(
       fixture.mappings.uuidOrder.slice(10),
     );
+    const savedMapping = [...first.mappings, ...second.mappings].find(
+      (value) => value.scope.mappingId === mapping.mappingId,
+    );
+    if (!savedMapping) throw new Error("Missing primary mapping on both pages");
+    expect(savedMapping.scope).toEqual(mapping);
+    mappingName = savedMapping.name;
     expect(new URL(page.url()).searchParams.get("cursor")).toBe(
       first.nextCursor,
     );
@@ -424,21 +276,12 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
 
   await test.step("real revision pages are descending strings and retain the original concrete URL", async () => {
     const endpoint = catalogApi(mappingPath(mapping)) + "/revisions";
-    const [current, first] = await Promise.all([
-      capture<components["schemas"]["CatalogMappingV1"]>(
-        page,
-        catalogApi(mappingPath(mapping)),
-        async () => {},
-      ),
-      capture<RevisionPage>(
-        page,
-        endpoint,
-        () => page.goto(mappingPath(mapping)),
-        { limit: "10" },
-      ),
-    ]);
-    expect(current.scope).toEqual(mapping);
-    mappingName = current.name;
+    const first = await capture<RevisionPage>(
+      page,
+      endpoint,
+      () => page.goto(mappingPath(mapping)),
+      { limit: "10" },
+    );
     expect(first.revisions).toEqual(
       fixture.history.sequenceDescending.slice(0, 10),
     );
