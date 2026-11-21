@@ -8,7 +8,7 @@ import {
   revisionPath,
   synthetic,
   syntheticCatalog,
-  test,
+  controlledTest as test,
 } from "./catalog.fixture";
 
 test("controlled UI: real links, concrete revision routes, breadcrumbs and unknown routes", async ({
@@ -35,14 +35,11 @@ test("controlled UI: real links, concrete revision routes, breadcrumbs and unkno
     .getByRole("link", { name: "Revision 1", exact: true })
     .focus();
   await page.keyboard.press("Enter");
-  await expectRevision(page, synthetic.revision);
+  await expectRevision(page, synthetic.revision, synthetic.mapping.name);
   const breadcrumbs = page.getByRole("navigation", {
-    name: "Breadcrumb",
+    name: "Mapping location",
     exact: true,
   });
-  await expect(breadcrumbs.locator('[aria-current="page"]')).toContainText(
-    "Revision 1",
-  );
   await breadcrumbs
     .getByRole("link", { name: synthetic.mapping.name, exact: true })
     .click();
@@ -141,10 +138,10 @@ test("controlled UI: keyboard and mobile keep long Unicode metadata readable as 
     ),
   ).toBe(false);
   await page.goto(revisionPath(longRevision.scope));
-  await expectRevision(page, longRevision);
+  await expectRevision(page, longRevision, synthetic.mapping.name);
   await expect(
     page.getByRole("heading", {
-      name: "Current mapping metadata",
+      name: "Saved versions",
       exact: true,
     }),
   ).toBeVisible();
@@ -156,21 +153,13 @@ test("controlled UI: keyboard and mobile keep long Unicode metadata readable as 
   expect(await page.evaluate(() => "__braidInjected" in window)).toBe(false);
 });
 
-test("controlled UI: advisory write flags do not expose mutations in this read-only increment", async ({
+test("controlled UI: project write flags do not expose mutations without matching workspace features", async ({
   page,
 }) => {
   const actions = Object.fromEntries(
     Object.keys(synthetic.project.access.actions).map((key) => [key, true]),
   );
-  const features = Object.fromEntries(
-    Object.keys(synthetic.context.features).map((key) => [key, true]),
-  );
   await syntheticCatalog(page, {
-    "/api/v1/catalog/context": {
-      ...synthetic.context,
-      features,
-      organizationActions: { createProjects: true },
-    },
     [catalogApi(projectPath(synthetic.project.scope))]: {
       ...synthetic.project,
       access: { role: "administrator", actions },
@@ -205,13 +194,13 @@ test("controlled UI: viewing the already-current head refreshes the same concret
     },
   );
   await page.goto(revisionPath(synthetic.revision.scope));
-  await expectRevision(page, synthetic.revision);
+  await expectRevision(page, synthetic.revision, synthetic.mapping.name);
   const before = mappingReads;
   await page
-    .getByRole("button", { name: "View current head", exact: true })
+    .getByRole("button", { name: "View latest version", exact: true })
     .click();
   await expect.poll(() => mappingReads).toBeGreaterThan(before);
-  await expectRevision(page, synthetic.revision);
+  await expectRevision(page, synthetic.revision, synthetic.mapping.name);
   await expect(
     page.getByRole("button", { name: "Refresh catalog", exact: true }),
   ).toBeEnabled();

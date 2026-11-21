@@ -556,6 +556,7 @@ export const test = base.extend<{}, { catalogOwner: CatalogOwner }>({
   ],
 });
 export { expect };
+export { base as controlledTest };
 
 export const projectPath = (s: ProjectScope) =>
   `/catalog/organizations/${s.organizationId}/projects/${s.projectId}`;
@@ -574,31 +575,55 @@ export const metadataValue = (page: Page, label: string) =>
 export async function expectRevision(
   page: Page,
   value: Revision,
+  mappingName: string,
+  versionPage: 1 | 2 = 1,
 ): Promise<void> {
   await expect(page).toHaveURL(new RegExp(revisionPath(value.scope) + "$"));
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    `Revision ${value.sequence}`,
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(mappingName);
+  await expect(
+    page.getByRole("navigation", { name: "Mapping location", exact: true }),
+  ).toContainText(new RegExp(`Version ${value.sequence}$`));
+  const tab = page.getByRole("tab", { name: "Versions", exact: true });
+  if ((await tab.getAttribute("aria-selected")) !== "true") await tab.click();
+  const history = page.getByRole("region", { name: "Version history" });
+  const row = history.getByRole("row").filter({
+    has: page.locator(`a[href="${revisionPath(value.scope)}"]`),
+  });
+  if (versionPage === 2) {
+    // Reload the first page regardless of the workbench's prior selection.
+    const refresh = history.getByRole("button", {
+      name: "Refresh version history",
+    });
+    await refresh.click();
+    await history.getByRole("button", { name: "Next versions" }).click();
+  }
+  await expect(row.getByRole("cell").nth(0)).toHaveText(
+    `${value.sequence} · viewing`,
   );
+  await expect(row.getByRole("cell").nth(1)).toHaveText(
+    value.admission === "valid"
+      ? "File accepted"
+      : "Saved with validation issues",
+  );
+  await expect(row.getByRole("cell").nth(2)).toHaveText(value.originalFilename);
+  const committed = row.getByRole("cell").nth(3);
+  await committed.locator("summary").click();
+  await expect(committed.locator("code")).toHaveText(value.committedAtUtc);
+  await committed.locator("summary").click();
+  const technical = history.getByText("Technical details for this version", {
+    exact: true,
+  });
+  if ((await technical.locator("..").getAttribute("open")) === null)
+    await technical.click();
   for (const [label, text] of [
     ["Revision ID", value.scope.revisionId],
-    ["Sequence", value.sequence],
     ["Native digest", value.nativeDigest.value],
-    [
-      "Admission",
-      value.admission === "valid"
-        ? "File accepted"
-        : "Saved with validation issues",
-    ],
-    ["Original filename", value.originalFilename],
     ["Native bytes", String(value.nativeByteCount)],
     ["Backend", value.backendId],
     ["Logical document", value.logicalDocument],
     ["Creator", value.creatorPrincipalId],
   ])
-    await expect(metadataValue(page, label)).toContainText(text);
-  await expect(
-    metadataValue(page, "Committed").locator("time"),
-  ).toHaveAttribute("datetime", value.committedAtUtc);
+    await expect(metadataValue(page, label)).toHaveText(text);
 }
 
 // Deliberately synthetic DTOs. These qualify UI boundaries, never persistence or authority.
@@ -700,10 +725,6 @@ export async function syntheticCatalog(
       nextCursor: null,
     },
     [catalogApi(mappingPath(synthetic.mapping.scope))]: synthetic.mapping,
-    [catalogApi(mappingPath(synthetic.mapping.scope)) + "/revisions"]: {
-      revisions: [synthetic.revision],
-      nextCursor: null,
-    },
     [catalogApi(revisionPath(synthetic.revision.scope))]: synthetic.revision,
     ...overrides,
   };
@@ -711,6 +732,14 @@ export async function syntheticCatalog(
   const root = replies["/api/v1/catalog/context"] as typeof synthetic.context;
   const path = organizationContextPath(synthetic.org);
   if (!(path in overrides)) replies[path] = organizationContext(root);
+  const revisionsPath =
+    catalogApi(mappingPath(synthetic.mapping.scope)) + "/revisions";
+  const revisionPathname = catalogApi(revisionPath(synthetic.revision.scope));
+  if (!(revisionsPath in overrides))
+    replies[revisionsPath] = {
+      revisions: [replies[revisionPathname]],
+      nextCursor: null,
+    };
   await page.route("**/api/auth/session*", async (route: Route) => {
     const request = route.request(),
       url = new URL(request.url());

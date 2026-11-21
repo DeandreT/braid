@@ -203,6 +203,7 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
   const mapping = fixture.mappings.primary;
   const original = fixture.history.original;
   const projects = projectsPath(fixture.organizationId);
+  let mappingName: string;
   const forbiddenReads: string[] = [];
   const scopedReads: string[] = [];
   const contextPath = organizationContextPath(fixture.organizationId);
@@ -213,19 +214,27 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
   const resourceRead = new RegExp(
     `^/api/v1/organizations/${id}/projects(?:/${id}(?:/mappings(?:/${id}(?:/revisions(?:/${id})?)?)?)?)?$`,
   );
+  // The catalog overview also reads lifecycle, capability and check status.
+  // Admit only those exact endpoints on the fixture organization.
+  const overviewRead = new RegExp(
+    `^/api/v1/organizations/${fixture.organizationId}/projects/${id}/(?:creation-capabilities|lifecycle|automation|regression-suites/${id}|mappings/${id}/(?:lifecycle|automation))$`,
+  );
   page.context().on("request", (request) => {
-    const path = new URL(request.url()).pathname;
-    if (resourceRead.test(path)) scopedReads.push(path);
+    const { origin, pathname: path } = new URL(request.url());
+    if (/^\/api\/v1\/organizations\/[^/]+\/projects(?:\/|$)/.test(path))
+      scopedReads.push(path);
     if (isSessionStatusRequest(request, fixture.readOrigin)) return;
     if (
       request.method() !== "GET" ||
       (path.startsWith("/api/") &&
-        path !== "/api/v1/catalog/context" &&
-        path !== contextPath &&
-        path !== foreignContext &&
-        !resourceRead.test(path))
+        (origin !== fixture.readOrigin ||
+          (path !== "/api/v1/catalog/context" &&
+            path !== contextPath &&
+            path !== foreignContext &&
+            !resourceRead.test(path) &&
+            !overviewRead.test(path))))
     )
-      forbiddenReads.push(path);
+      forbiddenReads.push(`${request.method()} ${path}`);
   });
 
   await test.step("real viewer projects preserve UUID order, exact emitted cursor and Back/First navigation", async () => {
@@ -321,6 +330,7 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
       fixture.mappings.uuidOrder.slice(0, 10),
     );
     const list = page.getByRole("list", { name: "Mappings", exact: true });
+    await expect(list.getByRole("listitem")).toHaveCount(first.mappings.length);
     expect(await linkPaths(list)).toEqual(
       first.mappings.map((m) => mappingPath(m.scope)),
     );
@@ -397,12 +407,21 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
 
   await test.step("real revision pages are descending strings and retain the original concrete URL", async () => {
     const endpoint = catalogApi(mappingPath(mapping)) + "/revisions";
-    const first = await capture<RevisionPage>(
-      page,
-      endpoint,
-      () => page.goto(mappingPath(mapping)),
-      { limit: "10" },
-    );
+    const [current, first] = await Promise.all([
+      capture<components["schemas"]["CatalogMappingV1"]>(
+        page,
+        catalogApi(mappingPath(mapping)),
+        async () => {},
+      ),
+      capture<RevisionPage>(
+        page,
+        endpoint,
+        () => page.goto(mappingPath(mapping)),
+        { limit: "10" },
+      ),
+    ]);
+    expect(current.scope).toEqual(mapping);
+    mappingName = current.name;
     expect(first.revisions).toEqual(
       fixture.history.sequenceDescending.slice(0, 10),
     );
@@ -410,6 +429,9 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
       name: "Revision history",
       exact: true,
     });
+    await expect(list.getByRole("listitem")).toHaveCount(
+      first.revisions.length,
+    );
     expect(await linkPaths(list)).toEqual(
       first.revisions.map((r) => revisionPath(r.scope)),
     );
@@ -441,7 +463,7 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
           .click(),
     );
     expect(saved).toEqual(original);
-    await expectRevision(page, original);
+    await expectRevision(page, original, mappingName, 2);
   });
 
   await test.step("ordinary HTTP append advances fresh head while saved original revision remains immutable", async () => {
@@ -467,14 +489,14 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
         .getByRole("button", { name: "View current head", exact: true })
         .click();
       expect((await fresh).status()).toBe(200);
-      await expectRevision(overview, ack.appendedRevision);
+      await expectRevision(overview, ack.appendedRevision, mappingName);
       const saved = await capture<Revision>(
         page,
         catalogApi(revisionPath(original.scope)),
         () => page.reload(),
       );
       expect(saved).toEqual(original);
-      await expectRevision(page, original);
+      await expectRevision(page, original, mappingName, 2);
     } finally {
       await overview.close();
     }
@@ -512,7 +534,7 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
       () => page.getByRole("button", { name: "Retry", exact: true }).click(),
     );
     expect(apiRestarted).toEqual(original);
-    await expectRevision(page, original);
+    await expectRevision(page, original, mappingName, 2);
     await catalogOwner.control("restart-profile", "readerUnavailable");
     const unavailable = page.waitForResponse(
       (response) => new URL(response.url()).pathname === contextPath,
@@ -534,7 +556,7 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
       () => page.reload(),
     );
     expect(pgRestarted).toEqual(original);
-    await expectRevision(page, original);
+    await expectRevision(page, original, mappingName, 2);
   });
 
   await test.step("one-way owner-authored project and organization revocations clear prior content on the next actual read", async () => {
@@ -549,6 +571,7 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
       page.getByText(original.nativeDigest.value, { exact: false }),
     ).toHaveCount(0);
     await catalogOwner.control("revoke-org");
+    const beforeOrganizationDenial = scopedReads.length;
     const revokedAdmission = page.waitForResponse(
       (response) => new URL(response.url()).pathname === contextPath,
     );
@@ -562,8 +585,9 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
       page.getByRole("heading", { name: "Not found", exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("list", { name: "Revision history", exact: true }),
+      page.getByRole("region", { name: "Version history", exact: true }),
     ).toHaveCount(0);
+    expect(scopedReads.slice(beforeOrganizationDenial)).toEqual([]);
     expect(forbiddenReads).toEqual([]);
   });
 });
