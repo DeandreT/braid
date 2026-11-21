@@ -25,8 +25,13 @@ import { failureSite } from "./failure-site.mjs";
 import { hostFailureSummary } from "./safe-diagnostics.mjs";
 import { createOnFreeSubnet, isPoolOverlap } from "./test-subnets.mjs";
 import {
+  browserFixtureRolePairs as rolePairs,
+  matchesBrowserFixtureRoles,
+} from "./roles.mjs";
+import {
   browserFixtureMigrations,
   browserFixtureProtectedTables,
+  browserFixtureRowsQuery,
   matchesBrowserFixtureMigrationJournal,
   regressionReadProfile,
 } from "./schema.mjs";
@@ -465,49 +470,6 @@ export async function runBrowserFixture(definition) {
       eventClosed = false;
     const workerEvents = new Map(),
       secrets = new Map();
-    const rolePairs = [
-      ["braid_migrator", "MIGRATOR"],
-      ["braid_runtime", "RUNTIME"],
-      ["braid_ingest", "INGEST"],
-      ["braid_catalog_reader", "CATALOG"],
-      ["braid_catalog_editor", "METADATA"],
-      ["braid_project_creator", "CREATOR"],
-      ["braid_report_reader", "REPORT"],
-      ["braid_deriver", "DERIVATION"],
-      ["braid_maintenance", "MAINTENANCE"],
-      ["braid_identity_reader", "IDENTITY"],
-      ["braid_payload_permission_reader", "PAYLOAD_PERMISSION"],
-      ["braid_session_reader", "SESSION_READER"],
-      ["braid_session_writer", "SESSION_WRITER"],
-      ["braid_chat_reader", "CHAT_READER"],
-      ["braid_chat_writer", "CHAT_WRITER"],
-      ["braid_chat_approver", "CHAT_APPROVER"],
-      ["braid_chat_lifecycle", "CHAT_LIFECYCLE"],
-      ["braid_preview_reader", "PREVIEW_READER"],
-      ["braid_preview_writer", "PREVIEW_WRITER"],
-      ["braid_case_reader", "CASE_READER"],
-      ["braid_case_writer", "CASE_WRITER"],
-      ["braid_run_reader", "RUN_READER"],
-      ["braid_run_writer", "RUN_WRITER"],
-      ["braid_comparison_settler", "COMPARISON"],
-      ["braid_build_reader", "BUILD_READER"],
-      ["braid_build_writer", "BUILD_WRITER"],
-      ["braid_build_run_reader", "BUILD_RUN_READER"],
-      ["braid_build_run_writer", "BUILD_RUN_WRITER"],
-      ["braid_build_dispatcher", "BUILD_DISPATCHER"],
-      ["braid_build_metadata_reader", "BUILD_METADATA"],
-      ["braid_qualification_reader", "QUALIFICATION_READER"],
-      ["braid_qualification_writer", "QUALIFICATION_WRITER"],
-      ["braid_release_reader", "RELEASE_READER"],
-      ["braid_release_writer", "RELEASE_WRITER"],
-      ["braid_invocation_grant_writer", "INVOCATION_GRANT_WRITER"],
-      ["braid_invocation_writer", "INVOCATION_WRITER"],
-      ["braid_api_audit_writer", "API_AUDIT_WRITER"],
-      ["braid_trigger_worker", "TRIGGER_WORKER"],
-      ["braid_administration", "ADMINISTRATION"],
-      ["braid_draft_reader", "DRAFT_READER"],
-      ["braid_draft_writer", "DRAFT_WRITER"],
-    ];
     const roleEnvironment = { ...process.env };
     for (const key of Object.keys(roleEnvironment))
       if (
@@ -834,22 +796,7 @@ export async function runBrowserFixture(definition) {
           ]
         : []),
     ];
-    const rows = () =>
-      jsonSql(
-        "SELECT json_build_object(" +
-          tables
-            .map((table) =>
-              table === "build_publications"
-                ? "'build_publications',(SELECT coalesce(jsonb_agg((to_jsonb(r)-'artifact_body')||jsonb_build_object('artifact_body_sha256',encode(sha256(r.artifact_body),'hex'),'artifact_body_bytes',octet_length(r.artifact_body)) ORDER BY r.organization_id,r.build_id),'[]'::jsonb) FROM braid.build_publications r)"
-                : "'" +
-                  table +
-                  "',(SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text),'[]'::jsonb) FROM braid." +
-                  table +
-                  " r)",
-            )
-            .join(",") +
-          ")",
-      );
+    const rows = () => jsonSql(browserFixtureRowsQuery(tables));
     const journal = () =>
       jsonSql(
         "SELECT coalesce(json_agg(json_build_object('version',version,'checksum',checksum,'appliedAt',applied_at) ORDER BY version),'[]'::json) FROM braid.schema_migrations",
@@ -2193,25 +2140,10 @@ export async function runBrowserFixture(definition) {
         ) === "0",
       );
       const roles = jsonSql(
-        "SELECT json_agg(json_build_object('name',rolname,'login',rolcanlogin,'super',rolsuper,'createDb',rolcreatedb,'createRole',rolcreaterole,'inherit',rolinherit,'replication',rolreplication,'bypass',rolbypassrls) ORDER BY rolname) FROM pg_roles WHERE rolname LIKE 'braid_%'",
+        "SELECT json_agg(json_build_object('name',rolname,'login',rolcanlogin,'super',rolsuper,'createDb',rolcreatedb,'createRole',rolcreaterole,'inherit',rolinherit,'replication',rolreplication,'bypass',rolbypassrls,'hasPassword',rolpassword IS NOT NULL) ORDER BY rolname) FROM pg_authid WHERE rolname LIKE 'braid_%'",
         true,
       );
-      check(
-        equivalent(
-          roles.map((role) => role.name),
-          rolePairs.map((pair) => pair[0]).sort(),
-        ) &&
-          roles.every(
-            (role) =>
-              role.login &&
-              !role.super &&
-              !role.createDb &&
-              !role.createRole &&
-              !role.inherit &&
-              !role.replication &&
-              !role.bypass,
-          ),
-      );
+      check(matchesBrowserFixtureRoles(roles));
       check(
         sql(
           "SELECT bool_and(auth_method='scram-sha-256') FROM pg_hba_file_rules WHERE type IN ('host','hostssl','hostnossl')",

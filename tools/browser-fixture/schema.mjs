@@ -89,6 +89,30 @@ export function matchesBrowserFixtureMigrationJournal(rows, sourceHashes) {
   );
 }
 
+export function browserFixtureRowsQuery(tables) {
+  if (
+    tables.length === 0 ||
+    new Set(tables).size !== tables.length ||
+    tables.some((name) => !/^[a-z][a-z0-9_]*$/.test(name))
+  )
+    throw new Error("Invalid fixture table inventory");
+
+  // PostgreSQL caps function calls at 100 arguments. Aggregate one entry per
+  // table without dropping any of the protected tables or changing row order.
+  const entries = tables.map((table, index) => {
+    const rows =
+      table === "build_publications"
+        ? "(SELECT coalesce(jsonb_agg((to_jsonb(r)-'artifact_body')||jsonb_build_object('artifact_body_sha256',encode(sha256(r.artifact_body),'hex'),'artifact_body_bytes',octet_length(r.artifact_body)) ORDER BY r.organization_id,r.build_id),'[]'::jsonb) FROM braid.build_publications r)"
+        : `(SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text),'[]'::jsonb) FROM braid.${table} r)`;
+    return `(${index},'${table}',${rows})`;
+  });
+  return (
+    "SELECT json_object_agg(entry.name, entry.contents ORDER BY entry.ordinal) FROM (VALUES " +
+    entries.join(",") +
+    ") AS entry(ordinal,name,contents)"
+  );
+}
+
 export const browserFixtureProtectedTables = Object.freeze([
   "audit_log_events",
   "ai_usage_turns",
