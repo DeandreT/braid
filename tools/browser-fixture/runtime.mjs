@@ -29,6 +29,7 @@ import {
   matchesBrowserFixtureRoles,
 } from "./roles.mjs";
 import {
+  browserFixtureContextFeatures,
   browserFixtureMigrations,
   browserFixtureProtectedTables,
   browserFixtureRowsQuery,
@@ -1124,21 +1125,8 @@ export async function runBrowserFixture(definition) {
           "productFailure",
         );
         host.token = reply.body.requestToken;
-        const expectedFeatures = {
-          readCatalog: true,
-          createProjects: host.writer || host.creationOnly,
-          createMappings: host.writer || host.uploadOnly,
-          editMetadata: host.metadataEdits,
-          uploadRevisions: host.writer || host.uploadOnly,
-          readReports: host.reportMode !== null,
-          chat: false,
-          preview: false,
-          manageMembership: false,
-          deriveReports:
-            host.reportMode !== null && host.reportMode !== "readOnlyNoWorker",
-        };
         check(
-          equivalent(reply.body.features, expectedFeatures),
+          equivalent(reply.body.features, browserFixtureContextFeatures(host)),
           "productFailure",
         );
       }

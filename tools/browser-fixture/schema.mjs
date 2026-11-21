@@ -113,6 +113,24 @@ export function browserFixtureRowsQuery(tables) {
   );
 }
 
+export function browserFixtureContextFeatures(host) {
+  return {
+    readCatalog: true,
+    createProjects: host.writer || host.creationOnly,
+    createMappings: host.writer || host.uploadOnly,
+    editMetadata: host.metadataEdits,
+    uploadRevisions: host.writer || host.uploadOnly,
+    readReports: host.reportMode !== null,
+    chat: false,
+    preview: false,
+    manageMembership: false,
+    deriveReports:
+      host.reportMode !== null && host.reportMode !== "readOnlyNoWorker",
+    edit: false,
+    xmlPreview: false,
+  };
+}
+
 export const browserFixtureProtectedTables = Object.freeze([
   "audit_log_events",
   "ai_usage_turns",

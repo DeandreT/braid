@@ -9,6 +9,7 @@ import {
   matchesBrowserFixtureRoles,
 } from "./roles.mjs";
 import {
+  browserFixtureContextFeatures,
   browserFixtureMigrations,
   browserFixtureProtectedTables,
   browserFixtureRowsQuery,
@@ -85,6 +86,46 @@ test("the complete fixture snapshot keeps one ordered entry per table without a 
   assert.match(query, /'artifact_body_sha256'/);
   for (const invalid of [[], ["organizations", "organizations"], ["a'"]])
     assert.throws(() => browserFixtureRowsQuery(invalid));
+});
+
+test("catalog fixture feature expectations include default false fields and omit disabled optional capabilities", () => {
+  const contract = JSON.parse(
+    readFileSync(new URL("../../contracts/braid-v1.json", import.meta.url)),
+  ).components.schemas.CatalogFeaturesV1;
+  const host = {
+    writer: false,
+    creationOnly: false,
+    uploadOnly: false,
+    metadataEdits: false,
+    reportMode: null,
+  };
+  const viewer = browserFixtureContextFeatures(host);
+  const wireKeys = [
+    ...contract.required,
+    ...Object.keys(contract.properties).filter(
+      (key) =>
+        !contract.required.includes(key) &&
+        contract.properties[key].default === false,
+    ),
+  ].sort();
+  assert.deepEqual(Object.keys(viewer).sort(), wireKeys);
+  assert.deepEqual(
+    Object.keys(viewer).filter((key) => viewer[key]),
+    ["readCatalog"],
+  );
+  for (const profile of [
+    { writer: true },
+    { creationOnly: true },
+    { uploadOnly: true },
+    { metadataEdits: true },
+    { reportMode: "full" },
+  ]) {
+    const features = browserFixtureContextFeatures({ ...host, ...profile });
+    assert.equal(features.edit, false);
+    assert.equal(features.xmlPreview, false);
+    assert.equal("csvPreview" in features, false);
+    assert.equal("nativePreviewProfiles" in features, false);
+  }
 });
 
 test("production entry assets do not depend on an admitted base element", () => {
