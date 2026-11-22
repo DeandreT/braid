@@ -283,7 +283,7 @@ try {
         seen.set(id, gen);
       } else {
         assert.ok(
-          ["F", "R", "E", "C", "B", "A", "P", "O", "M", "L", "X"].includes(
+          ["F", "R", "E", "C", "B", "A", "P", "I", "O", "M", "L", "X"].includes(
             stage,
           ),
         );

@@ -1,3 +1,4 @@
+import { until } from "./catalog-test-deadline.mjs";
 // Controlled catalog UI workflow. The published product serves all HTML, JS,
 // CSS and response policies. Only the existing controlled-test API replies
 // are synthetic. This is not the live DB/worker suite or a clean verdict.
@@ -183,7 +184,11 @@ try {
       runId,
       generation: original,
     });
-    const current = await lifecycle();
+    const current = await until(
+      lifecycle,
+      (row) => row[4] > prior[4],
+      "original ordinary lifecycle update",
+    );
     console.log(
       "BRAID_VIS_TEST ordinaryUpdates=" +
         (current[4] - prior[4]) +

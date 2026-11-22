@@ -63,7 +63,7 @@
  #include "content/browser/renderer_host/navigation_request.h"
  #include "content/browser/renderer_host/render_frame_host_impl.h"
  #include "content/public/browser/render_process_host.h"
-@@ -108,11 +113,19 @@
+@@ -108,11 +113,20 @@
    std::array<uint8_t,32> key{};
    std::vector<std::string> records;
    std::set<std::string> live;
@@ -79,11 +79,12 @@
 +  std::set<std::pair<std::string,std::string>> admitted_keys;
 +  int opened_loaders=0;
 +  std::string next_receiver_fault;
++  base::OnceClosure held_challenge;
 +
    std::vector<std::string> resource_log;
    bool resource_lost=false;
    bool nav_enabled=false,nav_lost=false;
-@@ -147,17 +160,76 @@
+@@ -147,17 +161,76 @@
    if(!slot||!slot->run||!slot->run->nav_enabled)return {};
    // Bound to this factory's original document, never looked up by current frame at job arrival.
    auto token=frame.GetDocumentTokenIgnoringSafetyRestrictions().ToString();
@@ -95,7 +96,7 @@
 +    if(!network_id.empty() && network_id.size()<=64){
 +      auto [it, fresh]=r->receiver_credits.emplace(std::make_pair(generation,network_id),BraidInventory::ReceiverCredit{id});
 +      if(!fresh){it->second.invalid=true;r->Fail("duplicate-receiver-key");}
-+      else r->resource_log.push_back("C:"+base::NumberToString(id)+":"+generation);
++      else {r->resource_log.push_back("C:"+base::NumberToString(id)+":"+generation);if(r->admitted_keys.contains({generation,network_id}))r->resource_log.push_back("I:"+base::NumberToString(id)+":"+generation);}
 +    }
      r->resource_log.push_back("R:"+base::NumberToString(id)+":"+generation);
 -    return base::BindOnce([](std::shared_ptr<BraidInventory> run,std::string original,int credit,bool ok){
@@ -114,7 +115,7 @@
 +  OriginalFetchReceiver(RenderFrameHostImpl& f,mojo::PendingReceiver<blink::mojom::BraidReceiver> pipe,std::shared_ptr<BraidInventory> r):DocumentService(f,std::move(pipe)),r_(std::move(r)),gen_(f.GetDocumentToken().ToString()){}
 +  ~OriginalFetchReceiver() override {if(!returned_)Refuse("receiver-disconnected");}
 +  void Open(const std::string& gen,const std::string& loader,const std::string& key,OpenCallback reply) override {
-+    if(key.empty()||key.size()>64||bad_||!nonce_.empty()||gen!=gen_||loader.size()!=32||!r_->snapshot.empty()||r_->loader_nonces.size()>=2048||!r_->loader_nonces.insert(loader).second||!r_->admitted_keys.emplace(gen_,key).second){Refuse("wrong-receiver-open");std::move(reply).Run("missing");return;}nonce_=loader;admitted_=key;auto fault=std::exchange(r_->next_receiver_fault,{});drop_reply_=fault=="lost-reply";std::move(reply).Run(drop_reply_?std::string():fault);
++    if(key.empty()||key.size()>64||bad_||!nonce_.empty()||gen!=gen_||loader.size()!=32||!r_->snapshot.empty()||r_->loader_nonces.size()>=2048||!r_->loader_nonces.insert(loader).second||!r_->admitted_keys.emplace(gen_,key).second){Refuse("wrong-receiver-open");std::move(reply).Run("missing");return;}nonce_=loader;admitted_=key;auto fault=std::exchange(r_->next_receiver_fault,{});drop_reply_=fault=="lost-reply";hold_=fault=="hold-challenge";auto it=r_->receiver_credits.find({gen_,key});if(it!=r_->receiver_credits.end())Log("I",it->second.id);std::move(reply).Run(drop_reply_?std::string():fault);
 +  }
 +  void Enter(const std::string& key) override {
 +    auto it=r_->receiver_credits.find({gen_,key});if(key!=admitted_||bad_||nonce_.empty()||!key_.empty()||it==r_->receiver_credits.end()||it->second.entered||it->second.invalid||!r_->live.contains(gen_)){Refuse("receiver-entry-mismatch");return;}key_=key;it->second.entered=true;
@@ -131,17 +132,17 @@
 +    const std::string& presented=loader;
 +    if(!r_->snapshot.empty()||!r_->live.contains(gen_)){Refuse("late-receiver-return");std::move(ack).Run("");return;}
 +    if(presented!=nonce_||!c.body||!c.forwarded||c.invalid||c.returned||!challenge_.empty()||!r_->outstanding_receivers.contains(c.id)){Refuse("wrong-receiver-return");std::move(ack).Run("");return;}
-+    challenge_=base::UnguessableToken::Create().ToString();Log("P",c.id);if(drop_reply_){ResetAndDeleteThis();return;}std::move(ack).Run(challenge_);
++    challenge_=base::UnguessableToken::Create().ToString();Log("P",c.id);if(drop_reply_){ResetAndDeleteThis();return;}if(hold_){r_->held_challenge=base::BindOnce(std::move(ack),challenge_);return;}std::move(ack).Run(challenge_);
 +  }
-+  void Confirm(const std::string& gen,const std::string& key,const std::string& loader,const std::string& challenge) override {
-+    if(bad_||key_.empty()||key!=key_||gen!=gen_||loader!=nonce_||challenge_.empty()||challenge!=challenge_||!r_->snapshot.empty()||!r_->live.contains(gen_)){Refuse("invalid-renderer-confirm");return;}
-+    auto& c=r_->receiver_credits.at({gen_,key_});if(c.returned||c.invalid||!r_->outstanding_receivers.erase(c.id)){Refuse("duplicate-renderer-confirm");return;}
-+    returned_=c.returned=true;challenge_.clear();Log("A",c.id);
++  void Confirm(const std::string& gen,const std::string& key,const std::string& loader,const std::string& challenge,ConfirmCallback reply) override {
++    if(bad_||key_.empty()||key!=key_||gen!=gen_||loader!=nonce_||challenge_.empty()||challenge!=challenge_||!r_->snapshot.empty()||!r_->live.contains(gen_)){Refuse("invalid-renderer-confirm");std::move(reply).Run(false);return;}
++    auto& c=r_->receiver_credits.at({gen_,key_});if(c.returned||c.invalid||!r_->outstanding_receivers.erase(c.id)){Refuse("duplicate-renderer-confirm");std::move(reply).Run(false);return;}
++    returned_=c.returned=true;challenge_.clear();Log("A",c.id);std::move(reply).Run(true);
 +  }
 + private:
 +  void Log(const char* stage,int id){r_->resource_log.push_back(std::string(stage)+":"+base::NumberToString(id)+":"+gen_);}
 +  void Refuse(const char* why){if(bad_)return;bad_=true;r_->Fail(why);if(!key_.empty()){auto& c=r_->receiver_credits.at({gen_,key_});c.invalid=true;Log(std::string_view(why)=="late-receiver-return"?"L":std::string_view(why)=="receiver-disconnected"?"M":"X",c.id);}}
-+  std::shared_ptr<BraidInventory> r_;std::string gen_,nonce_,key_,admitted_;std::string challenge_;bool bad_=false,returned_=false,drop_reply_=false;
++  std::shared_ptr<BraidInventory> r_;std::string gen_,nonce_,key_,admitted_;std::string challenge_;bool bad_=false,returned_=false,drop_reply_=false,hold_=false;
 +};
 +void BindBraidReceiver(RenderFrameHost* host,mojo::PendingReceiver<blink::mojom::BraidReceiver> pipe){
 +  auto* f=static_cast<RenderFrameHostImpl*>(host);auto* slot=static_cast<BraidSlot*>(f->GetBrowserContext()->GetUserData(&kBraidSlot));
@@ -159,11 +160,11 @@
 +  // does not simulate a tab becoming hidden and grants no settlement credit.
 +  view->GetAssociatedPageBroadcast()->SetPageLifecycleState(std::move(state),nullptr,base::DoNothing());return Response::Success();
 +}
-+Response BrowserHandler::ArmBraidReceiverFault(const std::string& id,const std::string& mode){if(!braid_||braid_->run!=id||!braid_->nav_enabled||!braid_->snapshot.empty()||!braid_->next_receiver_fault.empty()||(mode!="missing"&&mode!="wrong"&&mode!="lost-reply"))return Response::ServerError("invalid refusal control");braid_->next_receiver_fault=mode;return Response::Success();}
++Response BrowserHandler::ArmBraidReceiverFault(const std::string& id,const std::string& mode){if(!braid_||braid_->run!=id||!braid_->nav_enabled||!braid_->snapshot.empty()||!braid_->next_receiver_fault.empty()||(mode!="missing"&&mode!="wrong"&&mode!="lost-reply"&&mode!="hold-challenge"))return Response::ServerError("invalid refusal control");braid_->next_receiver_fault=mode;return Response::Success();}
  void BraidBeginNavigation(NavigationRequest& request) {
    auto* frame=request.frame_tree_node()->current_frame_host();auto* ctx=frame->GetBrowserContext();
    auto* slot=static_cast<BraidSlot*>(ctx->GetUserData(&kBraidSlot));if(!slot||!slot->run||!slot->run->nav_enabled)return;
-@@ -172,7 +244,7 @@
+@@ -172,7 +245,7 @@
    r.nav_log.push_back("C:"+base::NumberToString(lease->id)+":"+request.GetDocumentToken().ToString());lease->committed=true;
  }
  Response BrowserHandler::EnableBraidNavigations(const std::string& id){if(!braid_||braid_->run!=id||braid_->nav_enabled||!braid_->records.empty())return Response::ServerError("late navigation enrollment");braid_->nav_enabled=true;return Response::Success();}
@@ -172,7 +173,7 @@
  void BraidDocumentTransition(RenderFrameHostImpl& frame,const blink::DocumentToken& token,bool birth) {
    DCHECK_CURRENTLY_ON(BrowserThread::UI);
    auto* ctx=frame.GetBrowserContext();
-@@ -184,7 +256,7 @@
+@@ -184,7 +257,7 @@
    auto& r=*slot->run;
    if(r.records.size()>=512){r.Fail("inventory-limit");return;}
    std::string id=token.ToString();
@@ -181,7 +182,7 @@
    else if(!r.live.erase(id))r.Fail("unknown-disposal");
    auto* parent=frame.GetParent();
    // The parent may itself be speculative; its frame-tree node is not a document token.
-@@ -218,6 +290,7 @@
+@@ -218,11 +291,13 @@
         crypto::keypair::PublicKey::FromEd25519PublicKey(r.key),base::as_byte_span(message),signature))r.Fail("invalid-checkpoint-proof");
    }
    if(!r.pending_resources.empty())r.Fail("pending-browser-resource");
@@ -189,6 +190,12 @@
    if(!r.outstanding_receivers.empty())r.Fail("original-resource-receiver-unacknowledged");
    if(!r.pending_nav.empty())r.Fail("pending-navigation");
    if(r.live.empty() || r.context_gone)r.Fail("no-live-original");
+   *ticket=r.snapshot=base::UnguessableToken::Create().ToString();
+   *disposition=r.failure.empty()?"renderer-producer-coverage-unproven":r.failure;
++  if(r.held_challenge)std::move(r.held_challenge).Run();
+   return Response::Success();
+ }
+ Response BrowserHandler::VerifyBraidDisposal(const std::string& run,int revision,const std::string& ticket,const std::string& digest,const std::string& checkpoint,bool* disposed,std::string* disposition,int* current,std::string* transitions){
 --- a/content/browser/devtools/protocol/browser_handler.h
 +++ b/content/browser/devtools/protocol/browser_handler.h
 @@ -49,6 +49,8 @@
@@ -273,7 +280,7 @@
 +  Enter(string network_id);
 +  Body(string network_id);
 +  Returned(string network_id, string loader) => (string challenge);
-+  Confirm(string generation, string network_id, string loader, string challenge);
++  Confirm(string generation, string network_id, string loader, string challenge) => (bool accepted);
 +};
 --- a/third_party/blink/renderer/core/dom/document.cc
 +++ b/third_party/blink/renderer/core/dom/document.cc
@@ -493,17 +500,20 @@
    }
    braid_reserved_frame_ = frame; braid_epoch_ = epoch;
    pending_epoch_.Set(epoch); pending_frame_.Set(frame_id);
-@@ -254,7 +254,8 @@
+@@ -254,7 +254,11 @@
            scheduler::TaskAttributionTracker::From(context->GetIsolate())) {
      fixture_publication_baseline_ = tracker->ArmFixturePublicationVeto();
    }
 -  delegate.fixture_async=std::make_shared<FixtureAsyncWork>();
-+  auto* window=DynamicTo<LocalDOMWindow>(context);fixture_ingress_=window?window->BeginFixtureLifecycleIngress():nullptr;
++  auto* window=DynamicTo<LocalDOMWindow>(context);// Reserved negative-control epoch: install an incumbent native ingress, then
++  // exercise the real duplicate-owner rejection inside BeginFixtureLifecycleIngress.
++  if(window&&braid_epoch_=="00000000000000000000000000000000")window->BeginFixtureLifecycleIngress();
++  fixture_ingress_=window?window->BeginFixtureLifecycleIngress():nullptr;
 +  if(!fixture_ingress_){braid_refused_=true;return;}
    braid_creating_=true; BindBraidDocumentCheck(delegate);
    load_producer_=std::nullopt;
    auto load=braid_scope_->Root();
-@@ -266,6 +267,8 @@
+@@ -266,6 +270,8 @@
  void InspectorAuditsAgent::DidCreateBraidDocument(LocalFrame* frame, Document* doc) {
    if(frame != braid_reserved_frame_.Get() || braid_refused_) return;
    if(!braid_creating_ || !doc || doc->IsPrerendering() || !doc->IsHTMLDocument() || !braid_dispatch_->empty()) {braid_refused_=true;return;}
@@ -512,7 +522,7 @@
    braid_creating_=false; braid_document_=doc;
  }
  
-@@ -311,6 +314,14 @@
+@@ -311,6 +317,14 @@
    auto work=FixtureAsyncWork::From(doc->domWindow());if(!work)return protocol::Response::ServerError("missing enrollment");
    *generation=String::FromUtf8(doc->Token().ToString());*jobs=work->jobs;*returned=work->returns;*nested=work->nested;*pendingValues=work->PendingValues(doc->domWindow()->GetIsolate());*posted=work->posted;*received=work->received;*sends=work->sends;*finishes=work->finishes;*cancelled=work->cancelled;*scheduled=work->registered;*fired=work->fired;*removed=work->removed;*pending_callbacks=static_cast<int>(work->scheduled.size());*executing_callbacks=work->active_invocations;*reason=work->reason;*lost=work->lost;return protocol::Response::Success();
  }
@@ -527,7 +537,7 @@
  protocol::Response InspectorAuditsAgent::prepareBraidIngress(
      const String& epoch, const String& generation, bool* focus_outstanding,
      bool* visibility_outstanding, String* disposition) {
-@@ -328,6 +339,7 @@
+@@ -328,6 +342,7 @@
    // Neither a listener census nor return from one IPC establishes closed
    // ingress. Unload itself can dispatch visibilitychange during retirement.
    // Preserve normal dispatch and original work; refusal is generation-local.
@@ -587,7 +597,7 @@
 +  static void MaybeReport(const std::shared_ptr<OriginalReceiver>& r){
 +    if(!r->armed||!r->returned||r->sent)return;r->sent=true;
 +    if(r->mode=="missing"){if(r->child)r->owner->SetTerminal(r->child,"missing-open");r->pipe.reset();return;}
-+    r->pipe->Returned(r->returned_key,r->mode=="wrong"?String("invalid-loader"):r->nonce,blink::BindOnce([](std::shared_ptr<OriginalReceiver> owner,const String& challenge){auto* win=owner->window.Get();if(challenge.empty()||!win||win->IsContextDestroyed()||!win->document()||win->document()->Token().ToString()!=owner->owner->eligible_original){if(owner->child)owner->owner->SetTerminal(owner->child,"refused-open");return;}owner->pipe->Confirm(owner->original,owner->key,owner->nonce,challenge);if(owner->child)owner->owner->ReturnedChild(owner->child,"receiver-ack");},r));
++    r->pipe->Returned(r->returned_key,r->mode=="wrong"?String("invalid-loader"):r->nonce,blink::BindOnce([](std::shared_ptr<OriginalReceiver> owner,const String& challenge){auto* win=owner->window.Get();if(challenge.empty()||!win||win->IsContextDestroyed()||!win->document()||win->document()->Token().ToString()!=owner->owner->eligible_original){if(owner->child)owner->owner->SetTerminal(owner->child,"refused-open");return;}owner->pipe->Confirm(owner->original,owner->key,owner->nonce,challenge,blink::BindOnce([](std::shared_ptr<OriginalReceiver> r,bool accepted){if(!r->child)return;if(accepted)r->owner->ReturnedChild(r->child,"receiver-ack");else r->owner->SetTerminal(r->child,"refused-open");},owner));},r));
 +  }
 +};
 +void ThreadableLoader::EnrollFixtureFetch(const ResourceRequest& request){

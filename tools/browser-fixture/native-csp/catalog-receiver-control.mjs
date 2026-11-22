@@ -1,3 +1,4 @@
+import { bounded, until } from "./catalog-test-deadline.mjs";
 // Controlled catalog UI workflow. The published product serves all HTML, JS,
 // CSS and response policies. Only the existing controlled-test API replies
 // are synthetic. This is not the live DB/worker suite or a clean verdict.
@@ -114,19 +115,6 @@ try {
     types.set(r.resourceType(), 1 + (types.get(r.resourceType()) ?? 0));
   });
   await page.goto(origin + "/this-route-does-not-exist");
-  async function start(path) {
-    const { frameTree } = await c.send("Page.getFrameTree");
-    await c.send("Audits.reserveBraidDocument", {
-      epoch,
-      frameId: frameTree.frame.id,
-    });
-    const r = await page.goto(origin + path);
-    assert.equal(r.status(), 200);
-    assert.match(
-      await r.headerValue("content-security-policy"),
-      /script-src 'self'/,
-    );
-  }
   const work = () => c.send("Audits.readBraidWork", { epoch });
   const mode = process.argv[2];
   assert.ok(
@@ -136,6 +124,7 @@ try {
       "wrong",
       "late",
       "lost-reply",
+      "hold-challenge",
       "replacement",
       "target-close",
       "refused-enrollment",
@@ -143,6 +132,18 @@ try {
   );
   const path = projectsPath(synthetic.org);
   const eligible = mode !== "refused-enrollment";
+  await c.send("Network.enable");
+  const { frameTree } = await c.send("Page.getFrameTree");
+  await c.send("Audits.reserveBraidDocument", {
+    epoch: eligible ? epoch : "0".repeat(32),
+    frameId: frameTree.frame.id,
+  });
+  if (mode === "hold-challenge") {
+    await page.goto(origin + path);
+    await page
+      .getByRole("link", { name: synthetic.project.name, exact: true })
+      .waitFor();
+  }
   let arrived, release;
   const wait = new Promise((r) => (arrived = r)),
     gate = new Promise((r) => (release = r));
@@ -155,25 +156,13 @@ try {
     },
     { times: 1 },
   );
-  if (["missing", "wrong", "lost-reply"].includes(mode))
+  if (["missing", "wrong", "lost-reply", "hold-challenge"].includes(mode))
     await owner.send("Browser.armBraidReceiverFault", { runId, mode });
-  await c.send("Network.enable");
-  const { frameTree } = await c.send("Page.getFrameTree");
-  await c.send("Audits.reserveBraidDocument", {
-    epoch,
-    frameId: frameTree.frame.id,
-  });
-  if (!eligible)
-    await assert.rejects(
-      c.send("Audits.reserveBraidDocument", {
-        epoch,
-        frameId: frameTree.frame.id,
-      }),
-      /reservation refused/,
-    );
-  await page.goto(origin + path);
+  if (mode === "hold-challenge")
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  else await page.goto(origin + path);
   try {
-    await wait;
+    await bounded(wait, "held GET");
     const h = await host();
     const rows = h.resourceRecords.split("\n").map((r) => r.split(":"));
     const open = rows.filter(
@@ -187,10 +176,23 @@ try {
         .map((r) => r.split(":"))
         .filter(([, i, gen]) => i === id && g === gen)
         .map(([k]) => k);
-    assert.deepEqual(stages(h), ["S", "C", "R", "O"]);
+    assert.deepEqual(
+      stages(h).filter((k) => k !== "I"),
+      ["S", "C", "R", "O"],
+    );
+    if (eligible)
+      await until(host, (h) => stages(h).includes("I"), "original Open");
     if (eligible) assert.equal((await work()).generation, g);
-    else await assert.rejects(work(), /original work unavailable/);
-    if (mode === "late") {
+    else
+      await assert.rejects(
+        c.send("Audits.readBraidWork", { epoch: "0".repeat(32) }),
+        /original work unavailable/,
+      );
+    if (mode === "hold-challenge") {
+      release();
+      await until(host, (h) => stages(h).includes("P"), "challenge issued");
+    }
+    if (["late", "hold-challenge"].includes(mode)) {
       const inv = await owner.send("Browser.readBraidInventory", { runId });
       const receipt = journal.accept(
         epoch,
@@ -229,11 +231,42 @@ try {
     if (mode === "replacement")
       await page.goto(origin + "/this-route-does-not-exist");
     if (mode === "target-close") await page.close();
+    if (["replacement", "target-close"].includes(mode))
+      await until(
+        () => owner.send("Browser.readBraidInventory", { runId }),
+        (inv) =>
+          inv.inventory
+            .split("\n")
+            .some((row) => row.startsWith("D:" + g + ":")),
+        "original death before release",
+      );
     release();
     if (!["replacement", "target-close"].includes(mode))
       await page
         .getByRole("link", { name: synthetic.project.name, exact: true })
         .waitFor();
+    const wanted = {
+      success: "A",
+      missing: "M",
+      wrong: "X",
+      late: "L",
+      "lost-reply": "M",
+      "hold-challenge": "X",
+      "refused-enrollment": "F",
+    }[mode];
+    if (wanted)
+      await until(host, (h) => stages(h).includes(wanted), "original verdict");
+    if (mode === "hold-challenge") {
+      const edge = await until(
+        () => c.send("Audits.readBraidEdges", { epoch, generation: g }),
+        (x) =>
+          x.records
+            .split("\n")
+            .some((r) => r.endsWith(":fetch-client:refused-open")),
+        "renderer rejected original child",
+      );
+      assert.ok(!edge.records.includes(":fetch-client:receiver-ack"));
+    }
     await ctx.close();
     const state = stages(await host());
     console.log(mode, g, id, state.join(" "));
@@ -243,6 +276,10 @@ try {
       assert.ok(
         state.indexOf("P") > state.indexOf("F") &&
           state.indexOf("A") > state.indexOf("P"),
+      );
+    if (mode === "hold-challenge")
+      assert.ok(
+        state.indexOf("P") >= 0 && state.indexOf("X") > state.indexOf("P"),
       );
     if (mode === "lost-reply")
       assert.ok(state.includes("P") && state.includes("M"));

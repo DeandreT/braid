@@ -1,3 +1,4 @@
+import { until } from "./catalog-test-deadline.mjs";
 // Controlled catalog UI workflow. The published product serves all HTML, JS,
 // CSS and response policies. Only the existing controlled-test API replies
 // are synthetic. This is not the live DB/worker suite or a clean verdict.
@@ -194,7 +195,10 @@ try {
         rows(h)
           .filter((x) => x[1] === id)
           .map((x) => x[0]);
-      assert.deepEqual(stages(h), ["S", "C", "R", "O"]);
+      assert.deepEqual(
+        stages(h).filter((k) => k !== "I"),
+        ["S", "C", "R", "O"],
+      );
       assert.ok(h.resourcePending > 0);
 
       release();
@@ -203,7 +207,9 @@ try {
       await result.finished();
       await project.waitFor();
       await successor.send("Audits.readBraidWork", { epoch: epoch2 });
-      const sequence = stages(await host());
+      const sequence = stages(
+        await until(host, (h) => stages(h).includes("A"), "receiver confirmed"),
+      );
       assert.deepEqual(
         sequence.filter((k) => ["F", "P", "A"].includes(k)),
         ["F", "P", "A"],
