@@ -1,0 +1,205 @@
+--- a/third_party/blink/public/devtools_protocol/domains/Audits.pdl
++++ b/third_party/blink/public/devtools_protocol/domains/Audits.pdl
+@@ -914,6 +914,13 @@
+       string generation
+       string dispatch
+ 
++  experimental command reserveBraidDocument
++    parameters
++      string epoch
++      string frameId
++    returns
++      string reservation
++
+   experimental command armBraidWorker
+     parameters
+       string epoch
+--- a/third_party/blink/renderer/core/probe/core_probes.pidl
++++ b/third_party/blink/renderer/core/probe/core_probes.pidl
+@@ -181,6 +181,8 @@
+   void AnimationUpdated(Document*, Animation*);
+   void WindowOpen(ExecutionContext*, const KURL& url, const AtomicString& window_name, const WebWindowFeatures& window_features, bool user_gestrue);
+   void ConsoleMessageAdded(ExecutionContext*, ConsoleMessage*);
++  void WillCreateBraidDocument([Keep] LocalFrame*, ExecutionContext*, const KURL& url);
++  void DidCreateBraidDocument([Keep] LocalFrame*, Document*);
+   void InspectorIssueAdded(CoreProbeSink*, protocol::Audits::InspectorIssue*);
+   void WillRunJavaScriptDialog(LocalFrame* frame);
+   void DidRunJavaScriptDialog(LocalFrame* frame);
+--- a/third_party/blink/renderer/core/probe/core_probes.json5
++++ b/third_party/blink/renderer/core/probe/core_probes.json5
+@@ -67,7 +67,7 @@
+     },
+     InspectorAuditsAgent: {
+       probes: [
+-        "InspectorIssueAdded"
++        "InspectorIssueAdded", "WillCreateBraidDocument", "DidCreateBraidDocument"
+       ]
+     },
+     InspectorCSSAgent: {
+--- a/third_party/blink/renderer/core/frame/local_dom_window.cc
++++ b/third_party/blink/renderer/core/frame/local_dom_window.cc
+@@ -932,7 +932,9 @@
+   DCHECK(!document_);
+   DCHECK_EQ(init.GetWindow(), this);
+ 
++  probe::WillCreateBraidDocument(GetFrame(), this, init.Url());
+   document_ = init.CreateDocument();
++  probe::DidCreateBraidDocument(GetFrame(), document_.Get());
+   document_->Initialize();
+ 
+   document_->GetViewportData().UpdateViewportDescription();
+--- a/third_party/blink/renderer/core/inspector/inspector_audits_agent.h
++++ b/third_party/blink/renderer/core/inspector/inspector_audits_agent.h
+@@ -19,6 +19,7 @@
+ class InspectorIssue;
+ }  // namespace protocol::Audits
+ 
++class ExecutionContextCSPDelegate;
+ class InspectorIssueStorage;
+ class WebAutofillClient;
+ 
+@@ -48,6 +49,9 @@
+   protocol::Response readBraidDispatch(const String&, String*, String*) override;
+   protocol::Response armBraidWorker(const String&, String*) override;
+   protocol::Response readBraidWorker(const String&, bool, String*, String*, bool*) override;
++  protocol::Response reserveBraidDocument(const String&, const String&, String*) override;
++  void WillCreateBraidDocument(LocalFrame*, ExecutionContext*, const KURL&);
++  void DidCreateBraidDocument(LocalFrame*, Document*);
+   void Restore() override;
+ 
+   protocol::Response getEncodedResponse(
+@@ -63,6 +67,9 @@
+   void InnerEnable();
+   struct WorkerBridge;
+   std::shared_ptr<WorkerBridge> braid_worker_;
++  void BindBraidDocumentCheck(ExecutionContextCSPDelegate&);
++  WeakMember<LocalFrame> braid_reserved_frame_;
++  bool braid_creating_ = false;
+   WeakMember<Document> braid_document_;
+   String braid_epoch_;
+   std::shared_ptr<braid::probe::Scope> braid_scope_;
+@@ -72,6 +79,8 @@
+   const raw_ptr<InspectorIssueStorage, UnprotectedInRelease | DanglingUntriaged>
+       inspector_issue_storage_;
+   InspectorAgentState::Boolean enabled_;
++  InspectorAgentState::String pending_epoch_;
++  InspectorAgentState::String pending_frame_;
+   Member<InspectorNetworkAgent> network_agent_;
+   Member<InspectedFrames> inspected_frames_;
+   const raw_ptr<WebAutofillClient, UnprotectedInRelease | DanglingUntriaged>
+--- a/third_party/blink/renderer/core/inspector/inspector_audits_agent.cc
++++ b/third_party/blink/renderer/core/inspector/inspector_audits_agent.cc
+@@ -84,6 +84,7 @@
+ }  // namespace
+ 
+ void InspectorAuditsAgent::Trace(Visitor* visitor) const {
++  visitor->Trace(braid_reserved_frame_);
+   visitor->Trace(braid_document_);
+   visitor->Trace(network_agent_);
+   visitor->Trace(inspected_frames_);
+@@ -97,6 +98,8 @@
+     WebAutofillClient* web_autofill_client)
+     : inspector_issue_storage_(storage),
+       enabled_(&agent_state_, false),
++      pending_epoch_(&agent_state_, String()),
++      pending_frame_(&agent_state_, String()),
+       network_agent_(network_agent),
+       inspected_frames_(inspected_frames),
+       web_autofill_client_(web_autofill_client) {
+@@ -155,7 +158,7 @@
+ protocol::Response InspectorAuditsAgent::armBraidWorker(const String& epoch, String* generation) {
+   auto* frame = inspected_frames_->Root();
+   auto* doc = frame ? frame->GetDocument() : nullptr;
+-  if (braid_refused_ || braid_worker_ || braid_scope_ || epoch.length() != 32 || !doc || !frame->IsMainFrame() ||
++  if (braid_refused_ || !braid_epoch_.empty() || braid_worker_ || braid_scope_ || epoch.length() != 32 || !doc || !frame->IsMainFrame() ||
+       !doc->domWindow() || doc->Url().GetString() != "http://braid.invalid/worker-fixture") {
+     braid_refused_ = true; return protocol::Response::ServerError("worker fixture refused");
+   }
+@@ -200,7 +203,7 @@
+ protocol::Response InspectorAuditsAgent::armBraidDispatch(const String& epoch, String* generation) {
+   auto* frame = inspected_frames_->Root();
+   auto* doc = frame ? frame->GetDocument() : nullptr;
+-  if (braid_refused_ || braid_worker_ || braid_scope_ || epoch.length() != 32 || !doc || !frame->IsMainFrame() ||
++  if (braid_refused_ || !braid_epoch_.empty() || braid_worker_ || braid_scope_ || epoch.length() != 32 || !doc || !frame->IsMainFrame() ||
+       !doc->domWindow() || doc->Url().GetString() != "http://braid.invalid/fixture") {
+     braid_refused_ = true;
+     return protocol::Response::ServerError("fixture refused");
+@@ -213,6 +216,46 @@
+   }
+   braid_epoch_ = epoch;
+   braid_document_ = doc;
++  BindBraidDocumentCheck(delegate);
++  *generation = String::FromUtf8(doc->Token().ToString());
++  return protocol::Response::Success();
++}
++
++protocol::Response InspectorAuditsAgent::reserveBraidDocument(const String& epoch, const String& frame_id, String* reservation) {
++  auto* frame = IdentifiersFactory::FrameById(inspected_frames_, frame_id);
++  if (braid_refused_ || !braid_epoch_.empty() || !frame || !inspected_frames_->Root()->IsMainFrame() ||
++      epoch.length()!=32 || (frame != inspected_frames_->Root() && frame->Tree().Parent() != inspected_frames_->Root())) {
++    braid_refused_ = true; return protocol::Response::ServerError("reservation refused");
++  }
++  braid_reserved_frame_ = frame; braid_epoch_ = epoch;
++  pending_epoch_.Set(epoch); pending_frame_.Set(frame_id);
++  *reservation = String::FromUtf8(base::UnguessableToken::Create().ToString());
++  return enable();
++}
++
++void InspectorAuditsAgent::WillCreateBraidDocument(LocalFrame* frame, ExecutionContext* context, const KURL& url) {
++  if (frame != braid_reserved_frame_.Get()) {
++    if (pending_epoch_.Get().empty() || IdentifiersFactory::FrameId(frame) != pending_frame_.Get()) return;
++    braid_reserved_frame_=frame;
++  }
++  // Consume the one-shot reservation at document birth. Never serialize a
++  // completed observation, credit, document pointer, or reusable admission.
++  pending_epoch_.Clear(); pending_frame_.Clear();
++  if (braid_refused_ || braid_scope_ || !context || url.GetString() != "http://braid.invalid/fixture") {
++    braid_refused_=true; return;
++  }
++  auto& delegate=static_cast<ExecutionContextCSPDelegate&>(context->GetContentSecurityPolicyDelegate());
++  if (delegate.HasFixtureProbe()) {braid_refused_=true;return;}
++  braid_creating_=true; BindBraidDocumentCheck(delegate);
++}
++
++void InspectorAuditsAgent::DidCreateBraidDocument(LocalFrame* frame, Document* doc) {
++  if(frame != braid_reserved_frame_.Get() || braid_refused_) return;
++  if(!braid_creating_ || !doc || doc->IsPrerendering() || !doc->IsHTMLDocument() || !braid_dispatch_->empty()) {braid_refused_=true;return;}
++  braid_creating_=false; braid_document_=doc;
++}
++
++void InspectorAuditsAgent::BindBraidDocumentCheck(ExecutionContextCSPDelegate& delegate) {
+   braid_scope_ = std::make_shared<braid::probe::Scope>();
+   braid_dispatch_ = std::make_shared<String>();
+   delegate.SetFixtureProbe(braid_scope_, base::BindRepeating([](std::shared_ptr<String> id, const Event& e) {
+@@ -225,17 +268,18 @@
+     *id = String::FromUtf8(base::UnguessableToken::Create().ToString());
+     return true;
+   }, braid_dispatch_));
+-  *generation = String::FromUtf8(doc->Token().ToString());
+-  return protocol::Response::Success();
+ }
+ 
+ protocol::Response InspectorAuditsAgent::readBraidDispatch(const String& epoch, String* generation, String* dispatch) {
+-  auto* frame = inspected_frames_->Root();
++  auto* frame = braid_reserved_frame_ ? braid_reserved_frame_.Get() : inspected_frames_->Root();
+   auto* doc = braid_document_.Get();
+   if (braid_refused_ || !braid_scope_ || braid_epoch_ != epoch || !doc || !frame ||
+-      frame->GetDocument() != doc || !doc->domWindow() || doc->domWindow()->IsContextDestroyed()) {
++      !inspected_frames_->Contains(frame) || frame->GetDocument() != doc || !doc->domWindow() ||
++      doc->IsPrerendering() || doc->domWindow()->is_in_back_forward_cache() || doc->domWindow()->IsContextDestroyed()) {
+     braid_refused_ = true;
+-    return protocol::Response::ServerError("original fixture lost");
++    return protocol::Response::ServerError(braid_epoch_.empty() ? "original fixture lost: session not enrolled" :
++        !braid_scope_ ? "original fixture lost: no native birth" : !doc ? "original fixture lost: no original document" :
++        frame && frame->GetDocument()!=doc ? "original fixture lost: different document" : "original fixture lost: invalid state");
+   }
+   // Terminal read of this one enrolled delegate, not a fence on its producers.
+   braid_scope_->SealIngress();
+@@ -280,6 +324,7 @@
+ }
+ 
+ void InspectorAuditsAgent::Restore() {
++  if (!pending_epoch_.Get().empty()) braid_epoch_ = pending_epoch_.Get();
+   if (!enabled_.Get())
+     return;
+   InnerEnable();
