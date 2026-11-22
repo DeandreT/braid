@@ -1,0 +1,954 @@
+--- a/content/browser/devtools/devtools_instrumentation.cc
++++ b/content/browser/devtools/devtools_instrumentation.cc
+@@ -1882,6 +1882,7 @@
+     mojo::PendingRemote<network::mojom::TrustedURLLoaderHeaderClient>*
+         header_client) {
+   CHECK(!is_download || is_navigation);
++  base::AutoReset<const protocol::BraidResourceFactory*> original_factory(&protocol::CurrentBraidFactory(), !is_navigation && !is_download && braid_factory_ ? &braid_factory_ : nullptr);
+ 
+   network::mojom::URLLoaderFactoryOverride devtools_override;
+   // If caller passed some existing overrides, use those.
+@@ -1933,6 +1934,8 @@
+   return true;
+ }
+ 
++WillCreateURLLoaderFactoryParams::~WillCreateURLLoaderFactoryParams() = default;
++WillCreateURLLoaderFactoryParams::WillCreateURLLoaderFactoryParams(const WillCreateURLLoaderFactoryParams&) = default;
+ WillCreateURLLoaderFactoryParams::WillCreateURLLoaderFactoryParams(
+     DevToolsAgentHostImpl* agent_host,
+     const base::UnguessableToken& devtools_token,
+@@ -1945,10 +1948,11 @@
+ 
+ WillCreateURLLoaderFactoryParams WillCreateURLLoaderFactoryParams::ForFrame(
+     RenderFrameHostImpl* rfh) {
+-  return WillCreateURLLoaderFactoryParams(
++  auto result=WillCreateURLLoaderFactoryParams(
+       RenderFrameDevToolsAgentHost::GetFor(rfh), rfh->GetDevToolsFrameToken(),
+       rfh->GetProcess()->GetDeprecatedID(),
+       rfh->GetProcess()->GetStoragePartition());
++  result.braid_factory_=protocol::BraidFactoryForDocument(*rfh);return result;
+ }
+ 
+ WillCreateURLLoaderFactoryParams
+--- a/content/browser/devtools/devtools_instrumentation.h
++++ b/content/browser/devtools/devtools_instrumentation.h
+@@ -12,6 +12,7 @@
+ #include <optional>
+ #include <vector>
+ 
++#include "content/browser/devtools/protocol/braid_inventory.h"
+ #include "base/memory/stack_allocated.h"
+ #include "base/types/optional_ref.h"
+ #include "base/unguessable_token.h"
+@@ -155,6 +156,8 @@
+   STACK_ALLOCATED();
+ 
+  public:
++  ~WillCreateURLLoaderFactoryParams();
++  WillCreateURLLoaderFactoryParams(const WillCreateURLLoaderFactoryParams&);
+   static WillCreateURLLoaderFactoryParams ForFrame(RenderFrameHostImpl* rfh);
+ 
+   static WillCreateURLLoaderFactoryParams ForServiceWorker(
+@@ -191,6 +194,7 @@
+ 
+   const raw_ptr<DevToolsAgentHostImpl> agent_host_;
+   const base::UnguessableToken devtools_token_;
++  protocol::BraidResourceFactory braid_factory_;
+   const int process_id_;
+   const raw_ptr<StoragePartition> storage_partition_;
+ };
+--- a/content/browser/devtools/devtools_url_loader_interceptor.cc
++++ b/content/browser/devtools/devtools_url_loader_interceptor.cc
+@@ -63,6 +63,7 @@
+ #include "third_party/blink/public/platform/resource_request_blocked_reason.h"
+ #include "third_party/perfetto/include/perfetto/tracing/track.h"
+ 
++#include "content/browser/devtools/protocol/braid_inventory.h"
+ namespace content {
+ 
+ InterceptedRequestInfo::InterceptedRequestInfo() = default;
+@@ -413,6 +414,7 @@
+   bool CanHandleAuth() const;
+ 
+   InterceptionJob(
++      base::OnceCallback<void(bool)> braid_credit,
+       DevToolsURLLoaderInterceptor* interceptor,
+       int id_seq,
+       const base::UnguessableToken& frame_token,
+@@ -447,6 +449,7 @@
+ 
+  private:
+   ~InterceptionJob() override {
++    if(braid_credit_)std::move(braid_credit_).Run(false);
+     if (pending_auth_callback_) {
+       std::move(pending_auth_callback_)
+           .Run(/*use_fallback=*/true, std::nullopt);
+@@ -550,6 +553,7 @@
+                                 static_cast<uint64_t>(id_seq_));
+   }
+ 
++  base::OnceCallback<void(bool)> braid_credit_;
+   const int id_seq_;
+   const GlobalRequestID global_req_id_;
+   const base::UnguessableToken frame_token_;
+@@ -645,6 +649,7 @@
+ }
+ 
+ void DevToolsURLLoaderInterceptor::CreateJob(
++    base::OnceCallback<void(bool)> braid_credit,
+     const base::UnguessableToken& frame_token,
+     int32_t process_id,
+     bool is_download,
+@@ -660,7 +665,7 @@
+ 
+   // This class will manage its own life time to match the loader client.
+   new InterceptionJob(
+-      this, ++last_id, frame_token, process_id, renderer_request_id,
++      std::move(braid_credit), this, ++last_id, frame_token, process_id, renderer_request_id,
+       std::move(create_params), is_download, std::move(loader_receiver),
+       std::move(client), std::move(target_factory), std::move(cookie_manager));
+ }
+@@ -726,6 +731,7 @@
+   void OnTargetHeaderClientError();
+ 
+   const base::UnguessableToken frame_token_;
++  protocol::BraidResourceFactory braid_factory_;
+   const int32_t process_id_;
+   const bool is_download_;
+ 
+@@ -762,6 +768,7 @@
+       is_download_(is_download),
+       target_factory_(std::move(target_factory_remote)),
+       interceptor_(std::move(interceptor)) {
++  if(auto* factory=protocol::CurrentBraidFactory())braid_factory_=*factory;
+   target_factory_.set_disconnect_handler(
+       base::BindOnce(&DevToolsURLLoaderFactoryProxy::OnTargetFactoryError,
+                      base::Unretained(this)));
+@@ -803,8 +810,10 @@
+     const net::MutableNetworkTrafficAnnotationTag& traffic_annotation) {
+   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+ 
++  auto credit=braid_factory_?braid_factory_.Run():base::OnceCallback<void(bool)>();
+   DevToolsURLLoaderInterceptor* interceptor = interceptor_.get();
+   if (!interceptor) {
++    if(credit)std::move(credit).Run(false);
+     target_factory_->CreateLoaderAndStart(std::move(loader), request_id,
+                                           options, request, std::move(client),
+                                           traffic_annotation);
+@@ -824,7 +833,8 @@
+     // skip interception and forward directly to the target factory without
+     // touching the existing job (crbug.com/40276949).
+     if (process_id_ <= 0) {
+-      target_factory_->CreateLoaderAndStart(std::move(loader), request_id,
++      if(credit)std::move(credit).Run(false);
++    target_factory_->CreateLoaderAndStart(std::move(loader), request_id,
+                                             options, request, std::move(client),
+                                             traffic_annotation);
+       return;
+@@ -848,6 +858,7 @@
+   }
+ 
+   if (request.url.SchemeIs(url::kDataScheme)) {
++    if(credit)std::move(credit).Run(false);
+     target_factory_->CreateLoaderAndStart(std::move(loader), request_id,
+                                           options, request, std::move(client),
+                                           traffic_annotation);
+@@ -861,6 +872,7 @@
+   cookie_manager_->CloneInterface(
+       cookie_manager_clone.InitWithNewPipeAndPassReceiver());
+   interceptor->CreateJob(
++      std::move(credit),
+       frame_token_, process_id_, is_download_, request.devtools_request_id,
+       std::move(creation_params), std::move(loader), std::move(client),
+       std::move(factory_clone), std::move(cookie_manager_clone));
+@@ -1127,6 +1139,7 @@
+ }
+ 
+ InterceptionJob::InterceptionJob(
++    base::OnceCallback<void(bool)> braid_credit,
+     DevToolsURLLoaderInterceptor* interceptor,
+     int id_seq,
+     const base::UnguessableToken& frame_token,
+@@ -1138,7 +1151,7 @@
+     mojo::PendingRemote<network::mojom::URLLoaderClient> client,
+     mojo::PendingRemote<network::mojom::URLLoaderFactory> target_factory,
+     mojo::PendingRemote<network::mojom::CookieManager> cookie_manager)
+-    : id_seq_(id_seq),
++    : braid_credit_(std::move(braid_credit)),id_seq_(id_seq),
+       global_req_id_(ToOriginatingProcessIdUnsafe(process_id),
+                      create_loader_params->request_id),
+       frame_token_(frame_token),
+@@ -1929,6 +1942,7 @@
+ void InterceptionJob::CompleteRequest(
+     const network::URLLoaderCompletionStatus& status) {
+   client_->OnComplete(status);
++  if(braid_credit_)std::move(braid_credit_).Run(status.error_code==net::OK);
+   Shutdown();
+ }
+ 
+--- a/content/browser/devtools/devtools_url_loader_interceptor.h
++++ b/content/browser/devtools/devtools_url_loader_interceptor.h
+@@ -233,6 +233,7 @@
+   using InterceptionStages = base::EnumSet<InterceptionStage>;
+ 
+   void CreateJob(
++      base::OnceCallback<void(bool)> braid_credit,
+       const base::UnguessableToken& frame_token,
+       int32_t process_id,
+       bool is_download,
+--- a/content/browser/devtools/protocol/braid_inventory.h
++++ b/content/browser/devtools/protocol/braid_inventory.h
+@@ -3,10 +3,17 @@
+ // found in the LICENSE file.
+ #ifndef CONTENT_BROWSER_DEVTOOLS_PROTOCOL_BRAID_INVENTORY_H_
+ #define CONTENT_BROWSER_DEVTOOLS_PROTOCOL_BRAID_INVENTORY_H_
++#include "base/functional/callback.h"
+ #include "third_party/blink/public/common/tokens/tokens.h"
+ namespace content {
+ class RenderFrameHostImpl;
++class NavigationRequest;
+ namespace protocol {
++using BraidResourceFactory=base::RepeatingCallback<base::OnceCallback<void(bool)>()>;
++BraidResourceFactory BraidFactoryForDocument(RenderFrameHostImpl&);
++const BraidResourceFactory*& CurrentBraidFactory();
++void BraidBeginNavigation(NavigationRequest&);
++void BraidCommitNavigation(NavigationRequest&,bool);
+ void BraidDocumentTransition(RenderFrameHostImpl&, const blink::DocumentToken&, bool birth);
+ }
+ }
+--- a/content/browser/devtools/protocol/browser_handler.cc
++++ b/content/browser/devtools/protocol/browser_handler.cc
+@@ -6,6 +6,7 @@
+ 
+ #include <string.h>
+ #include "content/browser/devtools/protocol/braid_inventory.h"
++#include "content/browser/renderer_host/navigation_request.h"
+ #include "content/browser/renderer_host/render_frame_host_impl.h"
+ #include "content/public/browser/render_process_host.h"
+ #include "content/public/browser/browser_thread.h"
+@@ -107,6 +108,16 @@
+   std::array<uint8_t,32> key{};
+   std::vector<std::string> records;
+   std::set<std::string> live;
++  int issued_resources=0, forwarded_resources=0;
++  std::set<int> pending_resources;
++  // Separate from the interceptor's send-side credit. No authenticated
++  // original-receiver return path exists in this protocol version.
++  std::map<int, std::string> outstanding_receivers;
++  std::vector<std::string> resource_log;
++  bool resource_lost=false;
++  bool nav_enabled=false,nav_lost=false;
++  std::set<int64_t> pending_nav;
++  std::vector<std::string> nav_log;
+   int prepared_revision = 0;
+   bool context_gone = false, verified = false;
+   void Fail(std::string why) { if (failure.empty()) failure=std::move(why); }
+@@ -123,6 +134,45 @@
+   return value.size()==length && value.find_first_not_of("0123456789abcdef")==std::string::npos;
+ }
+ }
++namespace {
++const int kNavigationLease=0;
++struct NavigationLease : base::SupportsUserData::Data {
++  std::shared_ptr<BraidInventory> run;int64_t id=0;bool committed=false;
++  ~NavigationLease() override {if(!committed){run->nav_lost=true;run->pending_nav.erase(id);run->Fail("lost-navigation");}}
++};
++}
++const BraidResourceFactory*& CurrentBraidFactory(){static thread_local const BraidResourceFactory* factory=nullptr;return factory;}
++BraidResourceFactory BraidFactoryForDocument(RenderFrameHostImpl& frame){
++  auto* ctx=frame.GetBrowserContext();auto* slot=static_cast<BraidSlot*>(ctx->GetUserData(&kBraidSlot));
++  if(!slot||!slot->run||!slot->run->nav_enabled)return {};
++  // Bound to this factory's original document, never looked up by current frame at job arrival.
++  auto token=frame.GetDocumentTokenIgnoringSafetyRestrictions().ToString();
++  return base::BindRepeating([](std::shared_ptr<BraidInventory> r,std::string generation)->base::OnceCallback<void(bool)>{
++    if(r->issued_resources>=2048||!r->live.contains(generation)||!r->snapshot.empty()){r->resource_lost=true;r->Fail("unowned-resource");return {};}
++    int id=++r->issued_resources;r->pending_resources.insert(id);r->resource_log.push_back("S:"+base::NumberToString(id)+":"+generation);
++    r->outstanding_receivers.emplace(id,generation);
++    r->resource_log.push_back("R:"+base::NumberToString(id)+":"+generation);
++    return base::BindOnce([](std::shared_ptr<BraidInventory> run,std::string original,int credit,bool ok){
++      if(run->pending_resources.erase(credit)!=1||!ok||!run->live.contains(original)){run->resource_lost=true;run->Fail("resource-lost");return;}
++      ++run->forwarded_resources;run->resource_log.push_back("F:"+base::NumberToString(credit)+":"+original);
++    },r,generation,id);
++  },slot->run,token);
++}
++void BraidBeginNavigation(NavigationRequest& request) {
++  auto* frame=request.frame_tree_node()->current_frame_host();auto* ctx=frame->GetBrowserContext();
++  auto* slot=static_cast<BraidSlot*>(ctx->GetUserData(&kBraidSlot));if(!slot||!slot->run||!slot->run->nav_enabled)return;
++  auto& r=*slot->run;auto id=request.GetNavigationId();if(request.IsSameDocument()||r.nav_log.size()+r.pending_nav.size()>=510||request.GetUserData(&kNavigationLease)||!r.pending_nav.insert(id).second){r.nav_lost=true;r.Fail("unsupported-navigation");return;}
++  if(!r.snapshot.empty())r.Fail("late-navigation");
++  auto lease=std::make_unique<NavigationLease>();lease->run=slot->run;lease->id=id;
++  r.nav_log.push_back("S:"+base::NumberToString(id)+":"+frame->GetDocumentToken().ToString());request.SetUserData(&kNavigationLease,std::move(lease));
++}
++void BraidCommitNavigation(NavigationRequest& request,bool success){
++  auto* lease=static_cast<NavigationLease*>(request.GetUserData(&kNavigationLease));if(!lease)return;
++  auto& r=*lease->run;if(!success||request.IsSameDocument()||lease->committed||r.pending_nav.erase(lease->id)!=1){r.nav_lost=true;r.Fail("navigation-not-committed");return;}
++  r.nav_log.push_back("C:"+base::NumberToString(lease->id)+":"+request.GetDocumentToken().ToString());lease->committed=true;
++}
++Response BrowserHandler::EnableBraidNavigations(const std::string& id){if(!braid_||braid_->run!=id||braid_->nav_enabled||!braid_->records.empty())return Response::ServerError("late navigation enrollment");braid_->nav_enabled=true;return Response::Success();}
++Response BrowserHandler::ReadBraidNavigations(const std::string& id,std::string* records,int* pending,bool* lost,std::string* resource_records,int* resource_pending,bool* resource_lost){if(!braid_||braid_->run!=id||!braid_->nav_enabled)return Response::ServerError("unowned navigation");*records=base::JoinString(braid_->nav_log,"\n");*pending=static_cast<int>(braid_->pending_nav.size());*lost=braid_->nav_lost;*resource_records=base::JoinString(braid_->resource_log,"\n");*resource_pending=static_cast<int>(braid_->pending_resources.size());*resource_lost=braid_->resource_lost;return Response::Success();}
+ void BraidDocumentTransition(RenderFrameHostImpl& frame,const blink::DocumentToken& token,bool birth) {
+   DCHECK_CURRENTLY_ON(BrowserThread::UI);
+   auto* ctx=frame.GetBrowserContext();
+@@ -167,6 +217,9 @@
+     if(!base::HexStringToSpan(checkpoint.substr(67),signature) || !crypto::sign::Verify(crypto::sign::ED25519,
+        crypto::keypair::PublicKey::FromEd25519PublicKey(r.key),base::as_byte_span(message),signature))r.Fail("invalid-checkpoint-proof");
+   }
++  if(!r.pending_resources.empty())r.Fail("pending-browser-resource");
++  if(!r.outstanding_receivers.empty())r.Fail("original-resource-receiver-unacknowledged");
++  if(!r.pending_nav.empty())r.Fail("pending-navigation");
+   if(r.live.empty() || r.context_gone)r.Fail("no-live-original");
+   *ticket=r.snapshot=base::UnguessableToken::Create().ToString();
+   *disposition=r.failure.empty()?"renderer-producer-coverage-unproven":r.failure;
+--- a/content/browser/devtools/protocol/browser_handler.h
++++ b/content/browser/devtools/protocol/browser_handler.h
+@@ -49,6 +49,8 @@
+ 
+   Response Disable() override;
+ 
++  Response EnableBraidNavigations(const std::string&) override;
++  Response ReadBraidNavigations(const std::string&, std::string*, int*, bool*,std::string*,int*,bool*) override;
+   Response BeginBraidInventory(const std::string& browserContextId, const std::string& epoch, const std::string& publicKey, std::string* out_runId) override;
+   Response ReadBraidInventory(const std::string& runId, int* out_revision, std::string* out_inventory, std::string* out_digest) override;
+   Response PrepareBraidFence(const std::string& runId, int revision, const std::string& inventory, const std::string& digest, const std::string& checkpoint, std::string* out_snapshotToken, std::string* out_disposition) override;
+--- a/content/browser/devtools/protocol_config.json
++++ b/content/browser/devtools/protocol_config.json
+@@ -19,7 +19,7 @@
+             },
+             {
+                 "domain": "Browser",
+-                "include": ["getVersion", "getHistograms", "getHistogram", "getBrowserCommandLine", "grantPermissions", "setDownloadBehavior", "cancelDownload", "resetPermissions", "crash", "crashGpuProcess", "setPermission", "getGlobalPrivacyControl", "setGlobalPrivacyControl", "addMockCamera", "beginBraidInventory", "readBraidInventory", "prepareBraidFence", "verifyBraidDisposal"],
++                "include": ["getVersion", "getHistograms", "getHistogram", "getBrowserCommandLine", "grantPermissions", "setDownloadBehavior", "cancelDownload", "resetPermissions", "crash", "crashGpuProcess", "setPermission", "getGlobalPrivacyControl", "setGlobalPrivacyControl", "addMockCamera", "beginBraidInventory", "readBraidInventory", "enableBraidNavigations", "readBraidNavigations", "prepareBraidFence", "verifyBraidDisposal"],
+                 "async": ["grantPermissions", "resetPermissions", "setPermission"]
+             },
+             {
+--- a/content/browser/renderer_host/navigation_request.cc
++++ b/content/browser/renderer_host/navigation_request.cc
+@@ -3,6 +3,7 @@
+ // found in the LICENSE file.
+ 
+ #include "content/browser/renderer_host/navigation_request.h"
++#include "content/browser/devtools/protocol/braid_inventory.h"
+ 
+ #include <algorithm>
+ #include <memory>
+@@ -2466,6 +2467,7 @@
+ }
+ 
+ void NavigationRequest::BeginNavigation() {
++  protocol::BraidBeginNavigation(*this);
+   begin_navigation_time_ = base::TimeTicks::Now();
+   TRACE_EVENT("navigation", "NavigationRequest::BeginNavigation",
+               perfetto::Flow::FromPointer(this));
+@@ -9597,6 +9599,7 @@
+         blink::mojom::WebFeature::kPrefetchAndPrerenderActivationBeacon);
+   }
+ 
++  protocol::BraidCommitNavigation(*this, state_ == DID_COMMIT);
+   // DO NOT ADD CODE after this.
+   // UnblockPendingSubframeNavigationRequestsIfNeeded() resumes throttles, which
+   // may cause the destruction of this NavigationRequest.
+--- a/third_party/blink/public/devtools_protocol/domains/Audits.pdl
++++ b/third_party/blink/public/devtools_protocol/domains/Audits.pdl
+@@ -923,6 +923,37 @@
+ 
+   # Narrow load-producer scope with a conservative JS/port publication veto.
+   # Does not certify document, renderer or browser quiescence.
++  experimental command prepareBraidIngress
++    parameters
++      string epoch
++      string generation
++    returns
++      boolean focusOutstanding
++      boolean visibilityOutstanding
++      string disposition
++
++  experimental command readBraidWork
++    parameters
++      string epoch
++    returns
++      string generation
++      integer jobs
++      integer returned
++      integer nested
++      integer pendingValues
++      integer posted
++      integer received
++      integer sends
++      integer finishes
++      integer cancelled
++      integer scheduled
++      integer fired
++      integer removed
++      integer pendingCallbacks
++      integer executingCallbacks
++      integer refusalCode
++      boolean lost
++
+   experimental command readBraidBoundedLoad
+     parameters
+       string epoch
+--- a/third_party/blink/public/devtools_protocol/domains/Browser.pdl
++++ b/third_party/blink/public/devtools_protocol/domains/Browser.pdl
+@@ -353,6 +353,21 @@
+     returns
+       string runId
+ 
++  experimental command enableBraidNavigations
++    parameters
++      string runId
++
++  experimental command readBraidNavigations
++    parameters
++      string runId
++    returns
++      string records
++      integer pending
++      boolean lost
++      string resourceRecords
++      integer resourcePending
++      boolean resourceLost
++
+   experimental command readBraidInventory
+     parameters
+       string runId
+--- a/third_party/blink/renderer/core/dom/frame_request_callback_collection.cc
++++ b/third_party/blink/renderer/core/dom/frame_request_callback_collection.cc
+@@ -9,6 +9,7 @@
+ #include "third_party/blink/renderer/core/probe/core_probes.h"
+ #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
+ 
++#include "third_party/blink/renderer/core/frame/csp/fixture_async_work.h"
+ namespace blink {
+ 
+ FrameRequestCallbackCollection::FrameRequestCallbackCollection(
+@@ -21,6 +22,8 @@
+   FrameRequestCallbackCollection::CallbackId id =
+       (type == FrameCallbackType::kInternal) ? ++next_internal_callback_id_
+                                              : ++next_callback_id_;
++  callback->fixture_owner=FixtureAsyncWork::From(context_.Get());
++  if(callback->fixture_owner)callback->fixture_credit=callback->fixture_owner->Register();
+   callback->SetIsCancelled(false);
+   callback->SetId(id);
+   if (type == FrameCallbackType::kInternal) {
+@@ -50,6 +53,7 @@
+     if (callbacks[i]->Id() == id) {
+       callbacks[i]->async_task_context()->Cancel();
+       probe::BreakableLocation(context_, "cancelAnimationFrame");
++      if(callbacks[i]->fixture_credit)callbacks[i]->fixture_owner->Remove(std::exchange(callbacks[i]->fixture_credit,0),true);
+       callbacks.EraseAt(i);
+       DEVTOOLS_TIMELINE_TRACE_EVENT_INSTANT(
+           "CancelAnimationFrame", inspector_animation_frame_event::Data,
+@@ -64,6 +68,7 @@
+       DEVTOOLS_TIMELINE_TRACE_EVENT_INSTANT(
+           "CancelAnimationFrame", inspector_animation_frame_event::Data,
+           context_.Get(), id);
++      if(callback->fixture_credit)callback->fixture_owner->Remove(std::exchange(callback->fixture_credit,0),true);
+       callback->SetIsCancelled(true);
+       // will be removed at the end of ExecuteCallbacks()
+       return;
+@@ -117,11 +122,14 @@
+     probe::AsyncTask async_task(context_, callback->async_task_context());
+     probe::UserCallback probe(context_, "requestAnimationFrame", AtomicString(),
+                               true);
++    auto original=callback->fixture_owner;const int credit=std::exchange(callback->fixture_credit,0);
++    if(original && credit)original->Begin(credit);
+     if (callback->GetUseLegacyTimeBase()) {
+       callback->Invoke(high_res_now_ms_legacy);
+     } else {
+       callback->Invoke(high_res_now_ms);
+     }
++    if(original && credit)original->End(credit,true);
+   }
+ 
+   callbacks_to_invoke.clear();
+--- a/third_party/blink/renderer/core/dom/frame_request_callback_collection.h
++++ b/third_party/blink/renderer/core/dom/frame_request_callback_collection.h
+@@ -38,6 +38,10 @@
+ 
+   probe::AsyncTaskContext* async_task_context() { return &async_task_context_; }
+ 
++ protected:
++ public:
++  std::shared_ptr<struct FixtureAsyncWork> fixture_owner;
++  int fixture_credit=0;
+  protected:
+   FrameCallback() = default;
+ 
+--- a/third_party/blink/renderer/core/frame/csp/execution_context_csp_delegate.cc
++++ b/third_party/blink/renderer/core/frame/csp/execution_context_csp_delegate.cc
+@@ -32,7 +32,14 @@
+ #include "third_party/blink/renderer/platform/network/encoded_form_data.h"
+ #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
+ 
++#include "third_party/blink/renderer/core/frame/csp/fixture_async_work.h"
++
+ namespace blink {
++std::shared_ptr<FixtureAsyncWork> FixtureAsyncWork::From(ExecutionContext* ctx) {
++  if(!ctx || !ctx->IsWindow() || ctx->IsContextDestroyed())return {};
++  return static_cast<ExecutionContextCSPDelegate&>(ctx->GetContentSecurityPolicyDelegate()).fixture_async;
++}
++
+ 
+ ExecutionContextCSPDelegate::ExecutionContextCSPDelegate(
+     ExecutionContext& execution_context)
+--- a/third_party/blink/renderer/core/frame/csp/execution_context_csp_delegate.h
++++ b/third_party/blink/renderer/core/frame/csp/execution_context_csp_delegate.h
+@@ -26,6 +26,7 @@
+     fixture_probe_ = std::move(scope);
+     fixture_check_ = std::move(check);
+   }
++  std::shared_ptr<struct FixtureAsyncWork> fixture_async;
+   bool HasFixtureProbe() const { return !!fixture_probe_; }
+   void Trace(Visitor*) const override;
+ 
+--- /dev/null
++++ b/third_party/blink/renderer/core/frame/csp/fixture_async_work.h
+@@ -0,0 +1,66 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++#ifndef THIRD_PARTY_BLINK_RENDERER_CORE_FRAME_CSP_FIXTURE_ASYNC_WORK_H_
++#define THIRD_PARTY_BLINK_RENDERER_CORE_FRAME_CSP_FIXTURE_ASYNC_WORK_H_
++#include <memory>
++#include "third_party/blink/renderer/platform/wtf/hash_set.h"
++#include "third_party/blink/renderer/platform/wtf/vector.h"
++#include "v8/include/v8-promise.h"
++#include "v8/include/v8-persistent-handle.h"
++namespace blink {
++class ExecutionContext;
++// Main-sequence only. Exact transfer identities; weak promise handles do not
++// keep an application promise alive. Unknown/lost work never becomes success.
++struct FixtureAsyncWork {
++  static std::shared_ptr<FixtureAsyncWork> From(ExecutionContext*);
++  struct PromiseSlot {v8::Global<v8::Promise> handle; bool job=false, started=false, returned=false;};
++  Vector<PromiseSlot> promises;
++  // Keep acquisition order per destination promise; a running assimilation
++  // may publish a new job for that same promise before the old one returns.
++  struct Adoption {v8::Global<v8::Promise> target;bool running=false,done=false;};
++  Vector<Adoption> adoptions;
++  void Thenable(v8::Isolate* iso,v8::Local<v8::Promise> p,int phase){
++    if(phase==0){if(adoptions.size()>=4096){Lose(7);return;} adoptions.push_back(Adoption{v8::Global<v8::Promise>(iso,p)});adoptions.back().target.SetWeak();++jobs;if(!executing.empty())++nested;return;}
++    for(wtf_size_t i=0;i<adoptions.size();++i){auto& a=adoptions[i];if(a.done || a.target.IsEmpty() || a.target!=p)continue;
++      if(phase==1){if(a.running){Lose(7);return;}a.running=true;executing.push_back(8192u+i);}
++      else{if(!a.running||executing.empty()||executing.back()!=8192u+i){Lose(7);return;}executing.pop_back();a.done=true;a.target.Reset();++returns;}return;
++    }Lose(7);
++  }
++
++  HashSet<uint64_t> messages, resources;
++  Vector<wtf_size_t> executing;
++  int jobs=0,returns=0,nested=0,posted=0,received=0,sends=0,finishes=0,cancelled=0;
++  bool lost=false;int reason=0;void Lose(int r){lost=true;if(!reason)reason=r;}
++  void PromiseHook(v8::Isolate* iso,v8::PromiseHookType kind,v8::Local<v8::Promise> p,v8::Local<v8::Value> parent){
++    if(promises.size()>=4096){Lose(1);return;}
++    if(kind==v8::PromiseHookType::kInit){
++      if(promises.size()>=4096){lost=true;return;}
++      const bool job=parent->IsPromise();
++      promises.push_back(PromiseSlot{v8::Global<v8::Promise>(iso,p),job});promises.back().handle.SetWeak();
++      if(job){++jobs;if(!executing.empty())++nested;} return;
++    }
++    if(kind==v8::PromiseHookType::kResolve)return; // not a terminal transition
++    for(wtf_size_t i=promises.size();i>0;--i){auto& slot=promises[i-1];if(slot.handle.IsEmpty() || slot.handle!=p)continue;
++      if(!slot.job || slot.returned){Lose(2);return;}
++      if(kind==v8::PromiseHookType::kBefore){if(slot.started){lost=true;return;}slot.started=true;executing.push_back(i);}
++      else {if(executing.empty() || executing.back()!=i || !slot.started){lost=true;return;}executing.pop_back();slot.returned=true;++returns;}
++      return;
++    }
++    Lose(3);
++  }
++  int PendingValues(v8::Isolate* iso){v8::HandleScope handles(iso);int pending=0;for(auto& slot:promises){if(slot.handle.IsEmpty()){if(!slot.returned)Lose(4);continue;}if(slot.handle.Get(iso)->State()==v8::Promise::kPending)++pending;}return pending;}
++  int registered=0, fired=0, removed=0, active_invocations=0;
++  HashSet<int> scheduled;
++  int Register(){if(registered>=4096){Lose(9);return 0;}int id=++registered;scheduled.insert(id);return id;}
++  void Begin(int id){if(!scheduled.Contains(id)){Lose(9);return;}++active_invocations;}
++  void End(int id,bool once){if(active_invocations<=0){Lose(9);return;}--active_invocations;++fired;if(once)Remove(id,false);}
++  void Remove(int id,bool cancel){if(!scheduled.Contains(id)){Lose(9);return;}scheduled.erase(id);if(cancel)++removed;}
++  uint64_t Post(){if(posted>=4096){lost=true;return 0;}auto id=static_cast<uint64_t>(++posted);messages.insert(id);return id;}
++  void Receive(uint64_t id){if(!messages.Contains(id)){lost=true;return;}messages.erase(id);++received;}
++  void Send(uint64_t id,bool redirect){if(redirect){if(!resources.Contains(id))lost=true;return;}if(sends>=4096||!id || !resources.insert(id).is_new_entry){lost=true;return;}++sends;}
++  void Cancel(uint64_t id){if(!resources.Contains(id)){Lose(8);return;}resources.erase(id);++cancelled;}
++  void Finish(uint64_t id,bool ok){if(!ok||!resources.Contains(id)){Lose(ok?5:6);return;}resources.erase(id);++finishes;}
++};
++}  // namespace blink
++#endif
+--- a/third_party/blink/renderer/core/inspector/inspector_audits_agent.cc
++++ b/third_party/blink/renderer/core/inspector/inspector_audits_agent.cc
+@@ -18,6 +18,7 @@
+ #include "third_party/blink/renderer/core/events/security_policy_violation_event.h"
+ #include "third_party/blink/renderer/core/frame/csp/execution_context_csp_delegate.h"
+ #include "third_party/blink/renderer/core/frame/local_dom_window.h"
++#include "third_party/blink/renderer/core/event_type_names.h"
+ #include "third_party/blink/renderer/core/frame/local_frame.h"
+ #include "third_party/blink/renderer/core/html/html_anchor_element.h"
+ #include "third_party/blink/renderer/core/inspector/identifiers_factory.h"
+@@ -34,6 +35,8 @@
+ #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
+ #include "third_party/skia/include/core/SkImage.h"
+ #include "ui/gfx/geometry/size.h"
++
++#include "third_party/blink/renderer/core/frame/csp/fixture_async_work.h"
+ 
+ namespace blink {
+ 
+@@ -242,7 +245,7 @@
+   // Consume the one-shot reservation at document birth. Never serialize a
+   // completed observation, credit, document pointer, or reusable admission.
+   pending_epoch_.Clear(); pending_frame_.Clear();
+-  if (braid_refused_ || braid_scope_ || !context || url.GetString() != "http://braid.invalid/fixture") {
++  if (braid_refused_ || braid_scope_ || !context || (url.GetString() != "http://braid.invalid/fixture" && url.GetString() != "http://127.0.0.1:45921/catalog/organizations/not-a-uuid/projects" && url.GetString() != "http://127.0.0.1:45921/catalog/organizations/10000000-0000-4000-8000-000000000001/projects")) {
+     braid_refused_=true; return;
+   }
+   auto& delegate=static_cast<ExecutionContextCSPDelegate&>(context->GetContentSecurityPolicyDelegate());
+@@ -251,6 +254,7 @@
+           scheduler::TaskAttributionTracker::From(context->GetIsolate())) {
+     fixture_publication_baseline_ = tracker->ArmFixturePublicationVeto();
+   }
++  delegate.fixture_async=std::make_shared<FixtureAsyncWork>();
+   braid_creating_=true; BindBraidDocumentCheck(delegate);
+   load_producer_=std::nullopt;
+   auto load=braid_scope_->Root();
+@@ -301,6 +305,34 @@
+   braid_scope_->SealIngress();if(braid_scope_->Inspect()!=braid::probe::Scope::Status::ClosedLocalOnly){braid_refused_=true;return protocol::Response::ServerError("unsettled CSP work");}
+   *generation=String::FromUtf8(doc->Token().ToString());*producer=load_identity_;return protocol::Response::Success();
+ }
++protocol::Response InspectorAuditsAgent::readBraidWork(const String& epoch,String* generation, int* jobs, int* returned, int* nested, int* pendingValues, int* posted, int* received, int* sends, int* finishes, int* cancelled,int* scheduled,int* fired,int* removed,int* pending_callbacks,int* executing_callbacks, int* reason, bool* lost) {
++  auto* doc=braid_document_.Get();auto* frame=braid_reserved_frame_.Get();
++  if(!doc || !frame || epoch!=braid_epoch_ || braid_refused_ || !load_returned_ || frame->GetDocument()!=doc || !inspected_frames_->Contains(frame))return protocol::Response::ServerError("original work unavailable");
++  auto work=FixtureAsyncWork::From(doc->domWindow());if(!work)return protocol::Response::ServerError("missing enrollment");
++  *generation=String::FromUtf8(doc->Token().ToString());*jobs=work->jobs;*returned=work->returns;*nested=work->nested;*pendingValues=work->PendingValues(doc->domWindow()->GetIsolate());*posted=work->posted;*received=work->received;*sends=work->sends;*finishes=work->finishes;*cancelled=work->cancelled;*scheduled=work->registered;*fired=work->fired;*removed=work->removed;*pending_callbacks=static_cast<int>(work->scheduled.size());*executing_callbacks=work->active_invocations;*reason=work->reason;*lost=work->lost;return protocol::Response::Success();
++}
++protocol::Response InspectorAuditsAgent::prepareBraidIngress(
++    const String& epoch, const String& generation, bool* focus_outstanding,
++    bool* visibility_outstanding, String* disposition) {
++  auto* doc = braid_document_.Get();
++  auto* frame = braid_reserved_frame_.Get();
++  if (!doc || !frame || frame->GetDocument() != doc ||
++      !inspected_frames_->Contains(frame) || braid_epoch_ != epoch ||
++      String::FromUtf8(doc->Token().ToString()) != generation ||
++      !doc->domWindow() || doc->domWindow()->IsContextDestroyed())
++    return protocol::Response::ServerError("original ingress unavailable");
++  auto work = FixtureAsyncWork::From(doc->domWindow());
++  if (!work) return protocol::Response::ServerError("missing enrollment");
++  *focus_outstanding = doc->domWindow()->HasEventListeners(event_type_names::kFocus);
++  *visibility_outstanding = doc->HasEventListeners(event_type_names::kVisibilitychange);
++  // Neither a listener census nor return from one IPC establishes closed
++  // ingress. Unload itself can dispatch visibilitychange during retirement.
++  // Preserve normal dispatch and original work; refusal is generation-local.
++  work->Lose(10);
++  *disposition = (*focus_outstanding || *visibility_outstanding)
++                     ? "live-external-ingress" : "unproved-source-barrier";
++  return protocol::Response::Success();
++}
+ void InspectorAuditsAgent::BindBraidDocumentCheck(ExecutionContextCSPDelegate& delegate) {
+   braid_scope_ = std::make_shared<braid::probe::Scope>();
+   braid_dispatch_ = std::make_shared<String>();
+--- a/third_party/blink/renderer/core/inspector/inspector_audits_agent.h
++++ b/third_party/blink/renderer/core/inspector/inspector_audits_agent.h
+@@ -57,7 +57,9 @@
+                                           String*) override;
+   uint64_t fixture_publication_baseline_ = UINT64_MAX;
+   void LoadEventFired(LocalFrame*);
++  protocol::Response prepareBraidIngress(const String&, const String&, bool*, bool*, String*) override;
+   protocol::Response readBraidZero(const String&, String*, String*) override;
++  protocol::Response readBraidWork(const String& epoch,String* generation, int* jobs, int* returned, int* nested, int* pendingValues, int* posted, int* received, int* sends, int* finishes, int* cancelled,int* scheduled,int* fired,int* removed,int* pending_callbacks,int* executing_callbacks, int* reason, bool* lost) override;
+   void Restore() override;
+ 
+   protocol::Response getEncodedResponse(
+--- a/third_party/blink/renderer/core/loader/resource_load_observer_for_frame.cc
++++ b/third_party/blink/renderer/core/loader/resource_load_observer_for_frame.cc
+@@ -46,6 +46,8 @@
+ #include "third_party/blink/renderer/platform/loader/fetch/resource_response.h"
+ #include "third_party/blink/renderer/platform/scheduler/public/task_attribution_tracker.h"
+ 
++#include "third_party/blink/renderer/core/frame/csp/fixture_async_work.h"
++
+ namespace blink {
+ namespace {
+ 
+@@ -147,6 +149,7 @@
+     const Resource* resource) {
+   LocalFrame* frame = document_->GetFrame();
+   DCHECK(frame);
++  if(auto work=FixtureAsyncWork::From(document_->domWindow()))work->Send(request.InspectorId(),!redirect_response.IsNull());
+   if (redirect_response.IsNull()) {
+     // Progress doesn't care about redirects, only notify it when an
+     // initial request is sent.
+@@ -342,7 +345,9 @@
+   if (IdlenessDetector* idleness_detector = frame->GetIdlenessDetector()) {
+     idleness_detector->OnDidLoadResource();
+   }
++  auto work=FixtureAsyncWork::From(document_->domWindow());
+   document_->CheckCompleted();
++  if(work)work->Finish(identifier,true);
+ }
+ 
+ void ResourceLoadObserverForFrame::DidFailLoading(
+@@ -356,6 +361,7 @@
+   frame->Loader().Progress().CompleteProgress(identifier);
+   resource_metrics_by_identifier_.erase(identifier);
+ 
++  auto original_work=FixtureAsyncWork::From(document_->domWindow());
+   probe::DidFailLoading(GetProbe(), identifier, document_loader_, error,
+                         frame->GetDevToolsFrameToken());
+ 
+@@ -373,6 +379,7 @@
+     idleness_detector->OnDidLoadResource();
+   }
+   document_->CheckCompleted();
++  if(original_work){if(error.IsCancellation())original_work->Cancel(identifier);else original_work->Finish(identifier,false);}
+ }
+ 
+ void ResourceLoadObserverForFrame::DidChangeRenderBlockingBehavior(
+--- a/third_party/blink/renderer/core/messaging/message_port.cc
++++ b/third_party/blink/renderer/core/messaging/message_port.cc
+@@ -62,6 +62,8 @@
+ #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
+ #include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
+ 
++#include "third_party/blink/renderer/core/frame/csp/fixture_async_work.h"
++
+ namespace blink {
+ 
+ namespace {
+@@ -112,7 +114,7 @@
+       dispatch_event_task_runner_(
+           execution_context.GetTaskRunner(TaskType::kPostedMessage)),
+       post_message_task_container_(
+-          MakeGarbageCollected<PostMessageTaskContainer>()) {}
++          MakeGarbageCollected<PostMessageTaskContainer>()) { fixture_birth_=FixtureAsyncWork::From(&execution_context); }
+ 
+ void MessagePort::Dispose() {
+   DCHECK(!started_ || !IsEntangled());
+@@ -203,10 +205,16 @@
+           scheduler::TaskAttributionTracker::From(script_state->GetIsolate())) {
+     tracker->NoteFixturePublication(2);
+   }
+-  connector_->Accept(&mojo_message);
++  auto work=FixtureAsyncWork::From(GetExecutionContext());
++  if(work){auto* peer=initially_entangled_port_.Get();
++    if(!peer || peer->GetExecutionContext()!=GetExecutionContext() || fixture_birth_.lock()!=work || peer->fixture_birth_.lock()!=work || peer->fixture_incoming_.size()>=4096 || !transferables.message_ports.empty())work->lost=true;
++    else peer->fixture_incoming_.push_back(work->Post());
++  }
++  if(!connector_->Accept(&mojo_message) && work)work->lost=true;
+ }
+ 
+ MessagePortChannel MessagePort::Disentangle() {
++  if(!fixture_incoming_.empty())if(auto work=fixture_birth_.lock())work->lost=true;
+   DCHECK(!IsNeutered());
+   port_descriptor_.GiveDisentangledHandle(connector_->PassMessagePipe());
+   weak_cell_factory_for_dispatch_.Invalidate();
+@@ -431,6 +439,9 @@
+       return;
+   }
+ 
++  auto work=FixtureAsyncWork::From(context);uint64_t receipt=0;
++  if(work){if(fixture_birth_.lock()!=work || fixture_incoming_.empty())work->lost=true;
++    else {receipt=fixture_incoming_.front();fixture_incoming_.pop_front();}}
+   Event* evt = CreateMessageEvent(message);
+   std::optional<scheduler::TaskAttributionTracker::TaskScope>
+       task_attribution_scope;
+@@ -459,6 +470,7 @@
+   if (debugger)
+     debugger->ExternalAsyncTaskStarted(message.sender_stack_trace_id);
+   DispatchEvent(*evt);
++  if(work){if(evt->type()!=event_type_names::kMessage)work->lost=true;work->Receive(receipt); }
+   if (debugger)
+     debugger->ExternalAsyncTaskFinished(message.sender_stack_trace_id);
+ }
+--- a/third_party/blink/renderer/core/messaging/message_port.h
++++ b/third_party/blink/renderer/core/messaging/message_port.h
+@@ -28,6 +28,7 @@
+ #define THIRD_PARTY_BLINK_RENDERER_CORE_MESSAGING_MESSAGE_PORT_H_
+ 
+ #include <memory>
++#include "third_party/blink/renderer/platform/wtf/deque.h"
+ #include <vector>
+ 
+ #include "base/memory/scoped_refptr.h"
+@@ -51,6 +52,7 @@
+ 
+ namespace blink {
+ 
++struct FixtureAsyncWork;
+ struct BlinkTransferableMessage;
+ class ExceptionState;
+ class ExecutionContext;
+@@ -190,6 +192,8 @@
+ 
+   std::unique_ptr<mojo::Connector> connector_;
+ 
++  std::weak_ptr<FixtureAsyncWork> fixture_birth_;
++  Deque<uint64_t> fixture_incoming_;
+   bool started_ = false;
+   bool closed_;
+ 
+--- a/third_party/blink/renderer/core/scheduler/dom_timer.cc
++++ b/third_party/blink/renderer/core/scheduler/dom_timer.cc
+@@ -51,6 +51,7 @@
+ #include "third_party/blink/renderer/platform/scheduler/public/scheduling_policy.h"
+ #include "third_party/blink/renderer/platform/weborigin/reporting_disposition.h"
+ 
++#include "third_party/blink/renderer/core/frame/csp/fixture_async_work.h"
+ namespace blink {
+ 
+ namespace {
+@@ -370,6 +371,7 @@
+     timeout = std::max(timeout, base::Milliseconds(1));
+   }
+ 
++  fixture_owner_=FixtureAsyncWork::From(&context);if(fixture_owner_)fixture_credit_=fixture_owner_->Register();
+   if (single_shot) {
+     StartOneShot(timeout, FROM_HERE, precise);
+   } else {
+@@ -415,6 +417,7 @@
+   }
+ 
+   TimerBase::Stop();
++  if(fixture_credit_ && fixture_owner_)fixture_owner_->Remove(std::exchange(fixture_credit_,0),true);
+ }
+ 
+ void DOMTimer::ContextDestroyed() {
+@@ -445,6 +448,8 @@
+ 
+   const int max_timer_nesting_level = kSpecCompliantMaxTimerNestingLevel;
+ 
++  auto original=fixture_owner_;int credit=fixture_credit_;
++  if(original && credit)original->Begin(credit);
+   // Simple case for non-one-shot timers.
+   if (IsActive()) {
+     DCHECK(is_interval);
+@@ -471,6 +476,7 @@
+ 
+     // No access to member variables after this point, it can delete the timer.
+     action_->Execute(context);
++    if(original && credit)original->End(credit,false);
+ 
+     DOMTimerCoordinator::From(*context).SetTimerNestingLevel(0);
+ 
+@@ -479,6 +485,7 @@
+ 
+   // Unregister the timer from ExecutionContext before executing the action
+   // for one-shot timers.
++  fixture_credit_=0;
+   ScheduledAction* action = action_.Release();
+   DOMTimerCoordinator::From(*context).RemoveTimeoutByID(timeout_id_);
+ 
+@@ -486,6 +493,7 @@
+ 
+   // Eagerly clear out |action|'s resources.
+   action->Dispose();
++  if(original && credit)original->End(credit,true);
+ 
+   // ExecutionContext might be already gone when we executed action->execute().
+   ExecutionContext* execution_context = GetExecutionContext();
+--- a/third_party/blink/renderer/core/scheduler/dom_timer.h
++++ b/third_party/blink/renderer/core/scheduler/dom_timer.h
+@@ -111,6 +111,8 @@
+   // |kMaxTimerNestingLevel|, the clamping doesn't affect behavior.
+   void IncrementNestingLevel();
+ 
++  std::shared_ptr<struct FixtureAsyncWork> fixture_owner_;
++  int fixture_credit_=0;
+   int timeout_id_;
+   int nesting_level_;
+   probe::AsyncTaskContext async_task_context_;
+--- a/third_party/blink/renderer/core/scheduler/task_attribution_tracker_impl.cc
++++ b/third_party/blink/renderer/core/scheduler/task_attribution_tracker_impl.cc
+@@ -26,6 +26,9 @@
+ #include "third_party/blink/renderer/platform/wtf/casting.h"
+ #include "third_party/perfetto/include/perfetto/tracing/traced_value.h"
+ #include "v8/include/v8-promise.h"
++#include "v8/include/v8-braid-job.h"
++
++#include "third_party/blink/renderer/core/frame/csp/fixture_async_work.h"
+ 
+ namespace blink {
+ class ScriptToolContext;
+@@ -111,9 +114,24 @@
+ // Deliberately coarser than reaction identity: a single publication anywhere
+ // on the original isolate disqualifies a promise-free load. Never decrement
+ // on resolve/after: a handler may have transferred work to a host subsystem.
++void ThenablePublication(v8::Isolate* iso,v8::Local<v8::Promise> promise) {
++  v8::Local<v8::Context> creation;
++  if(!promise->GetCreationContext(iso).ToLocal(&creation))return;
++  auto* state=ScriptState::MaybeFrom(iso,creation);
++  if(state && state->ContextIsValid())if(auto work=FixtureAsyncWork::From(ExecutionContext::From(state)))work->Thenable(iso,promise,0);
++}
+ void FixtureHook(v8::PromiseHookType type,
+-                 v8::Local<v8::Promise>,
+-                 v8::Local<v8::Value>) {
++                 v8::Local<v8::Promise> promise,
++                 v8::Local<v8::Value> parent) {
++  auto* iso=v8::Isolate::GetCurrent();v8::Local<v8::Context> creation;
++  if(promise->GetCreationContext(iso).ToLocal(&creation)) {
++    auto* state=ScriptState::MaybeFrom(iso,creation);
++    if(state && state->ContextIsValid())if(auto work=FixtureAsyncWork::From(ExecutionContext::From(state))){
++      if((type==v8::PromiseHookType::kBefore || type==v8::PromiseHookType::kAfter) && v8::BraidCurrentJobIsThenable(iso))
++        work->Thenable(iso,promise,type==v8::PromiseHookType::kBefore ? 1 : 2);
++      else work->PromiseHook(iso,type,promise,parent);
++    }
++  }
+   auto* tracker = TaskAttributionTracker::From(v8::Isolate::GetCurrent());
+   if (tracker) {
+     tracker->NoteFixturePublication(1);
+@@ -130,6 +148,7 @@
+ uint64_t TaskAttributionTrackerImpl::ArmFixturePublicationVeto() {
+   if (!fixture_observing_) {
+     fixture_observing_ = true;
++    v8::SetBraidThenablePublication(ThenablePublication);
+     isolate_->SetPromiseHook(tracing_promise_hook_ ? CombinedHook
+                                                    : FixtureHook);
+   }
+--- /dev/null
++++ b/v8/include/v8-braid-job.h
+@@ -0,0 +1,12 @@
++// Copyright 2026 the V8 project authors. All rights reserved.
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++#ifndef V8_INCLUDE_V8_BRAID_JOB_H_
++#define V8_INCLUDE_V8_BRAID_JOB_H_
++#include "v8-promise.h"
++namespace v8 {
++using BraidThenablePublication = void (*)(Isolate*, Local<Promise>);
++V8_EXPORT void SetBraidThenablePublication(BraidThenablePublication callback);
++V8_EXPORT bool BraidCurrentJobIsThenable(Isolate* isolate);
++}
++#endif
+--- a/v8/src/objects/objects.cc
++++ b/v8/src/objects/objects.cc
+@@ -71,6 +71,9 @@
+ #include "src/objects/map.h"
+ #include "src/objects/megadom-handler-inl.h"
+ #include "src/objects/microtask-inl.h"
++#include "include/v8-braid-job.h"
++#include "src/api/api-inl.h"
++
+ #include "src/objects/module-inl.h"
+ #include "src/objects/object-conversions-inl.h"
+ #include "src/objects/objects-body-descriptors-inl.h"
+@@ -115,6 +118,14 @@
+ #include "src/objects/js-segments.h"
+ #endif  // V8_INTL_SUPPORT
+ 
++namespace v8 {
++namespace { thread_local BraidThenablePublication braid_publish = nullptr; }
++void SetBraidThenablePublication(BraidThenablePublication callback) { braid_publish=callback; }
++bool BraidCurrentJobIsThenable(Isolate* isolate) {
++  auto* i=reinterpret_cast<internal::Isolate*>(isolate);
++  return internal::IsPromiseResolveThenableJobTask(i->heap()->current_microtask());
++}
++}  // namespace v8
+ namespace v8::internal {
+ 
+ ShouldThrow GetShouldThrow(Isolate* isolate, Maybe<ShouldThrow> should_throw) {
+@@ -4876,6 +4887,11 @@
+                         promise)
+         .Check();
+   }
++  // With the fixture isolate promise hook active, ResolvePromise routes
++  // through this exact path. Acquire before publishing the new job, not when
++  // it eventually runs. Missing queue leaves an unresolved obligation.
++  if (braid_publish)
++    braid_publish(reinterpret_cast<v8::Isolate*>(isolate), v8::Utils::ToLocal(promise));
+   MicrotaskQueue* microtask_queue = then_context->microtask_queue();
+   if (microtask_queue) microtask_queue->EnqueueMicrotask(*task);
+ 
