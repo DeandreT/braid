@@ -1,0 +1,579 @@
+--- a/third_party/blink/renderer/core/dom/events/event_target.cc
++++ b/third_party/blink/renderer/core/dom/events/event_target.cc
+@@ -47,6 +47,7 @@
+ #include "third_party/blink/renderer/bindings/core/v8/v8_union_boolean_eventlisteneroptions.h"
+ #include "third_party/blink/renderer/core/dom/abort_signal.h"
+ #include "third_party/blink/renderer/core/dom/abort_signal_registry.h"
++#include "third_party/blink/renderer/core/dom/document.h"
+ #include "third_party/blink/renderer/core/dom/events/add_event_listener_options_resolved.h"
+ #include "third_party/blink/renderer/core/dom/events/event.h"
+ #include "third_party/blink/renderer/core/dom/events/event_dispatch_forbidden_scope.h"
+@@ -58,6 +59,7 @@
+ #include "third_party/blink/renderer/core/event_type_names.h"
+ #include "third_party/blink/renderer/core/events/event_util.h"
+ #include "third_party/blink/renderer/core/events/pointer_event.h"
++#include "third_party/blink/renderer/core/frame/csp/fixture_lifecycle_ingress.h"
+ #include "third_party/blink/renderer/core/frame/deprecation/deprecation.h"
+ #include "third_party/blink/renderer/core/frame/frame_console.h"
+ #include "third_party/blink/renderer/core/frame/local_dom_window.h"
+@@ -86,6 +88,66 @@
+ 
+ namespace blink {
+ namespace {
++
++using FixtureIngress = braid::probe::LifecycleIngress;
++
++std::shared_ptr<FixtureIngress> LifecycleIngressFor(EventTarget& target,
++                                                    const AtomicString& type) {
++  const bool visibility = type == event_type_names::kVisibilitychange ||
++                          type == event_type_names::kWebkitvisibilitychange;
++  if (auto* window = target.ToLocalDOMWindow()) {
++    if (visibility || type == event_type_names::kFocus ||
++        type == event_type_names::kBlur ||
++        type == event_type_names::kBeforeunload ||
++        type == event_type_names::kPagehide ||
++        type == event_type_names::kPageshow ||
++        type == event_type_names::kUnload) {
++      return window->FixtureLifecycleIngress();
++    }
++  } else if (visibility) {
++    if (auto* doc = DynamicTo<Document>(target.ToNode())) {
++      if (auto* window = doc->domWindow()) {
++        auto ingress = window->FixtureLifecycleIngress();
++        if (ingress && window->document() != doc) {
++          ingress->Refuse(FixtureIngress::Failure::kWrongOriginal);
++          return nullptr;
++        }
++        return ingress;
++      }
++    }
++  }
++  return nullptr;
++}
++
++class ScopedFixtureLifecycleCallback {
++  STACK_ALLOCATED();
++
++ public:
++  ScopedFixtureLifecycleCallback(EventTarget& target,
++                                 const Event& event,
++                                 const RegisteredEventListener& listener)
++      : ingress_(LifecycleIngressFor(target, event.type())) {
++    if (ingress_) {
++      id_ = ingress_->Enter(&listener,
++                            event.isTrusted()
++                                ? FixtureIngress::Provenance::kTrustedDom
++                                : FixtureIngress::Provenance::kSynthetic);
++    }
++  }
++  ScopedFixtureLifecycleCallback(const ScopedFixtureLifecycleCallback&) =
++      delete;
++  ScopedFixtureLifecycleCallback& operator=(
++      const ScopedFixtureLifecycleCallback&) = delete;
++  ~ScopedFixtureLifecycleCallback() {
++    if (ingress_) {
++      ingress_->Leave(id_);
++    }
++  }
++
++ private:
++  std::shared_ptr<FixtureIngress> ingress_;
++  FixtureIngress::Id id_ = 0;
++};
+ 
+ enum PassiveForcedListenerResultType {
+   kPreventDefaultNotCalled,
+@@ -668,6 +730,11 @@
+       event_type, listener, options, &registered_listener);
+   if (added) {
+     CHECK(registered_listener);
++    // The map insertion cannot call script. Record the original registration
++    // before publishing it to any observer below.
++    if (auto ingress = LifecycleIngressFor(*this, event_type)) {
++      ingress->Register(registered_listener);
++    }
+     if (options.HasSignal()) {
+       // Capture only the boolean that removeEventListener uses instead of the
+       // temporary options object.
+@@ -807,6 +874,9 @@
+   }
+ 
+   CHECK(registered_listener);
++  if (auto ingress = LifecycleIngressFor(*this, event_type)) {
++    ingress->Remove(registered_listener);
++  }
+   RemovedEventListener(event_type, *registered_listener);
+   return true;
+ }
+@@ -840,6 +910,9 @@
+     return false;
+   }
+   if (registered_listener) {
++    if (auto ingress = LifecycleIngressFor(*this, event_type)) {
++      ingress->Refuse(FixtureIngress::Failure::kUnsupportedPublication);
++    }
+     registered_listener->SetCallback(listener);
+     return true;
+   }
+@@ -1052,6 +1125,8 @@
+     for (auto& registered_listener : entry) {
+       if (registered_listener->IsAnimationTrigger() &&
+           registered_listener->ShouldFire(event)) {
++        ScopedFixtureLifecycleCallback credit(*this, event,
++                                              *registered_listener);
+         EventListener* listener = registered_listener->Callback();
+         if (registered_listener->Once()) {
+           removeEventListener(event.type(), listener,
+@@ -1081,6 +1156,7 @@
+       continue;
+     }
+ 
++    ScopedFixtureLifecycleCallback credit(*this, event, *registered_listener);
+     EventListener* listener = registered_listener->Callback();
+     // The listener will be retained by Member<EventListener> in the
+     // registeredListener, i and size are updated with the firing event iterator
+@@ -1149,6 +1225,16 @@
+ 
+ void EventTarget::RemoveAllEventListeners() {
+   if (auto* d = GetEventTargetData()) {
++    if (ToLocalDOMWindow() || IsA<Document>(ToNode())) {
++      d->event_listener_map.ForAllEventListenerTypes(
++          [this](const AtomicString& type, uint32_t) {
++            if (auto ingress = LifecycleIngressFor(*this, type)) {
++              for (const auto& listener : *GetEventListeners(type)) {
++                ingress->BulkClear(listener.Get());
++              }
++            }
++          });
++    }
+     d->event_listener_map.Clear();
+   }
+ }
+--- /dev/null
++++ b/third_party/blink/renderer/core/frame/csp/fixture_lifecycle_ingress.h
+@@ -0,0 +1,304 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++#ifndef THIRD_PARTY_BLINK_RENDERER_CORE_FRAME_CSP_FIXTURE_LIFECYCLE_INGRESS_H_
++#define THIRD_PARTY_BLINK_RENDERER_CORE_FRAME_CSP_FIXTURE_LIFECYCLE_INGRESS_H_
++
++#include <array>
++#include <cstddef>
++#include <cstdint>
++#include <limits>
++#include <string>
++#include <string_view>
++
++namespace braid::probe {
++
++// Main sequence and one original DocumentToken only. This monitors a subset
++// of DOM listener ingress. It is neither an app policy nor a browser cutoff.
++class LifecycleIngress {
++ public:
++  enum class Failure {
++    kNone,
++    kWrongOriginal,
++    kUnknownRegistration,
++    kUnsupportedPublication,
++    kLatePublication,
++    kPendingAtPrepare,
++    kLostAtClear,
++    kWindowReuse,
++    kCapacity,
++    kInvalidTransition,
++  };
++  enum class Provenance { kTrustedDom, kSynthetic };
++  using Id = uint64_t;
++  struct Ticket {
++    std::string original;
++    Id revision;
++  };
++
++  LifecycleIngress() = default;
++  LifecycleIngress(const LifecycleIngress&) = delete;
++  LifecycleIngress& operator=(const LifecycleIngress&) = delete;
++
++  bool BindOriginal(std::string_view original) {
++    if (!original_.empty() || original.empty() || detached_) {
++      Refuse(Failure::kWrongOriginal);
++      return false;
++    }
++    original_ = original;
++    return failure_ == Failure::kNone;
++  }
++
++  void Register(const void* registration) {
++    if (prepared_ || detached_) {
++      return Refuse(Failure::kLatePublication);
++    }
++    if (original_.empty() || !registration || Contains(registration)) {
++      return Refuse(Failure::kUnknownRegistration);
++    }
++    for (auto& slot : registrations_) {
++      if (!slot) {
++        slot = registration;
++        Advance();
++        return;
++      }
++    }
++    Refuse(Failure::kCapacity);
++  }
++
++  void Remove(const void* registration) {
++    for (auto& slot : registrations_) {
++      if (slot && slot == registration) {
++        slot = nullptr;
++        Advance();
++        return;
++      }
++    }
++    Refuse(Failure::kUnknownRegistration);
++  }
++
++  // Blink's bulk clear is not the application's natural listener removal.
++  // A possibly live registration must not disappear from the inventory.
++  void BulkClear(const void* registration) {
++    if (Contains(registration)) {
++      Refuse(Failure::kLostAtClear);
++    } else {
++      Refuse(Failure::kUnknownRegistration);
++    }
++  }
++
++  // Acquire before 'once' removes the registration and before invoking script.
++  Id Enter(const void* registration, Provenance provenance) {
++    if (prepared_ || detached_) {
++      Refuse(Failure::kLatePublication);
++      return 0;
++    }
++    if (!Contains(registration)) {
++      Refuse(Failure::kUnknownRegistration);
++      return 0;
++    }
++    if (depth_ >= callbacks_.size() || !Advance()) {
++      Refuse(Failure::kCapacity);
++      return 0;
++    }
++    callbacks_[depth_++] = {revision_, false};
++    if (provenance == Provenance::kTrustedDom) {
++      ++trusted_calls_;
++    } else {
++      ++synthetic_calls_;
++    }
++    return revision_;
++  }
++
++  void Leave(Id callback) {
++    if (!callback) {
++      return;
++    }
++    if (!depth_ || CurrentCallback() != callback) {
++      return Refuse(Failure::kInvalidTransition);
++    }
++    if (!callbacks_[depth_ - 1].covered) {
++      Refuse(Failure::kUnsupportedPublication);
++    }
++    --depth_;
++    Advance();
++  }
++
++  Id CurrentCallback() const { return depth_ ? callbacks_[depth_ - 1].id : 0; }
++
++  // Native producer owner only: after installing the original callback
++  // handoffs, attest that its synchronous body ran under that coverage.
++  // Live descendants remain independent. Callback return alone is not proof.
++  void AcknowledgeCoverage(std::string_view original, Id callback) {
++    if (!CheckOriginal(original)) {
++      return;
++    }
++    if (!callback || callback != CurrentCallback() ||
++        callbacks_[depth_ - 1].covered) {
++      return Refuse(Failure::kInvalidTransition);
++    }
++    callbacks_[depth_ - 1].covered = true;
++  }
++
++  // Called by the existing producer ledger *before* publishing a child. The
++  // child's identity remains live across return and may publish descendants.
++  // Publication with no original link is not evidence for this boundary.
++  Id Publish(std::string_view original, Id parent) {
++    if (!CheckOriginal(original)) {
++      return 0;
++    }
++    if (prepared_ || detached_) {
++      Refuse(Failure::kLatePublication);
++      return 0;
++    }
++    if (!parent || (parent != CurrentCallback() && !HasChild(parent))) {
++      Refuse(Failure::kUnsupportedPublication);
++      return 0;
++    }
++    for (auto& child : children_) {
++      if (!child && Advance()) {
++        return child = revision_;
++      }
++    }
++    Refuse(Failure::kCapacity);
++    return 0;
++  }
++
++  void Complete(std::string_view original, Id id) {
++    if (!CheckOriginal(original)) {
++      return;
++    }
++    for (auto& child : children_) {
++      if (child && child == id) {
++        child = 0;
++        Advance();
++        return;
++      }
++    }
++    Refuse(Failure::kUnsupportedPublication);
++  }
++
++  // Observation while waiting for ordinary app destruction is not prepare.
++  bool Ready() const {
++    if (original_.empty() || failure_ != Failure::kNone || detached_ ||
++        depth_) {
++      return false;
++    }
++    for (const auto* registration : registrations_) {
++      if (registration) {
++        return false;
++      }
++    }
++    for (Id child : children_) {
++      if (child) {
++        return false;
++      }
++    }
++    return true;
++  }
++
++  // Production callers must also fence/prepare every other producer class.
++  // A failed preparation is sticky; late work is still delivered by Blink.
++  Ticket Prepare(std::string_view original) {
++    if (!CheckOriginal(original)) {
++      return {};
++    }
++    if (prepared_) {
++      Refuse(Failure::kInvalidTransition);
++      return {};
++    }
++    prepared_ = true;
++    if (!Ready() || !Advance()) {
++      Refuse(Failure::kPendingAtPrepare);
++      return {};
++    }
++    prepared_revision_ = revision_;
++    return {original_, prepared_revision_};
++  }
++
++  void Detach(std::string_view original) {
++    if (!CheckOriginal(original)) {
++      return;
++    }
++    if (detached_ || !prepared_revision_ || !Ready() ||
++        revision_ != prepared_revision_) {
++      Refuse(Failure::kInvalidTransition);
++    }
++    detached_ = true;
++  }
++
++  bool VerifyRetirement(const Ticket& ticket) const {
++    return prepared_revision_ && detached_ && failure_ == Failure::kNone &&
++           ticket.original == original_ &&
++           ticket.revision == prepared_revision_;
++  }
++
++  void Refuse(Failure reason) {
++    if (failure_ == Failure::kNone) {
++      failure_ = reason;
++    }
++  }
++
++  Failure failure() const { return failure_; }
++  Id trusted_calls() const { return trusted_calls_; }
++  Id synthetic_calls() const { return synthetic_calls_; }
++
++ private:
++  bool CheckOriginal(std::string_view original) {
++    if (!original_.empty() && original_ == original) {
++      return true;
++    }
++    Refuse(Failure::kWrongOriginal);
++    return false;
++  }
++
++  bool Advance() {
++    if (revision_ == std::numeric_limits<Id>::max()) {
++      Refuse(Failure::kCapacity);
++      return false;
++    }
++    ++revision_;
++    return true;
++  }
++
++  bool Contains(const void* registration) const {
++    if (registration) {
++      for (const auto* slot : registrations_) {
++        if (slot == registration) {
++          return true;
++        }
++      }
++    }
++    return false;
++  }
++
++  bool HasChild(Id id) const {
++    for (Id child : children_) {
++      if (child && child == id) {
++        return true;
++      }
++    }
++    return false;
++  }
++
++  std::string original_;
++  std::array<const void*, 128> registrations_{};
++  struct Callback {
++    Id id;
++    bool covered;
++  };
++  std::array<Callback, 32> callbacks_{};
++  std::array<Id, 256> children_{};
++  std::size_t depth_ = 0;
++  Id revision_ = 0;
++  Id prepared_revision_ = 0;
++  Id trusted_calls_ = 0;
++  Id synthetic_calls_ = 0;
++  Failure failure_ = Failure::kNone;
++  bool prepared_ = false;
++  bool detached_ = false;
++};
++
++}  // namespace braid::probe
++
++#endif  // THIRD_PARTY_BLINK_RENDERER_CORE_FRAME_CSP_FIXTURE_LIFECYCLE_INGRESS_H_
+--- a/third_party/blink/renderer/core/frame/local_dom_window.cc
++++ b/third_party/blink/renderer/core/frame/local_dom_window.cc
+@@ -88,6 +88,7 @@
+ #include "third_party/blink/renderer/core/frame/bar_prop.h"
+ #include "third_party/blink/renderer/core/frame/crash_report_context.h"
+ #include "third_party/blink/renderer/core/frame/csp/content_security_policy.h"
++#include "third_party/blink/renderer/core/frame/csp/fixture_lifecycle_ingress.h"
+ #include "third_party/blink/renderer/core/frame/document_policy_violation_report_body.h"
+ #include "third_party/blink/renderer/core/frame/dom_viewport.h"
+ #include "third_party/blink/renderer/core/frame/dom_visual_viewport.h"
+@@ -269,6 +270,10 @@
+ }
+ 
+ void LocalDOMWindow::ClearForReuse() {
++  if (fixture_lifecycle_ingress_) {
++    fixture_lifecycle_ingress_->Refuse(
++        braid::probe::LifecycleIngress::Failure::kWindowReuse);
++  }
+   is_dom_window_reused_ = true;
+   // update event listener counts before clearing document_
+   if (document_ && HasEventListeners()) {
+@@ -287,7 +292,27 @@
+   WindowPerformance::ClearForWindowReuse(*this);
+ }
+ 
++std::shared_ptr<braid::probe::LifecycleIngress>
++LocalDOMWindow::BeginFixtureLifecycleIngress() {
++  using Ingress = braid::probe::LifecycleIngress;
++  if (fixture_lifecycle_ingress_) {
++    fixture_lifecycle_ingress_->Refuse(Ingress::Failure::kWrongOriginal);
++    return nullptr;
++  }
++  // Inherited registrations from a seed/reused window are not covered.
++  if (document_ || is_dom_window_reused_ || HasEventListeners() ||
++      !GetFrame() || IsContextDestroyed()) {
++    return nullptr;
++  }
++  fixture_lifecycle_ingress_ = std::make_shared<Ingress>();
++  return fixture_lifecycle_ingress_;
++}
++
+ void LocalDOMWindow::ResetWindowAgent(WindowAgent* agent) {
++  if (fixture_lifecycle_ingress_) {
++    fixture_lifecycle_ingress_->Refuse(
++        braid::probe::LifecycleIngress::Failure::kWindowReuse);
++  }
+   ResetAgent(agent);
+   if (document_) {
+     document_->ResetAgent(*agent);
+@@ -934,6 +959,9 @@
+ 
+   probe::WillCreateBraidDocument(GetFrame(), this, init.Url());
+   document_ = init.CreateDocument();
++  if (fixture_lifecycle_ingress_) {
++    fixture_lifecycle_ingress_->BindOriginal(document_->Token().ToString());
++  }
+   probe::DidCreateBraidDocument(GetFrame(), document_.Get());
+   document_->Initialize();
+ 
+@@ -1124,6 +1152,15 @@
+   if (!GetFrame()) {
+     return;
+   }
++  // Shutdown clears the Document's back-pointer to this window before it
++  // bulk-removes listeners. Inspect the original target while still attached.
++  if (fixture_lifecycle_ingress_ &&
++      (document()->HasEventListeners(event_type_names::kVisibilitychange) ||
++       document()->HasEventListeners(
++           event_type_names::kWebkitvisibilitychange))) {
++    fixture_lifecycle_ingress_->Refuse(
++        braid::probe::LifecycleIngress::Failure::kLostAtClear);
++  }
+   // Manually flush any remaining buffered performance entries before the window
+   // is destroyed.
+   DOMWindowPerformance::performance(*this)->FlushPerformanceEntries();
+@@ -1143,6 +1180,9 @@
+   MainThreadDebugger::Instance(GetIsolate())
+       ->DidClearContextsForFrame(GetFrame());
+   DisconnectFromFrame();
++  if (fixture_lifecycle_ingress_) {
++    fixture_lifecycle_ingress_->Detach(document()->Token().ToString());
++  }
+ }
+ 
+ void LocalDOMWindow::RegisterEventListenerObserver(
+--- a/third_party/blink/renderer/core/frame/local_dom_window.h
++++ b/third_party/blink/renderer/core/frame/local_dom_window.h
+@@ -61,6 +61,10 @@
+ #include "third_party/blink/renderer/platform/supplementable.h"
+ #include "third_party/blink/renderer/platform/wtf/casting.h"
+ #include "third_party/blink/renderer/platform/wtf/forward.h"
++
++namespace braid::probe {
++class LifecycleIngress;
++}
+ 
+ namespace blink {
+ 
+@@ -161,6 +165,14 @@
+ 
+   void Initialize();
+   void ClearForReuse();
++  // Retain the returned state outside the page/DevTools target, by original
++  // DocumentToken. A replacement must never inherit it.
++  std::shared_ptr<braid::probe::LifecycleIngress>
++  BeginFixtureLifecycleIngress();
++  std::shared_ptr<braid::probe::LifecycleIngress> FixtureLifecycleIngress()
++      const {
++    return fixture_lifecycle_ingress_;
++  }
+ 
+   void ResetWindowAgent(WindowAgent*);
+ 
+@@ -654,6 +666,7 @@
+   Member<ScriptController> script_controller_;
+ 
+   Member<Document> document_;
++  std::shared_ptr<braid::probe::LifecycleIngress> fixture_lifecycle_ingress_;
+   Member<DOMViewport> viewport_;
+   Member<DOMVisualViewport> visualViewport_;
+ 
