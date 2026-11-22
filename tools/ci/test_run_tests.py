@@ -318,6 +318,9 @@ class GroupTests(unittest.TestCase):
         self.assertEqual(sorted(fixtures), sorted(method for methods in run_tests.classify(fixtures, groups).values()
                                                   for method in methods))
 
+    def test_current_source_audit_matches_test_and_build_inputs(self):
+        test_groups.verify_sources(Path.cwd())
+
     def test_stale_local_source_audit_does_not_gate_full_suite_or_ci_shards(self):
         with patch.object(test_groups, "AUDITED_SOURCE_SHA256", "stale"), \
                 patch.object(run_tests, "run", return_value=0), patch.object(run_tests, "run_shard", return_value=0):
