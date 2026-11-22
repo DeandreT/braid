@@ -1,0 +1,177 @@
+--- a/third_party/blink/renderer/core/workers/csp_fixture_worker_lifecycle.h
++++ b/third_party/blink/renderer/core/workers/csp_fixture_worker_lifecycle.h
+@@ -8,6 +8,7 @@
+ #include <memory>
+ #include <mutex>
+ #include <utility>
++#include <string>
+ 
+ #include "third_party/blink/renderer/core/frame/csp/credit_scope.h"
+ 
+@@ -49,6 +50,7 @@
+     // generation cannot disappear from subsequent checks.
+     std::array<std::shared_ptr<Scope>, kMaxGenerations> scopes;
+     size_t generations = 0;
++    std::array<std::string, kMaxGenerations> tokens;
+   };
+ 
+  public:
+@@ -82,6 +84,15 @@
+       return scope_;
+     }
+ 
++    void RecordToken(std::string token) {
++      std::lock_guard guard(state_->lock);
++      auto& original = state_->tokens[id_-1];
++      if (phase_ != Phase::kBound || !original.empty() || token.size() != 32) {
++        state_->Refuse(Refusal::kInvalidTransition); return;
++      }
++      original = std::move(token);
++    }
++
+     void TopLevelEvaluated(bool success) {
+       if (phase_ != Phase::kBound) {
+         Refuse(Refusal::kInvalidTransition);
+@@ -171,6 +182,13 @@
+   // Terminal local check, not a drain operation. Calling it with outstanding
+   // work is a sticky refusal, even if that work eventually finishes. Caller
+   // still owes an ingress fence, remote producer inventory, and receipt proof.
++  // This fixture admits one original reservation, never a replacement.
++  bool SingleReservation(std::string& token, bool& retired) const {
++    std::lock_guard guard(state_->lock);
++    if (state_->refusal != Refusal::kNone || state_->generations != 1 || state_->tokens[0].empty()) return false;
++    token = state_->tokens[0]; retired = !state_->live; return true;
++  }
++
+   Refusal SealAndCheckTerminal() {
+     std::lock_guard guard(state_->lock);
+     state_->sealed = true;
+--- a/third_party/blink/renderer/core/workers/worker_or_worklet_global_scope.cc
++++ b/third_party/blink/renderer/core/workers/worker_or_worklet_global_scope.cc
+@@ -598,6 +598,7 @@
+   if (auto* worker = DynamicTo<WorkerGlobalScope>(this)) {
+     if (auto* producer = worker->GetThread()->FixtureCspProducer()) {
+       if (auto scope = producer->generation->Bind()) {
++        producer->generation->RecordToken(worker->GetWorkerToken().ToString());
+         auto check = base::BindRepeating(
+             [](const WorkerCspCheck& check,
+                braid::probe::WorkerCspLedger::Id id, const WorkerToken& token,
+--- a/third_party/blink/public/devtools_protocol/domains/Audits.pdl
++++ b/third_party/blink/public/devtools_protocol/domains/Audits.pdl
+@@ -914,6 +914,21 @@
+       string generation
+       string dispatch
+ 
++  experimental command armBraidWorker
++    parameters
++      string epoch
++    returns
++      string generation
++
++  experimental command readBraidWorker
++    parameters
++      string epoch
++      boolean terminal
++    returns
++      string token
++      string dispatch
++      boolean retired
++
+   event issueAdded
+     parameters
+       InspectorIssue issue
+--- a/third_party/blink/renderer/core/inspector/inspector_audits_agent.h
++++ b/third_party/blink/renderer/core/inspector/inspector_audits_agent.h
+@@ -46,6 +46,8 @@
+ 
+   protocol::Response armBraidDispatch(const String&, String*) override;
+   protocol::Response readBraidDispatch(const String&, String*, String*) override;
++  protocol::Response armBraidWorker(const String&, String*) override;
++  protocol::Response readBraidWorker(const String&, bool, String*, String*, bool*) override;
+   void Restore() override;
+ 
+   protocol::Response getEncodedResponse(
+@@ -59,6 +61,8 @@
+ 
+  private:
+   void InnerEnable();
++  struct WorkerBridge;
++  std::shared_ptr<WorkerBridge> braid_worker_;
+   WeakMember<Document> braid_document_;
+   String braid_epoch_;
+   std::shared_ptr<braid::probe::Scope> braid_scope_;
+--- a/third_party/blink/renderer/core/inspector/inspector_audits_agent.cc
++++ b/third_party/blink/renderer/core/inspector/inspector_audits_agent.cc
+@@ -6,6 +6,8 @@
+ 
+ #include "base/numerics/safe_conversions.h"
+ #include "base/unguessable_token.h"
++#include "third_party/blink/renderer/core/workers/csp_fixture_workers.h"
++#include "third_party/blink/renderer/core/workers/worker_global_scope.h"
+ #include "base/functional/bind.h"
+ #include "third_party/blink/renderer/bindings/core/v8/v8_security_policy_violation_event_disposition.h"
+ #include "third_party/blink/renderer/core/frame/csp/execution_context_csp_delegate.h"
+@@ -143,10 +145,62 @@
+   return protocol::Response::Success();
+ }
+ 
++struct InspectorAuditsAgent::WorkerBridge {
++  std::mutex lock;
++  std::shared_ptr<braid::probe::WorkerCspLedger> ledger;
++  std::string token;
++  std::string dispatch;
++};
++
++protocol::Response InspectorAuditsAgent::armBraidWorker(const String& epoch, String* generation) {
++  auto* frame = inspected_frames_->Root();
++  auto* doc = frame ? frame->GetDocument() : nullptr;
++  if (braid_refused_ || braid_worker_ || braid_scope_ || epoch.length() != 32 || !doc || !frame->IsMainFrame() ||
++      !doc->domWindow() || doc->Url().GetString() != "http://braid.invalid/worker-fixture") {
++    braid_refused_ = true; return protocol::Response::ServerError("worker fixture refused");
++  }
++  auto state = std::make_shared<WorkerBridge>();
++  state->ledger = InstallWorkerCspFixture(base::BindRepeating([](const std::shared_ptr<WorkerBridge>& bridge,
++      braid::probe::WorkerCspLedger::Id id, const WorkerToken& token, const Event& event) {
++    const auto& csp = static_cast<const SecurityPolicyViolationEvent&>(event);
++    auto* target = event.target();
++    auto* worker = DynamicTo<WorkerGlobalScope>(target ? target->GetExecutionContext() : nullptr);
++    if (id != 1 || !worker || worker != target || token != worker->GetWorkerToken() ||
++        !token.Is<DedicatedWorkerToken>() || !event.isTrusted() || event.eventPhase() != Event::PhaseType::kAtTarget ||
++        csp.effectiveDirective() != "connect-src" || csp.violatedDirective() != "connect-src" ||
++        csp.blockedURI() != "http://braid.invalid/blocked" ||
++        csp.disposition().AsEnum() != V8SecurityPolicyViolationEventDisposition::Enum::kEnforce) return false;
++    std::lock_guard guard(bridge->lock);
++    if (!bridge->dispatch.empty()) return false;
++    bridge->token = token.ToString(); bridge->dispatch = base::UnguessableToken::Create().ToString(); return true;
++  }, state));
++  if (!state->ledger) {braid_refused_ = true; return protocol::Response::ServerError("worker ingress not original");}
++  braid_epoch_ = epoch; braid_document_ = doc; braid_worker_ = std::move(state);
++  *generation = String::FromUtf8(doc->Token().ToString()); return protocol::Response::Success();
++}
++
++protocol::Response InspectorAuditsAgent::readBraidWorker(const String& epoch, bool terminal,
++    String* token, String* dispatch, bool* retired) {
++  auto* frame = inspected_frames_->Root(); auto* doc = braid_document_.Get();
++  std::string worker;
++  if (braid_refused_ || !braid_worker_ || epoch != braid_epoch_ || !doc || !frame || frame->GetDocument() != doc ||
++      !doc->domWindow() || doc->domWindow()->IsContextDestroyed() || !braid_worker_->ledger->SingleReservation(worker, *retired)) {
++    braid_refused_ = true; return protocol::Response::ServerError("original worker unavailable");
++  }
++  *token = String::FromUtf8(worker); *dispatch = String("");
++  if (!terminal || !*retired) return protocol::Response::Success();
++  std::lock_guard guard(braid_worker_->lock);
++  if (braid_worker_->ledger->SealAndCheckTerminal() != braid::probe::WorkerCspLedger::Refusal::kNone ||
++      worker != braid_worker_->token || braid_worker_->dispatch.empty()) {
++    braid_refused_ = true; return protocol::Response::ServerError("worker unsettled");
++  }
++  *dispatch = String::FromUtf8(braid_worker_->dispatch); return protocol::Response::Success();
++}
++
+ protocol::Response InspectorAuditsAgent::armBraidDispatch(const String& epoch, String* generation) {
+   auto* frame = inspected_frames_->Root();
+   auto* doc = frame ? frame->GetDocument() : nullptr;
+-  if (braid_refused_ || braid_scope_ || epoch.length() != 32 || !doc || !frame->IsMainFrame() ||
++  if (braid_refused_ || braid_worker_ || braid_scope_ || epoch.length() != 32 || !doc || !frame->IsMainFrame() ||
+       !doc->domWindow() || doc->Url().GetString() != "http://braid.invalid/fixture") {
+     braid_refused_ = true;
+     return protocol::Response::ServerError("fixture refused");

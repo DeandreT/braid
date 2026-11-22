@@ -1,0 +1,895 @@
+--- a/third_party/blink/renderer/core/workers/build.gni
++++ b/third_party/blink/renderer/core/workers/build.gni
+@@ -7,6 +7,9 @@
+ blink_core_sources_workers = [
+   "abstract_worker.cc",
+   "abstract_worker.h",
++  "csp_fixture_worker_lifecycle.h",
++  "csp_fixture_workers.cc",
++  "csp_fixture_workers.h",
+   "cross_thread_global_scope_creation_params_copier.h",
+   "custom_event_message.h",
+   "dedicated_worker.cc",
+--- /dev/null
++++ b/third_party/blink/renderer/core/workers/csp_fixture_worker_lifecycle.h
+@@ -0,0 +1,194 @@
++// Qualification-only worker lifecycle accounting. This is not a browser cutoff.
++#ifndef THIRD_PARTY_BLINK_RENDERER_CORE_WORKERS_CSP_FIXTURE_WORKER_LIFECYCLE_H_
++#define THIRD_PARTY_BLINK_RENDERER_CORE_WORKERS_CSP_FIXTURE_WORKER_LIFECYCLE_H_
++
++#include <array>
++#include <cstddef>
++#include <cstdint>
++#include <memory>
++#include <mutex>
++#include <utility>
++
++#include "third_party/blink/renderer/core/frame/csp/credit_scope.h"
++
++namespace braid::probe {
++
++class WorkerCspLedger {
++ public:
++  enum class Refusal {
++    kNone,
++    kLateIngress,
++    kGenerationLimit,
++    kUnadmittedStart,
++    kUnsupportedWorker,
++    kUnsupportedWorklet,
++    kOutsideSettingsDispatch,
++    kUnresolvedStart,
++    kInvalidTransition,
++    kForcedDisposal,
++    kUnsettledDispatch,
++    kLiveProducer,
++  };
++  using Id = uint64_t;
++
++ private:
++  static constexpr size_t kMaxGenerations = 256;
++
++  struct State {
++    void Refuse(Refusal reason) {
++      if (refusal == Refusal::kNone) {
++        refusal = reason;
++      }
++    }
++
++    std::mutex lock;
++    bool sealed = false;
++    Refusal refusal = Refusal::kNone;
++    unsigned live = 0;
++    // Retain the terminal dispatch scopes so that a late root on a retired
++    // generation cannot disappear from subsequent checks.
++    std::array<std::shared_ptr<Scope>, kMaxGenerations> scopes;
++    size_t generations = 0;
++  };
++
++ public:
++  // One owner, transferred from the creator to the worker before it can run.
++  // Its methods must not be called concurrently. The ledger and dispatch scope
++  // are independently synchronized and safe to inspect from the fixture owner.
++  class Generation {
++   public:
++    Generation(const Generation&) = delete;
++    Generation& operator=(const Generation&) = delete;
++    ~Generation() {
++      if (phase_ == Phase::kRetired) {
++        return;
++      }
++      std::lock_guard guard(state_->lock);
++      state_->Refuse(phase_ == Phase::kReserved || phase_ == Phase::kBound
++                         ? Refusal::kUnresolvedStart
++                         : Refusal::kForcedDisposal);
++      --state_->live;
++    }
++
++    Id id() const { return id_; }
++
++    // Call once, before binding the execution-context CSP to its delegate.
++    std::shared_ptr<Scope> Bind() {
++      if (phase_ != Phase::kReserved) {
++        Refuse(Refusal::kInvalidTransition);
++        return nullptr;
++      }
++      phase_ = Phase::kBound;
++      return scope_;
++    }
++
++    void TopLevelEvaluated(bool success) {
++      if (phase_ != Phase::kBound) {
++        Refuse(Refusal::kInvalidTransition);
++        return;
++      }
++      if (!success) {
++        Refuse(Refusal::kUnresolvedStart);
++        return;
++      }
++      phase_ = Phase::kRunning;
++    }
++
++    void BeginDisposal() {
++      if (phase_ != Phase::kRunning) {
++        Refuse(phase_ == Phase::kReserved || phase_ == Phase::kBound
++                   ? Refusal::kUnresolvedStart
++                   : Refusal::kInvalidTransition);
++      }
++      if (phase_ != Phase::kRetired) {
++        phase_ = Phase::kDisposing;
++      }
++      scope_->SealIngress();
++    }
++
++    void FinishDisposal(bool graceful) {
++      if (phase_ != Phase::kDisposing) {
++        Refuse(Refusal::kInvalidTransition);
++        return;
++      }
++      std::lock_guard guard(state_->lock);
++      if (!graceful) {
++        state_->Refuse(Refusal::kForcedDisposal);
++      }
++      if (scope_->Inspect() != Scope::Status::ClosedLocalOnly) {
++        state_->Refuse(Refusal::kUnsettledDispatch);
++      }
++      phase_ = Phase::kRetired;
++      --state_->live;
++    }
++
++    void Refuse(Refusal reason) {
++      std::lock_guard guard(state_->lock);
++      state_->Refuse(reason);
++    }
++
++   private:
++    friend class WorkerCspLedger;
++    enum class Phase { kReserved, kBound, kRunning, kDisposing, kRetired };
++    Generation(std::shared_ptr<State> state,
++               std::shared_ptr<Scope> scope,
++               Id id)
++        : state_(std::move(state)), scope_(std::move(scope)), id_(id) {}
++
++    const std::shared_ptr<State> state_;
++    const std::shared_ptr<Scope> scope_;
++    const Id id_;
++    Phase phase_ = Phase::kReserved;
++  };
++
++  WorkerCspLedger() = default;
++  WorkerCspLedger(const WorkerCspLedger&) = delete;
++  WorkerCspLedger& operator=(const WorkerCspLedger&) = delete;
++
++  std::unique_ptr<Generation> Reserve() {
++    std::lock_guard guard(state_->lock);
++    if (state_->sealed) {
++      state_->Refuse(Refusal::kLateIngress);
++    }
++    if (state_->generations == kMaxGenerations) {
++      state_->Refuse(Refusal::kGenerationLimit);
++    }
++    if (state_->refusal != Refusal::kNone) {
++      return nullptr;
++    }
++    auto scope = std::make_shared<Scope>();
++    state_->scopes[state_->generations++] = scope;
++    ++state_->live;
++    return std::unique_ptr<Generation>(
++        new Generation(state_, std::move(scope), state_->generations));
++  }
++
++  void Refuse(Refusal reason) {
++    std::lock_guard guard(state_->lock);
++    state_->Refuse(reason);
++  }
++
++  // Terminal local check, not a drain operation. Calling it with outstanding
++  // work is a sticky refusal, even if that work eventually finishes. Caller
++  // still owes an ingress fence, remote producer inventory, and receipt proof.
++  Refusal SealAndCheckTerminal() {
++    std::lock_guard guard(state_->lock);
++    state_->sealed = true;
++    if (state_->live != 0) {
++      state_->Refuse(Refusal::kLiveProducer);
++    }
++    for (size_t i = 0; i < state_->generations; ++i) {
++      if (state_->scopes[i]->Inspect() != Scope::Status::ClosedLocalOnly) {
++        state_->Refuse(Refusal::kUnsettledDispatch);
++      }
++    }
++    return state_->refusal;
++  }
++
++ private:
++  const std::shared_ptr<State> state_ = std::make_shared<State>();
++};
++
++}  // namespace braid::probe
++
++#endif  // THIRD_PARTY_BLINK_RENDERER_CORE_WORKERS_CSP_FIXTURE_WORKER_LIFECYCLE_H_
+--- /dev/null
++++ b/third_party/blink/renderer/core/workers/csp_fixture_workers.cc
+@@ -0,0 +1,69 @@
++// Qualification-only native API. No web API or browser-wide status.
++#include "third_party/blink/renderer/core/workers/csp_fixture_workers.h"
++
++#include <mutex>
++#include <utility>
++
++#include "base/no_destructor.h"
++
++namespace blink {
++namespace {
++
++using Ledger = braid::probe::WorkerCspLedger;
++
++struct ProcessSlot {
++  std::mutex lock;
++  bool used = false;
++  std::shared_ptr<Ledger> ledger;
++  WorkerCspCheck check;
++};
++
++ProcessSlot& GetProcessSlot() {
++  static base::NoDestructor<ProcessSlot> slot;
++  return *slot;
++}
++
++}  // namespace
++
++std::shared_ptr<Ledger> InstallWorkerCspFixture(WorkerCspCheck check) {
++  auto& slot = GetProcessSlot();
++  std::lock_guard guard(slot.lock);
++  if (slot.used || !check) {
++    slot.used = true;
++    if (slot.ledger) {
++      slot.ledger->Refuse(Ledger::Refusal::kInvalidTransition);
++    }
++    return nullptr;
++  }
++  slot.used = true;
++  slot.check = std::move(check);
++  slot.ledger = std::make_shared<Ledger>();
++  return slot.ledger;
++}
++
++std::unique_ptr<FixtureWorkerCspProducer>
++ReserveFixtureClassicDedicatedWorker() {
++  auto& slot = GetProcessSlot();
++  std::lock_guard guard(slot.lock);
++  slot.used = true;
++  if (!slot.ledger) {
++    return nullptr;
++  }
++  auto generation = slot.ledger->Reserve();
++  if (!generation) {
++    return nullptr;
++  }
++  return std::make_unique<FixtureWorkerCspProducer>(
++      FixtureWorkerCspProducer{std::move(generation), slot.check});
++}
++
++void RefuseFixtureWorker(Ledger::Refusal reason) {
++  auto& slot = GetProcessSlot();
++  std::lock_guard guard(slot.lock);
++  slot.used = true;
++  if (slot.ledger) {
++    slot.ledger->Refuse(reason);
++  }
++}
++
++}  // namespace blink
+--- /dev/null
++++ b/third_party/blink/renderer/core/workers/csp_fixture_workers.h
+@@ -0,0 +1,35 @@
++// Qualification-only native API. No web API or browser-wide status.
++#ifndef THIRD_PARTY_BLINK_RENDERER_CORE_WORKERS_CSP_FIXTURE_WORKERS_H_
++#define THIRD_PARTY_BLINK_RENDERER_CORE_WORKERS_CSP_FIXTURE_WORKERS_H_
++
++#include "base/functional/callback.h"
++#include "third_party/blink/public/common/tokens/tokens.h"
++#include "third_party/blink/renderer/core/core_export.h"
++#include "third_party/blink/renderer/core/workers/csp_fixture_worker_lifecycle.h"
++
++namespace blink {
++
++class Event;
++
++using WorkerCspCheck = base::RepeatingCallback<
++    bool(braid::probe::WorkerCspLedger::Id, const WorkerToken&, const Event&)>;
++
++struct FixtureWorkerCspProducer {
++  std::unique_ptr<braid::probe::WorkerCspLedger::Generation> generation;
++  WorkerCspCheck check;
++};
++
++// Only the trusted owner of an isolated fixture may install this, once per
++// process, before any worker/worklet ingress. A null result is a refusal.
++// The check runs synchronously on each worker thread before event handlers;
++// its captured state must support concurrent calls and must not retain Event.
++CORE_EXPORT std::shared_ptr<braid::probe::WorkerCspLedger>
++    InstallWorkerCspFixture(WorkerCspCheck);
++
++std::unique_ptr<FixtureWorkerCspProducer>
++ReserveFixtureClassicDedicatedWorker();
++CORE_EXPORT void RefuseFixtureWorker(braid::probe::WorkerCspLedger::Refusal);
++
++}  // namespace blink
++
++#endif  // THIRD_PARTY_BLINK_RENDERER_CORE_WORKERS_CSP_FIXTURE_WORKERS_H_
+--- a/third_party/blink/renderer/core/workers/dedicated_worker.cc
++++ b/third_party/blink/renderer/core/workers/dedicated_worker.cc
+@@ -48,6 +48,7 @@
+ #include "third_party/blink/renderer/core/probe/core_probes.h"
+ #include "third_party/blink/renderer/core/script/script.h"
+ #include "third_party/blink/renderer/core/script_type_names.h"
++#include "third_party/blink/renderer/core/workers/csp_fixture_workers.h"
+ #include "third_party/blink/renderer/core/workers/custom_event_message.h"
+ #include "third_party/blink/renderer/core/workers/dedicated_worker_messaging_proxy.h"
+ #include "third_party/blink/renderer/core/workers/global_scope_creation_params.h"
+@@ -156,6 +157,7 @@
+ 
+ void DedicatedWorker::Dispose() {
+   DCHECK(!GetExecutionContext() || GetExecutionContext()->IsContextThread());
++  fixture_csp_producer_.reset();
+   context_proxy_->ParentObjectDestroyed();
+   factory_client_.reset();
+ }
+@@ -332,6 +334,14 @@
+     GetExecutionContext()->CountUse(WebFeature::kDataUrlDedicatedWorker);
+   }
+ 
++  // Browser startup is already outstanding by the time WorkerThread::Start
++  // runs. Reserve on the creator's sequence before sending the host request.
++  if (options_->type() == V8WorkerType::Enum::kClassic) {
++    fixture_csp_producer_ = ReserveFixtureClassicDedicatedWorker();
++  } else {
++    RefuseFixtureWorker(
++        braid::probe::WorkerCspLedger::Refusal::kUnsupportedWorker);
++  }
+   factory_client_->CreateWorkerHost(
+       token_, script_request_url_, credentials_mode,
+       WebFetchClientSettingsObject(*outside_fetch_client_settings_object_),
+@@ -345,6 +355,7 @@
+ 
+ void DedicatedWorker::terminate() {
+   DCHECK(!GetExecutionContext() || GetExecutionContext()->IsContextThread());
++  fixture_csp_producer_.reset();
+   context_proxy_->TerminateGlobalScope();
+ }
+ 
+@@ -401,6 +412,7 @@
+ 
+ void DedicatedWorker::OnScriptLoadStartFailed() {
+   TRACE_EVENT("blink.worker", "DedicatedWorker::OnScriptLoadStartFailed");
++  fixture_csp_producer_.reset();  // Unresolved starts refuse, even on failure.
+   // Specify empty source code here because scripts will be fetched on the
+   context_proxy_->DidFailToFetchScript();
+   factory_client_.reset();
+@@ -496,15 +508,15 @@
+   if (!GetExecutionContext()) {
+     return;
+   }
++  auto creation_params = CreateGlobalScopeCreationParams(
++      script_url, referrer_policy,
++      std::move(response_content_security_policies), std::move(document_policy),
++      std::move(coep_reporting_observer), std::move(dip_reporting_observer));
++  creation_params->fixture_csp_producer = std::move(fixture_csp_producer_);
+   context_proxy_->StartWorkerGlobalScope(
+-      CreateGlobalScopeCreationParams(
+-          script_url, referrer_policy,
+-          std::move(response_content_security_policies),
+-          std::move(document_policy), std::move(coep_reporting_observer),
+-          std::move(dip_reporting_observer)),
+-      std::move(worker_main_script_load_params), options_, script_url,
+-      *outside_fetch_client_settings_object_, v8_stack_trace_id_, token_,
+-      std::move(pending_dedicated_worker_host_),
++      std::move(creation_params), std::move(worker_main_script_load_params),
++      options_, script_url, *outside_fetch_client_settings_object_,
++      v8_stack_trace_id_, token_, std::move(pending_dedicated_worker_host_),
+       std::move(back_forward_cache_controller_host),
+       std::move(policy_container));
+ }
+--- a/third_party/blink/renderer/core/workers/dedicated_worker.h
++++ b/third_party/blink/renderer/core/workers/dedicated_worker.h
+@@ -47,6 +47,7 @@
+ class ScriptState;
+ class V8UnionTrustedScriptURLOrUSVString;
+ class WebContentSettingsClient;
++struct FixtureWorkerCspProducer;
+ struct GlobalScopeCreationParams;
+ struct WebPolicyContainer;
+ 
+@@ -217,6 +218,7 @@
+   const Member<DedicatedWorkerMessagingProxy> context_proxy_;
+ 
+   std::unique_ptr<WebDedicatedWorkerHostFactoryClient> factory_client_;
++  std::unique_ptr<FixtureWorkerCspProducer> fixture_csp_producer_;
+ 
+   // Used for tracking cross-debugger calls.
+   v8_inspector::V8StackTraceId v8_stack_trace_id_;
+--- a/third_party/blink/renderer/core/workers/global_scope_creation_params.h
++++ b/third_party/blink/renderer/core/workers/global_scope_creation_params.h
+@@ -29,6 +29,7 @@
+ #include "third_party/blink/public/platform/web_worker_fetch_context.h"
+ #include "third_party/blink/renderer/core/core_export.h"
+ #include "third_party/blink/renderer/core/frame/csp/content_security_policy.h"
++#include "third_party/blink/renderer/core/workers/csp_fixture_workers.h"
+ #include "third_party/blink/renderer/core/workers/worker_clients.h"
+ #include "third_party/blink/renderer/core/workers/worker_settings.h"
+ #include "third_party/blink/renderer/core/workers/worklet_module_responses_map.h"
+@@ -129,6 +130,7 @@
+   KURL script_url;
+ 
+   mojom::blink::ScriptType script_type;
++  std::unique_ptr<FixtureWorkerCspProducer> fixture_csp_producer;
+ 
+   String global_scope_name;
+   String user_agent;
+--- a/third_party/blink/renderer/core/workers/shared_worker.cc
++++ b/third_party/blink/renderer/core/workers/shared_worker.cc
+@@ -52,6 +52,7 @@
+ #include "third_party/blink/renderer/core/messaging/message_port.h"
+ #include "third_party/blink/renderer/core/probe/core_probes.h"
+ #include "third_party/blink/renderer/core/script/script.h"
++#include "third_party/blink/renderer/core/workers/csp_fixture_workers.h"
+ #include "third_party/blink/renderer/core/workers/shared_worker_client_holder.h"
+ #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+ #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
+@@ -236,11 +237,16 @@
+     }
+   }
+   DCHECK(!options->name.IsNull());
+-  if (options->type == mojom::blink::ScriptType::kClassic)
++  if (options->type == mojom::blink::ScriptType::kClassic) {
+     UseCounter::Count(window, WebFeature::kClassicSharedWorker);
+-  else if (options->type == mojom::blink::ScriptType::kModule)
++  } else if (options->type == mojom::blink::ScriptType::kModule) {
+     UseCounter::Count(window, WebFeature::kModuleSharedWorker);
+-
++  }
++
++  // A connection can reuse a worker in another renderer. No local receipt
++  // can attest for that lifetime.
++  RefuseFixtureWorker(
++      braid::probe::WorkerCspLedger::Refusal::kUnsupportedWorker);
+   SharedWorkerClientHolder::From(*window)->Connect(
+       worker, std::move(remote_port), script_url, std::move(blob_url_token),
+       std::move(options), same_site_cookies, connector_override,
+--- a/third_party/blink/renderer/core/workers/threaded_worklet_messaging_proxy.cc
++++ b/third_party/blink/renderer/core/workers/threaded_worklet_messaging_proxy.cc
+@@ -21,6 +21,7 @@
+ #include "third_party/blink/renderer/core/loader/worker_fetch_context.h"
+ #include "third_party/blink/renderer/core/origin_trials/origin_trial_context.h"
+ #include "third_party/blink/renderer/core/script/script.h"
++#include "third_party/blink/renderer/core/workers/csp_fixture_workers.h"
+ #include "third_party/blink/renderer/core/workers/global_scope_creation_params.h"
+ #include "third_party/blink/renderer/core/workers/threaded_worklet_object_proxy.h"
+ #include "third_party/blink/renderer/core/workers/worker_clients.h"
+@@ -49,8 +50,13 @@
+     mojom::blink::WorkletGlobalScopeCreationParamsPtr
+         client_provided_global_scope_creation_params) {
+   DCHECK(IsMainThread());
+-  if (AskedToTerminate())
++  if (AskedToTerminate()) {
+     return;
++  }
++
++  // Some threaded worklets have no parent renderer execution context.
++  RefuseFixtureWorker(
++      braid::probe::WorkerCspLedger::Refusal::kUnsupportedWorklet);
+ 
+   worklet_object_proxy_ =
+       CreateObjectProxy(this, GetParentExecutionContextTaskRunners(),
+--- a/third_party/blink/renderer/core/workers/worker_global_scope.cc
++++ b/third_party/blink/renderer/core/workers/worker_global_scope.cc
+@@ -74,6 +74,7 @@
+ #include "third_party/blink/renderer/core/trustedtypes/trusted_script_url.h"
+ #include "third_party/blink/renderer/core/trustedtypes/trusted_type_policy_factory.h"
+ #include "third_party/blink/renderer/core/url/dom_origin.h"
++#include "third_party/blink/renderer/core/workers/csp_fixture_workers.h"
+ #include "third_party/blink/renderer/core/workers/custom_event_message.h"
+ #include "third_party/blink/renderer/core/workers/global_scope_creation_params.h"
+ #include "third_party/blink/renderer/core/workers/installed_scripts_manager.h"
+@@ -806,10 +807,14 @@
+   if (is_success) {
+     DetectJavascriptFrameworksOnWorkerLoad(*this, result);
+   }
++  if (auto* producer = GetThread()->FixtureCspProducer()) {
++    producer->generation->TopLevelEvaluated(is_success);
++  }
+   ReportingProxy().DidEvaluateTopLevelScript(is_success, result);
+ 
+-  if (debugger && stack_id_)
++  if (debugger && stack_id_) {
+     debugger->ExternalAsyncTaskFinished(*stack_id_);
++  }
+ 
+   script_eval_state_ = ScriptEvalState::kEvaluated;
+   if (auto* controller = GetThread()->GetWorkerInspectorController()) {
+--- a/third_party/blink/renderer/core/workers/worker_or_worklet_global_scope.cc
++++ b/third_party/blink/renderer/core/workers/worker_or_worklet_global_scope.cc
+@@ -23,6 +23,7 @@
+ #include "third_party/blink/renderer/bindings/core/v8/worker_or_worklet_script_controller.h"
+ #include "third_party/blink/renderer/core/dom/events/event_queue.h"
+ #include "third_party/blink/renderer/core/execution_context/agent.h"
++#include "third_party/blink/renderer/core/frame/csp/execution_context_csp_delegate.h"
+ #include "third_party/blink/renderer/core/frame/deprecation/deprecation.h"
+ #include "third_party/blink/renderer/core/frame/policy_container.h"
+ #include "third_party/blink/renderer/core/inspector/console_message.h"
+@@ -38,6 +39,7 @@
+ #include "third_party/blink/renderer/core/origin_trials/origin_trial_context.h"
+ #include "third_party/blink/renderer/core/probe/core_probes.h"
+ #include "third_party/blink/renderer/core/script/fetch_client_settings_object_impl.h"
++#include "third_party/blink/renderer/core/workers/csp_fixture_workers.h"
+ #include "third_party/blink/renderer/core/workers/worker_global_scope.h"
+ #include "third_party/blink/renderer/core/workers/worker_navigator.h"
+ #include "third_party/blink/renderer/core/workers/worker_reporting_proxy.h"
+@@ -135,6 +137,11 @@
+       const SecurityPolicyViolationEventInit& violation_data,
+       Element* element) override {
+     DCHECK_CALLED_ON_VALID_THREAD(worker_thread_checker_);
++
++    // This delegate can either drop the event or forward it to a different
++    // producer via a separate proxy. Never credit it as a worker DOM dispatch.
++    RefuseFixtureWorker(
++        braid::probe::WorkerCspLedger::Refusal::kOutsideSettingsDispatch);
+ 
+     if (!RuntimeEnabledFeatures::
+             DispatchWorkerCSPViolationEventForModuleGraphFetchingEnabled()) {
+@@ -588,6 +595,21 @@
+ 
+ void WorkerOrWorkletGlobalScope::BindContentSecurityPolicyToExecutionContext() {
+   DCHECK(IsContextThread());
++  if (auto* worker = DynamicTo<WorkerGlobalScope>(this)) {
++    if (auto* producer = worker->GetThread()->FixtureCspProducer()) {
++      if (auto scope = producer->generation->Bind()) {
++        auto check = base::BindRepeating(
++            [](const WorkerCspCheck& check,
++               braid::probe::WorkerCspLedger::Id id, const WorkerToken& token,
++               const Event& event) { return check.Run(id, token, event); },
++            producer->check, producer->generation->id(),
++            worker->GetWorkerToken());
++        static_cast<ExecutionContextCSPDelegate&>(
++            GetContentSecurityPolicyDelegate())
++            .SetFixtureProbe(std::move(scope), std::move(check));
++      }
++    }
++  }
+   GetContentSecurityPolicy()->BindToDelegate(
+       GetContentSecurityPolicyDelegate());
+ }
+--- a/third_party/blink/renderer/core/workers/worker_thread.cc
++++ b/third_party/blink/renderer/core/workers/worker_thread.cc
+@@ -55,6 +55,7 @@
+ #include "third_party/blink/renderer/core/loader/worker_resource_timing_notifier_impl.h"
+ #include "third_party/blink/renderer/core/probe/core_probes.h"
+ #include "third_party/blink/renderer/core/workers/cross_thread_global_scope_creation_params_copier.h"
++#include "third_party/blink/renderer/core/workers/csp_fixture_workers.h"
+ #include "third_party/blink/renderer/core/workers/global_scope_creation_params.h"
+ #include "third_party/blink/renderer/core/workers/worker_backing_thread.h"
+ #include "third_party/blink/renderer/core/workers/worker_clients.h"
+@@ -176,14 +177,24 @@
+     std::unique_ptr<WorkerDevToolsParams> devtools_params) {
+   DCHECK_CALLED_ON_VALID_THREAD(parent_thread_checker_);
+   devtools_worker_token_ = devtools_params->devtools_worker_token;
++  fixture_csp_producer_ =
++      std::move(global_scope_creation_params->fixture_csp_producer);
++  if (!fixture_csp_producer_) {
++    RefuseFixtureWorker(
++        braid::probe::WorkerCspLedger::Refusal::kUnadmittedStart);
++  }
+   PostCrossThreadTask(
+       *GetWorkerBackingThread().BackingThread().GetTaskRunner(), FROM_HERE,
+-      CrossThreadBindOnce(&WorkerThread::InitializeOnWorkerThread,
+-                          CrossThreadUnretained(this),
+-                          std::move(global_scope_creation_params),
+-                          IsOwningBackingThread() ?
+-                              thread_startup_data : std::nullopt,
+-                          std::move(devtools_params)));
++      CrossThreadBindOnce(
++          &WorkerThread::InitializeOnWorkerThread, CrossThreadUnretained(this),
++          std::move(global_scope_creation_params),
++          IsOwningBackingThread() ? thread_startup_data : std::nullopt,
++          std::move(devtools_params)));
++}
++
++FixtureWorkerCspProducer* WorkerThread::FixtureCspProducer() {
++  DCHECK(IsCurrentThread());
++  return fixture_csp_producer_.get();
+ }
+ 
+ void WorkerThread::EvaluateClassicScript(
+@@ -811,8 +822,14 @@
+   }
+   pause_handle_.reset();
+ 
+-  if (WorkerThreadDebugger* debugger = WorkerThreadDebugger::From(GetIsolate()))
++  if (fixture_csp_producer_) {
++    fixture_csp_producer_->generation->BeginDisposal();
++  }
++
++  if (WorkerThreadDebugger* debugger =
++          WorkerThreadDebugger::From(GetIsolate())) {
+     debugger->WorkerThreadDestroyed(this);
++  }
+ 
+   GetWorkerReportingProxy().WillDestroyWorkerGlobalScope();
+ 
+@@ -834,12 +851,15 @@
+ 
+ void WorkerThread::PerformShutdownOnWorkerThread() {
+   DCHECK(IsCurrentThread());
++  bool fixture_graceful;
+   {
+     base::AutoLock locker(lock_);
+     DCHECK_EQ(TerminationProgress::kPerforming, termination_progress_);
+     DCHECK_EQ(ThreadState::kReadyToShutdown, thread_state_);
+-    if (exit_code_ == ExitCode::kNotTerminated)
++    if (exit_code_ == ExitCode::kNotTerminated) {
+       SetExitCode(ExitCode::kGracefullyTerminated);
++    }
++    fixture_graceful = exit_code_ == ExitCode::kGracefullyTerminated;
+   }
+ 
+   // Child workers must not exist when `PerformShutdownOnWorkerThread()`
+@@ -859,9 +879,14 @@
+   console_message_storage_.Clear();
+   inspector_issue_storage_.Clear();
+ 
+-  if (IsOwningBackingThread())
++  if (IsOwningBackingThread()) {
+     GetWorkerBackingThread().ShutdownOnBackingThread();
++  }
+   // We must not touch GetWorkerBackingThread() from now on.
++
++  if (fixture_csp_producer_) {
++    fixture_csp_producer_->generation->FinishDisposal(fixture_graceful);
++  }
+ 
+   // Keep the reference to the shutdown event in a local variable so that the
+   // worker thread can signal it even after calling DidTerminateWorkerThread(),
+--- a/third_party/blink/renderer/core/workers/worker_thread.h
++++ b/third_party/blink/renderer/core/workers/worker_thread.h
+@@ -66,6 +66,7 @@
+ 
+ namespace blink {
+ 
++struct FixtureWorkerCspProducer;
+ class ConsoleMessageStorage;
+ class InspectorTaskRunner;
+ class InspectorIssueStorage;
+@@ -193,6 +194,7 @@
+   // Can be called only on the worker thread, WorkerOrWorkletGlobalScope
+   // and WorkerInspectorController are not thread safe.
+   WorkerOrWorkletGlobalScope* GlobalScope();
++  FixtureWorkerCspProducer* FixtureCspProducer();
+   WorkerInspectorController* GetWorkerInspectorController();
+ 
+   // Number of active worker threads.
+@@ -488,6 +490,8 @@
+ 
+   CrossThreadPersistent<ConsoleMessageStorage> console_message_storage_;
+   CrossThreadPersistent<WorkerOrWorkletGlobalScope> global_scope_;
++  // Set before posting initialization; used only by the worker thereafter.
++  std::unique_ptr<FixtureWorkerCspProducer> fixture_csp_producer_;
+   CrossThreadPersistent<WorkerInspectorController> worker_inspector_controller_;
+ 
+   // Signaled when the thread completes termination on the worker thread. Only
+--- a/third_party/blink/renderer/core/workers/worker_thread_test.cc
++++ b/third_party/blink/renderer/core/workers/worker_thread_test.cc
+@@ -4,20 +4,24 @@
+ 
+ #include "third_party/blink/renderer/core/workers/worker_thread.h"
+ 
++#include <atomic>
+ #include <memory>
+ #include <utility>
+ 
++#include "base/functional/bind.h"
+ #include "base/run_loop.h"
+ #include "base/synchronization/lock.h"
+ #include "base/synchronization/waitable_event.h"
+ #include "testing/gmock/include/gmock/gmock.h"
+ #include "testing/gtest/include/gtest/gtest.h"
+ #include "third_party/blink/public/mojom/v8_cache_options.mojom-blink.h"
++#include "third_party/blink/renderer/core/events/security_policy_violation_event.h"
+ #include "third_party/blink/renderer/core/frame/settings.h"
+ #include "third_party/blink/renderer/core/inspector/inspector_task_runner.h"
+ #include "third_party/blink/renderer/core/inspector/worker_devtools_params.h"
+ #include "third_party/blink/renderer/core/inspector/worker_thread_debugger.h"
+ #include "third_party/blink/renderer/core/script/script.h"
++#include "third_party/blink/renderer/core/workers/csp_fixture_workers.h"
+ #include "third_party/blink/renderer/core/workers/global_scope_creation_params.h"
+ #include "third_party/blink/renderer/core/workers/worker_reporting_proxy.h"
+ #include "third_party/blink/renderer/core/workers/worker_thread_test_helper.h"
+@@ -61,6 +65,18 @@
+   WorkerThreadDebugger* debugger =
+       WorkerThreadDebugger::From(worker_thread->GetIsolate());
+   debugger->PauseWorkerOnStart(worker_thread);
++}
++
++void QueueFixtureCspViolation(WorkerGlobalScope& worker) {
++  auto* csp = worker.GetContentSecurityPolicy();
++  csp->AddPolicies(ParseContentSecurityPolicies(
++      "connect-src 'none'",
++      network::mojom::blink::ContentSecurityPolicyType::kEnforce,
++      network::mojom::blink::ContentSecurityPolicySource::kHTTP,
++      *worker.GetSecurityOrigin()));
++  KURL blocked("http://fake.url/blocked");
++  EXPECT_FALSE(csp->AllowConnectToSource(
++      blocked, blocked, ResourceRequest::RedirectStatus::kNoRedirect));
+ }
+ 
+ // This helper managers a child worker thread and a reporting proxy
+@@ -240,6 +256,111 @@
+             worker_thread_->ShouldTerminateScriptExecution());
+ }
+ 
++TEST_F(WorkerThreadTest, FixtureCspRunsOnOriginalWorkerBeforeGracefulDisposal) {
++  using Ledger = braid::probe::WorkerCspLedger;
++  auto ledger = std::make_shared<Ledger>();
++  auto generation = ledger->Reserve();
++  ASSERT_TRUE(generation);
++  const auto id = generation->id();
++  std::atomic<unsigned> matches{0};
++  const KURL script_url("http://fake.url/");
++  auto params = GlobalScopeCreationParams::CreateForWorkerForTesting(
++      security_origin_.get(), script_url);
++  params->fixture_csp_producer =
++      std::make_unique<FixtureWorkerCspProducer>(FixtureWorkerCspProducer{
++          std::move(generation),
++          base::BindRepeating(
++              [](Ledger::Id id, std::atomic<unsigned>* matches,
++                 Ledger::Id observed, const WorkerToken& token,
++                 const Event& event) {
++                const auto& csp =
++                    static_cast<const SecurityPolicyViolationEvent&>(event);
++                auto* target = event.target();
++                auto* worker = DynamicTo<WorkerGlobalScope>(
++                    target ? target->GetExecutionContext() : nullptr);
++                if (id != observed || !worker || worker != target ||
++                    worker->GetWorkerToken() != token || !event.isTrusted() ||
++                    event.eventPhase() != Event::PhaseType::kAtTarget ||
++                    csp.effectiveDirective() != "connect-src" ||
++                    csp.blockedURI() != "http://fake.url/blocked") {
++                  return false;
++                }
++                ++*matches;
++                return true;
++              },
++              id, base::Unretained(&matches))});
++  ExpectReportingCalls();
++  worker_thread_->Start(std::move(params),
++                        WorkerBackingThreadStartupData::CreateDefault(),
++                        std::make_unique<WorkerDevToolsParams>());
++  RunWorkerToplevelScriptForTesting(*worker_thread_, security_origin_.get(),
++                                    "// CSP fixture worker", script_url);
++  reporting_proxy_->WaitUntilDidEvaluateTopLevelScript();
++
++  // The two closures and the CSP notification share the networking queue.
++  // Enqueue the barrier from the first closure, after CSP has posted.
++  base::WaitableEvent settled;
++  PostCrossThreadTask(
++      *worker_thread_->GetTaskRunner(TaskType::kNetworking), FROM_HERE,
++      CrossThreadBindOnce(
++          [](WorkerThread* thread, base::WaitableEvent* settled) {
++            QueueFixtureCspViolation(
++                *To<WorkerGlobalScope>(thread->GlobalScope()));
++            thread->GetTaskRunner(TaskType::kNetworking)
++                ->PostTask(FROM_HERE,
++                           base::BindOnce(&base::WaitableEvent::Signal,
++                                          base::Unretained(settled)));
++          },
++          CrossThreadUnretained(worker_thread_.get()),
++          CrossThreadUnretained(&settled)));
++  settled.Wait();
++  EXPECT_EQ(1u, matches.load());
++  worker_thread_->Terminate();
++  worker_thread_->WaitForShutdownForTesting();
++  EXPECT_EQ(ExitCode::kGracefullyTerminated, GetExitCode());
++  EXPECT_EQ(Ledger::Refusal::kNone, ledger->SealAndCheckTerminal());
++}
++
++TEST_F(WorkerThreadTest, FixtureCspWorkerCloseWithQueuedDispatchRefuses) {
++  using Ledger = braid::probe::WorkerCspLedger;
++  Ledger ledger;
++  const KURL script_url("http://fake.url/");
++  auto params = GlobalScopeCreationParams::CreateForWorkerForTesting(
++      security_origin_.get(), script_url);
++  params->fixture_csp_producer =
++      std::make_unique<FixtureWorkerCspProducer>(FixtureWorkerCspProducer{
++          ledger.Reserve(),
++          base::BindRepeating([](Ledger::Id, const WorkerToken&, const Event&) {
++            ADD_FAILURE() << "Queued dispatch ran after close()";
++            return false;
++          })});
++  ExpectReportingCalls();
++  EXPECT_CALL(*reporting_proxy_, DidCloseWorkerGlobalScope()).Times(1);
++  worker_thread_->Start(std::move(params),
++                        WorkerBackingThreadStartupData::CreateDefault(),
++                        std::make_unique<WorkerDevToolsParams>());
++  RunWorkerToplevelScriptForTesting(*worker_thread_, security_origin_.get(),
++                                    "// CSP fixture worker", script_url);
++  reporting_proxy_->WaitUntilDidEvaluateTopLevelScript();
++
++  base::WaitableEvent closing;
++  PostCrossThreadTask(
++      *worker_thread_->GetTaskRunner(TaskType::kNetworking), FROM_HERE,
++      CrossThreadBindOnce(
++          [](WorkerThread* thread, base::WaitableEvent* closing) {
++            auto* worker = To<WorkerGlobalScope>(thread->GlobalScope());
++            QueueFixtureCspViolation(*worker);
++            worker->close();
++            closing->Signal();
++          },
++          CrossThreadUnretained(worker_thread_.get()),
++          CrossThreadUnretained(&closing)));
++  closing.Wait();
++  worker_thread_->Terminate();
++  worker_thread_->WaitForShutdownForTesting();
++  EXPECT_EQ(Ledger::Refusal::kUnsettledDispatch, ledger.SealAndCheckTerminal());
++}
++
+ TEST_F(WorkerThreadTest, AsyncTerminate_OnIdle) {
+   ExpectReportingCalls();
+   Start();
+--- a/third_party/blink/renderer/core/workers/worklet.cc
++++ b/third_party/blink/renderer/core/workers/worklet.cc
+@@ -18,6 +18,7 @@
+ #include "third_party/blink/renderer/core/fetch/request.h"
+ #include "third_party/blink/renderer/core/frame/local_dom_window.h"
+ #include "third_party/blink/renderer/core/loader/worker_resource_timing_notifier_impl.h"
++#include "third_party/blink/renderer/core/workers/csp_fixture_workers.h"
+ #include "third_party/blink/renderer/core/workers/worklet_pending_tasks.h"
+ #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
+ #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+@@ -86,6 +87,9 @@
+     return promise;
+   }
+ 
++  // Refuse before posting work, including main-thread worklets.
++  RefuseFixtureWorker(
++      braid::probe::WorkerCspLedger::Refusal::kUnsupportedWorklet);
+   WorkletPendingTasks* pending_tasks =
+       MakeGarbageCollected<WorkletPendingTasks>(this, resolver);
+   pending_tasks_set_.insert(pending_tasks);
+--- a/third_party/blink/renderer/core/workers/worklet_global_scope.cc
++++ b/third_party/blink/renderer/core/workers/worklet_global_scope.cc
+@@ -30,6 +30,7 @@
+ #include "third_party/blink/renderer/core/origin_trials/origin_trial_context.h"
+ #include "third_party/blink/renderer/core/probe/core_probes.h"
+ #include "third_party/blink/renderer/core/script/modulator.h"
++#include "third_party/blink/renderer/core/workers/csp_fixture_workers.h"
+ #include "third_party/blink/renderer/core/workers/global_scope_creation_params.h"
+ #include "third_party/blink/renderer/core/workers/worker_reporting_proxy.h"
+ #include "third_party/blink/renderer/core/workers/worker_thread.h"
+@@ -111,6 +112,8 @@
+           creation_params->cross_origin_isolated_capability),
+       parent_is_isolated_context_(creation_params->parent_is_isolated_context),
+       browser_interface_broker_proxy_(this) {
++  RefuseFixtureWorker(
++      braid::probe::WorkerCspLedger::Refusal::kUnsupportedWorklet);
+   DCHECK((thread_type_ == ThreadType::kMainThread && frame_) ||
+          (thread_type_ == ThreadType::kOffMainThread && worker_thread_));
+ 
+--- a/third_party/blink/renderer/modules/service_worker/service_worker_container.cc
++++ b/third_party/blink/renderer/modules/service_worker/service_worker_container.cc
+@@ -61,6 +61,7 @@
+ #include "third_party/blink/renderer/core/messaging/message_port.h"
+ #include "third_party/blink/renderer/core/script/script.h"
+ #include "third_party/blink/renderer/core/script_type_names.h"
++#include "third_party/blink/renderer/core/workers/csp_fixture_workers.h"
+ #include "third_party/blink/renderer/core/workers/dedicated_worker_global_scope.h"
+ #include "third_party/blink/renderer/modules/event_target_modules.h"
+ #include "third_party/blink/renderer/modules/service_worker/service_worker.h"
+@@ -478,6 +479,9 @@
+       WebServiceWorkerRegistrationObjectInfo, const WebServiceWorkerError&,
+       WebServiceWorkerErrorTraitsForUpdate>>(resolver);
+ 
++  // Registration can create or reuse a producer outside this renderer.
++  RefuseFixtureWorker(
++      braid::probe::WorkerCspLedger::Refusal::kUnsupportedWorker);
+   // Defer register() from a prerendered page until page activation.
+   // https://wicg.github.io/nav-speculation/prerendering.html#patch-service-workers
+   if (GetExecutionContext()->IsWindow()) {

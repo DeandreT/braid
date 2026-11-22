@@ -27,7 +27,8 @@ def main():
         parser.error("expected pristine Playwright checkout")
     # Grant no provenance based on LASTCHANGE alone. Caller verifies the
     # release archive before extraction, as specified in the adjacent README.
-    stages = [(chrome, here / "native-phase.patch"), (chrome, here / "inspector-receipt.patch"),
+    stages = [(chrome, here / "native-phase.patch"), (chrome, here / "worker-lifecycle.patch"),
+              (chrome, here / "inspector-receipt.patch"), (chrome, here / "worker-transport.patch"),
               (driver, here / "driver-launch.patch")]
     touched = []
     try:
