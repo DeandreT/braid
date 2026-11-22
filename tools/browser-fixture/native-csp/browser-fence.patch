@@ -1,0 +1,347 @@
+--- a/content/browser/devtools/browser_devtools_agent_host.cc
++++ b/content/browser/devtools/browser_devtools_agent_host.cc
+@@ -237,7 +237,7 @@
+   session->CreateAndAddHandler<protocol::BluetoothEmulationHandler>();
+ #endif
+   session->CreateAndAddHandler<protocol::BrowserHandler>(
+-      session->GetClient()->MayWriteLocalFiles());
++      session->GetClient()->MayWriteLocalFiles(), true);
+ #if BUILDFLAG(USE_VIZ_DEBUGGER)
+   session->CreateAndAddHandler<protocol::VisualDebuggerHandler>();
+ #endif
+--- /dev/null
++++ b/content/browser/devtools/protocol/braid_inventory.h
+@@ -0,0 +1,13 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++#ifndef CONTENT_BROWSER_DEVTOOLS_PROTOCOL_BRAID_INVENTORY_H_
++#define CONTENT_BROWSER_DEVTOOLS_PROTOCOL_BRAID_INVENTORY_H_
++#include "third_party/blink/public/common/tokens/tokens.h"
++namespace content {
++class RenderFrameHostImpl;
++namespace protocol {
++void BraidDocumentTransition(RenderFrameHostImpl&, const blink::DocumentToken&, bool birth);
++}
++}
++#endif
+--- a/content/browser/devtools/protocol/browser_handler.cc
++++ b/content/browser/devtools/protocol/browser_handler.cc
+@@ -5,8 +5,18 @@
+ #include "content/browser/devtools/protocol/browser_handler.h"
+ 
+ #include <string.h>
++#include "content/browser/devtools/protocol/braid_inventory.h"
++#include "content/browser/renderer_host/render_frame_host_impl.h"
++#include "content/public/browser/render_process_host.h"
++#include "content/public/browser/browser_thread.h"
++#include "base/supports_user_data.h"
++#include "base/strings/string_number_conversions.h"
++#include "crypto/hash.h"
++#include "crypto/sign.h"
+ 
+ #include <algorithm>
++#include <set>
++#include "base/unguessable_token.h"
+ #include <memory>
+ #include <optional>
+ #include <string>
+@@ -84,11 +94,91 @@
+ 
+ }  // namespace
+ 
+-BrowserHandler::BrowserHandler(bool allow_set_download_behavior)
++BrowserHandler::BrowserHandler(bool allow_set_download_behavior, bool braid_browser_session)
+     : DevToolsDomainHandler(Browser::Metainfo::domainName),
++      braid_browser_session_(braid_browser_session),
+       download_events_enabled_(false),
+       allow_set_download_behavior_(allow_set_download_behavior) {}
+ 
++// Browser UI-sequence authority for this *document* inventory. Renderer
++// producers are not inferred from it. Native clean admission is intentionally absent.
++struct BraidInventory {
++  std::string run,epoch,snapshot,prepared_digest,checkpoint,failure;
++  std::array<uint8_t,32> key{};
++  std::vector<std::string> records;
++  std::set<std::string> live;
++  int prepared_revision = 0;
++  bool context_gone = false, verified = false;
++  void Fail(std::string why) { if (failure.empty()) failure=std::move(why); }
++  std::string Records() const {return base::JoinString(records,"\n");}
++  std::string Digest() const {return base::HexEncodeLower(crypto::hash::Sha256(run+":"+epoch+":"+Records()));}
++};
++namespace {
++const int kBraidSlot = 0;
++struct BraidSlot : base::SupportsUserData::Data {
++  std::shared_ptr<BraidInventory> run;
++  ~BraidSlot() override {if(run)run->context_gone=true;}
++};
++bool BraidHex(const std::string& value,size_t length) {
++  return value.size()==length && value.find_first_not_of("0123456789abcdef")==std::string::npos;
++}
++}
++void BraidDocumentTransition(RenderFrameHostImpl& frame,const blink::DocumentToken& token,bool birth) {
++  DCHECK_CURRENTLY_ON(BrowserThread::UI);
++  auto* ctx=frame.GetBrowserContext();
++  if(!ctx->IsOffTheRecord())return;
++  auto* slot=static_cast<BraidSlot*>(ctx->GetUserData(&kBraidSlot));
++  // One persistent marker rejects late admission even when every old page is gone.
++  if(!slot){ctx->SetUserData(&kBraidSlot,std::make_unique<BraidSlot>());return;}
++  if(!slot->run)return;
++  auto& r=*slot->run;
++  if(r.records.size()>=512){r.Fail("inventory-limit");return;}
++  std::string id=token.ToString();
++  if(birth){if(!r.snapshot.empty())r.Fail("late-document");if(!r.live.insert(id).second)r.Fail("duplicate-document");}
++  else if(!r.live.erase(id))r.Fail("unknown-disposal");
++  auto* parent=frame.GetParent();
++  // The parent may itself be speculative; its frame-tree node is not a document token.
++  r.records.push_back(std::string(birth?"B:":"D:")+id+":"+base::NumberToString(frame.GetFrameTreeNodeId().value())+":"+
++    base::NumberToString(frame.GetProcess()->GetID().value())+":"+(parent?base::NumberToString(parent->GetFrameTreeNodeId().value()):"-"));
++}
++Response BrowserHandler::BeginBraidInventory(const std::string& context,const std::string& epoch,const std::string& public_key,std::string* run) {
++  if(!braid_browser_session_ || braid_ || !BraidHex(epoch,32))return Response::ServerError("invalid browser enrollment");
++  BrowserContext* ctx=nullptr;auto found=FindBrowserContext(context,&ctx);if(!found.IsSuccess())return found;
++  if(!ctx->IsOffTheRecord() || ctx->GetUserData(&kBraidSlot))return Response::ServerError("context already used");
++  auto slot=std::make_unique<BraidSlot>();braid_=std::make_shared<BraidInventory>();slot->run=braid_;
++  if(!BraidHex(public_key,64) || !base::HexStringToSpan(public_key,braid_->key)){braid_.reset();return Response::ServerError("invalid receipt key");}
++  braid_->epoch=epoch;*run=braid_->run=base::UnguessableToken::Create().ToString();ctx->SetUserData(&kBraidSlot,std::move(slot));return Response::Success();
++}
++Response BrowserHandler::ReadBraidInventory(const std::string& run,int* rev,std::string* records,std::string* digest) {
++  if(!braid_ || braid_->run!=run)return Response::ServerError("unknown run");
++  *rev=static_cast<int>(braid_->records.size());*records=braid_->Records();*digest=braid_->Digest();return Response::Success();
++}
++Response BrowserHandler::PrepareBraidFence(const std::string& run,int revision,const std::string& inventory,const std::string& digest,const std::string& checkpoint,std::string* ticket,std::string* disposition) {
++  if(!braid_ || braid_->run!=run)return Response::ServerError("unknown run");auto& r=*braid_;
++  if(!r.snapshot.empty()){r.Fail("duplicate-prepare");return Response::ServerError("already prepared");}
++  r.prepared_revision=static_cast<int>(r.records.size());r.prepared_digest=r.Digest();r.checkpoint=checkpoint;
++  if(revision!=r.prepared_revision || inventory!=r.Records() || digest!=r.prepared_digest)r.Fail("inventory-mismatch");
++  // Prefix 1 is the fsynced inventory checkpoint of this single-use fence.
++  // Do not equate a hex digest or a valid signature with renderer coverage.
++  if(checkpoint.size()!=195 || !checkpoint.starts_with("1:") || checkpoint[66]!=':' || !BraidHex(checkpoint.substr(2,64),64))r.Fail("missing-durable-checkpoint");
++  else {
++    std::array<uint8_t,64> signature{};
++    const std::string message="braid-fence-v1:"+run+":"+r.epoch+":"+base::NumberToString(revision)+":"+digest+":"+checkpoint.substr(0,66);
++    if(!base::HexStringToSpan(checkpoint.substr(67),signature) || !crypto::sign::Verify(crypto::sign::ED25519,
++       crypto::keypair::PublicKey::FromEd25519PublicKey(r.key),base::as_byte_span(message),signature))r.Fail("invalid-checkpoint-proof");
++  }
++  if(r.live.empty() || r.context_gone)r.Fail("no-live-original");
++  *ticket=r.snapshot=base::UnguessableToken::Create().ToString();
++  *disposition=r.failure.empty()?"renderer-producer-coverage-unproven":r.failure;
++  return Response::Success();
++}
++Response BrowserHandler::VerifyBraidDisposal(const std::string& run,int revision,const std::string& ticket,const std::string& digest,const std::string& checkpoint,bool* disposed,std::string* disposition,int* current,std::string* transitions){
++  if(!braid_ || braid_->run!=run)return Response::ServerError("unknown run");auto& r=*braid_;
++  if(r.verified || r.snapshot.empty() || ticket!=r.snapshot || revision!=r.prepared_revision || digest!=r.prepared_digest || checkpoint!=r.checkpoint)r.Fail("invalid-fence-echo");
++  *current=static_cast<int>(r.records.size()); *transitions=base::JoinString(std::vector<std::string>(r.records.begin()+r.prepared_revision,r.records.end()),"\n");
++  r.verified=true;*disposed=r.context_gone && r.live.empty();if(!*disposed)r.Fail("originals-not-disposed");
++  *disposition=r.failure.empty()?"renderer-producer-coverage-unproven":r.failure;return Response::Success();
++}
+ BrowserHandler::~BrowserHandler() = default;
+ 
+ Response BrowserHandler::Disable() {
+--- a/content/browser/devtools/protocol/browser_handler.h
++++ b/content/browser/devtools/protocol/browser_handler.h
+@@ -26,11 +26,13 @@
+ 
+ namespace protocol {
+ 
++struct BraidInventory;
++
+ class BrowserHandler : public DevToolsDomainHandler,
+                        public Browser::Backend,
+                        public download::DownloadItem::Observer {
+  public:
+-  explicit BrowserHandler(bool allow_set_download_behavior);
++  explicit BrowserHandler(bool allow_set_download_behavior, bool braid_browser_session = false);
+ 
+   BrowserHandler(const BrowserHandler&) = delete;
+   BrowserHandler& operator=(const BrowserHandler&) = delete;
+@@ -47,6 +49,10 @@
+ 
+   Response Disable() override;
+ 
++  Response BeginBraidInventory(const std::string& browserContextId, const std::string& epoch, const std::string& publicKey, std::string* out_runId) override;
++  Response ReadBraidInventory(const std::string& runId, int* out_revision, std::string* out_inventory, std::string* out_digest) override;
++  Response PrepareBraidFence(const std::string& runId, int revision, const std::string& inventory, const std::string& digest, const std::string& checkpoint, std::string* out_snapshotToken, std::string* out_disposition) override;
++  Response VerifyBraidDisposal(const std::string& runId, int revision, const std::string& snapshotToken, const std::string& digest, const std::string& checkpoint, bool* out_disposed, std::string* out_disposition, int* out_revision, std::string* out_transitions) override;
+   // Protocol methods.
+   Response GetVersion(std::string* protocol_version,
+                       std::string* product,
+@@ -136,6 +142,8 @@
+       std::string,
+       DevToolsDownloadManagerDelegate::DownloadBehaviorOverrideHandle>
+       download_behavior_overrides_;
++  std::shared_ptr<BraidInventory> braid_;
++  const bool braid_browser_session_;
+   bool download_events_enabled_;
+   const bool allow_set_download_behavior_;
+   base::flat_set<raw_ptr<download::DownloadItem, CtnExperimental>>
+--- a/content/browser/devtools/protocol_config.json
++++ b/content/browser/devtools/protocol_config.json
+@@ -19,7 +19,7 @@
+             },
+             {
+                 "domain": "Browser",
+-                "include": ["getVersion", "getHistograms", "getHistogram", "getBrowserCommandLine", "grantPermissions", "setDownloadBehavior", "cancelDownload", "resetPermissions", "crash", "crashGpuProcess", "setPermission", "getGlobalPrivacyControl", "setGlobalPrivacyControl", "addMockCamera"],
++                "include": ["getVersion", "getHistograms", "getHistogram", "getBrowserCommandLine", "grantPermissions", "setDownloadBehavior", "cancelDownload", "resetPermissions", "crash", "crashGpuProcess", "setPermission", "getGlobalPrivacyControl", "setGlobalPrivacyControl", "addMockCamera", "beginBraidInventory", "readBraidInventory", "prepareBraidFence", "verifyBraidDisposal"],
+                 "async": ["grantPermissions", "resetPermissions", "setPermission"]
+             },
+             {
+--- a/content/browser/renderer_host/document_associated_data.cc
++++ b/content/browser/renderer_host/document_associated_data.cc
+@@ -5,6 +5,7 @@
+ #include "content/browser/renderer_host/document_associated_data.h"
+ 
+ #include <utility>
++#include "content/browser/devtools/protocol/braid_inventory.h"
+ 
+ #include "base/check.h"
+ #include "base/check_op.h"
+@@ -53,6 +54,7 @@
+       weak_factory_(&document) {
+   auto [_, inserted] = GetDocumentTokenMap().insert({token_, &document});
+   CHECK(inserted);
++  protocol::BraidDocumentTransition(document, token_, true);
+ 
+   // Only create page object for the main document as the PageImpl is 1:1 with
+   // main document.
+@@ -102,6 +104,7 @@
+ 
+   // Last in case any DocumentService / DocumentUserData service destructors try
+   // to look up RenderFrameHosts by DocumentToken.
++  protocol::BraidDocumentTransition(*GetWeakPtr(), token_, false);
+   CHECK_EQ(1u, GetDocumentTokenMap().erase(token_));
+ }
+ 
+--- a/third_party/blink/public/devtools_protocol/domains/Audits.pdl
++++ b/third_party/blink/public/devtools_protocol/domains/Audits.pdl
+@@ -921,6 +921,13 @@
+     returns
+       string reservation
+ 
++  experimental command readBraidZero
++    parameters
++      string epoch
++    returns
++      string generation
++      string producer
++
+   experimental command armBraidWorker
+     parameters
+       string epoch
+--- a/third_party/blink/public/devtools_protocol/domains/Browser.pdl
++++ b/third_party/blink/public/devtools_protocol/domains/Browser.pdl
+@@ -345,6 +345,46 @@
+ 
+   # Gets the current globally-applied privacy control status
+   # See https://www.w3.org/TR/gpc/#get-global-privacy-control
++  experimental command beginBraidInventory
++    parameters
++      string browserContextId
++      string epoch
++      string publicKey
++    returns
++      string runId
++
++  experimental command readBraidInventory
++    parameters
++      string runId
++    returns
++      integer revision
++      string inventory
++      string digest
++
++  experimental command prepareBraidFence
++    parameters
++      string runId
++      integer revision
++      string inventory
++      string digest
++      string checkpoint
++    returns
++      string snapshotToken
++      string disposition
++
++  experimental command verifyBraidDisposal
++    parameters
++      string runId
++      integer revision
++      string snapshotToken
++      string digest
++      string checkpoint
++    returns
++      boolean disposed
++      string disposition
++      integer inventoryRevision
++      string transitions
++
+   experimental command getGlobalPrivacyControl
+     returns
+       boolean gpc
+--- a/third_party/blink/renderer/core/inspector/inspector_audits_agent.cc
++++ b/third_party/blink/renderer/core/inspector/inspector_audits_agent.cc
+@@ -247,6 +247,11 @@
+   auto& delegate=static_cast<ExecutionContextCSPDelegate&>(context->GetContentSecurityPolicyDelegate());
+   if (delegate.HasFixtureProbe()) {braid_refused_=true;return;}
+   braid_creating_=true; BindBraidDocumentCheck(delegate);
++  load_producer_=std::nullopt;
++  auto load=braid_scope_->Root();
++  if(!load){braid_refused_=true;return;}
++  load_producer_.emplace(std::move(*load));
++  load_identity_=String::FromUtf8(base::UnguessableToken::Create().ToString());
+ }
+ 
+ void InspectorAuditsAgent::DidCreateBraidDocument(LocalFrame* frame, Document* doc) {
+@@ -255,6 +260,20 @@
+   braid_creating_=false; braid_document_=doc;
+ }
+ 
++void InspectorAuditsAgent::LoadEventFired(LocalFrame* frame) {
++  if(!load_producer_ || frame!=braid_reserved_frame_.Get())return;
++  if(!braid_document_ || frame->GetDocument()!=braid_document_.Get()){braid_refused_=true;return;}
++  load_producer_->Completed();load_producer_.reset();load_returned_=true;
++}
++protocol::Response InspectorAuditsAgent::readBraidZero(const String& epoch,String* generation,String* producer) {
++  auto* doc=braid_document_.Get();auto* frame=braid_reserved_frame_.Get();
++  if(braid_refused_ || epoch!=braid_epoch_ || !braid_scope_ || !doc || !frame || frame->GetDocument()!=doc ||
++     !inspected_frames_->Contains(frame) || !doc->domWindow() || doc->domWindow()->IsContextDestroyed() ||
++     doc->IsPrerendering() || doc->domWindow()->is_in_back_forward_cache() || !load_returned_ || load_producer_ ||
++     !braid_dispatch_->empty()) {braid_refused_=true;return protocol::Response::ServerError("zero producer unresolved");}
++  braid_scope_->SealIngress();if(braid_scope_->Inspect()!=braid::probe::Scope::Status::ClosedLocalOnly){braid_refused_=true;return protocol::Response::ServerError("unsettled CSP work");}
++  *generation=String::FromUtf8(doc->Token().ToString());*producer=load_identity_;return protocol::Response::Success();
++}
+ void InspectorAuditsAgent::BindBraidDocumentCheck(ExecutionContextCSPDelegate& delegate) {
+   braid_scope_ = std::make_shared<braid::probe::Scope>();
+   braid_dispatch_ = std::make_shared<String>();
+--- a/third_party/blink/renderer/core/inspector/inspector_audits_agent.h
++++ b/third_party/blink/renderer/core/inspector/inspector_audits_agent.h
+@@ -52,6 +52,8 @@
+   protocol::Response reserveBraidDocument(const String&, const String&, String*) override;
+   void WillCreateBraidDocument(LocalFrame*, ExecutionContext*, const KURL&);
+   void DidCreateBraidDocument(LocalFrame*, Document*);
++  void LoadEventFired(LocalFrame*);
++  protocol::Response readBraidZero(const String&, String*, String*) override;
+   void Restore() override;
+ 
+   protocol::Response getEncodedResponse(
+@@ -70,6 +72,9 @@
+   void BindBraidDocumentCheck(ExecutionContextCSPDelegate&);
+   WeakMember<LocalFrame> braid_reserved_frame_;
+   bool braid_creating_ = false;
++  std::optional<braid::probe::Scope::Credit> load_producer_;
++  String load_identity_;
++  bool load_returned_ = false;
+   WeakMember<Document> braid_document_;
+   String braid_epoch_;
+   std::shared_ptr<braid::probe::Scope> braid_scope_;
+--- a/third_party/blink/renderer/core/probe/core_probes.json5
++++ b/third_party/blink/renderer/core/probe/core_probes.json5
+@@ -67,7 +67,7 @@
+     },
+     InspectorAuditsAgent: {
+       probes: [
+-        "InspectorIssueAdded", "WillCreateBraidDocument", "DidCreateBraidDocument"
++        "InspectorIssueAdded", "WillCreateBraidDocument", "DidCreateBraidDocument", "LoadEventFired"
+       ]
+     },
+     InspectorCSSAgent: {

@@ -6,7 +6,7 @@ No browser suite imports this fixture. There is no browser-clean verdict. `worke
 
 Use an empty task-owned build directory. Obtain Chromium release source `157.0.8090.0`, revision `2ea1b71af70d7fc5d41325dda8df37c1f98ac531` (official `.tar.xz` SHA-256 `59d273ca268798f0e3fd5a703cd7233d44a912a6e9adb0597d9b8e61d991eb0a`). Verify the digest **before** extracting, verify `build/util/LASTCHANGE` against the revision, and use the GN, sysroot, Clang, Rust and test fonts pinned in its `DEPS`. If the release compiler lacks `cr_build_revision`, restore the verified pinned Clang package using Chromium's `tools/clang/scripts/update.py`; don't bypass GN's version check. The test-fonts GCS package belongs under `third_party/test_fonts/test_fonts`.
 
-After verifying and extracting Chromium and checking out Playwright at `606ecd8b34bac100db32561b6278ffd76e5eb3cd`, apply the complete stack **once** to pristine inputs. `$FIXTURE` is the absolute path to this directory. The helper applies `native-phase.patch`, `worker-lifecycle.patch`, `inspector-receipt.patch`, `worker-transport.patch`, then `document-birth.patch` to Chromium, and `driver-launch.patch` to Playwright.
+After verifying and extracting Chromium and checking out Playwright at `606ecd8b34bac100db32561b6278ffd76e5eb3cd`, apply the complete stack **once** to pristine inputs. `$FIXTURE` is the absolute path to this directory. The helper applies `native-phase.patch`, `worker-lifecycle.patch`, `inspector-receipt.patch`, `worker-transport.patch`, `document-birth.patch`, then `browser-fence.patch` to Chromium, and `driver-launch.patch` to Playwright.
 
 ```sh
 python3 "$FIXTURE/apply-receipt-pair.py" "$CHROMIUM_SRC" "$PLAYWRIGHT_SRC"
@@ -44,3 +44,5 @@ With the same admitted pair, environment and loopback-down namespace, run `timeo
 ## Reserving the next fixture document
 
 `Audits.reserveBraidDocument({epoch, frameId})` on the original private page session returns a one-use reservation for the next mapped HTML document in the specified root or immediate local child frame. Reserve before navigating. The renderer installs its delegate before `DocumentInit::CreateDocument`, and binds the created document before initialization. Only pending reservation state transfers across an agent replacement; an old receipt must never transfer. Read the actual document token and completed dispatch using `Audits.readBraidDispatch` on the same logical session. Test with `timeout 40 node "$FIXTURE/navigation-control.mjs"` in the offline fixture namespace. The controls target the fixed fixture origin and don't attest the seed page, arbitrary origins, blocked or abandoned navigations, browser-wide ingress, or final disposal. Don't use this method as the packaged adapter's `drain` or `cutoff` implementation.
+
+The [browser-session fence transport](browser-fence.md) binds the original document inventory and signed checkpoint across context disposal. It is refusal-only.
