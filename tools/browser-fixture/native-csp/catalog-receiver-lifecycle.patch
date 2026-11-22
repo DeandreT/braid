@@ -489,6 +489,14 @@
          Advance();
          return;
        }
+@@ -240,6 +244,7 @@
+   }
+ 
+   Failure failure() const { return failure_; }
++  bool OutstandingChild(Id id) const {return HasChild(id);}
+   Id trusted_calls() const { return trusted_calls_; }
+   Id synthetic_calls() const { return synthetic_calls_; }
+ 
 --- a/third_party/blink/renderer/core/inspector/inspector_audits_agent.cc
 +++ b/third_party/blink/renderer/core/inspector/inspector_audits_agent.cc
 @@ -229,7 +229,7 @@
@@ -532,7 +540,7 @@
 +}
 +protocol::Response InspectorAuditsAgent::readBraidEdges(const String& epoch,const String& generation,String* result){
 +  auto* doc=braid_document_.Get();auto* frame=braid_reserved_frame_.Get();if(!doc||!frame||frame->GetDocument()!=doc||epoch!=braid_epoch_||generation!=String::FromUtf8(doc->Token().ToString()))return protocol::Response::ServerError("original unavailable");
-+  auto work=FixtureAsyncWork::From(doc->domWindow());if(!work)return protocol::Response::ServerError("unowned work");std::string out;for(const auto& edge:work->edges){out+=std::to_string(edge.id)+":"+std::to_string(edge.parent)+":"+edge.kind+":"+(edge.terminal?edge.terminal:"open")+"\n";}*result=String::FromUtf8(out);return protocol::Response::Success();
++  auto work=FixtureAsyncWork::From(doc->domWindow());if(!work)return protocol::Response::ServerError("unowned work");std::string out;for(const auto& edge:work->edges){out+=std::to_string(edge.id)+":"+std::to_string(edge.parent)+":"+edge.kind+":"+(edge.terminal?edge.terminal:"open")+":"+(work->ingress->OutstandingChild(edge.id)?"live":"retired")+"\n";}*result=String::FromUtf8(out);return protocol::Response::Success();
 +}
  protocol::Response InspectorAuditsAgent::prepareBraidIngress(
      const String& epoch, const String& generation, bool* focus_outstanding,

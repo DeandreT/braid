@@ -138,7 +138,8 @@ try {
     epoch: eligible ? epoch : "0".repeat(32),
     frameId: frameTree.frame.id,
   });
-  if (mode === "hold-challenge") {
+  const traceChild = mode === "hold-challenge" || mode === "success";
+  if (traceChild) {
     await page.goto(origin + path);
     await page
       .getByRole("link", { name: synthetic.project.name, exact: true })
@@ -158,7 +159,16 @@ try {
   );
   if (["missing", "wrong", "lost-reply", "hold-challenge"].includes(mode))
     await owner.send("Browser.armBraidReceiverFault", { runId, mode });
-  if (mode === "hold-challenge")
+  const readChildren = async (generation) =>
+    (await c.send("Audits.readBraidEdges", { epoch, generation })).records
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((x) => x.split(":"));
+  const priorIds = traceChild
+    ? new Set((await readChildren((await work()).generation)).map((e) => e[0]))
+    : null;
+  if (traceChild)
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   else await page.goto(origin + path);
   try {
@@ -177,7 +187,7 @@ try {
         .filter(([, i, gen]) => i === id && g === gen)
         .map(([k]) => k);
     assert.deepEqual(
-      stages(h).filter((k) => k !== "I"),
+      stages(h).filter((k) => !eligible || k !== "I"),
       ["S", "C", "R", "O"],
     );
     if (eligible)
@@ -188,6 +198,16 @@ try {
         c.send("Audits.readBraidWork", { epoch: "0".repeat(32) }),
         /original work unavailable/,
       );
+    let child;
+    if (traceChild) {
+      const selected = (await readChildren(g)).filter(
+        ([edgeId, parent, kind]) =>
+          kind === "fetch-client" && !priorIds.has(edgeId),
+      );
+      assert.equal(selected.length, 1);
+      child = selected[0];
+      assert.deepEqual(child.slice(3), ["open", "live"]);
+    }
     if (mode === "hold-challenge") {
       release();
       await until(host, (h) => stages(h).includes("P"), "challenge issued");
@@ -256,16 +276,24 @@ try {
     }[mode];
     if (wanted)
       await until(host, (h) => stages(h).includes(wanted), "original verdict");
-    if (mode === "hold-challenge") {
-      const edge = await until(
-        () => c.send("Audits.readBraidEdges", { epoch, generation: g }),
-        (x) =>
-          x.records
-            .split("\n")
-            .some((r) => r.endsWith(":fetch-client:refused-open")),
-        "renderer rejected original child",
+    if (traceChild) {
+      const desired =
+        mode === "success"
+          ? ["receiver-ack", "retired"]
+          : ["refused-open", "live"];
+      const original = child.slice(0, 3);
+      const result = await until(
+        () => readChildren(g),
+        (edges) =>
+          edges.some(
+            (e) =>
+              e[0] === child[0] && e[3] === desired[0] && e[4] === desired[1],
+          ),
+        "exact original fetch child",
       );
-      assert.ok(!edge.records.includes(":fetch-client:receiver-ack"));
+      const matches = result.filter((e) => e[0] === child[0]);
+      assert.deepEqual(matches, [[...original, ...desired]]);
+      console.log("original fetch child:", g, ...matches[0]);
     }
     await ctx.close();
     const state = stages(await host());
@@ -283,7 +311,8 @@ try {
       );
     if (mode === "lost-reply")
       assert.ok(state.includes("P") && state.includes("M"));
-    if (mode === "refused-enrollment") assert.ok(!state.includes("E"));
+    if (mode === "refused-enrollment")
+      assert.deepEqual(state, ["S", "C", "R", "F", "O"]);
     if (["late", "wrong", "missing"].includes(mode))
       assert.ok(state.includes({ late: "L", wrong: "X", missing: "M" }[mode]));
     if (echo) {
