@@ -83,7 +83,7 @@
    std::vector<std::string> resource_log;
    bool resource_lost=false;
    bool nav_enabled=false,nav_lost=false;
-@@ -147,17 +160,71 @@
+@@ -147,17 +160,76 @@
    if(!slot||!slot->run||!slot->run->nav_enabled)return {};
    // Bound to this factory's original document, never looked up by current frame at job arrival.
    auto token=frame.GetDocumentTokenIgnoringSafetyRestrictions().ToString();
@@ -114,7 +114,7 @@
 +  OriginalFetchReceiver(RenderFrameHostImpl& f,mojo::PendingReceiver<blink::mojom::BraidReceiver> pipe,std::shared_ptr<BraidInventory> r):DocumentService(f,std::move(pipe)),r_(std::move(r)),gen_(f.GetDocumentToken().ToString()){}
 +  ~OriginalFetchReceiver() override {if(!returned_)Refuse("receiver-disconnected");}
 +  void Open(const std::string& gen,const std::string& loader,const std::string& key,OpenCallback reply) override {
-+    if(key.empty()||key.size()>64||bad_||!nonce_.empty()||gen!=gen_||loader.size()!=32||!r_->snapshot.empty()||r_->loader_nonces.size()>=2048||!r_->loader_nonces.insert(loader).second||!r_->admitted_keys.emplace(gen_,key).second){Refuse("wrong-receiver-open");std::move(reply).Run("missing");return;}nonce_=loader;admitted_=key;std::move(reply).Run(std::exchange(r_->next_receiver_fault,{}));
++    if(key.empty()||key.size()>64||bad_||!nonce_.empty()||gen!=gen_||loader.size()!=32||!r_->snapshot.empty()||r_->loader_nonces.size()>=2048||!r_->loader_nonces.insert(loader).second||!r_->admitted_keys.emplace(gen_,key).second){Refuse("wrong-receiver-open");std::move(reply).Run("missing");return;}nonce_=loader;admitted_=key;auto fault=std::exchange(r_->next_receiver_fault,{});drop_reply_=fault=="lost-reply";std::move(reply).Run(drop_reply_?std::string():fault);
 +  }
 +  void Enter(const std::string& key) override {
 +    auto it=r_->receiver_credits.find({gen_,key});if(key!=admitted_||bad_||nonce_.empty()||!key_.empty()||it==r_->receiver_credits.end()||it->second.entered||it->second.invalid||!r_->live.contains(gen_)){Refuse("receiver-entry-mismatch");return;}key_=key;it->second.entered=true;
@@ -127,16 +127,21 @@
 +    if(bad_||key_.empty()||key!=key_){Refuse("receiver-body-mismatch");return;}auto& c=r_->receiver_credits.at({gen_,key_});if(c.body||c.invalid){Refuse("receiver-body-late");return;}c.body=true;Log("B",c.id);
 +  }
 +  void Returned(const std::string& key,const std::string& loader,ReturnedCallback ack) override {
-+    if(bad_||key_.empty()||key!=key_){Refuse("wrong-receiver-return");std::move(ack).Run(false);return;}auto& c=r_->receiver_credits.at({gen_,key_});
++    if(bad_||key_.empty()||key!=key_){Refuse("wrong-receiver-return");std::move(ack).Run("");return;}auto& c=r_->receiver_credits.at({gen_,key_});
 +    const std::string& presented=loader;
-+    if(!r_->snapshot.empty()||!r_->live.contains(gen_)){Refuse("late-receiver-return");std::move(ack).Run(false);return;}
-+    if(presented!=nonce_||!c.body||!c.forwarded||c.invalid||c.returned||!r_->outstanding_receivers.erase(c.id)){Refuse("wrong-receiver-return");std::move(ack).Run(false);return;}
-+    returned_=c.returned=true;Log("A",c.id);std::move(ack).Run(true);
++    if(!r_->snapshot.empty()||!r_->live.contains(gen_)){Refuse("late-receiver-return");std::move(ack).Run("");return;}
++    if(presented!=nonce_||!c.body||!c.forwarded||c.invalid||c.returned||!challenge_.empty()||!r_->outstanding_receivers.contains(c.id)){Refuse("wrong-receiver-return");std::move(ack).Run("");return;}
++    challenge_=base::UnguessableToken::Create().ToString();Log("P",c.id);if(drop_reply_){ResetAndDeleteThis();return;}std::move(ack).Run(challenge_);
++  }
++  void Confirm(const std::string& gen,const std::string& key,const std::string& loader,const std::string& challenge) override {
++    if(bad_||key_.empty()||key!=key_||gen!=gen_||loader!=nonce_||challenge_.empty()||challenge!=challenge_||!r_->snapshot.empty()||!r_->live.contains(gen_)){Refuse("invalid-renderer-confirm");return;}
++    auto& c=r_->receiver_credits.at({gen_,key_});if(c.returned||c.invalid||!r_->outstanding_receivers.erase(c.id)){Refuse("duplicate-renderer-confirm");return;}
++    returned_=c.returned=true;challenge_.clear();Log("A",c.id);
 +  }
 + private:
 +  void Log(const char* stage,int id){r_->resource_log.push_back(std::string(stage)+":"+base::NumberToString(id)+":"+gen_);}
 +  void Refuse(const char* why){if(bad_)return;bad_=true;r_->Fail(why);if(!key_.empty()){auto& c=r_->receiver_credits.at({gen_,key_});c.invalid=true;Log(std::string_view(why)=="late-receiver-return"?"L":std::string_view(why)=="receiver-disconnected"?"M":"X",c.id);}}
-+  std::shared_ptr<BraidInventory> r_;std::string gen_,nonce_,key_,admitted_;bool bad_=false,returned_=false;
++  std::shared_ptr<BraidInventory> r_;std::string gen_,nonce_,key_,admitted_;std::string challenge_;bool bad_=false,returned_=false,drop_reply_=false;
 +};
 +void BindBraidReceiver(RenderFrameHost* host,mojo::PendingReceiver<blink::mojom::BraidReceiver> pipe){
 +  auto* f=static_cast<RenderFrameHostImpl*>(host);auto* slot=static_cast<BraidSlot*>(f->GetBrowserContext()->GetUserData(&kBraidSlot));
@@ -154,11 +159,20 @@
 +  // does not simulate a tab becoming hidden and grants no settlement credit.
 +  view->GetAssociatedPageBroadcast()->SetPageLifecycleState(std::move(state),nullptr,base::DoNothing());return Response::Success();
 +}
-+Response BrowserHandler::ArmBraidReceiverFault(const std::string& id,const std::string& mode){if(!braid_||braid_->run!=id||!braid_->nav_enabled||!braid_->snapshot.empty()||!braid_->next_receiver_fault.empty()||(mode!="missing"&&mode!="wrong"))return Response::ServerError("invalid refusal control");braid_->next_receiver_fault=mode;return Response::Success();}
++Response BrowserHandler::ArmBraidReceiverFault(const std::string& id,const std::string& mode){if(!braid_||braid_->run!=id||!braid_->nav_enabled||!braid_->snapshot.empty()||!braid_->next_receiver_fault.empty()||(mode!="missing"&&mode!="wrong"&&mode!="lost-reply"))return Response::ServerError("invalid refusal control");braid_->next_receiver_fault=mode;return Response::Success();}
  void BraidBeginNavigation(NavigationRequest& request) {
    auto* frame=request.frame_tree_node()->current_frame_host();auto* ctx=frame->GetBrowserContext();
    auto* slot=static_cast<BraidSlot*>(ctx->GetUserData(&kBraidSlot));if(!slot||!slot->run||!slot->run->nav_enabled)return;
-@@ -184,7 +251,7 @@
+@@ -172,7 +244,7 @@
+   r.nav_log.push_back("C:"+base::NumberToString(lease->id)+":"+request.GetDocumentToken().ToString());lease->committed=true;
+ }
+ Response BrowserHandler::EnableBraidNavigations(const std::string& id){if(!braid_||braid_->run!=id||braid_->nav_enabled||!braid_->records.empty())return Response::ServerError("late navigation enrollment");braid_->nav_enabled=true;return Response::Success();}
+-Response BrowserHandler::ReadBraidNavigations(const std::string& id,std::string* records,int* pending,bool* lost,std::string* resource_records,int* resource_pending,bool* resource_lost){if(!braid_||braid_->run!=id||!braid_->nav_enabled)return Response::ServerError("unowned navigation");*records=base::JoinString(braid_->nav_log,"\n");*pending=static_cast<int>(braid_->pending_nav.size());*lost=braid_->nav_lost;*resource_records=base::JoinString(braid_->resource_log,"\n");*resource_pending=static_cast<int>(braid_->pending_resources.size());*resource_lost=braid_->resource_lost;return Response::Success();}
++Response BrowserHandler::ReadBraidNavigations(const std::string& id,std::string* records,int* pending,bool* lost,std::string* resource_records,int* resource_pending,bool* resource_lost){if(!braid_||braid_->run!=id||!braid_->nav_enabled)return Response::ServerError("unowned navigation");*records=base::JoinString(braid_->nav_log,"\n");*pending=static_cast<int>(braid_->pending_nav.size());*lost=braid_->nav_lost;auto resource_rows=braid_->resource_log;for(const auto& [credit,gen]:braid_->outstanding_receivers)resource_rows.push_back("O:"+base::NumberToString(credit)+":"+gen);*resource_records=base::JoinString(resource_rows,"\n");*resource_pending=static_cast<int>(braid_->pending_resources.size());*resource_lost=braid_->resource_lost;return Response::Success();}
+ void BraidDocumentTransition(RenderFrameHostImpl& frame,const blink::DocumentToken& token,bool birth) {
+   DCHECK_CURRENTLY_ON(BrowserThread::UI);
+   auto* ctx=frame.GetBrowserContext();
+@@ -184,7 +256,7 @@
    auto& r=*slot->run;
    if(r.records.size()>=512){r.Fail("inventory-limit");return;}
    std::string id=token.ToString();
@@ -167,7 +181,7 @@
    else if(!r.live.erase(id))r.Fail("unknown-disposal");
    auto* parent=frame.GetParent();
    // The parent may itself be speculative; its frame-tree node is not a document token.
-@@ -218,6 +285,7 @@
+@@ -218,6 +290,7 @@
         crypto::keypair::PublicKey::FromEd25519PublicKey(r.key),base::as_byte_span(message),signature))r.Fail("invalid-checkpoint-proof");
    }
    if(!r.pending_resources.empty())r.Fail("pending-browser-resource");
@@ -199,7 +213,7 @@
              {
 --- a/third_party/blink/public/devtools_protocol/domains/Audits.pdl
 +++ b/third_party/blink/public/devtools_protocol/domains/Audits.pdl
-@@ -923,6 +923,13 @@
+@@ -923,6 +923,20 @@
  
    # Narrow load-producer scope with a conservative JS/port publication veto.
    # Does not certify document, renderer or browser quiescence.
@@ -209,6 +223,13 @@
 +      string generation
 +    returns
 +      string state
++
++  experimental command readBraidEdges
++    parameters
++      string epoch
++      string generation
++    returns
++      string records
 +
    experimental command prepareBraidIngress
      parameters
@@ -244,14 +265,15 @@
      "frame/find_in_page.mojom",
 --- /dev/null
 +++ b/third_party/blink/public/mojom/frame/braid_receiver.mojom
-@@ -0,0 +1,8 @@
+@@ -0,0 +1,9 @@
 +// Private test transport. Each pipe belongs to one document and one fetch loader.
 +module blink.mojom;
 +interface BraidReceiver {
 +  Open(string generation, string loader, string network_id) => (string refusal_control);
 +  Enter(string network_id);
 +  Body(string network_id);
-+  Returned(string network_id, string loader) => (bool accepted);
++  Returned(string network_id, string loader) => (string challenge);
++  Confirm(string generation, string network_id, string loader, string challenge);
 +};
 --- a/third_party/blink/renderer/core/dom/document.cc
 +++ b/third_party/blink/renderer/core/dom/document.cc
@@ -365,11 +387,11 @@
    Vector<Adoption> adoptions;
    void Thenable(v8::Isolate* iso,v8::Local<v8::Promise> p,int phase){
 -    if(phase==0){if(adoptions.size()>=4096){Lose(7);return;} adoptions.push_back(Adoption{v8::Global<v8::Promise>(iso,p)});adoptions.back().target.SetWeak();++jobs;if(!executing.empty())++nested;return;}
-+    if(phase==0){if(adoptions.size()>=4096){Lose(7);return;} adoptions.push_back(Adoption{v8::Global<v8::Promise>(iso,p)});adoptions.back().child=PublishChild();adoptions.back().target.SetWeak();++jobs;if(!executing.empty())++nested;return;}
++    if(phase==0){if(adoptions.size()>=4096){Lose(7);return;} adoptions.push_back(Adoption{v8::Global<v8::Promise>(iso,p)});adoptions.back().child=PublishChild("adoption");adoptions.back().target.SetWeak();++jobs;if(!executing.empty())++nested;return;}
      for(wtf_size_t i=0;i<adoptions.size();++i){auto& a=adoptions[i];if(a.done || a.target.IsEmpty() || a.target!=p)continue;
        if(phase==1){if(a.running){Lose(7);return;}a.running=true;executing.push_back(8192u+i);}
 -      else{if(!a.running||executing.empty()||executing.back()!=8192u+i){Lose(7);return;}executing.pop_back();a.done=true;a.target.Reset();++returns;}return;
-+      else{if(!a.running||executing.empty()||executing.back()!=8192u+i){Lose(7);return;}executing.pop_back();a.done=true;if(a.child)ingress->Complete(ingress->original(),a.child);a.target.Reset();++returns;}return;
++      else{if(!a.running||executing.empty()||executing.back()!=8192u+i){Lose(7);return;}executing.pop_back();a.done=true;if(a.child)ReturnedChild(a.child,"returned");a.target.Reset();++returns;}return;
      }Lose(7);
    }
  
@@ -378,18 +400,18 @@
        const bool job=parent->IsPromise();
        promises.push_back(PromiseSlot{v8::Global<v8::Promise>(iso,p),job});promises.back().handle.SetWeak();
 -      if(job){++jobs;if(!executing.empty())++nested;} return;
-+      if(job){promises.back().child=PublishChild();++jobs;if(!executing.empty())++nested;} return;
++      if(job){promises.back().child=PublishChild("reaction");++jobs;if(!executing.empty())++nested;} return;
      }
      if(kind==v8::PromiseHookType::kResolve)return; // not a terminal transition
      for(wtf_size_t i=promises.size();i>0;--i){auto& slot=promises[i-1];if(slot.handle.IsEmpty() || slot.handle!=p)continue;
        if(!slot.job || slot.returned){Lose(2);return;}
        if(kind==v8::PromiseHookType::kBefore){if(slot.started){lost=true;return;}slot.started=true;executing.push_back(i);}
 -      else {if(executing.empty() || executing.back()!=i || !slot.started){lost=true;return;}executing.pop_back();slot.returned=true;++returns;}
-+      else {if(executing.empty() || executing.back()!=i || !slot.started){lost=true;return;}executing.pop_back();slot.returned=true;if(slot.child)ingress->Complete(ingress->original(),slot.child);++returns;}
++      else {if(executing.empty() || executing.back()!=i || !slot.started){lost=true;return;}executing.pop_back();slot.returned=true;if(slot.child)ReturnedChild(slot.child,"returned");++returns;}
        return;
      }
      Lose(3);
-@@ -52,10 +54,13 @@
+@@ -52,10 +54,17 @@
    int PendingValues(v8::Isolate* iso){v8::HandleScope handles(iso);int pending=0;for(auto& slot:promises){if(slot.handle.IsEmpty()){if(!slot.returned)Lose(4);continue;}if(slot.handle.Get(iso)->State()==v8::Promise::kPending)++pending;}return pending;}
    int registered=0, fired=0, removed=0, active_invocations=0;
    HashSet<int> scheduled;
@@ -399,11 +421,15 @@
 -  void Remove(int id,bool cancel){if(!scheduled.Contains(id)){Lose(9);return;}scheduled.erase(id);if(cancel)++removed;}
 +  std::shared_ptr<braid::probe::LifecycleIngress> ingress;
 +  HashMap<int,uint64_t> timer_children;Vector<uint64_t> firing;
-+  uint64_t PublishChild(){if(!ingress)return 0;auto parent=ingress->CurrentCallback();if(!parent&&!executing.empty()){auto id=executing.back();parent=id>=8192?adoptions[id-8192].child:promises[id-1].child;}if(!parent&&!firing.empty())parent=firing.back();return parent?ingress->Publish(ingress->original(),parent):0;}
-+  int Register(){if(registered>=4096){Lose(9);return 0;}int id=++registered;auto child=PublishChild();if(child)timer_children.Set(id,child);scheduled.insert(id);return id;}
++  struct Edge {uint64_t id,parent;const char* kind;const char* terminal;};
++  Vector<Edge> edges;std::string eligible_original;
++  void SetTerminal(uint64_t id,const char* state){for(auto& edge:edges)if(edge.id==id){if(edge.terminal){Lose(11);return;}edge.terminal=state;return;}Lose(11);}
++  void ReturnedChild(uint64_t id,const char* state){SetTerminal(id,state);ingress->Complete(ingress->original(),id);}
++  uint64_t PublishChild(const char* kind){if(!ingress)return 0;auto parent=ingress->CurrentCallback();if(!parent&&!executing.empty()){auto id=executing.back();parent=id>=8192?adoptions[id-8192].child:promises[id-1].child;}if(!parent&&!firing.empty())parent=firing.back();if(!parent)return 0;if(edges.size()>=4096){Lose(11);ingress->Refuse(braid::probe::LifecycleIngress::Failure::kCapacity);return 0;}auto child=ingress->Publish(ingress->original(),parent);if(child)edges.push_back(Edge{child,parent,kind,nullptr});return child;}
++  int Register(const char* kind="timer"){if(registered>=4096){Lose(9);return 0;}int id=++registered;auto child=PublishChild(kind);if(child)timer_children.Set(id,child);scheduled.insert(id);return id;}
 +  void Begin(int id){if(!scheduled.Contains(id)){Lose(9);return;}++active_invocations;auto it=timer_children.find(id);firing.push_back(it==timer_children.end()?0:it->value);}
-+  void End(int id,bool once){if(active_invocations<=0){Lose(9);return;}--active_invocations;auto child=firing.back();firing.pop_back();++fired;if(once)Remove(id,false);else if(child&&!scheduled.Contains(id)){ingress->Complete(ingress->original(),child);timer_children.erase(id);}}
-+  void Remove(int id,bool cancel){if(!scheduled.Contains(id)){Lose(9);return;}scheduled.erase(id);if(cancel)++removed;auto it=timer_children.find(id);if(it!=timer_children.end() && !firing.Contains(it->value)){ingress->Complete(ingress->original(),it->value);timer_children.erase(it);}}
++  void End(int id,bool once){if(active_invocations<=0){Lose(9);return;}--active_invocations;auto child=firing.back();firing.pop_back();++fired;if(once)Remove(id,false);else if(child&&!scheduled.Contains(id)){ReturnedChild(child,"cancelled-after-return");timer_children.erase(id);}}
++  void Remove(int id,bool cancel){if(!scheduled.Contains(id)){Lose(9);return;}scheduled.erase(id);if(cancel)++removed;auto it=timer_children.find(id);if(it!=timer_children.end() && !firing.Contains(it->value)){ReturnedChild(it->value,cancel?"cancelled":"returned");timer_children.erase(it);}}
    uint64_t Post(){if(posted>=4096){lost=true;return 0;}auto id=static_cast<uint64_t>(++posted);messages.insert(id);return id;}
    void Receive(uint64_t id){if(!messages.Contains(id)){lost=true;return;}messages.erase(id);++received;}
    void Send(uint64_t id,bool redirect){if(redirect){if(!resources.Contains(id))lost=true;return;}if(sends>=4096||!id || !resources.insert(id).is_new_entry){lost=true;return;}++sends;}
@@ -458,16 +484,35 @@
        }
 --- a/third_party/blink/renderer/core/inspector/inspector_audits_agent.cc
 +++ b/third_party/blink/renderer/core/inspector/inspector_audits_agent.cc
-@@ -255,6 +255,8 @@
+@@ -229,7 +229,7 @@
+   auto* frame = IdentifiersFactory::FrameById(inspected_frames_, frame_id);
+   if (braid_refused_ || !braid_epoch_.empty() || !frame || !inspected_frames_->Root()->IsMainFrame() ||
+       epoch.length()!=32 || (frame != inspected_frames_->Root() && frame->Tree().Parent() != inspected_frames_->Root())) {
+-    braid_refused_ = true; return protocol::Response::ServerError("reservation refused");
++    pending_epoch_.Clear(); pending_frame_.Clear(); braid_refused_ = true; return protocol::Response::ServerError("reservation refused");
+   }
+   braid_reserved_frame_ = frame; braid_epoch_ = epoch;
+   pending_epoch_.Set(epoch); pending_frame_.Set(frame_id);
+@@ -254,7 +254,8 @@
+           scheduler::TaskAttributionTracker::From(context->GetIsolate())) {
      fixture_publication_baseline_ = tracker->ArmFixturePublicationVeto();
    }
-   delegate.fixture_async=std::make_shared<FixtureAsyncWork>();
+-  delegate.fixture_async=std::make_shared<FixtureAsyncWork>();
 +  auto* window=DynamicTo<LocalDOMWindow>(context);fixture_ingress_=window?window->BeginFixtureLifecycleIngress():nullptr;
-+  if(!fixture_ingress_){braid_refused_=true;return;}delegate.fixture_async->ingress=fixture_ingress_;
++  if(!fixture_ingress_){braid_refused_=true;return;}
    braid_creating_=true; BindBraidDocumentCheck(delegate);
    load_producer_=std::nullopt;
    auto load=braid_scope_->Root();
-@@ -311,6 +313,10 @@
+@@ -266,6 +267,8 @@
+ void InspectorAuditsAgent::DidCreateBraidDocument(LocalFrame* frame, Document* doc) {
+   if(frame != braid_reserved_frame_.Get() || braid_refused_) return;
+   if(!braid_creating_ || !doc || doc->IsPrerendering() || !doc->IsHTMLDocument() || !braid_dispatch_->empty()) {braid_refused_=true;return;}
++  auto* win=doc->domWindow();if(!win||!fixture_ingress_||fixture_ingress_->failure()!=braid::probe::LifecycleIngress::Failure::kNone||fixture_ingress_->original()!=doc->Token().ToString()){braid_refused_=true;return;}
++  auto& delegate=static_cast<ExecutionContextCSPDelegate&>(win->GetContentSecurityPolicyDelegate());auto work=std::make_shared<FixtureAsyncWork>();work->eligible_original=doc->Token().ToString();work->ingress=fixture_ingress_;delegate.fixture_async=work;
+   braid_creating_=false; braid_document_=doc;
+ }
+ 
+@@ -311,6 +314,14 @@
    auto work=FixtureAsyncWork::From(doc->domWindow());if(!work)return protocol::Response::ServerError("missing enrollment");
    *generation=String::FromUtf8(doc->Token().ToString());*jobs=work->jobs;*returned=work->returns;*nested=work->nested;*pendingValues=work->PendingValues(doc->domWindow()->GetIsolate());*posted=work->posted;*received=work->received;*sends=work->sends;*finishes=work->finishes;*cancelled=work->cancelled;*scheduled=work->registered;*fired=work->fired;*removed=work->removed;*pending_callbacks=static_cast<int>(work->scheduled.size());*executing_callbacks=work->active_invocations;*reason=work->reason;*lost=work->lost;return protocol::Response::Success();
  }
@@ -475,10 +520,14 @@
 +  auto s=fixture_ingress_;if(epoch!=braid_epoch_||!s||gen.Utf8()!=s->original())return protocol::Response::ServerError("original lifecycle unavailable");
 +  *state=String::FromUtf8(std::to_string(s->adds)+":"+std::to_string(s->removes)+":"+std::to_string(s->published)+":"+std::to_string(s->completed)+":"+std::to_string(s->ordinary_updates)+":"+std::to_string(s->ordinary_visibility)+":"+std::to_string(s->replacement_visibility)+":"+std::to_string(s->unload_visibility)+":"+std::to_string(static_cast<int>(s->failure())));return protocol::Response::Success();
 +}
++protocol::Response InspectorAuditsAgent::readBraidEdges(const String& epoch,const String& generation,String* result){
++  auto* doc=braid_document_.Get();auto* frame=braid_reserved_frame_.Get();if(!doc||!frame||frame->GetDocument()!=doc||epoch!=braid_epoch_||generation!=String::FromUtf8(doc->Token().ToString()))return protocol::Response::ServerError("original unavailable");
++  auto work=FixtureAsyncWork::From(doc->domWindow());if(!work)return protocol::Response::ServerError("unowned work");std::string out;for(const auto& edge:work->edges){out+=std::to_string(edge.id)+":"+std::to_string(edge.parent)+":"+edge.kind+":"+(edge.terminal?edge.terminal:"open")+"\n";}*result=String::FromUtf8(out);return protocol::Response::Success();
++}
  protocol::Response InspectorAuditsAgent::prepareBraidIngress(
      const String& epoch, const String& generation, bool* focus_outstanding,
      bool* visibility_outstanding, String* disposition) {
-@@ -328,6 +334,7 @@
+@@ -328,6 +339,7 @@
    // Neither a listener census nor return from one IPC establishes closed
    // ingress. Unload itself can dispatch visibilitychange during retirement.
    // Preserve normal dispatch and original work; refusal is generation-local.
@@ -496,15 +545,17 @@
  #include "third_party/blink/renderer/core/core_export.h"
  #include "third_party/blink/renderer/core/dom/document.h"
  #include "third_party/blink/renderer/core/inspector/inspected_frames.h"
-@@ -56,6 +57,8 @@
+@@ -56,7 +57,10 @@
                                            String*,
                                            String*) override;
    uint64_t fixture_publication_baseline_ = UINT64_MAX;
 +  std::shared_ptr<braid::probe::LifecycleIngress> fixture_ingress_;
 +  protocol::Response readBraidLifecycle(const String&,const String&,String*) override;
    void LoadEventFired(LocalFrame*);
++  protocol::Response readBraidEdges(const String&,const String&,String*) override;
    protocol::Response prepareBraidIngress(const String&, const String&, bool*, bool*, String*) override;
    protocol::Response readBraidZero(const String&, String*, String*) override;
+   protocol::Response readBraidWork(const String& epoch,String* generation, int* jobs, int* returned, int* nested, int* pendingValues, int* posted, int* received, int* sends, int* finishes, int* cancelled,int* scheduled,int* fired,int* removed,int* pending_callbacks,int* executing_callbacks, int* reason, bool* lost) override;
 --- a/third_party/blink/renderer/core/loader/threadable_loader.cc
 +++ b/third_party/blink/renderer/core/loader/threadable_loader.cc
 @@ -30,6 +30,13 @@
@@ -521,7 +572,7 @@
  
  #include <memory>
  
-@@ -163,6 +170,33 @@
+@@ -163,6 +170,34 @@
    }
  }
  
@@ -532,30 +583,31 @@
 +  std::shared_ptr<FixtureAsyncWork> owner;
 +  uint64_t child=0;
 +  bool armed=false,returned=false,sent=false;
-+  String mode,returned_key;
++  String mode,returned_key,original;WeakPersistent<LocalDOMWindow> window;
 +  static void MaybeReport(const std::shared_ptr<OriginalReceiver>& r){
 +    if(!r->armed||!r->returned||r->sent)return;r->sent=true;
-+    if(r->mode=="missing"){r->pipe.reset();return;}
-+    r->pipe->Returned(r->returned_key,r->mode=="wrong"?String("invalid-loader"):r->nonce,blink::BindOnce([](std::shared_ptr<OriginalReceiver> owner,bool accepted){if(accepted&&owner->child)owner->owner->ingress->Complete(owner->owner->ingress->original(),owner->child);},r));
++    if(r->mode=="missing"){if(r->child)r->owner->SetTerminal(r->child,"missing-open");r->pipe.reset();return;}
++    r->pipe->Returned(r->returned_key,r->mode=="wrong"?String("invalid-loader"):r->nonce,blink::BindOnce([](std::shared_ptr<OriginalReceiver> owner,const String& challenge){auto* win=owner->window.Get();if(challenge.empty()||!win||win->IsContextDestroyed()||!win->document()||win->document()->Token().ToString()!=owner->owner->eligible_original){if(owner->child)owner->owner->SetTerminal(owner->child,"refused-open");return;}owner->pipe->Confirm(owner->original,owner->key,owner->nonce,challenge);if(owner->child)owner->owner->ReturnedChild(owner->child,"receiver-ack");},r));
 +  }
 +};
 +void ThreadableLoader::EnrollFixtureFetch(const ResourceRequest& request){
 +  auto* win=DynamicTo<LocalDOMWindow>(execution_context_.Get());
 +  if(!win||!win->document()||!FixtureAsyncWork::From(win)||request.GetKeepalive()||request.HttpMethod()!="GET"||request.Url().GetPath()!="/api/v1/organizations/10000000-0000-4000-8000-000000000001/projects"||request.Url().BaseAsString()!="http://127.0.0.1:45921/api/v1/organizations/10000000-0000-4000-8000-000000000001/")return;
-+  fixture_receiver_=std::make_shared<OriginalReceiver>();
-+  fixture_receiver_->owner=FixtureAsyncWork::From(win);fixture_receiver_->child=fixture_receiver_->owner->PublishChild();
++  auto eligible=FixtureAsyncWork::From(win);if(!eligible||eligible->eligible_original!=win->document()->Token().ToString())return;
++  fixture_receiver_=std::make_shared<OriginalReceiver>();fixture_receiver_->window=win;fixture_receiver_->original=String::FromUtf8(eligible->eligible_original);
++  fixture_receiver_->owner=FixtureAsyncWork::From(win);fixture_receiver_->child=fixture_receiver_->owner->PublishChild("fetch-client");
 +  win->GetBrowserInterfaceBroker().GetInterface(fixture_receiver_->pipe.BindNewPipeAndPassReceiver());
 + }
 +void ThreadableLoader::FixtureAdmitRequest(uint64_t identifier){
 +  if(!fixture_receiver_)return;auto* win=DynamicTo<LocalDOMWindow>(execution_context_.Get());
-+  if(!win||!win->document()||!fixture_receiver_->key.empty()){fixture_receiver_.reset();return;}
++  if(!win||win!=fixture_receiver_->window.Get()||!win->document()||win->document()->Token().ToString()!=fixture_receiver_->owner->eligible_original||!fixture_receiver_->key.empty()){fixture_receiver_.reset();return;}
 +  auto& r=*fixture_receiver_;r.key=IdentifiersFactory::SubresourceRequestId(identifier);
-+  r.pipe->Open(String::FromUtf8(win->document()->Token().ToString()),r.nonce,r.key,blink::BindOnce([](std::shared_ptr<OriginalReceiver> orig,const String& mode){orig->armed=true;orig->mode=mode;OriginalReceiver::MaybeReport(orig);},fixture_receiver_));
++  r.pipe->Open(r.original,r.nonce,r.key,blink::BindOnce([](std::shared_ptr<OriginalReceiver> orig,const String& mode){orig->armed=true;orig->mode=mode;OriginalReceiver::MaybeReport(orig);},fixture_receiver_));
 +}
  void ThreadableLoader::Start(ResourceRequest request) {
    const auto request_context = request.GetRequestContext();
    if (request.GetMode() == network::mojom::RequestMode::kNoCors) {
-@@ -260,6 +294,7 @@
+@@ -260,6 +295,7 @@
  }
  
  void ThreadableLoader::Detach() {
@@ -563,7 +615,7 @@
    Resource* resource = GetResource();
    if (!resource)
      return;
-@@ -274,6 +309,7 @@
+@@ -274,6 +310,7 @@
  }
  
  void ThreadableLoader::Clear() {
@@ -571,7 +623,7 @@
    client_ = nullptr;
    timeout_timer_.Stop();
    request_started_ = base::TimeTicks();
-@@ -289,6 +325,7 @@
+@@ -289,6 +326,7 @@
    DCHECK(client_);
    DCHECK_EQ(resource, GetResource());
    checker_.RedirectReceived();
@@ -579,7 +631,7 @@
  
    return client_->WillFollowRedirect(resource->InspectorId(), new_request.Url(),
                                       redirect_response);
-@@ -342,6 +379,8 @@
+@@ -342,6 +380,8 @@
    DCHECK_EQ(resource, GetResource());
  
    checker_.ResponseReceived();
@@ -588,7 +640,7 @@
  
    // If "Cache-Control: no-store" header exists in the XHR response,
    // Back/Forward cache will be disabled for the page if the main resource has
-@@ -367,6 +406,7 @@
+@@ -367,6 +407,7 @@
    DCHECK_EQ(resource, GetResource());
  
    checker_.ResponseBodyReceived();
@@ -596,7 +648,7 @@
    client_->DidStartLoadingResponseBody(body);
  }
  
-@@ -406,8 +446,13 @@
+@@ -406,8 +447,13 @@
    // Protect the resource in |DidFinishLoading| in order not to release the
    // downloaded file.
    Persistent<Resource> protect = GetResource();
@@ -650,3 +702,14 @@
    resource_request.SetFromOriginDirtyStyleSheet(
        params.IsFromOriginDirtyStyleSheet());
  
+--- a/third_party/blink/renderer/core/dom/frame_request_callback_collection.cc
++++ b/third_party/blink/renderer/core/dom/frame_request_callback_collection.cc
+@@ -23,7 +23,7 @@
+       (type == FrameCallbackType::kInternal) ? ++next_internal_callback_id_
+                                              : ++next_callback_id_;
+   callback->fixture_owner=FixtureAsyncWork::From(context_.Get());
+-  if(callback->fixture_owner)callback->fixture_credit=callback->fixture_owner->Register();
++  if(callback->fixture_owner)callback->fixture_credit=callback->fixture_owner->Register("frame");
+   callback->SetIsCancelled(false);
+   callback->SetId(id);
+   if (type == FrameCallbackType::kInternal) {

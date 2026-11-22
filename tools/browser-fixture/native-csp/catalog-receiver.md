@@ -14,8 +14,10 @@ run. No page or CDP method can submit a positive receipt.
 At browser admission, `S` identifies the send, `C` reserves downstream work,
 and `R` reserves the receiver. `F` records forwarding only. `E` and `B`
 identify response and body handoffs on the original pipe. After the concrete
-client's `DidFinishLoading` returns, `A` acknowledges that receiver if the
-admission, forwarding, original, nonce, and phase still match. `M`, `X`, and
+client's `DidFinishLoading` returns, `P` issues a fresh challenge. Only the
+original renderer's reply handler can echo it over that loader's pipe. `A`
+clears the receiver obligation after that echo matches run, document,
+request and nonce. `O` identifies a still-open receiver even after disposal. `M`, `X`, and
 `L` are missing, mismatched, and late returns. None clears `R`. Network
 cancellation, detached clients, redirects, other resource classes, and
 unmatched identities do not take the positive path.
@@ -27,13 +29,10 @@ selected loader where an original parent is available. It does not attest
 that arbitrary listener bodies published only covered work. A failure remains
 sticky after natural removal or disposal.
 
-Run `catalog-receiver-control.mjs` with the controlled packaged fixture
-environment used by `catalog-work-control.mjs`. The test holds the actual
-project-list GET, exercises real and rejected returns, then clicks Angular's
-Help link. The separate `catalog-visibility-control.mjs` uses a private X
-display and the same pinned launch defaults. Its `ordinary` case asks the
-browser to send its *unchanged* visible state. For replacement cases correlate
-`BRAID_FIXTURE_VIS` with the original token: source 1 is ordinary update, 2
-is old-page state during commit, 3 is direct unload. A replacement URL alone
-does not establish which path ran. These diagnostic records aren't signed
-dispatch receipts or retirement tickets.
+Build `BRAID_UI_FIXTURE` from the checked-out `apps/web/tests/catalog.fixture.ts` using the root lockfile's esbuild and the corresponding dependency tree (also used as `NODE_PATH` for `@playwright/test`):
+
+```sh
+node tools/browser-fixture/native-csp/build-catalog-ui-fixture.mjs "$LOCKED_WORKSPACE" "$PRIVATE_OUTPUT/ui-fixture.cjs"
+```
+
+Run `catalog-receiver-control.mjs MODE` once per fresh packaged fixture for `success`, `missing`, `wrong`, `late`, `lost-reply`, `replacement`, `target-close` and `refused-enrollment`. The lost-reply case closes the native service without delivering its reply. `catalog-fault-free-control.mjs` follows the actual Angular Help link and checks destination work separately. Use `catalog-visibility-control.mjs` only for the unchanged ordinary state, and the paired controls in `old-page-commit.md` for exact-source commit/unload verification. None is a CSP cutoff or a production journal provider.

@@ -1,50 +1,270 @@
 // Controlled catalog UI workflow. The published product serves all HTML, JS,
 // CSS and response policies. Only the existing controlled-test API replies
 // are synthetic. This is not the live DB/worker suite or a clean verdict.
-import assert from 'node:assert/strict';
-import {createRequire} from 'node:module';
-import {createHash,generateKeyPairSync,randomBytes,sign} from 'node:crypto';
-import {execFileSync,spawn} from 'node:child_process';
-import {once} from 'node:events';
-import {createReadStream,readFileSync,unlinkSync} from 'node:fs';
-import {PrefixJournal} from './receipt-probe.mjs';
-const env=process.env, require=createRequire(import.meta.url), origin='http://127.0.0.1:45921';
-async function check(path,pin){assert.match(pin,/^[a-f0-9]{64}$/);const h=createHash('sha256');for await(const part of createReadStream(path))h.update(part);assert.equal(h.digest('hex'),pin);}
-const links=JSON.parse(execFileSync('/usr/bin/ip',['-j','link'],{encoding:'utf8'}));assert.equal(links.length,1);assert.equal(links[0].ifname,'lo');assert.ok(links[0].flags.includes('UP'));assert.deepEqual(JSON.parse(execFileSync('/usr/bin/ip',['-j','route','show','default'])),[]);assert.notEqual(process.getuid(),0);assert.match(readFileSync('/proc/self/status','utf8'),/^CapEff:\s+0+$/m);
-await check(env.BRAID_CHROME,env.BRAID_CHROME_SHA256);await check(env.BRAID_DRIVER+'/lib/coreBundle.js',env.BRAID_BUNDLE_SHA256);
-const {chromium}=require(env.BRAID_DRIVER);const {syntheticCatalog,synthetic,projectsPath,catalogApi}=require(env.BRAID_UI_FIXTURE);
-const server=spawn(env.DOTNET_ROOT+'/dotnet',[env.BRAID_SERVER],{stdio:['ignore','pipe','ignore'],env:{HOME:env.HOME,TMPDIR:env.TMPDIR,PATH:'/usr/bin',DOTNET_ROOT:env.DOTNET_ROOT,DOTNET_ADD_GLOBAL_TOOLS_TO_PATH:'false',DOTNET_CLI_TELEMETRY_OPTOUT:'1',BRAID_DEV_LISTEN_ADDR:'127.0.0.1:45921'}});const exited=once(server,'exit');let browser,echo,refused;const journalPath=env.TMPDIR+'/catalog-retirement-'+randomBytes(16).toString('hex');const journal=new PrefixJournal(journalPath);
+import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+import {
+  createHash,
+  generateKeyPairSync,
+  randomBytes,
+  sign,
+} from "node:crypto";
+import { execFileSync, spawn } from "node:child_process";
+import { once } from "node:events";
+import { createReadStream, readFileSync, unlinkSync } from "node:fs";
+import { PrefixJournal } from "./receipt-probe.mjs";
+const env = process.env,
+  require = createRequire(import.meta.url),
+  origin = "http://127.0.0.1:45921";
+async function check(path, pin) {
+  assert.match(pin, /^[a-f0-9]{64}$/);
+  const h = createHash("sha256");
+  for await (const part of createReadStream(path)) h.update(part);
+  assert.equal(h.digest("hex"), pin);
+}
+const links = JSON.parse(
+  execFileSync("/usr/bin/ip", ["-j", "link"], { encoding: "utf8" }),
+);
+assert.equal(links.length, 1);
+assert.equal(links[0].ifname, "lo");
+assert.ok(links[0].flags.includes("UP"));
+assert.deepEqual(
+  JSON.parse(execFileSync("/usr/bin/ip", ["-j", "route", "show", "default"])),
+  [],
+);
+assert.notEqual(process.getuid(), 0);
+assert.match(readFileSync("/proc/self/status", "utf8"), /^CapEff:\s+0+$/m);
+await check(env.BRAID_CHROME, env.BRAID_CHROME_SHA256);
+await check(env.BRAID_DRIVER + "/lib/coreBundle.js", env.BRAID_BUNDLE_SHA256);
+const { chromium } = require(env.BRAID_DRIVER);
+const { syntheticCatalog, synthetic, projectsPath, catalogApi } = require(
+  env.BRAID_UI_FIXTURE,
+);
+const server = spawn(env.DOTNET_ROOT + "/dotnet", [env.BRAID_SERVER], {
+  stdio: ["ignore", "pipe", "ignore"],
+  env: {
+    HOME: env.HOME,
+    TMPDIR: env.TMPDIR,
+    PATH: "/usr/bin",
+    DOTNET_ROOT: env.DOTNET_ROOT,
+    DOTNET_ADD_GLOBAL_TOOLS_TO_PATH: "false",
+    DOTNET_CLI_TELEMETRY_OPTOUT: "1",
+    BRAID_DEV_LISTEN_ADDR: "127.0.0.1:45921",
+  },
+});
+const exited = once(server, "exit");
+let browser, echo, refused;
+const journalPath =
+  env.TMPDIR + "/catalog-retirement-" + randomBytes(16).toString("hex");
+const journal = new PrefixJournal(journalPath);
 try {
- await new Promise((resolve,reject)=>{const t=setTimeout(()=>reject(Error('server readiness deadline')),10000);let buf='';server.stdout.on('data',x=>{buf=(buf+x).slice(-4000);if(buf.includes('Now listening on: '+origin)){clearTimeout(t);resolve();}});server.once('exit',()=>{clearTimeout(t);reject(Error('server exited'));});});
- browser=await chromium.launch({executablePath:env.BRAID_CHROME,chromiumSandbox:true,headless:true,timeout:10000,env:{HOME:env.HOME,TMPDIR:env.TMPDIR,PATH:'/usr/bin'}});assert.equal(browser.version(),'157.0.8090.0');
- const owner=await browser.newBrowserCDPSession();const list=async()=>(await owner.send('Target.getBrowserContexts')).browserContextIds;const initial=new Set(await list());const ctx=await browser.newContext({serviceWorkers:'block'});const added=(await list()).filter(x=>!initial.has(x));assert.equal(added.length,1);
- const keys=generateKeyPairSync('ed25519');const epoch=journal.epoch,publicKey=Buffer.from(keys.publicKey.export({format:'jwk'}).x,'base64url').toString('hex');const {runId}=await owner.send('Browser.beginBraidInventory',{epoch,publicKey,browserContextId:added[0]});await owner.send('Browser.enableBraidNavigations',{runId});const host=()=>owner.send('Browser.readBraidNavigations',{runId});
- const page=await ctx.newPage();page.setDefaultTimeout(5000);await syntheticCatalog(page);const c=await ctx.newCDPSession(page);const types=new Map();page.on('request',r=>{assert.equal(new URL(r.url()).origin,origin);types.set(r.resourceType(),1+(types.get(r.resourceType())??0));});
- await page.goto(origin+'/this-route-does-not-exist');
- async function start(path){const {frameTree}=await c.send('Page.getFrameTree');await c.send('Audits.reserveBraidDocument',{epoch,frameId:frameTree.frame.id});const r=await page.goto(origin+path);assert.equal(r.status(),200);assert.match(await r.headerValue('content-security-policy'),/script-src 'self'/);}
- const work=()=>c.send('Audits.readBraidWork',{epoch});
- await start('/catalog/organizations/not-a-uuid/projects');await page.getByRole('heading',{name:'Invalid link',exact:true}).waitFor();assert.equal(await page.getByText('No projects',{exact:true}).count(),0);const first=await work();assert.ok(first.jobs>0 && first.returned>0 && first.sends>0);
- const successor=await ctx.newCDPSession(page);const {frameTree}=await successor.send('Page.getFrameTree');const epoch2=randomBytes(16).toString('hex');await successor.send('Audits.reserveBraidDocument',{epoch:epoch2,frameId:frameTree.frame.id});
- const path=projectsPath(synthetic.org),listResponse=r=>new URL(r.url()).pathname===catalogApi(path)&&r.request().method()==='GET';await successor.send('Network.enable');
- await page.goto(origin+path);const project=page.getByRole('link',{name:synthetic.project.name,exact:true});await project.waitFor();const original=(await successor.send('Audits.readBraidWork',{epoch:epoch2})).generation;
- const rows=(h)=>h.resourceRecords.split('\n').map(row=>row.split(':')).filter(([,id,gen])=>gen===original);
- // Two actual originals disappear with an already admitted GET held by the browser.
- for(const loss of ['replacement','target-close']){
-   const q=await ctx.newPage();await syntheticCatalog(q);await q.goto(origin+'/this-route-does-not-exist');const cq=await ctx.newCDPSession(q);await cq.send('Network.enable');const e=randomBytes(16).toString('hex');const f=await cq.send('Page.getFrameTree');await cq.send('Audits.reserveBraidDocument',{epoch:e,frameId:f.frameTree.frame.id});let reached,resume,finished;const waiting=new Promise(r=>reached=r),go=new Promise(r=>resume=r),done=new Promise(r=>finished=r);await q.route('**'+catalogApi(path)+'?*',async route=>{reached();await go;try{await route.fallback();}finally{finished();}},{times:1});
-   try{await Promise.all([q.goto(origin+path),waiting]);const g=(await cq.send('Audits.readBraidWork',{epoch:e})).generation;const stages=(h,id)=>h.resourceRecords.split('\n').filter(r=>r.endsWith(':'+g)).map(r=>r.split(':')).filter(r=>!id||r[1]===id);const before=stages(await host());const open=before.filter(([k,id])=>k==='S'&&before.some(([st,i])=>i===id&&st==='C')&&!before.some(([st,i])=>i===id&&st==='F'));assert.equal(open.length,1);if(loss==='replacement')await q.goto(origin+'/this-route-does-not-exist');else await q.close();resume();await done;if(!q.isClosed())await q.close();const h=await host();for(const [,id] of open)assert.ok(!stages(h,id).some(([kind])=>kind==='A'));const inv=await owner.send('Browser.readBraidInventory',{runId});assert.ok(inv.inventory.split('\n').some(row=>row.startsWith('D:'+g)));console.log(loss+': original disposed without receiver ACK');}finally{resume();if(!q.isClosed())await q.close();}
- }
- for(const mode of ['success','missing','wrong','late']){
-   if(mode==='missing'||mode==='wrong')await owner.send('Browser.armBraidReceiverFault',{runId,mode});
-   let arrive,release;const at=new Promise(r=>arrive=r),gate=new Promise(r=>release=r);const previous=rows(await host());const ids=new Set(previous.map(x=>x[1]));
-   await page.route('**'+catalogApi(path)+'?*',async r=>{arrive();await gate;await r.fallback();},{times:1});
-   try{const response=page.waitForResponse(listResponse);response.catch(()=>{});await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await at;
-    const h=await host();const live=rows(h).filter(([stage,id])=>stage==='S'&&!ids.has(id)&&!rows(h).some(([kind,other])=>kind==='F'&&other===id));assert.equal(live.length,1);const id=live[0][1];const stages=h=>rows(h).filter(x=>x[1]===id).map(x=>x[0]);assert.deepEqual(stages(h),['S','C','R']);assert.ok(h.resourcePending>0);
-    if(mode==='late'){const inv=await owner.send('Browser.readBraidInventory',{runId});const receipt=journal.accept(epoch,1,inv.revision,'0'.repeat(64),createHash('sha256').update(JSON.stringify([runId,original,id,inv,h])).digest('hex'));const prefix='1:'+receipt.digest;const checkpoint=prefix+':'+sign(null,Buffer.from(`braid-fence-v1:${runId}:${epoch}:${inv.revision}:${inv.digest}:${prefix}`),keys.privateKey).toString('hex');const ticket=await owner.send('Browser.prepareBraidFence',{runId,...inv,checkpoint});echo={runId,revision:inv.revision,digest:inv.digest,checkpoint,snapshotToken:ticket.snapshotToken};refused=ticket.disposition;}
-    release();const result=await response;assert.equal(result.status(),200);await result.finished();await project.waitFor();await successor.send('Audits.readBraidWork',{epoch:epoch2});const sequence=stages(await host());console.log(mode+': '+sequence.join(' '));assert.ok(sequence.includes('F'));if(mode==='success'){for(const x of ['E','C','B','A'])assert.ok(sequence.includes(x),x+' absent: '+sequence);assert.ok(sequence.indexOf('A')>Math.max(sequence.indexOf('B'),sequence.indexOf('F')));}else{assert.ok(!sequence.includes('A'));assert.ok(sequence.includes({missing:'M',wrong:'X',late:'L'}[mode]));}
-   }finally{release();}
- }
- const lifecycle=async()=>{const result=await successor.send('Audits.readBraidLifecycle',{epoch:epoch2,generation:original});return result.state.split(':').map(Number);};
- const prior=await lifecycle();
- const preHelp=await successor.send('Audits.readBraidWork',{epoch:epoch2});await page.getByRole('link',{name:'Help & guide',exact:true}).click();await page.waitForURL('**/help');await page.getByRole('heading',{name:/help/i}).first().waitFor();const postHelp=await successor.send('Audits.readBraidWork',{epoch:epoch2});const after=await lifecycle();console.log('Help same original; registrations,removals,children,returned children before/after:',prior,after,'destination sends and jobs:',postHelp.sends-preHelp.sends,postHelp.jobs-preHelp.jobs);assert.equal(postHelp.generation,original);assert.ok(after[1]>=prior[1]+2);assert.ok(postHelp.jobs>preHelp.jobs);assert.ok(after[2]>0);
- await page.close();await ctx.close();const verified=await owner.send('Browser.verifyBraidDisposal',echo);assert.equal(verified.disposed,true);assert.equal(verified.disposition,refused);console.log('Disposal preserved browser refusal:',refused);await owner.detach();
-}finally{try{if(browser)await browser.close();}finally{server.kill('SIGTERM');await exited;journal.close();unlinkSync(journalPath);}}
+  await new Promise((resolve, reject) => {
+    const t = setTimeout(
+      () => reject(Error("server readiness deadline")),
+      10000,
+    );
+    let buf = "";
+    server.stdout.on("data", (x) => {
+      buf = (buf + x).slice(-4000);
+      if (buf.includes("Now listening on: " + origin)) {
+        clearTimeout(t);
+        resolve();
+      }
+    });
+    server.once("exit", () => {
+      clearTimeout(t);
+      reject(Error("server exited"));
+    });
+  });
+  browser = await chromium.launch({
+    executablePath: env.BRAID_CHROME,
+    chromiumSandbox: true,
+    headless: true,
+    timeout: 10000,
+    env: { HOME: env.HOME, TMPDIR: env.TMPDIR, PATH: "/usr/bin" },
+  });
+  assert.equal(browser.version(), "157.0.8090.0");
+  const owner = await browser.newBrowserCDPSession();
+  const list = async () =>
+    (await owner.send("Target.getBrowserContexts")).browserContextIds;
+  const initial = new Set(await list());
+  const ctx = await browser.newContext({ serviceWorkers: "block" });
+  const added = (await list()).filter((x) => !initial.has(x));
+  assert.equal(added.length, 1);
+  const keys = generateKeyPairSync("ed25519");
+  const epoch = journal.epoch,
+    publicKey = Buffer.from(
+      keys.publicKey.export({ format: "jwk" }).x,
+      "base64url",
+    ).toString("hex");
+  const { runId } = await owner.send("Browser.beginBraidInventory", {
+    epoch,
+    publicKey,
+    browserContextId: added[0],
+  });
+  await owner.send("Browser.enableBraidNavigations", { runId });
+  const host = () => owner.send("Browser.readBraidNavigations", { runId });
+  const page = await ctx.newPage();
+  page.setDefaultTimeout(5000);
+  await syntheticCatalog(page);
+  const c = await ctx.newCDPSession(page);
+  const types = new Map();
+  page.on("request", (r) => {
+    assert.equal(new URL(r.url()).origin, origin);
+    types.set(r.resourceType(), 1 + (types.get(r.resourceType()) ?? 0));
+  });
+  await page.goto(origin + "/this-route-does-not-exist");
+  async function start(path) {
+    const { frameTree } = await c.send("Page.getFrameTree");
+    await c.send("Audits.reserveBraidDocument", {
+      epoch,
+      frameId: frameTree.frame.id,
+    });
+    const r = await page.goto(origin + path);
+    assert.equal(r.status(), 200);
+    assert.match(
+      await r.headerValue("content-security-policy"),
+      /script-src 'self'/,
+    );
+  }
+  const work = () => c.send("Audits.readBraidWork", { epoch });
+  const mode = process.argv[2];
+  assert.ok(
+    [
+      "success",
+      "missing",
+      "wrong",
+      "late",
+      "lost-reply",
+      "replacement",
+      "target-close",
+      "refused-enrollment",
+    ].includes(mode),
+  );
+  const path = projectsPath(synthetic.org);
+  const eligible = mode !== "refused-enrollment";
+  let arrived, release;
+  const wait = new Promise((r) => (arrived = r)),
+    gate = new Promise((r) => (release = r));
+  await page.route(
+    "**" + catalogApi(path) + "?*",
+    async (route) => {
+      arrived();
+      await gate;
+      await route.fallback();
+    },
+    { times: 1 },
+  );
+  if (["missing", "wrong", "lost-reply"].includes(mode))
+    await owner.send("Browser.armBraidReceiverFault", { runId, mode });
+  await c.send("Network.enable");
+  const { frameTree } = await c.send("Page.getFrameTree");
+  await c.send("Audits.reserveBraidDocument", {
+    epoch,
+    frameId: frameTree.frame.id,
+  });
+  if (!eligible)
+    await assert.rejects(
+      c.send("Audits.reserveBraidDocument", {
+        epoch,
+        frameId: frameTree.frame.id,
+      }),
+      /reservation refused/,
+    );
+  await page.goto(origin + path);
+  try {
+    await wait;
+    const h = await host();
+    const rows = h.resourceRecords.split("\n").map((r) => r.split(":"));
+    const open = rows.filter(
+      ([k, id]) => k === "C" && !rows.some(([st, i]) => i === id && st === "F"),
+    );
+    assert.equal(open.length, 1);
+    const [, id, g] = open[0];
+    const stages = (h) =>
+      h.resourceRecords
+        .split("\n")
+        .map((r) => r.split(":"))
+        .filter(([, i, gen]) => i === id && g === gen)
+        .map(([k]) => k);
+    assert.deepEqual(stages(h), ["S", "C", "R", "O"]);
+    if (eligible) assert.equal((await work()).generation, g);
+    else await assert.rejects(work(), /original work unavailable/);
+    if (mode === "late") {
+      const inv = await owner.send("Browser.readBraidInventory", { runId });
+      const receipt = journal.accept(
+        epoch,
+        1,
+        inv.revision,
+        "0".repeat(64),
+        createHash("sha256")
+          .update(JSON.stringify([runId, g, id, inv, h]))
+          .digest("hex"),
+      );
+      const prefix = "1:" + receipt.digest;
+      const checkpoint =
+        prefix +
+        ":" +
+        sign(
+          null,
+          Buffer.from(
+            `braid-fence-v1:${runId}:${epoch}:${inv.revision}:${inv.digest}:${prefix}`,
+          ),
+          keys.privateKey,
+        ).toString("hex");
+      const ticket = await owner.send("Browser.prepareBraidFence", {
+        runId,
+        ...inv,
+        checkpoint,
+      });
+      echo = {
+        runId,
+        revision: inv.revision,
+        digest: inv.digest,
+        checkpoint,
+        snapshotToken: ticket.snapshotToken,
+      };
+      refused = ticket.disposition;
+    }
+    if (mode === "replacement")
+      await page.goto(origin + "/this-route-does-not-exist");
+    if (mode === "target-close") await page.close();
+    release();
+    if (!["replacement", "target-close"].includes(mode))
+      await page
+        .getByRole("link", { name: synthetic.project.name, exact: true })
+        .waitFor();
+    await ctx.close();
+    const state = stages(await host());
+    console.log(mode, g, id, state.join(" "));
+    assert.equal(state.includes("O"), mode !== "success");
+    assert.equal(state.includes("A"), mode === "success");
+    if (mode === "success")
+      assert.ok(
+        state.indexOf("P") > state.indexOf("F") &&
+          state.indexOf("A") > state.indexOf("P"),
+      );
+    if (mode === "lost-reply")
+      assert.ok(state.includes("P") && state.includes("M"));
+    if (mode === "refused-enrollment") assert.ok(!state.includes("E"));
+    if (["late", "wrong", "missing"].includes(mode))
+      assert.ok(state.includes({ late: "L", wrong: "X", missing: "M" }[mode]));
+    if (echo) {
+      const v = await owner.send("Browser.verifyBraidDisposal", echo);
+      assert.equal(v.disposed, true);
+      assert.equal(v.disposition, refused);
+    }
+    await owner.detach();
+  } finally {
+    release();
+  }
+} finally {
+  try {
+    if (browser) await browser.close();
+  } finally {
+    server.kill("SIGTERM");
+    await exited;
+    journal.close();
+    unlinkSync(journalPath);
+  }
+}
