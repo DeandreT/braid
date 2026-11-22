@@ -48,3 +48,10 @@ With the same admitted pair, environment and loopback-down namespace, run `timeo
 The [browser-session fence transport](browser-fence.md) binds the original document inventory and signed checkpoint across context disposal. It is refusal-only.
 
 For the stricter opt-in load receipt and why it cannot close a general scriptable document, see [promise and host publication](reaction-boundary.md).
+
+The [browser-origin control](browser-origin-csp.md) distinguishes Blink-local
+DOM dispatch, browser-to-renderer CSP delivery, and `frame-ancestors` reporting
+without DOM dispatch. The [DOM receiver control](dom-target.md) distinguishes
+HTML, XHTML, and SVG documents, attached and moved elements, and shadow
+retargeting. These offline behavior controls neither acknowledge native
+receipts nor substitute for the packaged pair.
