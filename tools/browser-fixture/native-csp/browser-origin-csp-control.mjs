@@ -16,9 +16,12 @@ const child = `${b}/child`;
 const redirect = `${b}/redirect`;
 const deny = `${c}/blocked`;
 const ancestor = `${c}/ancestor`;
-const pixel = `${a}/pixel`;
+const submit = `${b}/submit`;
 const scenario = process.argv[2];
-assert(["blink", "redirect", "ancestors"].includes(scenario));
+assert(["blink", "redirect", "ancestors", "form"].includes(scenario));
+const form = scenario === "form";
+const receiverUrl = form ? child : original;
+const pixel = `${form ? b : a}/pixel`;
 const mode = process.argv[3];
 const paired = mode === "--paired";
 assert(
@@ -91,7 +94,8 @@ try {
   const context = await browser.newContext({ serviceWorkers: "block" });
   const hits = [];
   await context.route("**/*", async (route) => {
-    const url = route.request().url();
+    const request = route.request().url();
+    const url = form && request === `${submit}?` ? submit : request;
     hits.push(url);
     if (url === original) {
       await route.fulfill({
@@ -107,10 +111,19 @@ try {
     } else if (url === child) {
       await route.fulfill({
         status: 200,
-        contentType: "text/html",
-        body: `<!doctype html><title>child</title><a href="${redirect}">Navigate</a><a href="${ancestor}">Check ancestors</a>`,
+        headers: {
+          "content-type": "text/html",
+          ...(form && {
+            "content-security-policy": `form-action ${b}; img-src 'none'`,
+          }),
+        },
+        body:
+          "<!doctype html><title>child</title>" +
+          (form
+            ? `${script}<form method="get" action="${submit}" target="_top"><button>Submit</button></form>`
+            : `<a href="${redirect}">Navigate</a><a href="${ancestor}">Check ancestors</a>`),
       });
-    } else if (url === redirect) {
+    } else if (url === redirect || (form && url === submit)) {
       await route.fulfill({ status: 302, headers: { location: deny } });
     } else if (url === ancestor) {
       await route.fulfill({
@@ -130,7 +143,11 @@ try {
   assert.equal((await page.goto(original, { timeout: 8000 })).status(), 200);
   const frame = page.frames().find((entry) => entry.url() === child);
   assert(frame);
-  const cdp = await context.newCDPSession(page);
+  const receiver = form ? frame : page;
+  const peer = form ? page : frame;
+  const cdp = await context.newCDPSession(receiver);
+  const top = form ? await context.newCDPSession(page) : cdp;
+  const beforeTop = (await top.send("Page.getFrameTree")).frameTree.frame;
   const inspector = [];
   cdp.on("Audits.issueAdded", ({ issue }) => {
     const details = issue.details.contentSecurityPolicyIssueDetails;
@@ -138,7 +155,7 @@ try {
   });
   await cdp.send("Audits.enable");
   const { frameTree } = await cdp.send("Page.getFrameTree");
-  assert.equal(frameTree.frame.url, original);
+  assert.equal(frameTree.frame.url, receiverUrl);
   const auditReport = async (directive) => {
     let listener, timer;
     const result = new Promise((resolve, reject) => {
@@ -171,32 +188,48 @@ try {
       "navigation,blink,blink.user_timing,devtools.timeline,mojom,toplevel.flow,mojom.flow",
     options: "record-until-full",
   });
-  await page.evaluate((label) => performance.mark(label + ":original"), marker);
-  await frame.evaluate((label) => performance.mark(label + ":oopif"), marker);
+  await receiver.evaluate(
+    (label) => performance.mark(label + ":original"),
+    marker,
+  );
+  await peer.evaluate((label) => performance.mark(label + ":peer"), marker);
 
   if (scenario !== "blink") {
-    const expected = scenario === "redirect" ? "frame-src" : "frame-ancestors";
+    const expected = form
+      ? "form-action"
+      : scenario === "redirect"
+        ? "frame-src"
+        : "frame-ancestors";
     const audit = auditReport(expected);
     const failed = page.waitForEvent("requestfailed", {
-      predicate: (request) =>
-        request.isNavigationRequest() &&
-        [redirect, deny, ancestor].includes(request.url()),
+      predicate: (request) => {
+        if (!request.isNavigationRequest()) return false;
+        return (
+          form ? [submit, `${submit}?`, deny] : [redirect, deny, ancestor]
+        ).includes(request.url());
+      },
     });
     const link = scenario === "redirect" ? "Navigate" : "Check ancestors";
     const [details, failure] = await Promise.all([
       audit,
       failed,
-      frame.getByRole("link", { name: link }).click(),
+      form
+        ? frame
+            .getByRole("button", { name: "Submit" })
+            .click({ noWaitAfter: true })
+        : frame.getByRole("link", { name: link }).click(),
     ]);
     assert.equal(
       failure.failure()?.errorText,
-      scenario === "redirect"
-        ? "net::ERR_BLOCKED_BY_CSP"
-        : "net::ERR_BLOCKED_BY_RESPONSE",
+      form
+        ? "net::ERR_ABORTED"
+        : scenario === "redirect"
+          ? "net::ERR_BLOCKED_BY_CSP"
+          : "net::ERR_BLOCKED_BY_RESPONSE",
     );
     assert.equal(details.isReportOnly, false);
     assert.equal(details.contentSecurityPolicyViolationType, "kURLViolation");
-    assert.equal(new URL(details.blockedURL).origin, c);
+    assert.equal(new URL(details.blockedURL).origin, form ? b : c);
     if (scenario === "ancestors") {
       assert.equal(details.frameAncestor?.frameId, frameTree.frame.id);
     } else {
@@ -206,15 +239,15 @@ try {
   // The image CSP check queues a Blink-local event on the same original
   // networking runner. In ancestors mode this is the FIFO dispatch barrier,
   // after the native audit notification (which comes after any CSP enqueue).
-  await page.evaluate((url) => {
+  await receiver.evaluate((url) => {
     const image = document.createElement("img");
     image.src = url;
     document.body.append(image);
   }, pixel);
-  await page.waitForFunction(() =>
+  await receiver.waitForFunction(() =>
     window.fixtureEvents.some((event) => event.directive === "img-src"),
   );
-  await page.evaluate((label) => performance.mark(label + ":end"), marker);
+  await receiver.evaluate((label) => performance.mark(label + ":end"), marker);
   const completed = once(owner, "Tracing.tracingComplete");
   await owner.send("Tracing.end");
   const [{ dataLossOccurred }] = await completed;
@@ -222,22 +255,31 @@ try {
   const { frameTree: after } = await cdp.send("Page.getFrameTree");
   assert.equal(after.frame.id, frameTree.frame.id);
   assert.equal(after.frame.loaderId, frameTree.frame.loaderId);
-  const observed = await page.evaluate(() => window.fixtureEvents);
-  const directives =
-    scenario === "redirect" ? ["frame-src", "img-src"] : ["img-src"];
+  const afterTop = (await top.send("Page.getFrameTree")).frameTree.frame;
+  assert.equal(afterTop.id, beforeTop.id);
+  assert.equal(afterTop.loaderId, beforeTop.loaderId);
+  const observed = await receiver.evaluate(() => window.fixtureEvents);
+  const directives = form
+    ? ["form-action", "img-src"]
+    : scenario === "redirect"
+      ? ["frame-src", "img-src"]
+      : ["img-src"];
   assert.deepEqual(
     observed.map((event) => event.directive),
     directives,
   );
   for (const event of observed) {
-    assert.equal(event.uri, original);
+    assert.equal(event.uri, receiverUrl);
     assert.equal(event.originalTarget, true);
     assert.equal(event.trusted, true);
     assert.equal(event.disposition, "enforce");
+    const blocked = new URL(event.blocked);
     assert.equal(
-      new URL(event.blocked).origin,
-      event.directive === "frame-src" ? c : a,
+      blocked.origin,
+      event.directive === "frame-src" ? c : form ? b : a,
     );
+    if (event.directive === "form-action")
+      assert.equal(blocked.origin + blocked.pathname, submit);
   }
   assert.deepEqual(
     inspector.map(({ violatedDirective }) => violatedDirective).sort(),
@@ -253,6 +295,7 @@ try {
       child,
       ...(scenario === "redirect" ? [redirect] : []),
       ...(scenario === "ancestors" ? [ancestor] : []),
+      ...(form ? [submit] : []),
     ],
     "unexpected fixture request or blocked destination reached",
   );

@@ -13,10 +13,18 @@ the sandbox is enabled, and no browser feature override is required.
 | `redirect`  | Child follows an allowed same-site URL; its synthetic `302` redirects to a site forbidden by the parent's `frame-src`. The final URL must not be requested. | Browser `OnRequestRedirected`, exact `LocalFrame` CSP Mojo receive, then one trusted `frame-src` DOM event on the original document. `ERR_BLOCKED_BY_CSP` and the matching audit are checked separately. |
 | `ancestors` | Parent allows the child destination, but the final response sets `frame-ancestors 'none'`.                                                                  | `ERR_BLOCKED_BY_RESPONSE`, exact CSP Mojo receive, and a `frame-ancestors` audit naming the original parent. **No** `frame-ancestors` DOM event. The subsequent Blink image event still dispatches.      |
 
-The test asserts distinct renderer PIDs for the original parent and live
-child; a browser PID from the browser session; the unchanged parent frame,
+The `form` control exercises a different receiver. The original out-of-process
+child submits a top-level navigation to an allowed action URL. Its synthetic
+`302` redirects to a site forbidden by the child's `form-action`. The browser
+aborts the top navigation with `ERR_ABORTED` and sends the CSP notification to
+the original **child**, not the destination top document. Both original
+loaders stay unchanged. The reported URL is the initial action URL; the
+blocked redirect is never requested.
+
+The test asserts distinct renderer PIDs for the original receiver and its
+live peer; a browser PID from the browser session; the unchanged receiver frame,
 loader and trace navigation ID; the exact native Mojo interface and method;
-and a trusted parent listener mark **inside** a native CSP `EventDispatch`
+and a trusted receiver listener mark **inside** a native CSP `EventDispatch`
 slice. The audit is a receipt barrier for the test, not a DOM event:
 Blink emits it synchronously after posting any applicable CSP event on the
 original networking task runner. After the audit, the test queues the image
@@ -31,8 +39,9 @@ receipt.
   `OnRequestRedirected` → `CheckContentSecurityPolicy` → `CheckCSPDirectives`.
   Parent `frame-src` uses `RenderFrameHostCSPContext(parent)`. Form submission
   uses the separate initiator context from `GetInitiatorDocumentRenderFrameHost`
-  (resolves the original document token and process; may return null). This
-  control exercises **only** the parent path, not `form-action`.
+  (resolves the original document token and process; may return null). The
+  `form` control proves delivery to the original initiator while the separate
+  destination document remains alive; initiator loss is not covered.
 - `content/browser/renderer_host/render_frame_host_csp_context.cc`:
   `ReportContentSecurityPolicyViolation` forwards on the associated
   `blink.mojom.LocalFrame` remote. Cross-origin `frame-src` blocked URLs
@@ -71,7 +80,7 @@ and no credentials or shared profile:
 
 ```sh
 node --test "$FIXTURE/browser-origin-csp-trace.test.mjs"
-for mode in blink redirect ancestors; do
+for mode in blink redirect ancestors form; do
   unshare --user --map-current-user --net timeout 40 env \
     -u WAYLAND_DISPLAY -u XDG_RUNTIME_DIR -u XDG_SESSION_TYPE \
     -u DBUS_SESSION_BUS_ADDRESS xvfb-run -a \
@@ -98,4 +107,4 @@ done
    report/audit path instead of demanding a dispatch or minting a DOM
    receipt. If testing replacement or detach, require an original-scoped
    result or refusal, never delivery credited to the replacement. The
-   three controls above do not qualify those races or a browser cutoff.
+   controls above do not qualify those races or a browser cutoff.
