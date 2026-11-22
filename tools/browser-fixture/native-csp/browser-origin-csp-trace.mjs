@@ -18,7 +18,7 @@ const only = (values, message) => {
 };
 
 export function proveCspOrigin(trace, nonce, scenario, browserPid) {
-  assert(["blink", "redirect", "ancestors"].includes(scenario));
+  assert(["blink", "redirect", "ancestors", "form"].includes(scenario));
   const mark = (suffix) =>
     only(
       trace.filter(
@@ -29,17 +29,17 @@ export function proveCspOrigin(trace, nonce, scenario, browserPid) {
       ),
       `missing/ambiguous ${suffix} mark`,
     );
-  const parent = mark("original");
-  const child = mark("oopif");
+  const original = mark("original");
+  const peer = mark("peer");
   const end = mark("end");
   assert(Number.isSafeInteger(browserPid) && browserPid > 0);
-  assert(browserPid !== parent.pid && browserPid !== child.pid);
-  assert.notEqual(child.pid, parent.pid, "child was not out of process");
-  assert.notEqual(child.args.data.navigationId, parent.args.data.navigationId);
-  assert.match(parent.args.data.navigationId, /^[A-F0-9]{32}$/);
-  assert(sameLane(parent, end));
-  assert.equal(end.args.data.navigationId, parent.args.data.navigationId);
-  assert(parent.ts < child.ts && child.ts < end.ts);
+  assert(browserPid !== original.pid && browserPid !== peer.pid);
+  assert.notEqual(peer.pid, original.pid, "peer was not out of process");
+  assert.notEqual(peer.args.data.navigationId, original.args.data.navigationId);
+  assert.match(original.args.data.navigationId, /^[A-F0-9]{32}$/);
+  assert(sameLane(original, end));
+  assert.equal(end.args.data.navigationId, original.args.data.navigationId);
+  assert(original.ts < peer.ts && peer.ts < end.ts);
 
   // The pinned Chromium DevTools JSON export emits completed `X` slices for
   // these native scopes. An absent/partial slice is not positive evidence.
@@ -52,7 +52,7 @@ export function proveCspOrigin(trace, nonce, scenario, browserPid) {
         e.dur >= 0,
     )
     .map((e) => ({ ...e, end: e.ts + e.dur }));
-  const window = (e) => e.ts > child.ts && e.end <= end.ts;
+  const window = (e) => e.ts > peer.ts && e.end <= end.ts;
   const dispatches = slices.filter(
     (e) =>
       e.name === "EventDispatch" &&
@@ -62,10 +62,10 @@ export function proveCspOrigin(trace, nonce, scenario, browserPid) {
   );
   function dispatchFor(directive) {
     const evidence = mark(`event:${directive}:true`);
-    assert(sameLane(parent, evidence));
+    assert(sameLane(original, evidence));
     assert.equal(
       evidence.args.data.navigationId,
-      parent.args.data.navigationId,
+      original.args.data.navigationId,
     );
     return only(
       dispatches.filter(
@@ -86,9 +86,9 @@ export function proveCspOrigin(trace, nonce, scenario, browserPid) {
           e.args.chrome_mojo_event_info.ipc_hash === cspMethodHash)),
   );
   const result = {
-    originalRenderer: parent.pid,
-    childRenderer: child.pid,
-    originalNavigationId: parent.args.data.navigationId,
+    originalRenderer: original.pid,
+    peerRenderer: peer.pid,
+    originalNavigationId: original.args.data.navigationId,
     blinkLocalDispatch: image.ts,
     cspMojoReceives: inbound.length,
     cspDomDispatches: dispatches.length,
@@ -100,7 +100,10 @@ export function proveCspOrigin(trace, nonce, scenario, browserPid) {
   }
 
   const receive = only(inbound, "missing/ambiguous CSP Mojo receive");
-  assert(sameLane(receive, parent), "CSP arrived on a different renderer lane");
+  assert(
+    sameLane(receive, original),
+    "CSP arrived on a different renderer lane",
+  );
   assert(receive.end <= image.ts, "Blink barrier did not follow CSP Mojo");
   const navigation = only(
     slices.filter(
@@ -109,14 +112,16 @@ export function proveCspOrigin(trace, nonce, scenario, browserPid) {
         e.pid === browserPid &&
         category(e, "navigation") &&
         e.name ===
-          (scenario === "redirect"
-            ? "NavigationRequest::OnRequestRedirected"
-            : "NavigationRequest::OnRequestFailedInternal"),
+          (scenario === "ancestors"
+            ? "NavigationRequest::OnRequestFailedInternal"
+            : "NavigationRequest::OnRequestRedirected"),
     ),
     "missing/ambiguous browser navigation slice",
   );
-  if (scenario === "redirect") {
-    const report = dispatchFor("frame-src");
+  if (scenario !== "ancestors") {
+    const report = dispatchFor(
+      scenario === "form" ? "form-action" : "frame-src",
+    );
     assert(navigation.ts <= receive.ts);
     assert(receive.end <= report.ts && report.end <= image.ts);
     assert.equal(dispatches.length, 2);

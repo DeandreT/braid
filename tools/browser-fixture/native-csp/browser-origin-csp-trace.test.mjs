@@ -46,7 +46,7 @@ const navigate = (name) =>
   slice(`NavigationRequest::${name}`, 4, 7, "navigation", {}, 42);
 const base = () => [
   mark("original", 0),
-  mark("oopif", 2, 102, "B".repeat(32)),
+  mark("peer", 2, 102, "B".repeat(32)),
   dispatch(12),
   mark("event:img-src:true", 13),
   mark("end", 16),
@@ -87,13 +87,11 @@ test("a blocked navigation or generic Mojo message cannot substitute for CSP IPC
 });
 
 test("requires a distinct child process and trusted dispatch in the same original navigation", () => {
-  const withoutChild = redirect().filter(
-    (event) => event.name !== `${n}:oopif`,
-  );
+  const withoutChild = redirect().filter((event) => event.name !== `${n}:peer`);
   assert.throws(
     () =>
       prove(
-        [...withoutChild, mark("oopif", 2, 101, "B".repeat(32))],
+        [...withoutChild, mark("peer", 2, 101, "B".repeat(32))],
         "redirect",
       ),
     /not out of process/,
@@ -112,6 +110,19 @@ test("requires a distinct child process and trusted dispatch in the same origina
       "redirect",
     ),
   );
+});
+
+test("form navigation credits the original initiator, not its destination", () => {
+  const evidence = redirect().map((entry) =>
+    entry.name === `${n}:event:frame-src:true`
+      ? mark("event:form-action:true", 8)
+      : entry,
+  );
+  assert.equal(prove(evidence, "form").browserCspDispatch, 7);
+  const other = evidence.map((entry) =>
+    entry.name === "Receive mojo message" ? receive(102) : entry,
+  );
+  assert.throws(() => prove(other, "form"), /different renderer/);
 });
 
 test("audit-only rejects an actual or mislabeled frame-ancestors event", () => {
