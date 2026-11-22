@@ -1,0 +1,284 @@
+--- a/third_party/blink/public/devtools_protocol/domains/Audits.pdl
++++ b/third_party/blink/public/devtools_protocol/domains/Audits.pdl
+@@ -921,6 +921,15 @@
+     returns
+       string reservation
+ 
++  # Narrow load-producer scope with a conservative JS/port publication veto.
++  # Does not certify document, renderer or browser quiescence.
++  experimental command readBraidBoundedLoad
++    parameters
++      string epoch
++    returns
++      string generation
++      string producer
++
+   experimental command readBraidZero
+     parameters
+       string epoch
+--- a/third_party/blink/renderer/core/inspector/inspector_audits_agent.cc
++++ b/third_party/blink/renderer/core/inspector/inspector_audits_agent.cc
+@@ -4,21 +4,19 @@
+ 
+ #include "third_party/blink/renderer/core/inspector/inspector_audits_agent.h"
+ 
++#include "base/functional/bind.h"
+ #include "base/numerics/safe_conversions.h"
+ #include "base/unguessable_token.h"
+-#include "third_party/blink/renderer/core/workers/csp_fixture_workers.h"
+-#include "third_party/blink/renderer/core/workers/worker_global_scope.h"
+-#include "base/functional/bind.h"
+-#include "third_party/blink/renderer/bindings/core/v8/v8_security_policy_violation_event_disposition.h"
+-#include "third_party/blink/renderer/core/frame/csp/execution_context_csp_delegate.h"
+-#include "third_party/blink/renderer/core/events/security_policy_violation_event.h"
+ #include "third_party/blink/public/mojom/devtools/inspector_issue.mojom-blink.h"
+ #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink.h"
+ #include "third_party/blink/public/platform/web_data.h"
+ #include "third_party/blink/public/web/web_autofill_client.h"
+ #include "third_party/blink/public/web/web_image.h"
++#include "third_party/blink/renderer/bindings/core/v8/v8_security_policy_violation_event_disposition.h"
+ #include "third_party/blink/renderer/core/dom/dom_node_ids.h"
+ #include "third_party/blink/renderer/core/dom/dom_token_list.h"
++#include "third_party/blink/renderer/core/events/security_policy_violation_event.h"
++#include "third_party/blink/renderer/core/frame/csp/execution_context_csp_delegate.h"
+ #include "third_party/blink/renderer/core/frame/local_dom_window.h"
+ #include "third_party/blink/renderer/core/frame/local_frame.h"
+ #include "third_party/blink/renderer/core/html/html_anchor_element.h"
+@@ -27,8 +25,11 @@
+ #include "third_party/blink/renderer/core/inspector/inspector_issue_storage.h"
+ #include "third_party/blink/renderer/core/inspector/inspector_network_agent.h"
+ #include "third_party/blink/renderer/core/inspector/protocol/audits.h"
++#include "third_party/blink/renderer/core/workers/csp_fixture_workers.h"
++#include "third_party/blink/renderer/core/workers/worker_global_scope.h"
+ #include "third_party/blink/renderer/platform/graphics/image_data_buffer.h"
+ #include "third_party/blink/renderer/platform/image-encoders/image_encoder_utils.h"
++#include "third_party/blink/renderer/platform/scheduler/public/task_attribution_tracker.h"
+ #include "third_party/blink/renderer/platform/wtf/text/base64.h"
+ #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
+ #include "third_party/skia/include/core/SkImage.h"
+@@ -246,6 +247,10 @@
+   }
+   auto& delegate=static_cast<ExecutionContextCSPDelegate&>(context->GetContentSecurityPolicyDelegate());
+   if (delegate.HasFixtureProbe()) {braid_refused_=true;return;}
++  if (auto* tracker =
++          scheduler::TaskAttributionTracker::From(context->GetIsolate())) {
++    fixture_publication_baseline_ = tracker->ArmFixturePublicationVeto();
++  }
+   braid_creating_=true; BindBraidDocumentCheck(delegate);
+   load_producer_=std::nullopt;
+   auto load=braid_scope_->Root();
+@@ -264,6 +269,28 @@
+   if(!load_producer_ || frame!=braid_reserved_frame_.Get())return;
+   if(!braid_document_ || frame->GetDocument()!=braid_document_.Get()){braid_refused_=true;return;}
+   load_producer_->Completed();load_producer_.reset();load_returned_=true;
++}
++protocol::Response InspectorAuditsAgent::readBraidBoundedLoad(
++    const String& epoch,
++    String* generation,
++    String* producer) {
++  auto* doc = braid_document_.Get();
++  auto* tracker = doc && doc->domWindow()
++                      ? scheduler::TaskAttributionTracker::From(
++                            doc->domWindow()->GetIsolate())
++                      : nullptr;
++  if (!tracker || fixture_publication_baseline_ == UINT64_MAX ||
++      tracker->FixturePublicationRevision() != fixture_publication_baseline_) {
++    braid_refused_ = true;
++    return protocol::Response::ServerError(
++        !tracker ? "unowned fixture publication: no tracker"
++        : tracker->FixtureLastPublication() == 1
++            ? "unowned fixture publication: promise"
++        : tracker->FixtureLastPublication() == 2
++            ? "unowned fixture publication: port"
++            : tracker->FixtureLastPublication() == 3 ? "unowned fixture publication: resource" : "unowned fixture publication: database");
++  }
++  return readBraidZero(epoch, generation, producer);
+ }
+ protocol::Response InspectorAuditsAgent::readBraidZero(const String& epoch,String* generation,String* producer) {
+   auto* doc=braid_document_.Get();auto* frame=braid_reserved_frame_.Get();
+--- a/third_party/blink/renderer/core/inspector/inspector_audits_agent.h
++++ b/third_party/blink/renderer/core/inspector/inspector_audits_agent.h
+@@ -52,6 +52,10 @@
+   protocol::Response reserveBraidDocument(const String&, const String&, String*) override;
+   void WillCreateBraidDocument(LocalFrame*, ExecutionContext*, const KURL&);
+   void DidCreateBraidDocument(LocalFrame*, Document*);
++  protocol::Response readBraidBoundedLoad(const String&,
++                                          String*,
++                                          String*) override;
++  uint64_t fixture_publication_baseline_ = UINT64_MAX;
+   void LoadEventFired(LocalFrame*);
+   protocol::Response readBraidZero(const String&, String*, String*) override;
+   void Restore() override;
+--- a/third_party/blink/renderer/core/loader/resource_load_observer_for_frame.cc
++++ b/third_party/blink/renderer/core/loader/resource_load_observer_for_frame.cc
+@@ -44,6 +44,7 @@
+ #include "third_party/blink/renderer/platform/loader/fetch/resource_loader_options.h"
+ #include "third_party/blink/renderer/platform/loader/fetch/resource_request.h"
+ #include "third_party/blink/renderer/platform/loader/fetch/resource_response.h"
++#include "third_party/blink/renderer/platform/scheduler/public/task_attribution_tracker.h"
+ 
+ namespace blink {
+ namespace {
+@@ -153,6 +154,10 @@
+                                                 request.Priority());
+   }
+ 
++  if (auto* tracker = scheduler::TaskAttributionTracker::From(
++          document_->GetAgent().isolate())) {
++    tracker->NoteFixturePublication(3);
++  }
+   probe::WillSendRequest(
+       document_->domWindow(), document_loader_,
+       fetcher_properties_->GetFetchClientSettingsObject().GlobalObjectUrl(),
+--- a/third_party/blink/renderer/core/messaging/message_port.cc
++++ b/third_party/blink/renderer/core/messaging/message_port.cc
+@@ -199,6 +199,10 @@
+ 
+   mojo::Message mojo_message =
+       mojom::blink::TransferableMessage::WrapAsMessage(std::move(msg));
++  if (auto* tracker =
++          scheduler::TaskAttributionTracker::From(script_state->GetIsolate())) {
++    tracker->NoteFixturePublication(2);
++  }
+   connector_->Accept(&mojo_message);
+ }
+ 
+--- a/third_party/blink/renderer/core/scheduler/task_attribution_tracker_impl.cc
++++ b/third_party/blink/renderer/core/scheduler/task_attribution_tracker_impl.cc
+@@ -108,7 +108,33 @@
+   }
+ }
+ 
++// Deliberately coarser than reaction identity: a single publication anywhere
++// on the original isolate disqualifies a promise-free load. Never decrement
++// on resolve/after: a handler may have transferred work to a host subsystem.
++void FixtureHook(v8::PromiseHookType type,
++                 v8::Local<v8::Promise>,
++                 v8::Local<v8::Value>) {
++  auto* tracker = TaskAttributionTracker::From(v8::Isolate::GetCurrent());
++  if (tracker) {
++    tracker->NoteFixturePublication(1);
++  }
++}
++void CombinedHook(v8::PromiseHookType type,
++                  v8::Local<v8::Promise> promise,
++                  v8::Local<v8::Value> parent) {
++  FixtureHook(type, promise, parent);
++  TaskAttributionPromiseHook(type, promise, parent);
++}
+ }  // namespace
++
++uint64_t TaskAttributionTrackerImpl::ArmFixturePublicationVeto() {
++  if (!fixture_observing_) {
++    fixture_observing_ = true;
++    isolate_->SetPromiseHook(tracing_promise_hook_ ? CombinedHook
++                                                   : FixtureHook);
++  }
++  return fixture_revision_;
++}
+ 
+ // static
+ std::unique_ptr<TaskAttributionTracker> TaskAttributionTrackerImpl::Create(
+@@ -131,7 +157,9 @@
+     // If tracing was already enabled, we won't get a callback, so check if we
+     // need to register the promise hook.
+     if (IsTracingCategoryEnabled()) {
+-      isolate_->SetPromiseHook(TaskAttributionPromiseHook);
++      tracing_promise_hook_ = true;
++      isolate_->SetPromiseHook(fixture_observing_ ? CombinedHook
++                                                  : TaskAttributionPromiseHook);
+     }
+   }
+ }
+@@ -305,7 +333,9 @@
+ void TaskAttributionTrackerImpl::OnStart(
+     const perfetto::DataSourceBase::StartArgs&) {
+   if (IsTracingCategoryEnabled()) {
+-    isolate_->SetPromiseHook(TaskAttributionPromiseHook);
++    tracing_promise_hook_ = true;
++    isolate_->SetPromiseHook(fixture_observing_ ? CombinedHook
++                                                : TaskAttributionPromiseHook);
+   }
+ }
+ 
+@@ -314,7 +344,8 @@
+   bool should_stop = !base::trace_event::IsCategoryEnabledOnStop(
+       PERFETTO_GET_CATEGORY_INDEX(kTracingCategory), args);
+   if (should_stop) {
+-    isolate_->SetPromiseHook(nullptr);
++    tracing_promise_hook_ = false;
++    isolate_->SetPromiseHook(fixture_observing_ ? FixtureHook : nullptr);
+   }
+ }
+ 
+--- a/third_party/blink/renderer/core/scheduler/task_attribution_tracker_impl.h
++++ b/third_party/blink/renderer/core/scheduler/task_attribution_tracker_impl.h
+@@ -45,6 +45,21 @@
+   static std::unique_ptr<TaskAttributionTracker> Create(v8::Isolate*);
+ 
+   ~TaskAttributionTrackerImpl() override;
++  // Monotone veto only, not an inventory of JS work. A dedicated fixture
++  // renderer keeps this observation installed for its remaining lifetime.
++  uint64_t ArmFixturePublicationVeto() override;
++  uint64_t FixturePublicationRevision() const override {
++    return fixture_revision_;
++  }
++  unsigned FixtureLastPublication() const override { return fixture_kind_; }
++  void NoteFixturePublication(unsigned kind) override {
++    if (fixture_observing_) {
++      fixture_kind_ = kind;
++    }
++    if (fixture_observing_ && fixture_revision_ != UINT64_MAX) {
++      ++fixture_revision_;
++    }
++  }
+ 
+   // TaskAttributionTracker overrides:
+   std::optional<TaskScope> SetCurrentTaskStateIfTopLevel(
+@@ -108,6 +123,10 @@
+   // The lifetime of this class is tied to the `isolate_`.
+   raw_ptr<v8::Isolate, UnprotectedInRelease | DanglingUntriaged> isolate_;
+ 
++  unsigned fixture_kind_ = 0;
++  uint64_t fixture_revision_ = 0;
++  bool fixture_observing_ = false;
++  bool tracing_promise_hook_ = false;
+   bool should_override_top_level_check_ = false;
+ 
+   base::WeakPtrFactory<TaskAttributionTrackerImpl> weak_factory_{this};
+--- a/third_party/blink/renderer/platform/scheduler/public/task_attribution_tracker.h
++++ b/third_party/blink/renderer/platform/scheduler/public/task_attribution_tracker.h
+@@ -141,6 +141,11 @@
+   }
+ 
+   virtual ~TaskAttributionTracker() = default;
++  // Unsupported tracker implementations must never admit a bounded fixture.
++  virtual uint64_t ArmFixturePublicationVeto() { return UINT64_MAX; }
++  virtual uint64_t FixturePublicationRevision() const { return UINT64_MAX; }
++  virtual void NoteFixturePublication(unsigned) {}
++  virtual unsigned FixtureLastPublication() const { return 0; }
+ 
+   // Sets `task_state` as the current task state if `task_state` is non-null and
+   // JavaScript is not currently executing. Returns a `TaskScope`  initiating
+--- a/third_party/blink/renderer/modules/indexeddb/idb_factory.cc
++++ b/third_party/blink/renderer/modules/indexeddb/idb_factory.cc
+@@ -27,6 +27,7 @@
+  */
+ 
+ #include "third_party/blink/renderer/modules/indexeddb/idb_factory.h"
++#include "third_party/blink/renderer/platform/scheduler/public/task_attribution_tracker.h"
+ 
+ #include <limits>
+ #include <memory>
+@@ -291,6 +292,11 @@
+     UseCounter::Count(context, WebFeature::kFileAccessedDatabase);
+   }
+ 
++  // The browser's connection coordinator can hold this request after the
++  // calling script has returned, including when no JS promise was created.
++  if (auto* tracker = scheduler::TaskAttributionTracker::From(context->GetIsolate())) {
++    tracker->NoteFixturePublication(4);
++  }
+   int64_t transaction_id = IDBDatabase::NextTransactionId();
+ 
+   IDBTransaction::TransactionMojoRemote transaction_remote(context);

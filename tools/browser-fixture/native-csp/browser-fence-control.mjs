@@ -27,6 +27,7 @@ try {
     assert.equal(added.length, 1);
     const dir = await mkdtemp(join(tmpdir(), "braid-fence-"));
     const journal = new PrefixJournal(join(dir, "journal"));
+    const originals = new PrefixJournal(join(dir, "original-loads"));
     try {
       const epoch = journal.epoch;
       const { publicKey, privateKey } = generateKeyPairSync("ed25519");
@@ -42,6 +43,50 @@ try {
       let release;
       const pending = new Promise((r) => (release = r));
       const loads = [];
+      let originalPrefix;
+      async function retain(f) {
+        const load = await f.read();
+        if (mode === "zero") {
+          assert.match(load.generation, /^[A-F0-9]{32}$/);
+          assert.match(load.producer, /^[A-F0-9]{32}$/);
+          assert.ok(
+            !loads.some(
+              (x) =>
+                x.generation === load.generation ||
+                x.producer === load.producer,
+            ),
+          );
+          const snapshot = await session.send("Browser.readBraidInventory", {
+            runId,
+          });
+          const lifetime = snapshot.inventory
+            .split("\n")
+            .map((x) => x.split(":"))
+            .filter(([, id]) => id === load.generation);
+          assert.equal(lifetime.length, 1);
+          assert.equal(lifetime[0][0], "B");
+          const record = hash(
+            JSON.stringify([
+              "bounded-load-v1",
+              runId,
+              epoch,
+              snapshot.revision,
+              snapshot.digest,
+              load.generation,
+              load.producer,
+            ]),
+          );
+          originalPrefix = originals.accept(
+            originals.epoch,
+            loads.length + 1,
+            snapshot.revision,
+            originalPrefix?.digest ?? "0".repeat(64),
+            record,
+          );
+        }
+        loads.push(load);
+      }
+
       await ctx.route("**/*", async (r) => {
         if (r.request().url() === origin + "/hold") {
           await pending;
@@ -53,7 +98,7 @@ try {
           body:
             mode === "unresolved" && r.request().url().endsWith("/fixture")
               ? '<!doctype html><img src="/hold">'
-              : "<!doctype html><title>zero</title>",
+              : "<!doctype html><link rel=icon href=data:,><title>zero</title>",
         });
       });
       async function seed() {
@@ -74,7 +119,11 @@ try {
         };
         if (reload) await p.reload(opts);
         else await p.goto(origin + "/fixture", opts);
-        return { c, read: () => c.send("Audits.readBraidZero", { epoch }) };
+        const method =
+          mode === "zero"
+            ? "Audits.readBraidBoundedLoad"
+            : "Audits.readBraidZero";
+        return { c, read: () => c.send(method, { epoch }) };
       }
       const p = await seed(),
         q = await seed();
@@ -105,7 +154,7 @@ try {
             });
           });
         }
-        loads.push(await first.read());
+        await retain(first);
         if (mode === "continuation") {
           assert.equal(
             await p.evaluate(() => {
@@ -120,9 +169,14 @@ try {
           );
         }
         const replacement = await navigate(p, true);
-        loads.push(await replacement.read());
-        await assert.rejects(first.read(), /zero producer unresolved/);
-        loads.push(await (await navigate(q)).read());
+        await retain(replacement);
+        await assert.rejects(
+          first.read(),
+          mode === "zero"
+            ? /zero producer unresolved|unowned fixture publication/
+            : /zero producer unresolved/,
+        );
+        await retain(await navigate(q));
         assert.equal(new Set(loads.map((x) => x.generation)).size, 3);
         assert.equal(new Set(loads.map((x) => x.producer)).size, 3);
       }
@@ -139,7 +193,7 @@ try {
         1,
         inv.revision,
         "0".repeat(64),
-        hash(JSON.stringify([runId, inv, loads])),
+        hash(JSON.stringify([runId, inv, loads, originalPrefix ?? null])),
       );
       const message = `braid-fence-v1:${runId}:${epoch}:${inv.revision}:${inv.digest}:1:${receipt.digest}`;
       const signature = sign(null, Buffer.from(message), privateKey).toString(
@@ -195,6 +249,7 @@ try {
     } finally {
       await ctx.close();
       await session.detach();
+      originals.close();
       journal.close();
       await rm(dir, { recursive: true });
     }
