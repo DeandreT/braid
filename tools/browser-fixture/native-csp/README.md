@@ -6,10 +6,11 @@ No browser suite imports this fixture. There is no browser-clean verdict. `worke
 
 Use an empty task-owned build directory. Obtain Chromium release source `157.0.8090.0`, revision `2ea1b71af70d7fc5d41325dda8df37c1f98ac531` (official `.tar.xz` SHA-256 `59d273ca268798f0e3fd5a703cd7233d44a912a6e9adb0597d9b8e61d991eb0a`). Verify the digest **before** extracting, verify `build/util/LASTCHANGE` against the revision, and use the GN, sysroot, Clang, Rust and test fonts pinned in its `DEPS`. If the release compiler lacks `cr_build_revision`, restore the verified pinned Clang package using Chromium's `tools/clang/scripts/update.py`; don't bypass GN's version check. The test-fonts GCS package belongs under `third_party/test_fonts/test_fonts`.
 
-From Chromium's source directory (`FIXTURE` is the absolute path to this directory):
+After verifying and extracting Chromium and checking out Playwright at `606ecd8b34bac100db32561b6278ffd76e5eb3cd`, apply the complete stack **once** to pristine inputs. `$FIXTURE` is the absolute path to this directory. The helper applies `native-phase.patch` then `inspector-receipt.patch` to Chromium, and `driver-launch.patch` to Playwright.
 
 ```sh
-git apply --check "$FIXTURE/native-phase.patch" && git apply "$FIXTURE/native-phase.patch"
+python3 "$FIXTURE/apply-receipt-pair.py" "$CHROMIUM_SRC" "$PLAYWRIGHT_SRC"
+cd "$CHROMIUM_SRC"
 buildtools/linux64/gn gen out/CspProbe --threads=2 --args='is_debug=false is_component_build=false is_official_build=false symbol_level=0 blink_symbol_level=0 v8_symbol_level=0 use_remoteexec=false chrome_pgo_phase=0'
 third_party/ninja/ninja -C out/CspProbe -j2 blink_unittests chrome
 unshare --user --map-current-user --net timeout 30 out/CspProbe/blink_unittests --gtest_filter=ContentSecurityPolicyTest.FixtureLocalCaptureIsNotBrowserCutoff --test-launcher-jobs=1 --test-launcher-retry-limit=0 --test-launcher-print-test-stdio=always
@@ -17,7 +18,7 @@ unshare --user --map-current-user --net timeout 30 out/CspProbe/blink_unittests 
 
 Run builds under a storage monitor. On the Linux qualification host verify `/dev/sdb1` Btrfs on `/mnt/perok`; stop on ENOSPC, below 60 GiB free, or both below 128 MiB device-unallocated **and** below 600 MiB logical DUP metadata headroom. Retain build intermediates while developing the pair.
 
-In a separate Playwright checkout at `606ecd8b34bac100db32561b6278ffd76e5eb3cd` (`v1.64.0`), apply `driver-launch.patch`, run `npm ci --ignore-scripts --no-audit --no-fund` then `GOMAXPROCS=2 node utils/build/build.js --disable-install` with a private npm cache and `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`. Do not substitute Playwright's default browser.
+In a separate Playwright checkout at `606ecd8b34bac100db32561b6278ffd76e5eb3cd` (`v1.64.0`), after the helper has applied `driver-launch.patch`, run `npm ci --ignore-scripts --no-audit --no-fund` then `GOMAXPROCS=2 node utils/build/build.js --disable-install` with a private npm cache and `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`. Do not substitute Playwright's default browser.
 
 ## Bounded controls
 
@@ -29,3 +30,9 @@ unshare --user --map-current-user --net timeout 30 node "$FIXTURE/local-control.
 ```
 
 The browser sandbox remains enabled. No credentials, external service, capture, shared browser profile, or remote debugger endpoint is needed. The real policy comes from an intercepted fixture HTTP response. A page event synchronizes the stimulus only. The native unit test separately verifies one enrolled delegate's before-handler field match and settlement after return. Neither test is a cutoff.
+
+## Dispatch receipt API (local fixture only)
+
+`browser-receipt.mjs` runs in the same isolated **loopback-down** namespace as `local-control.mjs`; use an outer `timeout 120`. It launches its own verified source-built driver and sandboxed executable. The private pipe session must implement `Audits.armBraidDispatch({epoch}) → {generation}` and `Audits.readBraidDispatch({epoch}) → {generation, dispatch}`. The latter seals this delegate, not the browser. A missing method, session loss, mismatched generation or missing observation is a refusal, never an instruction to reconnect using stock Playwright. Node journals the redacted commitment and signs its receipt after fsync; the driver verifies that receipt before releasing the original session. No replay against a replacement page is permitted.
+
+This version enrolls the current document **after navigation**. It cannot attest the navigation, another page, a reload, a worker, earlier or unknown producers, or a whole run. The Node custody model refuses even when all locally issued tickets have settled. A packaged suite needs independent startup enrollment, a closed native producer inventory and a pre-close settlement protocol for each original page/context. It must use a separate namespace with only loopback up and task-owned loopback services; do not enable loopback in the offline control or reuse its profile, journal or cleanup owner.

@@ -1,0 +1,144 @@
+--- a/third_party/blink/public/devtools_protocol/domains/Audits.pdl
++++ b/third_party/blink/public/devtools_protocol/domains/Audits.pdl
+@@ -900,6 +900,20 @@
+     returns
+       array of GenericIssueDetails formIssues
+ 
++  # Isolated fixture only; no command attests browser-wide delivery.
++  experimental command armBraidDispatch
++    parameters
++      string epoch
++    returns
++      string generation
++
++  experimental command readBraidDispatch
++    parameters
++      string epoch
++    returns
++      string generation
++      string dispatch
++
+   event issueAdded
+     parameters
+       InspectorIssue issue
+--- a/third_party/blink/renderer/core/frame/csp/execution_context_csp_delegate.h
++++ b/third_party/blink/renderer/core/frame/csp/execution_context_csp_delegate.h
+@@ -26,6 +26,7 @@
+     fixture_probe_ = std::move(scope);
+     fixture_check_ = std::move(check);
+   }
++  bool HasFixtureProbe() const { return !!fixture_probe_; }
+   void Trace(Visitor*) const override;
+ 
+   // ContentSecurityPolicyDelegate overrides:
+--- a/third_party/blink/renderer/core/inspector/inspector_audits_agent.h
++++ b/third_party/blink/renderer/core/inspector/inspector_audits_agent.h
+@@ -6,6 +6,7 @@
+ #define THIRD_PARTY_BLINK_RENDERER_CORE_INSPECTOR_INSPECTOR_AUDITS_AGENT_H_
+ 
+ #include "base/memory/raw_ptr.h"
++#include "third_party/blink/renderer/core/frame/csp/credit_scope.h"
+ #include "third_party/blink/renderer/core/core_export.h"
+ #include "third_party/blink/renderer/core/dom/document.h"
+ #include "third_party/blink/renderer/core/inspector/inspected_frames.h"
+@@ -43,6 +44,8 @@
+       std::unique_ptr<protocol::Array<protocol::Audits::GenericIssueDetails>>*
+           out_formIssues) override;
+ 
++  protocol::Response armBraidDispatch(const String&, String*) override;
++  protocol::Response readBraidDispatch(const String&, String*, String*) override;
+   void Restore() override;
+ 
+   protocol::Response getEncodedResponse(
+@@ -56,6 +59,11 @@
+ 
+  private:
+   void InnerEnable();
++  WeakMember<Document> braid_document_;
++  String braid_epoch_;
++  std::shared_ptr<braid::probe::Scope> braid_scope_;
++  std::shared_ptr<String> braid_dispatch_;
++  bool braid_refused_ = false;
+ 
+   const raw_ptr<InspectorIssueStorage, UnprotectedInRelease | DanglingUntriaged>
+       inspector_issue_storage_;
+--- a/third_party/blink/renderer/core/inspector/inspector_audits_agent.cc
++++ b/third_party/blink/renderer/core/inspector/inspector_audits_agent.cc
+@@ -5,6 +5,11 @@
+ #include "third_party/blink/renderer/core/inspector/inspector_audits_agent.h"
+ 
+ #include "base/numerics/safe_conversions.h"
++#include "base/unguessable_token.h"
++#include "base/functional/bind.h"
++#include "third_party/blink/renderer/bindings/core/v8/v8_security_policy_violation_event_disposition.h"
++#include "third_party/blink/renderer/core/frame/csp/execution_context_csp_delegate.h"
++#include "third_party/blink/renderer/core/events/security_policy_violation_event.h"
+ #include "third_party/blink/public/mojom/devtools/inspector_issue.mojom-blink.h"
+ #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink.h"
+ #include "third_party/blink/public/platform/web_data.h"
+@@ -77,6 +82,7 @@
+ }  // namespace
+ 
+ void InspectorAuditsAgent::Trace(Visitor* visitor) const {
++  visitor->Trace(braid_document_);
+   visitor->Trace(network_agent_);
+   visitor->Trace(inspected_frames_);
+   InspectorBaseAgent::Trace(visitor);
+@@ -137,6 +143,57 @@
+   return protocol::Response::Success();
+ }
+ 
++protocol::Response InspectorAuditsAgent::armBraidDispatch(const String& epoch, String* generation) {
++  auto* frame = inspected_frames_->Root();
++  auto* doc = frame ? frame->GetDocument() : nullptr;
++  if (braid_refused_ || braid_scope_ || epoch.length() != 32 || !doc || !frame->IsMainFrame() ||
++      !doc->domWindow() || doc->Url().GetString() != "http://braid.invalid/fixture") {
++    braid_refused_ = true;
++    return protocol::Response::ServerError("fixture refused");
++  }
++  // ExecutionContext constructs exactly one ExecutionContextCSPDelegate.
++  auto& delegate = static_cast<ExecutionContextCSPDelegate&>(doc->domWindow()->GetContentSecurityPolicyDelegate());
++  if (delegate.HasFixtureProbe()) {
++    braid_refused_ = true;
++    return protocol::Response::ServerError("already enrolled");
++  }
++  braid_epoch_ = epoch;
++  braid_document_ = doc;
++  braid_scope_ = std::make_shared<braid::probe::Scope>();
++  braid_dispatch_ = std::make_shared<String>();
++  delegate.SetFixtureProbe(braid_scope_, base::BindRepeating([](std::shared_ptr<String> id, const Event& e) {
++    const auto& v = static_cast<const SecurityPolicyViolationEvent&>(e);
++    if (!id->empty() || !e.isTrusted() || e.eventPhase() != Event::PhaseType::kCapturingPhase ||
++        v.effectiveDirective() != "worker-src" || v.violatedDirective() != "worker-src" ||
++        v.blockedURI() != "http://braid.invalid/owned-worker.js" ||
++        v.disposition().AsEnum() != V8SecurityPolicyViolationEventDisposition::Enum::kEnforce)
++      return false;
++    *id = String::FromUtf8(base::UnguessableToken::Create().ToString());
++    return true;
++  }, braid_dispatch_));
++  *generation = String::FromUtf8(doc->Token().ToString());
++  return protocol::Response::Success();
++}
++
++protocol::Response InspectorAuditsAgent::readBraidDispatch(const String& epoch, String* generation, String* dispatch) {
++  auto* frame = inspected_frames_->Root();
++  auto* doc = braid_document_.Get();
++  if (braid_refused_ || !braid_scope_ || braid_epoch_ != epoch || !doc || !frame ||
++      frame->GetDocument() != doc || !doc->domWindow() || doc->domWindow()->IsContextDestroyed()) {
++    braid_refused_ = true;
++    return protocol::Response::ServerError("original fixture lost");
++  }
++  // Terminal read of this one enrolled delegate, not a fence on its producers.
++  braid_scope_->SealIngress();
++  if (braid_dispatch_->empty() || braid_scope_->Inspect() != braid::probe::Scope::Status::ClosedLocalOnly) {
++    braid_refused_ = true;
++    return protocol::Response::ServerError("dispatch not settled");
++  }
++  *generation = String::FromUtf8(doc->Token().ToString());
++  *dispatch = *braid_dispatch_;
++  return protocol::Response::Success();
++}
++
+ protocol::Response InspectorAuditsAgent::enable() {
+   if (enabled_.Get()) {
+     return protocol::Response::Success();
