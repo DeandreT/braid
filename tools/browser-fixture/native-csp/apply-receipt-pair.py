@@ -28,7 +28,7 @@ def main():
     # Grant no provenance based on LASTCHANGE alone. Caller verifies the
     # release archive before extraction, as specified in the adjacent README.
     stages = [(chrome, here / "native-phase.patch"), (chrome, here / "worker-lifecycle.patch"),
-              (chrome, here / "inspector-receipt.patch"), (chrome, here / "worker-transport.patch"), (chrome, here / "document-birth.patch"),
+              (chrome, here / "inspector-receipt.patch"), (chrome, here / "worker-transport.patch"), (chrome, here / "document-birth.patch"), (chrome, here / "browser-fence.patch"),
               (driver, here / "driver-launch.patch")]
     touched = []
     try:
