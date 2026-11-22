@@ -55,3 +55,9 @@ without DOM dispatch. The [DOM receiver control](dom-target.md) distinguishes
 HTML, XHTML, and SVG documents, attached and moved elements, and shadow
 retargeting. These offline behavior controls neither acknowledge native
 receipts nor substitute for the packaged pair.
+
+The [worker lifecycle oracle](worker-lifecycle-oracle.md) checks that a
+replacement classic worker receives only its own events. It also separates
+module-worker and Paint Worklet startup policy failures from any claimed
+worker-to-parent DOM delivery. A DevTools target close is not native
+retirement, and an unsupported worklet cannot earn a receipt.
