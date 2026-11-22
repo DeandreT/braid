@@ -1,0 +1,733 @@
+--- a/content/browser/browser_interface_binders.cc
++++ b/content/browser/browser_interface_binders.cc
+@@ -3,6 +3,7 @@
+ // found in the LICENSE file.
+ 
+ #include "content/browser/browser_interface_binders.h"
++#include "content/browser/devtools/protocol/braid_receiver.h"
+ 
+ #include <concepts>
+ 
+@@ -907,6 +908,7 @@
+ void PopulateBinderMapWithContext(
+     RenderFrameHostImpl* host,
+     mojo::BinderMapWithContext<RenderFrameHost*>* map) {
++  map->Add<blink::mojom::BraidReceiver>(base::BindRepeating(&protocol::BindBraidReceiver));
+   // Register empty binders for interfaces not bound by content but requested
+   // by blink.
+   // This avoids renderer kills when no binder is found in the absence of the
+--- a/content/browser/devtools/devtools_url_loader_interceptor.cc
++++ b/content/browser/devtools/devtools_url_loader_interceptor.cc
+@@ -810,7 +810,7 @@
+     const net::MutableNetworkTrafficAnnotationTag& traffic_annotation) {
+   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+ 
+-  auto credit=braid_factory_?braid_factory_.Run():base::OnceCallback<void(bool)>();
++  auto credit=braid_factory_?braid_factory_.Run(request.method=="GET" && !request.keepalive && request.url.GetWithoutFilename().spec()=="http://127.0.0.1:45921/api/v1/organizations/10000000-0000-4000-8000-000000000001/" && request.url.path().ends_with("/projects") ? request.devtools_request_id.value_or("") : ""):base::OnceCallback<void(bool)>();
+   DevToolsURLLoaderInterceptor* interceptor = interceptor_.get();
+   if (!interceptor) {
+     if(credit)std::move(credit).Run(false);
+--- a/content/browser/devtools/protocol/braid_inventory.h
++++ b/content/browser/devtools/protocol/braid_inventory.h
+@@ -9,7 +9,7 @@
+ class RenderFrameHostImpl;
+ class NavigationRequest;
+ namespace protocol {
+-using BraidResourceFactory=base::RepeatingCallback<base::OnceCallback<void(bool)>()>;
++using BraidResourceFactory=base::RepeatingCallback<base::OnceCallback<void(bool)>(const std::string&)>;
+ BraidResourceFactory BraidFactoryForDocument(RenderFrameHostImpl&);
+ const BraidResourceFactory*& CurrentBraidFactory();
+ void BraidBeginNavigation(NavigationRequest&);
+--- /dev/null
++++ b/content/browser/devtools/protocol/braid_receiver.h
+@@ -0,0 +1,8 @@
++#ifndef CONTENT_BROWSER_DEVTOOLS_PROTOCOL_BRAID_RECEIVER_H_
++#define CONTENT_BROWSER_DEVTOOLS_PROTOCOL_BRAID_RECEIVER_H_
++#include "third_party/blink/public/mojom/frame/braid_receiver.mojom.h"
++#include "mojo/public/cpp/bindings/pending_receiver.h"
++namespace content {class RenderFrameHost;namespace protocol {
++void BindBraidReceiver(RenderFrameHost*,mojo::PendingReceiver<blink::mojom::BraidReceiver>);
++}}
++#endif
+--- a/content/browser/devtools/protocol/browser_handler.cc
++++ b/content/browser/devtools/protocol/browser_handler.cc
+@@ -6,6 +6,11 @@
+ 
+ #include <string.h>
+ #include "content/browser/devtools/protocol/braid_inventory.h"
++#include "content/browser/devtools/protocol/braid_receiver.h"
++#include "content/public/browser/document_service.h"
++#include "content/browser/renderer_host/page_lifecycle_state_manager.h"
++#include "content/browser/renderer_host/render_view_host_impl.h"
++#include "third_party/blink/public/mojom/page/page.mojom.h"
+ #include "content/browser/renderer_host/navigation_request.h"
+ #include "content/browser/renderer_host/render_frame_host_impl.h"
+ #include "content/public/browser/render_process_host.h"
+@@ -108,11 +113,20 @@
+   std::array<uint8_t,32> key{};
+   std::vector<std::string> records;
+   std::set<std::string> live;
++  std::map<std::string,GlobalRenderFrameHostId> fixture_frame_ids;
+   int issued_resources=0, forwarded_resources=0;
+   std::set<int> pending_resources;
+   // Separate from the interceptor's send-side credit. No authenticated
+   // original-receiver return path exists in this protocol version.
+   std::map<int, std::string> outstanding_receivers;
++  struct ReceiverCredit {int id;bool entered=false,body=false,forwarded=false,returned=false,invalid=false;};
++  std::map<std::pair<std::string,std::string>,ReceiverCredit> receiver_credits;
++  std::set<std::string> loader_nonces;
++  std::set<std::pair<std::string,std::string>> admitted_keys;
++  int opened_loaders=0;
++  std::string next_receiver_fault;
++  base::OnceClosure held_challenge;
++
+   std::vector<std::string> resource_log;
+   bool resource_lost=false;
+   bool nav_enabled=false,nav_lost=false;
+@@ -147,17 +161,76 @@
+   if(!slot||!slot->run||!slot->run->nav_enabled)return {};
+   // Bound to this factory's original document, never looked up by current frame at job arrival.
+   auto token=frame.GetDocumentTokenIgnoringSafetyRestrictions().ToString();
+-  return base::BindRepeating([](std::shared_ptr<BraidInventory> r,std::string generation)->base::OnceCallback<void(bool)>{
++  return base::BindRepeating([](std::shared_ptr<BraidInventory> r,std::string generation,const std::string& network_id)->base::OnceCallback<void(bool)>{
+     if(r->issued_resources>=2048||!r->live.contains(generation)||!r->snapshot.empty()){r->resource_lost=true;r->Fail("unowned-resource");return {};}
+     int id=++r->issued_resources;r->pending_resources.insert(id);r->resource_log.push_back("S:"+base::NumberToString(id)+":"+generation);
+     r->outstanding_receivers.emplace(id,generation);
++    if(!network_id.empty() && network_id.size()<=64){
++      auto [it, fresh]=r->receiver_credits.emplace(std::make_pair(generation,network_id),BraidInventory::ReceiverCredit{id});
++      if(!fresh){it->second.invalid=true;r->Fail("duplicate-receiver-key");}
++      else {r->resource_log.push_back("C:"+base::NumberToString(id)+":"+generation);if(r->admitted_keys.contains({generation,network_id}))r->resource_log.push_back("I:"+base::NumberToString(id)+":"+generation);}
++    }
+     r->resource_log.push_back("R:"+base::NumberToString(id)+":"+generation);
+-    return base::BindOnce([](std::shared_ptr<BraidInventory> run,std::string original,int credit,bool ok){
++    return base::BindOnce([](std::shared_ptr<BraidInventory> run,std::string original,int credit,std::string key,bool ok){
+       if(run->pending_resources.erase(credit)!=1||!ok||!run->live.contains(original)){run->resource_lost=true;run->Fail("resource-lost");return;}
++      auto it=run->receiver_credits.find({original,key});if(it!=run->receiver_credits.end()&&it->second.id==credit)it->second.forwarded=true;
+       ++run->forwarded_resources;run->resource_log.push_back("F:"+base::NumberToString(credit)+":"+original);
+-    },r,generation,id);
++    },r,generation,id,network_id);
+   },slot->run,token);
+ }
++// One document service per concrete FetchManager loader; not accessible from JS.
++// No receipt method on the inspector or runner can synthesize a return.
++class OriginalFetchReceiver final : public DocumentService<blink::mojom::BraidReceiver> {
++ public:
++  OriginalFetchReceiver(RenderFrameHostImpl& f,mojo::PendingReceiver<blink::mojom::BraidReceiver> pipe,std::shared_ptr<BraidInventory> r):DocumentService(f,std::move(pipe)),r_(std::move(r)),gen_(f.GetDocumentToken().ToString()){}
++  ~OriginalFetchReceiver() override {if(!returned_)Refuse("receiver-disconnected");}
++  void Open(const std::string& gen,const std::string& loader,const std::string& key,OpenCallback reply) override {
++    if(key.empty()||key.size()>64||bad_||!nonce_.empty()||gen!=gen_||loader.size()!=32||!r_->snapshot.empty()||r_->loader_nonces.size()>=2048||!r_->loader_nonces.insert(loader).second||!r_->admitted_keys.emplace(gen_,key).second){Refuse("wrong-receiver-open");std::move(reply).Run("missing");return;}nonce_=loader;admitted_=key;auto fault=std::exchange(r_->next_receiver_fault,{});drop_reply_=fault=="lost-reply";hold_=fault=="hold-challenge";auto it=r_->receiver_credits.find({gen_,key});if(it!=r_->receiver_credits.end())Log("I",it->second.id);std::move(reply).Run(drop_reply_?std::string():fault);
++  }
++  void Enter(const std::string& key) override {
++    auto it=r_->receiver_credits.find({gen_,key});if(key!=admitted_||bad_||nonce_.empty()||!key_.empty()||it==r_->receiver_credits.end()||it->second.entered||it->second.invalid||!r_->live.contains(gen_)){Refuse("receiver-entry-mismatch");return;}key_=key;it->second.entered=true;
++    Log("E",it->second.id);
++    // Child obligations are retained, never acknowledged by the parent receipt:
++    // response consumer / JS continuations and embedder notification on success.
++    // C was reserved at admission, before any response can reach the renderer.
++  }
++  void Body(const std::string& key) override {
++    if(bad_||key_.empty()||key!=key_){Refuse("receiver-body-mismatch");return;}auto& c=r_->receiver_credits.at({gen_,key_});if(c.body||c.invalid){Refuse("receiver-body-late");return;}c.body=true;Log("B",c.id);
++  }
++  void Returned(const std::string& key,const std::string& loader,ReturnedCallback ack) override {
++    if(bad_||key_.empty()||key!=key_){Refuse("wrong-receiver-return");std::move(ack).Run("");return;}auto& c=r_->receiver_credits.at({gen_,key_});
++    const std::string& presented=loader;
++    if(!r_->snapshot.empty()||!r_->live.contains(gen_)){Refuse("late-receiver-return");std::move(ack).Run("");return;}
++    if(presented!=nonce_||!c.body||!c.forwarded||c.invalid||c.returned||!challenge_.empty()||!r_->outstanding_receivers.contains(c.id)){Refuse("wrong-receiver-return");std::move(ack).Run("");return;}
++    challenge_=base::UnguessableToken::Create().ToString();Log("P",c.id);if(drop_reply_){ResetAndDeleteThis();return;}if(hold_){r_->held_challenge=base::BindOnce(std::move(ack),challenge_);return;}std::move(ack).Run(challenge_);
++  }
++  void Confirm(const std::string& gen,const std::string& key,const std::string& loader,const std::string& challenge,ConfirmCallback reply) override {
++    if(bad_||key_.empty()||key!=key_||gen!=gen_||loader!=nonce_||challenge_.empty()||challenge!=challenge_||!r_->snapshot.empty()||!r_->live.contains(gen_)){Refuse("invalid-renderer-confirm");std::move(reply).Run(false);return;}
++    auto& c=r_->receiver_credits.at({gen_,key_});if(c.returned||c.invalid||!r_->outstanding_receivers.erase(c.id)){Refuse("duplicate-renderer-confirm");std::move(reply).Run(false);return;}
++    returned_=c.returned=true;challenge_.clear();Log("A",c.id);std::move(reply).Run(true);
++  }
++ private:
++  void Log(const char* stage,int id){r_->resource_log.push_back(std::string(stage)+":"+base::NumberToString(id)+":"+gen_);}
++  void Refuse(const char* why){if(bad_)return;bad_=true;r_->Fail(why);if(!key_.empty()){auto& c=r_->receiver_credits.at({gen_,key_});c.invalid=true;Log(std::string_view(why)=="late-receiver-return"?"L":std::string_view(why)=="receiver-disconnected"?"M":"X",c.id);}}
++  std::shared_ptr<BraidInventory> r_;std::string gen_,nonce_,key_,admitted_;std::string challenge_;bool bad_=false,returned_=false,drop_reply_=false,hold_=false;
++};
++void BindBraidReceiver(RenderFrameHost* host,mojo::PendingReceiver<blink::mojom::BraidReceiver> pipe){
++  auto* f=static_cast<RenderFrameHostImpl*>(host);auto* slot=static_cast<BraidSlot*>(f->GetBrowserContext()->GetUserData(&kBraidSlot));
++  if(!slot||!slot->run||!slot->run->nav_enabled||!f->IsActive())return;
++  if(++slot->run->opened_loaders>2048){slot->run->Fail("receiver-limit");return;}
++  new OriginalFetchReceiver(*f,std::move(pipe),slot->run);
++}
++Response BrowserHandler::ExerciseBraidLifecycleUpdate(const std::string& run,const std::string& gen){
++  if(!braid_||braid_->run!=run||!braid_->nav_enabled||!braid_->live.contains(gen)||!braid_->snapshot.empty())return Response::ServerError("unowned original");
++  auto it=braid_->fixture_frame_ids.find(gen);auto* frame=it==braid_->fixture_frame_ids.end()?nullptr:RenderFrameHostImpl::FromID(it->second);
++  if(!frame||!frame->IsActive()||frame->GetParent()||frame->GetDocumentToken().ToString()!=gen)return Response::ServerError("original changed");
++  auto* view=frame->render_view_host();auto* mgr=view->GetPageLifecycleStateManager();auto state=mgr->CalculatePageLifecycleState();
++  if(!view->GetAssociatedPageBroadcast()||state->is_frozen||state->is_in_back_forward_cache||state->visibility!=blink::mojom::PageVisibilityState::kVisible||state->pagehide_dispatch!=blink::mojom::PagehideDispatch::kNotDispatched||!state.Equals(mgr->last_acknowledged_state().Clone()))return Response::ServerError("unstable page lifecycle");
++  // A fixture-only no-change dispatch to the genuine ordinary receiver. This
++  // does not simulate a tab becoming hidden and grants no settlement credit.
++  view->GetAssociatedPageBroadcast()->SetPageLifecycleState(std::move(state),nullptr,base::DoNothing());return Response::Success();
++}
++Response BrowserHandler::ArmBraidReceiverFault(const std::string& id,const std::string& mode){if(!braid_||braid_->run!=id||!braid_->nav_enabled||!braid_->snapshot.empty()||!braid_->next_receiver_fault.empty()||(mode!="missing"&&mode!="wrong"&&mode!="lost-reply"&&mode!="hold-challenge"))return Response::ServerError("invalid refusal control");braid_->next_receiver_fault=mode;return Response::Success();}
+ void BraidBeginNavigation(NavigationRequest& request) {
+   auto* frame=request.frame_tree_node()->current_frame_host();auto* ctx=frame->GetBrowserContext();
+   auto* slot=static_cast<BraidSlot*>(ctx->GetUserData(&kBraidSlot));if(!slot||!slot->run||!slot->run->nav_enabled)return;
+@@ -172,7 +245,7 @@
+   r.nav_log.push_back("C:"+base::NumberToString(lease->id)+":"+request.GetDocumentToken().ToString());lease->committed=true;
+ }
+ Response BrowserHandler::EnableBraidNavigations(const std::string& id){if(!braid_||braid_->run!=id||braid_->nav_enabled||!braid_->records.empty())return Response::ServerError("late navigation enrollment");braid_->nav_enabled=true;return Response::Success();}
+-Response BrowserHandler::ReadBraidNavigations(const std::string& id,std::string* records,int* pending,bool* lost,std::string* resource_records,int* resource_pending,bool* resource_lost){if(!braid_||braid_->run!=id||!braid_->nav_enabled)return Response::ServerError("unowned navigation");*records=base::JoinString(braid_->nav_log,"\n");*pending=static_cast<int>(braid_->pending_nav.size());*lost=braid_->nav_lost;*resource_records=base::JoinString(braid_->resource_log,"\n");*resource_pending=static_cast<int>(braid_->pending_resources.size());*resource_lost=braid_->resource_lost;return Response::Success();}
++Response BrowserHandler::ReadBraidNavigations(const std::string& id,std::string* records,int* pending,bool* lost,std::string* resource_records,int* resource_pending,bool* resource_lost){if(!braid_||braid_->run!=id||!braid_->nav_enabled)return Response::ServerError("unowned navigation");*records=base::JoinString(braid_->nav_log,"\n");*pending=static_cast<int>(braid_->pending_nav.size());*lost=braid_->nav_lost;auto resource_rows=braid_->resource_log;for(const auto& [credit,gen]:braid_->outstanding_receivers)resource_rows.push_back("O:"+base::NumberToString(credit)+":"+gen);*resource_records=base::JoinString(resource_rows,"\n");*resource_pending=static_cast<int>(braid_->pending_resources.size());*resource_lost=braid_->resource_lost;return Response::Success();}
+ void BraidDocumentTransition(RenderFrameHostImpl& frame,const blink::DocumentToken& token,bool birth) {
+   DCHECK_CURRENTLY_ON(BrowserThread::UI);
+   auto* ctx=frame.GetBrowserContext();
+@@ -184,7 +257,7 @@
+   auto& r=*slot->run;
+   if(r.records.size()>=512){r.Fail("inventory-limit");return;}
+   std::string id=token.ToString();
+-  if(birth){if(!r.snapshot.empty())r.Fail("late-document");if(!r.live.insert(id).second)r.Fail("duplicate-document");}
++  if(birth){r.fixture_frame_ids.emplace(id,frame.GetGlobalId());if(!r.snapshot.empty())r.Fail("late-document");if(!r.live.insert(id).second)r.Fail("duplicate-document");}
+   else if(!r.live.erase(id))r.Fail("unknown-disposal");
+   auto* parent=frame.GetParent();
+   // The parent may itself be speculative; its frame-tree node is not a document token.
+@@ -218,11 +291,13 @@
+        crypto::keypair::PublicKey::FromEd25519PublicKey(r.key),base::as_byte_span(message),signature))r.Fail("invalid-checkpoint-proof");
+   }
+   if(!r.pending_resources.empty())r.Fail("pending-browser-resource");
++  if(!r.receiver_credits.empty())r.Fail("receiver-children-unsettled");
+   if(!r.outstanding_receivers.empty())r.Fail("original-resource-receiver-unacknowledged");
+   if(!r.pending_nav.empty())r.Fail("pending-navigation");
+   if(r.live.empty() || r.context_gone)r.Fail("no-live-original");
+   *ticket=r.snapshot=base::UnguessableToken::Create().ToString();
+   *disposition=r.failure.empty()?"renderer-producer-coverage-unproven":r.failure;
++  if(r.held_challenge)std::move(r.held_challenge).Run();
+   return Response::Success();
+ }
+ Response BrowserHandler::VerifyBraidDisposal(const std::string& run,int revision,const std::string& ticket,const std::string& digest,const std::string& checkpoint,bool* disposed,std::string* disposition,int* current,std::string* transitions){
+--- a/content/browser/devtools/protocol/browser_handler.h
++++ b/content/browser/devtools/protocol/browser_handler.h
+@@ -49,6 +49,8 @@
+ 
+   Response Disable() override;
+ 
++  Response ExerciseBraidLifecycleUpdate(const std::string&,const std::string&) override;
++  Response ArmBraidReceiverFault(const std::string&,const std::string&) override;
+   Response EnableBraidNavigations(const std::string&) override;
+   Response ReadBraidNavigations(const std::string&, std::string*, int*, bool*,std::string*,int*,bool*) override;
+   Response BeginBraidInventory(const std::string& browserContextId, const std::string& epoch, const std::string& publicKey, std::string* out_runId) override;
+--- a/content/browser/devtools/protocol_config.json
++++ b/content/browser/devtools/protocol_config.json
+@@ -19,7 +19,7 @@
+             },
+             {
+                 "domain": "Browser",
+-                "include": ["getVersion", "getHistograms", "getHistogram", "getBrowserCommandLine", "grantPermissions", "setDownloadBehavior", "cancelDownload", "resetPermissions", "crash", "crashGpuProcess", "setPermission", "getGlobalPrivacyControl", "setGlobalPrivacyControl", "addMockCamera", "beginBraidInventory", "readBraidInventory", "enableBraidNavigations", "readBraidNavigations", "prepareBraidFence", "verifyBraidDisposal"],
++                "include": ["getVersion", "getHistograms", "getHistogram", "getBrowserCommandLine", "grantPermissions", "setDownloadBehavior", "cancelDownload", "resetPermissions", "crash", "crashGpuProcess", "setPermission", "getGlobalPrivacyControl", "setGlobalPrivacyControl", "addMockCamera", "beginBraidInventory", "readBraidInventory", "enableBraidNavigations", "armBraidReceiverFault", "exerciseBraidLifecycleUpdate", "readBraidNavigations", "prepareBraidFence", "verifyBraidDisposal"],
+                 "async": ["grantPermissions", "resetPermissions", "setPermission"]
+             },
+             {
+--- a/third_party/blink/public/devtools_protocol/domains/Audits.pdl
++++ b/third_party/blink/public/devtools_protocol/domains/Audits.pdl
+@@ -923,6 +923,20 @@
+ 
+   # Narrow load-producer scope with a conservative JS/port publication veto.
+   # Does not certify document, renderer or browser quiescence.
++  experimental command readBraidLifecycle
++    parameters
++      string epoch
++      string generation
++    returns
++      string state
++
++  experimental command readBraidEdges
++    parameters
++      string epoch
++      string generation
++    returns
++      string records
++
+   experimental command prepareBraidIngress
+     parameters
+       string epoch
+--- a/third_party/blink/public/devtools_protocol/domains/Browser.pdl
++++ b/third_party/blink/public/devtools_protocol/domains/Browser.pdl
+@@ -357,6 +357,16 @@
+     parameters
+       string runId
+ 
++  experimental command exerciseBraidLifecycleUpdate
++    parameters
++      string runId
++      string generation
++
++  experimental command armBraidReceiverFault
++    parameters
++      string runId
++      string mode
++
+   experimental command readBraidNavigations
+     parameters
+       string runId
+--- a/third_party/blink/public/mojom/BUILD.gn
++++ b/third_party/blink/public/mojom/BUILD.gn
+@@ -1167,6 +1167,7 @@
+     # mojom GN targets to match better the core/platform separation in C++.
+     "frame/agent_cluster_key.mojom",
+     "frame/back_forward_cache_controller.mojom",
++    "frame/braid_receiver.mojom",
+     "frame/blocked_navigation_types.mojom",
+     "frame/deferred_fetch_policy.mojom",
+     "frame/find_in_page.mojom",
+--- /dev/null
++++ b/third_party/blink/public/mojom/frame/braid_receiver.mojom
+@@ -0,0 +1,9 @@
++// Private test transport. Each pipe belongs to one document and one fetch loader.
++module blink.mojom;
++interface BraidReceiver {
++  Open(string generation, string loader, string network_id) => (string refusal_control);
++  Enter(string network_id);
++  Body(string network_id);
++  Returned(string network_id, string loader) => (string challenge);
++  Confirm(string generation, string network_id, string loader, string challenge) => (bool accepted);
++};
+--- a/third_party/blink/renderer/core/dom/document.cc
++++ b/third_party/blink/renderer/core/dom/document.cc
+@@ -28,6 +28,8 @@
+  */
+ 
+ #include "third_party/blink/renderer/core/dom/document.h"
++#include "third_party/blink/renderer/core/frame/csp/fixture_lifecycle_ingress.h"
++#include "base/auto_reset.h"
+ 
+ #include <algorithm>
+ #include <memory>
+@@ -4694,6 +4696,8 @@
+               perfetto::Flow::FromPointer(this));
+   base::ScopedUmaHistogramTimer histogram_timer(
+       "Navigation.Document.DispatchUnloadEvents");
++  auto fixture_scope=domWindow()?domWindow()->FixtureLifecycleIngress():nullptr;
++  int unused=0;base::AutoReset<int> fixture_source(fixture_scope?&fixture_scope->source:&unused,3);
+   PageDismissalScope in_page_dismissal;
+   if (parser_) {
+     parser_->StopParsing();
+--- a/third_party/blink/renderer/core/dom/events/event_target.cc
++++ b/third_party/blink/renderer/core/dom/events/event_target.cc
+@@ -106,9 +106,9 @@
+     }
+   } else if (visibility) {
+     if (auto* doc = DynamicTo<Document>(target.ToNode())) {
+-      if (auto* window = doc->domWindow()) {
+-        auto ingress = window->FixtureLifecycleIngress();
+-        if (ingress && window->document() != doc) {
++      if (auto* doc_window = doc->domWindow()) {
++        auto ingress = doc_window->FixtureLifecycleIngress();
++        if (ingress && doc_window->document() != doc) {
+           ingress->Refuse(FixtureIngress::Failure::kWrongOriginal);
+           return nullptr;
+         }
+@@ -128,6 +128,12 @@
+                                  const RegisteredEventListener& listener)
+       : ingress_(LifecycleIngressFor(target, event.type())) {
+     if (ingress_) {
++      if(event.isTrusted() && event.type()==event_type_names::kVisibilitychange){
++        if(ingress_->source==1)++ingress_->ordinary_visibility;
++        if(ingress_->source==2)++ingress_->replacement_visibility;
++        if(ingress_->source==3)++ingress_->unload_visibility;
++        if(ingress_->source && ingress_->ordinary_visibility+ingress_->replacement_visibility+ingress_->unload_visibility<=8)fprintf(stderr,"BRAID_FIXTURE_VIS source=%d original=%s\n",ingress_->source,std::string(ingress_->original()).c_str());
++      }
+       id_ = ingress_->Enter(&listener,
+                             event.isTrusted()
+                                 ? FixtureIngress::Provenance::kTrustedDom
+--- a/third_party/blink/renderer/core/exported/web_view_impl.cc
++++ b/third_party/blink/renderer/core/exported/web_view_impl.cc
+@@ -28,6 +28,8 @@
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  */
+ #include "third_party/blink/renderer/core/exported/web_view_impl.h"
++#include "third_party/blink/renderer/core/frame/csp/fixture_lifecycle_ingress.h"
++#include "base/auto_reset.h"
+ 
+ #include <algorithm>
+ #include <memory>
+@@ -2550,6 +2552,8 @@
+       GetPage()->GetPageLifecycleState().Clone();
+   state->visibility = visibility;
+   state->pagehide_dispatch = pagehide_dispatch;
++  auto* f=DynamicTo<LocalFrame>(GetPage()->MainFrame());auto scope=f&&f->DomWindow()?f->DomWindow()->FixtureLifecycleIngress():nullptr;
++  int unused=0;base::AutoReset<int> source(scope?&scope->source:&unused,2);
+   SetPageLifecycleStateInternal(std::move(state),
+                                 /*page_restore_params=*/nullptr);
+ }
+@@ -2559,6 +2563,8 @@
+     mojom::blink::PageRestoreParamsPtr page_restore_params,
+     SetPageLifecycleStateCallback callback) {
+   TRACE_EVENT0("navigation", "WebViewImpl::SetPageLifecycleState");
++  auto* f=DynamicTo<LocalFrame>(GetPage()->MainFrame());auto scope=f&&f->DomWindow()?f->DomWindow()->FixtureLifecycleIngress():nullptr;
++  int unused=0;base::AutoReset<int> source(scope?&scope->source:&unused,1);if(scope && ++scope->ordinary_updates<=8)fprintf(stderr,"BRAID_FIXTURE_UPDATE original=%s\n",std::string(scope->original()).c_str());
+   SetPageLifecycleStateInternal(std::move(state),
+                                 std::move(page_restore_params));
+   // Tell the browser that the lifecycle update was successful.
+--- a/third_party/blink/renderer/core/fetch/fetch_manager.cc
++++ b/third_party/blink/renderer/core/fetch/fetch_manager.cc
+@@ -1306,6 +1306,7 @@
+     const ResourceLoaderOptions& resource_loader_options) {
+   threadable_loader_ = MakeGarbageCollected<ThreadableLoader>(
+       *GetExecutionContext(), this, resource_loader_options);
++  threadable_loader_->EnrollFixtureFetch(request);
+   threadable_loader_->Start(std::move(request));
+ }
+ 
+--- a/third_party/blink/renderer/core/frame/csp/fixture_async_work.h
++++ b/third_party/blink/renderer/core/frame/csp/fixture_async_work.h
+@@ -4,6 +4,8 @@
+ #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_FRAME_CSP_FIXTURE_ASYNC_WORK_H_
+ #define THIRD_PARTY_BLINK_RENDERER_CORE_FRAME_CSP_FIXTURE_ASYNC_WORK_H_
+ #include <memory>
++#include "third_party/blink/renderer/platform/wtf/hash_map.h"
++#include "third_party/blink/renderer/core/frame/csp/fixture_lifecycle_ingress.h"
+ #include "third_party/blink/renderer/platform/wtf/hash_set.h"
+ #include "third_party/blink/renderer/platform/wtf/vector.h"
+ #include "v8/include/v8-promise.h"
+@@ -14,17 +16,17 @@
+ // keep an application promise alive. Unknown/lost work never becomes success.
+ struct FixtureAsyncWork {
+   static std::shared_ptr<FixtureAsyncWork> From(ExecutionContext*);
+-  struct PromiseSlot {v8::Global<v8::Promise> handle; bool job=false, started=false, returned=false;};
++  struct PromiseSlot {v8::Global<v8::Promise> handle; bool job=false, started=false, returned=false;uint64_t child=0;};
+   Vector<PromiseSlot> promises;
+   // Keep acquisition order per destination promise; a running assimilation
+   // may publish a new job for that same promise before the old one returns.
+-  struct Adoption {v8::Global<v8::Promise> target;bool running=false,done=false;};
++  struct Adoption {v8::Global<v8::Promise> target;bool running=false,done=false;uint64_t child=0;};
+   Vector<Adoption> adoptions;
+   void Thenable(v8::Isolate* iso,v8::Local<v8::Promise> p,int phase){
+-    if(phase==0){if(adoptions.size()>=4096){Lose(7);return;} adoptions.push_back(Adoption{v8::Global<v8::Promise>(iso,p)});adoptions.back().target.SetWeak();++jobs;if(!executing.empty())++nested;return;}
++    if(phase==0){if(adoptions.size()>=4096){Lose(7);return;} adoptions.push_back(Adoption{v8::Global<v8::Promise>(iso,p)});adoptions.back().child=PublishChild("adoption");adoptions.back().target.SetWeak();++jobs;if(!executing.empty())++nested;return;}
+     for(wtf_size_t i=0;i<adoptions.size();++i){auto& a=adoptions[i];if(a.done || a.target.IsEmpty() || a.target!=p)continue;
+       if(phase==1){if(a.running){Lose(7);return;}a.running=true;executing.push_back(8192u+i);}
+-      else{if(!a.running||executing.empty()||executing.back()!=8192u+i){Lose(7);return;}executing.pop_back();a.done=true;a.target.Reset();++returns;}return;
++      else{if(!a.running||executing.empty()||executing.back()!=8192u+i){Lose(7);return;}executing.pop_back();a.done=true;if(a.child)ReturnedChild(a.child,"returned");a.target.Reset();++returns;}return;
+     }Lose(7);
+   }
+ 
+@@ -38,13 +40,13 @@
+       if(promises.size()>=4096){lost=true;return;}
+       const bool job=parent->IsPromise();
+       promises.push_back(PromiseSlot{v8::Global<v8::Promise>(iso,p),job});promises.back().handle.SetWeak();
+-      if(job){++jobs;if(!executing.empty())++nested;} return;
++      if(job){promises.back().child=PublishChild("reaction");++jobs;if(!executing.empty())++nested;} return;
+     }
+     if(kind==v8::PromiseHookType::kResolve)return; // not a terminal transition
+     for(wtf_size_t i=promises.size();i>0;--i){auto& slot=promises[i-1];if(slot.handle.IsEmpty() || slot.handle!=p)continue;
+       if(!slot.job || slot.returned){Lose(2);return;}
+       if(kind==v8::PromiseHookType::kBefore){if(slot.started){lost=true;return;}slot.started=true;executing.push_back(i);}
+-      else {if(executing.empty() || executing.back()!=i || !slot.started){lost=true;return;}executing.pop_back();slot.returned=true;++returns;}
++      else {if(executing.empty() || executing.back()!=i || !slot.started){lost=true;return;}executing.pop_back();slot.returned=true;if(slot.child)ReturnedChild(slot.child,"returned");++returns;}
+       return;
+     }
+     Lose(3);
+@@ -52,10 +54,17 @@
+   int PendingValues(v8::Isolate* iso){v8::HandleScope handles(iso);int pending=0;for(auto& slot:promises){if(slot.handle.IsEmpty()){if(!slot.returned)Lose(4);continue;}if(slot.handle.Get(iso)->State()==v8::Promise::kPending)++pending;}return pending;}
+   int registered=0, fired=0, removed=0, active_invocations=0;
+   HashSet<int> scheduled;
+-  int Register(){if(registered>=4096){Lose(9);return 0;}int id=++registered;scheduled.insert(id);return id;}
+-  void Begin(int id){if(!scheduled.Contains(id)){Lose(9);return;}++active_invocations;}
+-  void End(int id,bool once){if(active_invocations<=0){Lose(9);return;}--active_invocations;++fired;if(once)Remove(id,false);}
+-  void Remove(int id,bool cancel){if(!scheduled.Contains(id)){Lose(9);return;}scheduled.erase(id);if(cancel)++removed;}
++  std::shared_ptr<braid::probe::LifecycleIngress> ingress;
++  HashMap<int,uint64_t> timer_children;Vector<uint64_t> firing;
++  struct Edge {uint64_t id,parent;const char* kind;const char* terminal;};
++  Vector<Edge> edges;std::string eligible_original;
++  void SetTerminal(uint64_t id,const char* state){for(auto& edge:edges)if(edge.id==id){if(edge.terminal){Lose(11);return;}edge.terminal=state;return;}Lose(11);}
++  void ReturnedChild(uint64_t id,const char* state){SetTerminal(id,state);ingress->Complete(ingress->original(),id);}
++  uint64_t PublishChild(const char* kind){if(!ingress)return 0;auto parent=ingress->CurrentCallback();if(!parent&&!executing.empty()){auto id=executing.back();parent=id>=8192?adoptions[id-8192].child:promises[id-1].child;}if(!parent&&!firing.empty())parent=firing.back();if(!parent)return 0;if(edges.size()>=4096){Lose(11);ingress->Refuse(braid::probe::LifecycleIngress::Failure::kCapacity);return 0;}auto child=ingress->Publish(ingress->original(),parent);if(child)edges.push_back(Edge{child,parent,kind,nullptr});return child;}
++  int Register(const char* kind="timer"){if(registered>=4096){Lose(9);return 0;}int id=++registered;auto child=PublishChild(kind);if(child)timer_children.Set(id,child);scheduled.insert(id);return id;}
++  void Begin(int id){if(!scheduled.Contains(id)){Lose(9);return;}++active_invocations;auto it=timer_children.find(id);firing.push_back(it==timer_children.end()?0:it->value);}
++  void End(int id,bool once){if(active_invocations<=0){Lose(9);return;}--active_invocations;auto child=firing.back();firing.pop_back();++fired;if(once)Remove(id,false);else if(child&&!scheduled.Contains(id)){ReturnedChild(child,"cancelled-after-return");timer_children.erase(id);}}
++  void Remove(int id,bool cancel){if(!scheduled.Contains(id)){Lose(9);return;}scheduled.erase(id);if(cancel)++removed;auto it=timer_children.find(id);if(it!=timer_children.end() && !firing.Contains(it->value)){ReturnedChild(it->value,cancel?"cancelled":"returned");timer_children.erase(it);}}
+   uint64_t Post(){if(posted>=4096){lost=true;return 0;}auto id=static_cast<uint64_t>(++posted);messages.insert(id);return id;}
+   void Receive(uint64_t id){if(!messages.Contains(id)){lost=true;return;}messages.erase(id);++received;}
+   void Send(uint64_t id,bool redirect){if(redirect){if(!resources.Contains(id))lost=true;return;}if(sends>=4096||!id || !resources.insert(id).is_new_entry){lost=true;return;}++sends;}
+--- a/third_party/blink/renderer/core/frame/csp/fixture_lifecycle_ingress.h
++++ b/third_party/blink/renderer/core/frame/csp/fixture_lifecycle_ingress.h
+@@ -36,6 +36,10 @@
+     Id revision;
+   };
+ 
++  unsigned adds=0,removes=0,published=0,completed=0,ordinary_updates=0;
++  unsigned ordinary_visibility=0,replacement_visibility=0,unload_visibility=0;
++  int source=0;
++  std::string_view original() const{return original_;}
+   LifecycleIngress() = default;
+   LifecycleIngress(const LifecycleIngress&) = delete;
+   LifecycleIngress& operator=(const LifecycleIngress&) = delete;
+@@ -58,7 +62,7 @@
+     }
+     for (auto& slot : registrations_) {
+       if (!slot) {
+-        slot = registration;
++        ++adds;slot = registration;
+         Advance();
+         return;
+       }
+@@ -69,7 +73,7 @@
+   void Remove(const void* registration) {
+     for (auto& slot : registrations_) {
+       if (slot && slot == registration) {
+-        slot = nullptr;
++        ++removes;slot = nullptr;
+         Advance();
+         return;
+       }
+@@ -157,7 +161,7 @@
+     }
+     for (auto& child : children_) {
+       if (!child && Advance()) {
+-        return child = revision_;
++        ++published;return child = revision_;
+       }
+     }
+     Refuse(Failure::kCapacity);
+@@ -170,7 +174,7 @@
+     }
+     for (auto& child : children_) {
+       if (child && child == id) {
+-        child = 0;
++        ++completed;child = 0;
+         Advance();
+         return;
+       }
+@@ -240,6 +244,7 @@
+   }
+ 
+   Failure failure() const { return failure_; }
++  bool OutstandingChild(Id id) const {return HasChild(id);}
+   Id trusted_calls() const { return trusted_calls_; }
+   Id synthetic_calls() const { return synthetic_calls_; }
+ 
+--- a/third_party/blink/renderer/core/inspector/inspector_audits_agent.cc
++++ b/third_party/blink/renderer/core/inspector/inspector_audits_agent.cc
+@@ -229,7 +229,7 @@
+   auto* frame = IdentifiersFactory::FrameById(inspected_frames_, frame_id);
+   if (braid_refused_ || !braid_epoch_.empty() || !frame || !inspected_frames_->Root()->IsMainFrame() ||
+       epoch.length()!=32 || (frame != inspected_frames_->Root() && frame->Tree().Parent() != inspected_frames_->Root())) {
+-    braid_refused_ = true; return protocol::Response::ServerError("reservation refused");
++    pending_epoch_.Clear(); pending_frame_.Clear(); braid_refused_ = true; return protocol::Response::ServerError("reservation refused");
+   }
+   braid_reserved_frame_ = frame; braid_epoch_ = epoch;
+   pending_epoch_.Set(epoch); pending_frame_.Set(frame_id);
+@@ -254,7 +254,11 @@
+           scheduler::TaskAttributionTracker::From(context->GetIsolate())) {
+     fixture_publication_baseline_ = tracker->ArmFixturePublicationVeto();
+   }
+-  delegate.fixture_async=std::make_shared<FixtureAsyncWork>();
++  auto* window=DynamicTo<LocalDOMWindow>(context);// Reserved negative-control epoch: install an incumbent native ingress, then
++  // exercise the real duplicate-owner rejection inside BeginFixtureLifecycleIngress.
++  if(window&&braid_epoch_=="00000000000000000000000000000000")window->BeginFixtureLifecycleIngress();
++  fixture_ingress_=window?window->BeginFixtureLifecycleIngress():nullptr;
++  if(!fixture_ingress_){braid_refused_=true;return;}
+   braid_creating_=true; BindBraidDocumentCheck(delegate);
+   load_producer_=std::nullopt;
+   auto load=braid_scope_->Root();
+@@ -266,6 +270,8 @@
+ void InspectorAuditsAgent::DidCreateBraidDocument(LocalFrame* frame, Document* doc) {
+   if(frame != braid_reserved_frame_.Get() || braid_refused_) return;
+   if(!braid_creating_ || !doc || doc->IsPrerendering() || !doc->IsHTMLDocument() || !braid_dispatch_->empty()) {braid_refused_=true;return;}
++  auto* win=doc->domWindow();if(!win||!fixture_ingress_||fixture_ingress_->failure()!=braid::probe::LifecycleIngress::Failure::kNone||fixture_ingress_->original()!=doc->Token().ToString()){braid_refused_=true;return;}
++  auto& delegate=static_cast<ExecutionContextCSPDelegate&>(win->GetContentSecurityPolicyDelegate());auto work=std::make_shared<FixtureAsyncWork>();work->eligible_original=doc->Token().ToString();work->ingress=fixture_ingress_;delegate.fixture_async=work;
+   braid_creating_=false; braid_document_=doc;
+ }
+ 
+@@ -311,6 +317,14 @@
+   auto work=FixtureAsyncWork::From(doc->domWindow());if(!work)return protocol::Response::ServerError("missing enrollment");
+   *generation=String::FromUtf8(doc->Token().ToString());*jobs=work->jobs;*returned=work->returns;*nested=work->nested;*pendingValues=work->PendingValues(doc->domWindow()->GetIsolate());*posted=work->posted;*received=work->received;*sends=work->sends;*finishes=work->finishes;*cancelled=work->cancelled;*scheduled=work->registered;*fired=work->fired;*removed=work->removed;*pending_callbacks=static_cast<int>(work->scheduled.size());*executing_callbacks=work->active_invocations;*reason=work->reason;*lost=work->lost;return protocol::Response::Success();
+ }
++protocol::Response InspectorAuditsAgent::readBraidLifecycle(const String& epoch,const String& gen,String* state){
++  auto s=fixture_ingress_;if(epoch!=braid_epoch_||!s||gen.Utf8()!=s->original())return protocol::Response::ServerError("original lifecycle unavailable");
++  *state=String::FromUtf8(std::to_string(s->adds)+":"+std::to_string(s->removes)+":"+std::to_string(s->published)+":"+std::to_string(s->completed)+":"+std::to_string(s->ordinary_updates)+":"+std::to_string(s->ordinary_visibility)+":"+std::to_string(s->replacement_visibility)+":"+std::to_string(s->unload_visibility)+":"+std::to_string(static_cast<int>(s->failure())));return protocol::Response::Success();
++}
++protocol::Response InspectorAuditsAgent::readBraidEdges(const String& epoch,const String& generation,String* result){
++  auto* doc=braid_document_.Get();auto* frame=braid_reserved_frame_.Get();if(!doc||!frame||frame->GetDocument()!=doc||epoch!=braid_epoch_||generation!=String::FromUtf8(doc->Token().ToString()))return protocol::Response::ServerError("original unavailable");
++  auto work=FixtureAsyncWork::From(doc->domWindow());if(!work)return protocol::Response::ServerError("unowned work");std::string out;for(const auto& edge:work->edges){out+=std::to_string(edge.id)+":"+std::to_string(edge.parent)+":"+edge.kind+":"+(edge.terminal?edge.terminal:"open")+":"+(work->ingress->OutstandingChild(edge.id)?"live":"retired")+"\n";}*result=String::FromUtf8(out);return protocol::Response::Success();
++}
+ protocol::Response InspectorAuditsAgent::prepareBraidIngress(
+     const String& epoch, const String& generation, bool* focus_outstanding,
+     bool* visibility_outstanding, String* disposition) {
+@@ -328,6 +342,7 @@
+   // Neither a listener census nor return from one IPC establishes closed
+   // ingress. Unload itself can dispatch visibilitychange during retirement.
+   // Preserve normal dispatch and original work; refusal is generation-local.
++  if(fixture_ingress_)fixture_ingress_->Prepare(generation.Utf8());
+   work->Lose(10);
+   *disposition = (*focus_outstanding || *visibility_outstanding)
+                      ? "live-external-ingress" : "unproved-source-barrier";
+--- a/third_party/blink/renderer/core/inspector/inspector_audits_agent.h
++++ b/third_party/blink/renderer/core/inspector/inspector_audits_agent.h
+@@ -7,6 +7,7 @@
+ 
+ #include "base/memory/raw_ptr.h"
+ #include "third_party/blink/renderer/core/frame/csp/credit_scope.h"
++#include "third_party/blink/renderer/core/frame/csp/fixture_lifecycle_ingress.h"
+ #include "third_party/blink/renderer/core/core_export.h"
+ #include "third_party/blink/renderer/core/dom/document.h"
+ #include "third_party/blink/renderer/core/inspector/inspected_frames.h"
+@@ -56,7 +57,10 @@
+                                           String*,
+                                           String*) override;
+   uint64_t fixture_publication_baseline_ = UINT64_MAX;
++  std::shared_ptr<braid::probe::LifecycleIngress> fixture_ingress_;
++  protocol::Response readBraidLifecycle(const String&,const String&,String*) override;
+   void LoadEventFired(LocalFrame*);
++  protocol::Response readBraidEdges(const String&,const String&,String*) override;
+   protocol::Response prepareBraidIngress(const String&, const String&, bool*, bool*, String*) override;
+   protocol::Response readBraidZero(const String&, String*, String*) override;
+   protocol::Response readBraidWork(const String& epoch,String* generation, int* jobs, int* returned, int* nested, int* pendingValues, int* posted, int* received, int* sends, int* finishes, int* cancelled,int* scheduled,int* fired,int* removed,int* pending_callbacks,int* executing_callbacks, int* reason, bool* lost) override;
+--- a/third_party/blink/renderer/core/loader/threadable_loader.cc
++++ b/third_party/blink/renderer/core/loader/threadable_loader.cc
+@@ -30,6 +30,13 @@
+  */
+ 
+ #include "third_party/blink/renderer/core/loader/threadable_loader.h"
++#include "third_party/blink/renderer/core/frame/csp/fixture_async_work.h"
++#include "third_party/blink/renderer/core/frame/local_dom_window.h"
++#include "third_party/blink/renderer/core/inspector/identifiers_factory.h"
++#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
++#include "third_party/blink/public/mojom/frame/braid_receiver.mojom-blink.h"
++#include "mojo/public/cpp/bindings/remote.h"
++
+ 
+ #include <memory>
+ 
+@@ -163,6 +170,34 @@
+   }
+ }
+ 
++struct ThreadableLoader::OriginalReceiver {
++  mojo::Remote<mojom::blink::BraidReceiver> pipe;
++  String nonce=String::FromUtf8(base::UnguessableToken::Create().ToString());
++  String key;
++  std::shared_ptr<FixtureAsyncWork> owner;
++  uint64_t child=0;
++  bool armed=false,returned=false,sent=false;
++  String mode,returned_key,original;WeakPersistent<LocalDOMWindow> window;
++  static void MaybeReport(const std::shared_ptr<OriginalReceiver>& r){
++    if(!r->armed||!r->returned||r->sent)return;r->sent=true;
++    if(r->mode=="missing"){if(r->child)r->owner->SetTerminal(r->child,"missing-open");r->pipe.reset();return;}
++    r->pipe->Returned(r->returned_key,r->mode=="wrong"?String("invalid-loader"):r->nonce,blink::BindOnce([](std::shared_ptr<OriginalReceiver> owner,const String& challenge){auto* win=owner->window.Get();if(challenge.empty()||!win||win->IsContextDestroyed()||!win->document()||win->document()->Token().ToString()!=owner->owner->eligible_original){if(owner->child)owner->owner->SetTerminal(owner->child,"refused-open");return;}owner->pipe->Confirm(owner->original,owner->key,owner->nonce,challenge,blink::BindOnce([](std::shared_ptr<OriginalReceiver> r,bool accepted){if(!r->child)return;if(accepted)r->owner->ReturnedChild(r->child,"receiver-ack");else r->owner->SetTerminal(r->child,"refused-open");},owner));},r));
++  }
++};
++void ThreadableLoader::EnrollFixtureFetch(const ResourceRequest& request){
++  auto* win=DynamicTo<LocalDOMWindow>(execution_context_.Get());
++  if(!win||!win->document()||!FixtureAsyncWork::From(win)||request.GetKeepalive()||request.HttpMethod()!="GET"||request.Url().GetPath()!="/api/v1/organizations/10000000-0000-4000-8000-000000000001/projects"||request.Url().BaseAsString()!="http://127.0.0.1:45921/api/v1/organizations/10000000-0000-4000-8000-000000000001/")return;
++  auto eligible=FixtureAsyncWork::From(win);if(!eligible||eligible->eligible_original!=win->document()->Token().ToString())return;
++  fixture_receiver_=std::make_shared<OriginalReceiver>();fixture_receiver_->window=win;fixture_receiver_->original=String::FromUtf8(eligible->eligible_original);
++  fixture_receiver_->owner=FixtureAsyncWork::From(win);fixture_receiver_->child=fixture_receiver_->owner->PublishChild("fetch-client");
++  win->GetBrowserInterfaceBroker().GetInterface(fixture_receiver_->pipe.BindNewPipeAndPassReceiver());
++ }
++void ThreadableLoader::FixtureAdmitRequest(uint64_t identifier){
++  if(!fixture_receiver_)return;auto* win=DynamicTo<LocalDOMWindow>(execution_context_.Get());
++  if(!win||win!=fixture_receiver_->window.Get()||!win->document()||win->document()->Token().ToString()!=fixture_receiver_->owner->eligible_original||!fixture_receiver_->key.empty()){fixture_receiver_.reset();return;}
++  auto& r=*fixture_receiver_;r.key=IdentifiersFactory::SubresourceRequestId(identifier);
++  r.pipe->Open(r.original,r.nonce,r.key,blink::BindOnce([](std::shared_ptr<OriginalReceiver> orig,const String& mode){orig->armed=true;orig->mode=mode;OriginalReceiver::MaybeReport(orig);},fixture_receiver_));
++}
+ void ThreadableLoader::Start(ResourceRequest request) {
+   const auto request_context = request.GetRequestContext();
+   if (request.GetMode() == network::mojom::RequestMode::kNoCors) {
+@@ -260,6 +295,7 @@
+ }
+ 
+ void ThreadableLoader::Detach() {
++  fixture_receiver_.reset();
+   Resource* resource = GetResource();
+   if (!resource)
+     return;
+@@ -274,6 +310,7 @@
+ }
+ 
+ void ThreadableLoader::Clear() {
++  fixture_receiver_.reset();
+   client_ = nullptr;
+   timeout_timer_.Stop();
+   request_started_ = base::TimeTicks();
+@@ -289,6 +326,7 @@
+   DCHECK(client_);
+   DCHECK_EQ(resource, GetResource());
+   checker_.RedirectReceived();
++  fixture_receiver_.reset();
+ 
+   return client_->WillFollowRedirect(resource->InspectorId(), new_request.Url(),
+                                      redirect_response);
+@@ -342,6 +380,8 @@
+   DCHECK_EQ(resource, GetResource());
+ 
+   checker_.ResponseReceived();
++  if(fixture_receiver_){if(response.HttpStatusCode()!=200||response.WasFetchedViaServiceWorker())fixture_receiver_.reset();else{fixture_receiver_->pipe->Enter(IdentifiersFactory::SubresourceRequestId(resource->InspectorId()));}}
++
+ 
+   // If "Cache-Control: no-store" header exists in the XHR response,
+   // Back/Forward cache will be disabled for the page if the main resource has
+@@ -367,6 +407,7 @@
+   DCHECK_EQ(resource, GetResource());
+ 
+   checker_.ResponseBodyReceived();
++  if(fixture_receiver_)fixture_receiver_->pipe->Body(IdentifiersFactory::SubresourceRequestId(resource->InspectorId()));
+   client_->DidStartLoadingResponseBody(body);
+ }
+ 
+@@ -406,8 +447,13 @@
+   // Protect the resource in |DidFinishLoading| in order not to release the
+   // downloaded file.
+   Persistent<Resource> protect = GetResource();
++  auto original=std::move(fixture_receiver_);
++  auto key=original?IdentifiersFactory::SubresourceRequestId(resource->InspectorId()):String();
+   Clear();
+   client->DidFinishLoading(resource->InspectorId());
++  if(original){original->returned_key=key;original->returned=true;OriginalReceiver::MaybeReport(original);}
++
++
+ }
+ 
+ void ThreadableLoader::DidTimeout(TimerBase* timer) {
+--- a/third_party/blink/renderer/core/loader/threadable_loader.h
++++ b/third_party/blink/renderer/core/loader/threadable_loader.h
+@@ -101,6 +101,8 @@
+ 
+   // Must be called to actually begin the request.
+   void Start(ResourceRequest);
++  void FixtureAdmitRequest(uint64_t) override;
++  void EnrollFixtureFetch(const ResourceRequest&);
+ 
+   // A ThreadableLoader may have a timeout specified. It is possible, in some
+   // cases, for the timeout to be overridden after the request is sent (for
+@@ -157,6 +159,8 @@
+   const ResourceLoaderOptions resource_loader_options_;
+ 
+   Member<ThreadableLoaderClient> client_;
++  struct OriginalReceiver;
++  std::shared_ptr<OriginalReceiver> fixture_receiver_;
+   Member<ExecutionContext> execution_context_;
+   Member<ResourceFetcher> resource_fetcher_;
+ 
+--- a/third_party/blink/renderer/platform/loader/fetch/resource_client.h
++++ b/third_party/blink/renderer/platform/loader/fetch/resource_client.h
+@@ -61,6 +61,7 @@
+   virtual void DataReceived(Resource*, base::span<const char> /*data*/) {}
+   virtual void NotifyFinished(Resource*) {}
+ 
++  virtual void FixtureAdmitRequest(uint64_t) {}
+   virtual bool IsFontResourceClient() const { return false; }
+ 
+   virtual bool IsRawResourceClient() const { return false; }
+--- a/third_party/blink/renderer/platform/loader/fetch/resource_fetcher.cc
++++ b/third_party/blink/renderer/platform/loader/fetch/resource_fetcher.cc
+@@ -1383,6 +1383,7 @@
+   uint64_t identifier = CreateUniqueIdentifier();
+   ResourceRequest& resource_request = params.MutableResourceRequest();
+   resource_request.SetInspectorId(identifier);
++  if(client)client->FixtureAdmitRequest(identifier);
+   resource_request.SetFromOriginDirtyStyleSheet(
+       params.IsFromOriginDirtyStyleSheet());
+ 
+--- a/third_party/blink/renderer/core/dom/frame_request_callback_collection.cc
++++ b/third_party/blink/renderer/core/dom/frame_request_callback_collection.cc
+@@ -23,7 +23,7 @@
+       (type == FrameCallbackType::kInternal) ? ++next_internal_callback_id_
+                                              : ++next_callback_id_;
+   callback->fixture_owner=FixtureAsyncWork::From(context_.Get());
+-  if(callback->fixture_owner)callback->fixture_credit=callback->fixture_owner->Register();
++  if(callback->fixture_owner)callback->fixture_credit=callback->fixture_owner->Register("frame");
+   callback->SetIsCancelled(false);
+   callback->SetId(id);
+   if (type == FrameCallbackType::kInternal) {
