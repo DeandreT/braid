@@ -22,6 +22,7 @@ import net from "node:net";
 import { setTimeout as pause } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { failureSite } from "./failure-site.mjs";
+import { hostExecRequest, observeHostExec } from "./host-exec.mjs";
 import { hostFailureSummary } from "./safe-diagnostics.mjs";
 import { createOnFreeSubnet, isPoolOverlap } from "./test-subnets.mjs";
 import {
@@ -1562,16 +1563,19 @@ export async function runBrowserFixture(definition) {
         );
         admission.stage = "initialIdentity";
         check(child.pid, "productFailure");
-        host.identity = processIdentity(child.pid);
-        admission.procReadSucceeded = true;
-        admission.startTicksCaptured = true;
         admission.stage = "initialCommand";
-        admission.argvArityTwo = host.identity.command.length === 2;
-        admission.expectedCommandMatch = equivalent(host.identity.command, [
-          cfg.dotnet,
-          assembly,
-        ]);
+        const execution = await observeHostExec(
+          hostExecRequest(child.pid, [cfg.dotnet, assembly]),
+          () => !host.closeResult && !host.spawnFailure,
+          Math.min(end, Date.now() + 1000),
+        );
+        admission.procReadSucceeded = execution.sawOriginal;
+        admission.startTicksCaptured = execution.sawOriginal;
+        admission.argvArityTwo = execution.argvArityTwo;
+        admission.expectedCommandMatch = execution.identity !== null;
         check(admission.expectedCommandMatch, "ownershipChanged");
+        host.identity = execution.identity;
+        check(!host.overflow, "productFailure");
         host.ledger = {
           ...host.identity,
           kind,
