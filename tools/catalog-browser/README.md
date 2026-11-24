@@ -134,3 +134,154 @@ The outer observer must separately confirm actual resource profiles, automatic
 worker destruction, exact absence and unchanged preexisting resources. Retain
 failures and partial ledgers; never replace cleanup with global pruning or
 remove an unrelated resource by name prefix.
+
+## Native CSP qualification preflight
+
+The normal catalog command does not enable the collector. The separate
+`test:catalog-native-csp` entry point requires `--qualify`, `--pair`,
+`--pair-sha256` and `--origin`. It checks launch inputs only and then refuses:
+there is no admitted packaged-suite native cutoff adapter. It never launches
+Chromium, starts the operator, or substitutes the installed Playwright driver.
+
+```sh
+bun run test:catalog-native-csp --qualify \
+  --pair /inputs/pair/pair.json --pair-sha256 "$ADMITTED_PAIR_SHA256" \
+  --origin http://127.0.0.1:45921
+```
+
+Use an offline Linux x64 guest, with only `lo` present and up so the packaged
+HTTP service can listen on `127.0.0.1`. This is not the network setup used by
+the standalone intercepted-page control. Stage the pair on a root-owned,
+read-only ext4 snapshot and invoke the entry point as an unprivileged user.
+Give the exact read origin from the existing catalog operator configuration,
+not a development proxy. The future adapter must verify this origin against
+the released operator and retain the product owner's independent cleanup.
+
+The record is JSON with `schemaVersion: "braid.catalog-native-csp-pair.v1"`,
+`chromeVersion: "157.0.8090.0"`, `driverVersion: "1.64.0"` and `files`, a
+relative-path-to-SHA-256 map. Put the complete self-contained Chrome and
+Playwright Core distributions in sibling `chrome/` and `driver/` directories
+next to the record. The inventory includes the executable, resources, package
+entry, driver bundle, and every other ordinary file beneath both directories.
+The pinned Playwright Core manifest has no `main` or `type` override. Its
+ordered root conditions are `types` (`./index.d.ts`), `import` (`./index.mjs`),
+`require` and `default` (both `./index.js`). The record must pin all those
+files and the fixed exported subpaths. Admission selects `driver/index.js`
+explicitly; it does not look up an installed driver by package name.
+Pass the independently admitted SHA-256 of the record with `--pair-sha256`.
+This proves byte identity against that pin, not the provenance or behavior of
+an arbitrary pair. Do not substitute stock components or use a writable
+installation. The future runner must use the verified entry and exact module
+instance for the entire browser lane, explicitly request the Chromium
+sandbox, and use new private home and temporary directories.
+
+The generation guard is an **unwired, runner-local contract**. Its fields
+are not CDP fields, and its structural controls do not prove native behavior.
+Keep the original driver root session (not the child returned by
+`newBrowserCDPSession()`), epoch, and global journal through
+ordinary per-test context closes and final browser verification:
+
+1. `enrollContext(contextId)` binds the exact native ID before any descendant
+   is admitted. The provider must prove the context is new, owned, non-default,
+   and has never had a producer. `enroll(generation)` binds each native page,
+   frame, or worker to that context before it can produce work. Parents and
+   replacements must belong to the same context. Retired context IDs cannot
+   be reused in the epoch. A second page owns a separate generation; an
+   enrolled replacement never acknowledges the original.
+2. `close` and `replace` prepare the affected subtree before deliberate
+   disposal. `closeContext(contextId, ordinaryClose)` prepares all generations
+   in exactly that context, then invokes the ordinary close once. Even an
+   empty context needs its own retirement proof. `prepare(epoch, request,
+   signal)` returns an opaque token bound to the epoch, inventory revision,
+   disposal scope, selected context, original generations, open context set,
+   and durable receipt checkpoint. The expected inventory and previous
+   tickets are checks against native evidence, not its source.
+   Preparation freezes the native producer population and durable prefix,
+   not event production. Dispatches or receipts may be pending for those
+   origins, and enrolled originals may legitimately produce more events
+   during normal disposal. Unknown origins, dropped handoffs and late work
+   outside the authorized disposal window are never acceptable.
+3. After disposal, `verify(epoch, ticket, signal)` uses that same ticket
+   and browser session. The current inventory revision may advance only
+   for authorized disposal of the ticket's generations and, for a context
+   close, retirement of the selected context. The provider must
+   authenticate a gapless journal extension rooted at the ticket's exact
+   checkpoint and prove retirement and full settlement for every frozen
+   origin, even a zero-event one. The next preparation starts from the
+   last authenticated **final** checkpoint. If the journal advances between
+   fences, the new checkpoint must descend from that exact checkpoint.
+   A scoped close refuses if a surviving origin writes to the same global
+   journal during disposal: the adapter must not filter those entries.
+   Verification must reject unacknowledged records, early disappearance,
+   lost receipts, unrelated births and post-retirement work. A replacement
+   remains unadmitted until the old fence is verified and is enrolled before
+   it can produce. This ordering is a qualification requirement, not
+   permission to delay or serialize an ordinary reload. If native proof
+   cannot account for overlapping document lifetimes, refuse. If
+   preparation refuses, still close owned targets or contexts; do not
+   navigate a replacement or continue qualification.
+4. `prepareBrowserEnd()` refuses while any context remains unretired. It
+   freezes a separate browser-wide ticket on the original live root and
+   returns `{ session, ticket }` without verifying retirement. Neither an
+   empty roster nor successful context retirements proves browser-wide
+   settlement. Unrepresented producers refuse.
+5. The final retirement control is **failure-only**. The future owner must
+   perform one ordinary browser close and require both the expected unforced
+   exit of the original child and retained evidence authenticating the actual
+   terminal head after the debugger pipe closes. Chromium closes that pipe
+   before destroying profiles; a close reply, EOF, or Playwright's resolved
+   close promise is not proof. Authenticate the same frozen ticket against
+   retained evidence of the original session and epoch, never a replacement
+   session or a shorter valid prefix. No retained transport or
+   browser-only producer representation is supplied here. Timeout, missing,
+   partial, lost, foreign, or forced outcomes refuse. Product-owner
+   reconciliation remains independent and without retries: an enclosing
+   owner must revoke a hung browser lane and reach product shutdown without
+   waiting for the browser close promise.
+
+For the local adapter, `session` is the same browser-level object on each
+reply. Context enrollment echoes `epoch` and `contextId`; generation enrollment
+echoes `epoch` and `{kind,contextId,targetId,generationId,parentGenerationId}`.
+Prepare echoes `epoch`, `scope`, and `contextId` (`null` for browser end), and
+returns `contextIds` (the exact open context set), `browserWide`, `token`,
+`revision`, `inventory`, `receiptCheckpoint`
+(`sequence` and `digest`), and covered `origins` (`originId`, `generationId`,
+`producerCovered`, `produced`, `dispatched`, `acknowledged`). At prepare,
+`remaining.dispatches` and `remaining.receipts` account for the gaps
+between those counters. Verify returns the original `ticket`, current
+`inventoryRevision`, `browserWide`, `retiredContextId` (non-null only for a
+context close), the remaining `contextIds`, authorized `transitions`
+(`kind: "disposed"`, `contextId`, and `generationId`), a journal `extension`, and the
+final `settlements` of those exact origins, with `retired: true` and equal
+produced, dispatched and acknowledged counts. The extension contains the
+`base` checkpoint, contiguous `receipts` and the final `checkpoint`. Verify
+also carries the independently finalized `finalizedHead`; it must match
+the extension end, not just a valid prefix. Each
+receipt binds `sequence`, `previousDigest`, `digest`, `originId`,
+`generationId`, `recordId` and `commitment`. `remaining.producers`,
+`dispatches` and `receipts` must be zero after disposal. Both phases
+require zero `lateWork`, `unrelatedWork` and `droppedHandoffs`.
+
+The local `authenticateJournal(epoch, frozenClaim, signal)` seam uses the
+same admitted session to authenticate the **whole** statement against
+independently retained native evidence:
+
+- `prepare`: `ticket` (including selected context, exact open context set,
+  browser-wide coverage, and `remaining`), `afterRevision`, `previousTickets`,
+  and `previousCheckpoint`.
+- `verify`: the original `ticket`, normalized `extension` (including
+  origin settlements), and `terminal` (`scope`, selected and retired context
+  IDs, remaining context IDs, `browserWide`, `inventoryRevision`, exact
+  authorized `transitions`, `remaining`, and `finalizedHead`).
+
+Return the same claim object with `authenticated: true` and
+`epochRecordIdsUnique: true`, plus `checkpointAncestryVerified: true` at
+prepare or `finalizedHeadVerified: true` at verify. These attestations
+require actual native evidence, not just checks of the submitted claim.
+Epoch-wide `recordId` uniqueness includes the retained prefix
+and earlier fences: a receipt already counted cannot count again at a
+new sequence even if it carries a fresh, valid MAC. The guard advances its
+revision and checkpoint only from the authenticated terminal statement.
+These names are not a proposed CDP schema.
+
+Run the launch and lifecycle controls with `bun run check:catalog-native-csp`.
